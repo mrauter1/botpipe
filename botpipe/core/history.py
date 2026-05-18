@@ -460,7 +460,8 @@ class HistoryReader:
         if event_type == "provider_attempt_finished":
             usage = _mapping(record.get("token_usage"))
             if usage:
-                _merge_token_payload(acc.token_usage_from_attempts, turn_kind, usage)
+                usage_phase = "repair" if turn_kind == "outcome_repair" else turn_kind
+                _merge_token_payload(acc.token_usage_from_attempts, usage_phase, usage)
             return None
         if event_type != "provider_attempt_failed":
             return None

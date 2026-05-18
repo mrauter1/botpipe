@@ -1686,7 +1686,7 @@ class Engine:
 def _checkpoint_turn_kind(value: object) -> str | None:
     if value == "step":
         return "llm"
-    if isinstance(value, str) and value in {"producer", "verifier", "llm", "operation"}:
+    if isinstance(value, str) and value in {"producer", "verifier", "llm", "operation", "outcome_repair"}:
         return value
     return None
 

@@ -1056,6 +1056,206 @@ def test_after_hook_effects_complete_and_advance_persist_status_and_exhaust(tmp_
     assert [item["status"] for item in payload["gates"]] == ["completed", "completed"]
     assert [event_type for event_type, _ in runtime_events].count("worklist_status_set") == 2
     assert runtime_events[-1][0] == "worklist_exhausted"
+
+
+def test_after_hook_effects_complete_and_advance_can_finish_on_exhaustion(tmp_path: Path):
+    runtime_events: list[tuple[str, dict[str, object]]] = []
+
+    def after_assess(_ctx):
+        return Effects.complete_and_advance(exhausted=FINISH)
+
+    class EffectsFinishWorkflow(Workflow):
+        board = Artifact.json("{{ task.folder }}/gates.json", required=True)
+        gates = Worklist.from_artifact(
+            name="gate",
+            artifact=board,
+            collection="gates",
+            item_id="gate_id",
+            title="title",
+            status="status",
+        )
+        assess = PromptStep(name="assess", producer="assess.md", scope=gates, after=after_assess)
+        entry = assess
+        transitions = {assess: {"accepted": assess}}
+
+    task_folder, run_folder = _workspace(tmp_path)
+    (task_folder / "gates.json").write_text(
+        json.dumps(
+            {
+                "gates": [
+                    {"gate_id": "alpha", "title": "Alpha", "status": "queued"},
+                    {"gate_id": "beta", "title": "Beta", "status": "queued"},
+                ]
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = Engine(
+        EffectsFinishWorkflow,
+        provider=ScriptedLLMProvider(
+            llm_turns=[
+                Outcome(raw_output="ok-1", tag="accepted"),
+                Outcome(raw_output="ok-2", tag="accepted"),
+            ]
+        ),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+        runtime_event_sink=lambda event_type, payload: runtime_events.append((event_type, dict(payload))),
+    ).run(
+        task_id="task-effects-finish",
+        run_id="run-effects-finish",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+    )
+
+    payload = json.loads((task_folder / "gates.json").read_text(encoding="utf-8"))
+    event_types = [event_type for event_type, _ in runtime_events]
+
+    assert result.terminal == FINISH
+    assert result.history == ("assess", "assess")
+    assert result.last_transition is not None
+    assert result.last_transition.candidate_route == "accepted"
+    assert result.last_transition.final_route is None
+    assert result.last_transition.runtime_control == "finish"
+    assert result.last_transition.source_hook == "after_assess"
+    assert result.last_transition.source_phase == "after"
+    assert [item["status"] for item in payload["gates"]] == ["completed", "completed"]
+    assert event_types.count("worklist_status_set") == 2
+    assert "worklist_exhausted" in event_types
+    assert ("hook_runtime_control", "finish") in [
+        (event_type, str(payload.get("control"))) for event_type, payload in runtime_events
+    ]
+
+
+def test_route_complete_and_advance_can_finish_on_exhaustion(tmp_path: Path):
+    runtime_events: list[tuple[str, dict[str, object]]] = []
+
+    class RouteFinishWorkflow(Workflow):
+        board = Artifact.json("{{ task.folder }}/gates.json", required=True)
+        gates = Worklist.from_artifact(
+            name="gate",
+            artifact=board,
+            collection="gates",
+            item_id="gate_id",
+            title="title",
+            status="status",
+        )
+        assess = PromptStep(name="assess", producer="assess.md", scope=gates)
+        entry = assess
+        transitions = {assess: {"accepted": Route.complete_and_advance(assess, exhausted=FINISH)}}
+
+    task_folder, run_folder = _workspace(tmp_path)
+    (task_folder / "gates.json").write_text(
+        json.dumps(
+            {
+                "gates": [
+                    {"gate_id": "alpha", "title": "Alpha", "status": "queued"},
+                    {"gate_id": "beta", "title": "Beta", "status": "queued"},
+                ]
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = Engine(
+        RouteFinishWorkflow,
+        provider=ScriptedLLMProvider(
+            llm_turns=[
+                Outcome(raw_output="ok-1", tag="accepted"),
+                Outcome(raw_output="ok-2", tag="accepted"),
+            ]
+        ),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+        runtime_event_sink=lambda event_type, payload: runtime_events.append((event_type, dict(payload))),
+    ).run(
+        task_id="task-route-finish",
+        run_id="run-route-finish",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+    )
+
+    payload = json.loads((task_folder / "gates.json").read_text(encoding="utf-8"))
+    event_types = [event_type for event_type, _ in runtime_events]
+
+    assert result.terminal == FINISH
+    assert result.history == ("assess", "assess")
+    assert result.last_transition is not None
+    assert result.last_transition.candidate_route == "accepted"
+    assert result.last_transition.final_route is None
+    assert result.last_transition.runtime_control == "finish"
+    assert result.last_transition.source_hook == "route_effect"
+    assert result.last_transition.source_phase == "on_taken"
+    assert [item["status"] for item in payload["gates"]] == ["completed", "completed"]
+    assert event_types.count("worklist_status_set") == 2
+    assert "worklist_exhausted" in event_types
+    assert ("hook_runtime_control", "finish") in [
+        (event_type, str(payload.get("control"))) for event_type, payload in runtime_events
+    ]
+
+
+def test_route_complete_and_advance_finish_enforces_required_writes_on_exhaustion(tmp_path: Path):
+    class RouteFinishRequiredWritesWorkflow(Workflow):
+        board = Artifact.json("{{ task.folder }}/gates.json", required=True)
+        report = Artifact.md("{{ workflow.folder }}/report.md")
+        gates = Worklist.from_artifact(
+            name="gate",
+            artifact=board,
+            collection="gates",
+            item_id="gate_id",
+            title="title",
+            status="status",
+        )
+        assess = PromptStep(
+            name="assess",
+            producer="assess.md",
+            scope=gates,
+            writes={"report": report},
+            retry_policy=ProviderRetryPolicy(max_attempts=1),
+        )
+        entry = assess
+        transitions = {
+            assess: {
+                "accepted": Route.complete_and_advance(
+                    assess,
+                    exhausted=FINISH,
+                    required_writes=("report",),
+                )
+            }
+        }
+
+    task_folder, run_folder = _workspace(tmp_path)
+    (task_folder / "gates.json").write_text(
+        '{"gates":[{"gate_id":"alpha","title":"Alpha","status":"queued"}]}\n',
+        encoding="utf-8",
+    )
+    checkpoint_store = InMemoryCheckpointStore()
+
+    with pytest.raises(ProviderExecutionError, match=r"artifact validation failed.*report.md"):
+        Engine(
+            RouteFinishRequiredWritesWorkflow,
+            provider=ScriptedLLMProvider(llm_turns=[Outcome(raw_output="ok", tag="accepted")]),
+            session_store=InMemorySessionStore(),
+            checkpoint_store=checkpoint_store,
+        ).run(
+            task_id="task-route-finish-required-writes",
+            run_id="run-route-finish-required-writes",
+            task_folder=task_folder,
+            run_folder=run_folder,
+            root=tmp_path,
+        )
+
+    checkpoint = checkpoint_store.load()
+    assert checkpoint is not None
+    assert checkpoint.failure_context is not None
+    assert checkpoint.failure_context["final_route"] == "accepted"
+
+
 def test_route_hook_may_return_direct_worklist_effect_for_active_scoped_worklist(tmp_path: Path):
     def _complete_current_item(_ctx):
         return WorklistEffect.complete_and_advance(exhausted="done")
@@ -1159,6 +1359,8 @@ def test_after_hook_effect_event_takes_precedence_over_exhausted_route(tmp_path:
         ("request_input", AWAIT_INPUT, ("assess",), None),
         ("goto", FINISH, ("assess", "publish"), "done"),
         ("fail", FAIL, ("assess",), "failed"),
+        ("finish_string", FINISH, ("assess",), None),
+        ("fail_string", FAIL, ("assess",), None),
     ],
 )
 def test_after_hook_effect_runtime_controls_match_direct_controls(
@@ -1175,6 +1377,10 @@ def test_after_hook_effect_runtime_controls_match_direct_controls(
             return Goto("publish", reason="Skip directly to publication.")
         if control_kind == "fail":
             return Fail("Stop after capturing the gate status.")
+        if control_kind == "finish_string":
+            return FINISH
+        if control_kind == "fail_string":
+            return FAIL
         raise AssertionError(f"unexpected control kind {control_kind!r}")
 
     def run_variant(*, use_effect: bool):
@@ -1267,7 +1473,18 @@ def test_after_hook_effect_runtime_controls_match_direct_controls(
         assert effect_result.last_transition.source_phase == "python_step"
         assert direct_result.checkpoint is None
         assert effect_result.checkpoint is None
-    elif control_kind == "fail":
+    elif control_kind == "finish_string":
+        assert direct_result.last_transition.source_hook == "control_hook"
+        assert effect_result.last_transition.source_hook == "control_hook"
+        assert direct_result.last_transition.source_phase == "after"
+        assert effect_result.last_transition.source_phase == "after"
+        assert direct_result.last_transition.runtime_control == "finish"
+        assert effect_result.last_transition.runtime_control == "finish"
+        assert direct_result.last_event is None
+        assert effect_result.last_event is None
+        assert direct_result.checkpoint is None
+        assert effect_result.checkpoint is None
+    elif control_kind in {"fail", "fail_string"}:
         assert direct_result.last_transition.source_hook == "control_hook"
         assert effect_result.last_transition.source_hook == "control_hook"
         assert direct_result.last_transition.source_phase == "after"

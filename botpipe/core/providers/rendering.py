@@ -39,6 +39,8 @@ def render_provider_turn_with_policy(
         prompt_text = _require_prompt_text(context)
         if context.turn_kind == "operation":
             sections = _operation_sections(context, prompt_text=prompt_text)
+        elif context.turn_kind == "outcome_repair":
+            sections = _outcome_repair_sections(context, prompt_text=prompt_text)
         else:
             sections = [
                 f"# Step: {context.step_name}",
@@ -220,6 +222,24 @@ def _operation_sections(context: ProviderTurnContext, *, prompt_text: str) -> li
         "",
         "## Runtime Operation Contract",
         _render_operation_response(context),
+    ]
+
+
+def _outcome_repair_sections(context: ProviderTurnContext, *, prompt_text: str) -> list[str]:
+    return [
+        f"# Outcome Repair: {context.step_name}",
+        "",
+        prompt_text,
+        "",
+        "## Runtime Outcome Repair Contract",
+        "",
+        "This is a format-repair turn. Do not inspect files, modify files, rerun the step, or re-evaluate the work.",
+        "Return only the corrected outcome JSON object for the original step.",
+        "",
+        "### Available routes",
+        _render_routes(context),
+        "",
+        _render_outcome_response(context),
     ]
 
 

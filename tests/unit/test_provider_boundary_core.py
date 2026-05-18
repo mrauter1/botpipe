@@ -6,7 +6,7 @@ from dataclasses import dataclass, replace
 
 import pytest
 
-from botpipe.core.errors import ProviderExecutionError
+from botpipe.core.errors import ProviderExecutionError, exception_failure_context
 from botpipe.core.outcome_contract import NATIVE_SCHEMA_EXCEEDS_LIMIT
 from botpipe.core.prompts import ResolvedPrompt
 from botpipe.core.providers.models import (
@@ -82,10 +82,11 @@ def _turn_context(
     prompt_text: str = "Follow the workflow-authored instructions.",
     route_handoff: str | None = None,
     retry_feedback: str | None = None,
+    turn_kind: str = "verifier",
 ) -> ProviderTurnContext:
     return ProviderTurnContext(
         step_name="design",
-        turn_kind="verifier",
+        turn_kind=turn_kind,
         prompt=ResolvedPrompt(path="design.md", text=prompt_text),
         context=object(),
         artifacts=object(),
@@ -200,6 +201,24 @@ def test_render_provider_turn_renders_markdown_contract_without_raw_output() -> 
     assert "The current Runtime Step Contract remains authoritative." in turn.prompt_text
     assert "### Retry feedback" in turn.prompt_text
     assert "The previous attempt used an unsupported route." in turn.prompt_text
+
+
+def test_render_provider_turn_uses_compact_outcome_repair_contract() -> None:
+    turn = render_provider_turn(
+        _turn_context(
+            turn_kind="outcome_repair",
+            prompt_text="Repair only the malformed JSON.",
+        )
+    )
+
+    assert turn.turn_kind == "outcome_repair"
+    assert turn.expected_response == "outcome_json"
+    assert "# Outcome Repair: design" in turn.prompt_text
+    assert "## Runtime Outcome Repair Contract" in turn.prompt_text
+    assert "Do not inspect files, modify files, rerun the step, or re-evaluate the work." in turn.prompt_text
+    assert "### Declared artifacts this step may write" not in turn.prompt_text
+    assert "### Readable inputs" not in turn.prompt_text
+    assert "#### Required outcome structure" in turn.prompt_text
     assert "<producer_raw_output>" not in turn.prompt_text
     assert "producer raw" not in turn.prompt_text.lower()
     assert "verifier raw" not in turn.prompt_text.lower()
@@ -689,6 +708,37 @@ def test_fake_provider_can_emit_usage() -> None:
     assert llm_response.usage == llm_usage
 
 
+def test_rendered_provider_malformed_outcome_error_carries_failed_turn_snapshot() -> None:
+    session = _session_binding("thread-1")
+    usage = TokenUsage(input_tokens=10, output_tokens=3, total_tokens=13, source="test")
+    transport = _AsyncTransportStub(
+        result_text='{"outcome":{"tag":"done","payload":{},"route_fields":{}}',
+        session=session,
+        usage=usage,
+    )
+    provider = RenderedLLMProvider(transport)
+
+    with pytest.raises(ProviderExecutionError, match="malformed outcome JSON") as exc_info:
+        asyncio.run(
+            provider.run_llm(
+                LLMRequest(
+                    step_name="ask",
+                    prompt=ResolvedPrompt(path="ask.md", text="Answer."),
+                    context=object(),
+                    artifacts=object(),
+                    session=session,
+                )
+            )
+        )
+
+    failure_context = exception_failure_context(exc_info.value)
+    assert failure_context is not None
+    assert failure_context.details["outcome_json_candidate"] == transport.result_text
+    assert failure_context.details["provider_raw_output_sha256"]
+    assert failure_context.details["failed_provider_session"]["session_id"] == "thread-1"
+    assert failure_context.details["failed_provider_usage"]["total_tokens"] == 13
+
+
 def test_fake_provider_supports_async_turn_methods() -> None:
     provider = ScriptedLLMProvider(llm_turns=[OutcomeResponse(outcome=parse_outcome_json('{"tag":"done"}'))])
 
@@ -705,6 +755,25 @@ def test_fake_provider_supports_async_turn_methods() -> None:
 
     assert response.outcome.tag == "done"
     assert provider.calls[0].kind == "step"
+
+
+def test_fake_provider_records_internal_outcome_repair_turn_kind() -> None:
+    provider = ScriptedLLMProvider(llm_turns=[OutcomeResponse(outcome=parse_outcome_json('{"tag":"done"}'))])
+
+    asyncio.run(
+        provider.run_llm(
+            LLMRequest(
+                step_name="ask",
+                prompt=ResolvedPrompt(path=None, text="Repair malformed JSON."),
+                context=object(),
+                artifacts=object(),
+                turn_kind="outcome_repair",
+            )
+        )
+    )
+
+    assert provider.calls[0].kind == "outcome_repair"
+    assert provider.calls[0].session is None
 
 
 def test_fake_provider_records_session_binding_for_async_turns() -> None:

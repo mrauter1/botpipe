@@ -4,6 +4,11 @@ import pytest
 
 from botpipe.core.errors import FailureContext, ProviderExecutionError, exception_failure_context
 from botpipe.core.execution_runtime_services import EventRuntimeService
+from botpipe.core.providers.outcome_repair import (
+    extract_outcome_repair_constraints,
+    outcome_preserves_repair_constraints,
+    repair_incomplete_outcome_json,
+)
 from botpipe.core.providers.parsing import parse_outcome_json
 from botpipe.core.providers.retries import build_retry_feedback
 
@@ -204,4 +209,50 @@ def test_parse_outcome_json_malformed_error_keeps_decoder_details_for_retry_feed
     assert failure_context.details["json_error_column"] == 61
     assert failure_context.details["json_error_position"] == 60
     assert failure_context.details["json_error_excerpt"] == raw
+    assert failure_context.details["outcome_json_candidate"] == raw
+    assert failure_context.details["outcome_json_candidate_truncated"] is False
+    assert isinstance(failure_context.details["outcome_json_candidate_sha256"], str)
     assert failure_context.details["provider_failure_stage"] == "outcome_contract"
+
+
+def test_deterministic_outcome_repair_appends_only_missing_closers() -> None:
+    raw = '{"outcome":{"tag":"accepted","payload":{},"route_fields":{}}'
+
+    repaired = repair_incomplete_outcome_json(raw)
+
+    assert repaired is not None
+    assert repaired.repaired_text == '{"outcome":{"tag":"accepted","payload":{},"route_fields":{}}}'
+    assert repaired.outcome.tag == "accepted"
+
+
+def test_deterministic_outcome_repair_removes_single_trailing_comma() -> None:
+    raw = '{"outcome":{"tag":"accepted","payload":{},"route_fields":{}}},'
+
+    repaired = repair_incomplete_outcome_json(raw)
+
+    assert repaired is not None
+    assert repaired.repaired_text == '{"outcome":{"tag":"accepted","payload":{},"route_fields":{}}}'
+    assert repaired.outcome.tag == "accepted"
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        '{"outcome":{"tag":"accepted","payload":{},"route_fields":',
+        '{"outcome":{"tag":"accepted","payload":{},"route_fields":{}} garbage',
+        '{"outcome":{"tag":"accepted","payload":{},"route_fields":{}}}',
+    ],
+)
+def test_deterministic_outcome_repair_rejects_non_structural_repairs(raw: str) -> None:
+    assert repair_incomplete_outcome_json(raw) is None
+
+
+def test_outcome_repair_constraints_extract_canonical_route_from_malformed_json() -> None:
+    constraints = extract_outcome_repair_constraints(
+        '{"outcome":{"tag":"accepted","payload":{},"route_fields":{}},'
+    )
+
+    assert constraints is not None
+    assert constraints.route_tag == "accepted"
+    assert outcome_preserves_repair_constraints(parse_outcome_json('{"tag":"accepted"}'), constraints)
+    assert not outcome_preserves_repair_constraints(parse_outcome_json('{"tag":"rework"}'), constraints)

@@ -53,6 +53,7 @@ class StepProviderUsage:
     producer: TokenUsage | None = None
     verifier: TokenUsage | None = None
     llm: TokenUsage | None = None
+    repair: TokenUsage | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,7 +78,7 @@ class RuntimeInteractionPolicy:
 @dataclass(frozen=True, slots=True)
 class ProviderTurnContext:
     step_name: str
-    turn_kind: Literal["producer", "verifier", "step", "operation"]
+    turn_kind: Literal["producer", "verifier", "step", "operation", "outcome_repair"]
     prompt: ResolvedPrompt
     context: Context
     artifacts: ResolvedArtifacts
@@ -171,6 +172,7 @@ class LLMRequest:
     policy: ResolvedProviderPolicy | None = None
     attempt: int = 1
     max_attempts: int = 3
+    turn_kind: Literal["step", "outcome_repair"] = "step"
 
 
 @dataclass(frozen=True, slots=True)

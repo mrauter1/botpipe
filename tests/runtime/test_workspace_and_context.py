@@ -305,7 +305,7 @@ def test_provider_attempt_checkpoint_is_written_before_semantic_provider_call(tm
     assert resumed.state.before_count == 1
 
 
-def test_pair_resume_cursor_is_used_only_for_resumed_attempt_retry(tmp_path: Path) -> None:
+def test_pair_resume_cursor_verifier_retry_does_not_rerun_producer(tmp_path: Path) -> None:
     _write_pair_provider_attempt_checkpoint_workflow_package(
         tmp_path,
         "pair_provider_attempt_checkpoint_demo",
@@ -371,11 +371,10 @@ def test_pair_resume_cursor_is_used_only_for_resumed_attempt_retry(tmp_path: Pat
     )
 
     assert resumed.terminal == "FINISH"
-    assert resumed.state.producer_before_count == 2
-    assert verifier_inputs == ["checkpointed draft", "fresh draft"]
+    assert resumed.state.producer_before_count == 1
+    assert verifier_inputs == ["checkpointed draft", "checkpointed draft"]
     assert [(call.kind, call.attempt) for call in provider.calls] == [
         ("verifier", 1),
-        ("producer", 2),
         ("verifier", 2),
     ]
 

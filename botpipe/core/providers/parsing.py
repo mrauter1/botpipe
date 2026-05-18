@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import hashlib
 from copy import deepcopy
 from typing import Any
 
@@ -15,6 +16,7 @@ _JSON_FENCE_RE = re.compile(r"\A```json\s*\n(?P<body>[\s\S]*?)\n?```\s*\Z")
 _LEGACY_OPTIONAL_FIELDS = {"clarification", "payload", "question", "reason"}
 _CANONICAL_OUTCOME_FIELDS = {"tag", "payload", "route_fields"}
 _CANONICAL_TOP_LEVEL_FIELDS = {"outcome", "tag", *_LEGACY_OPTIONAL_FIELDS}
+_OUTCOME_CANDIDATE_DETAIL_LIMIT = 16_000
 
 
 def parse_outcome_json(text: str) -> Outcome:
@@ -90,11 +92,15 @@ def parse_outcome_json(text: str) -> Outcome:
     )
 
 
-def _normalize_outcome_json_candidate(candidate: str) -> str:
+def normalize_outcome_json_candidate(candidate: str) -> str:
     match = _JSON_FENCE_RE.fullmatch(candidate)
     if match is not None:
         return match.group("body").strip()
     return candidate
+
+
+def _normalize_outcome_json_candidate(candidate: str) -> str:
+    return normalize_outcome_json_candidate(candidate)
 
 
 def _last_outcome_json_candidate(text: str) -> str | None:
@@ -179,6 +185,7 @@ def _malformed_provider_output(
         )
         if raw_text is not None:
             details["json_error_excerpt"] = _json_error_excerpt(raw_text, json_error.pos)
+            details.update(_outcome_candidate_details(raw_text))
     return ProviderExecutionError(
         message,
         failure_context=FailureContext(
@@ -197,3 +204,15 @@ def _json_error_excerpt(text: str, position: int, *, radius: int = 80) -> str:
     prefix = "..." if start > 0 else ""
     suffix = "..." if end < len(text) else ""
     return f"{prefix}{text[start:end]}{suffix}"
+
+
+def _outcome_candidate_details(text: str) -> dict[str, object]:
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    details: dict[str, object] = {
+        "outcome_json_candidate_sha256": digest,
+        "outcome_json_candidate_length": len(text),
+        "outcome_json_candidate_truncated": len(text) > _OUTCOME_CANDIDATE_DETAIL_LIMIT,
+    }
+    if len(text) <= _OUTCOME_CANDIDATE_DETAIL_LIMIT:
+        details["outcome_json_candidate"] = text
+    return details

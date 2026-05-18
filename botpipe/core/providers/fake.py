@@ -33,6 +33,9 @@ class ProviderCall:
     route_required_writes: dict[str, tuple[str, ...]] = field(default_factory=dict)
     retry_feedback: str | None = None
     route_handoff: str | None = None
+    response_schema: dict[str, Any] | None = None
+    native_response_schema: dict[str, Any] | None = None
+    response_schema_native_skip_reason: str | None = None
     policy: Any | None = None
     attempt: int = 1
     max_attempts: int = 3
@@ -100,6 +103,9 @@ class ScriptedLLMProvider:
                 route_required_writes=deepcopy(dict(request.route_required_writes)),
                 retry_feedback=request.retry_feedback,
                 route_handoff=request.route_handoff,
+                response_schema=deepcopy(request.response_schema),
+                native_response_schema=deepcopy(request.native_response_schema),
+                response_schema_native_skip_reason=request.response_schema_native_skip_reason,
                 policy=deepcopy(request.policy),
                 attempt=request.attempt,
                 max_attempts=request.max_attempts,
@@ -122,6 +128,9 @@ class ScriptedLLMProvider:
                 route_required_writes=deepcopy(dict(request.route_required_writes)),
                 retry_feedback=request.retry_feedback,
                 route_handoff=request.route_handoff,
+                response_schema=deepcopy(request.response_schema),
+                native_response_schema=deepcopy(request.native_response_schema),
+                response_schema_native_skip_reason=request.response_schema_native_skip_reason,
                 policy=deepcopy(request.policy),
                 attempt=request.attempt,
                 max_attempts=request.max_attempts,
@@ -131,7 +140,7 @@ class ScriptedLLMProvider:
     def _record_llm_call(self, request: LLMRequest) -> None:
         self.calls.append(
             ProviderCall(
-                "step",
+                request.turn_kind,
                 request.step_name,
                 request.prompt.path,
                 session=deepcopy(request.session),
@@ -144,6 +153,9 @@ class ScriptedLLMProvider:
                 route_required_writes=deepcopy(dict(request.route_required_writes)),
                 retry_feedback=request.retry_feedback,
                 route_handoff=request.route_handoff,
+                response_schema=deepcopy(request.response_schema),
+                native_response_schema=deepcopy(request.native_response_schema),
+                response_schema_native_skip_reason=request.response_schema_native_skip_reason,
                 policy=deepcopy(request.policy),
                 attempt=request.attempt,
                 max_attempts=request.max_attempts,

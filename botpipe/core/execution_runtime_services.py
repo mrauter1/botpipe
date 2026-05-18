@@ -195,12 +195,14 @@ class EventRuntimeService:
         attempt: int,
         token_usage: Any | None = None,
         failure_context: Mapping[str, Any] | None = None,
+        **extra_payload: Any,
     ) -> None:
         payload: dict[str, Any] = {
             **step_runtime_event_payload(step=step, context=context),
             "turn_kind": turn_kind,
             "attempt": attempt,
         }
+        payload.update(extra_payload)
         if token_usage is not None:
             payload["token_usage"] = serialize_token_usage(token_usage)
         if failure_context:
@@ -1180,6 +1182,42 @@ class RouteRuntimeService:
         target_step: str | None = None
         pending_input_id: str | None = None
         try:
+            if control == FINISH:
+                runtime_control = "finish"
+                self._events.emit_runtime_event(
+                    "hook_runtime_control",
+                    **step_runtime_event_payload(step=step, context=context),
+                    control="finish",
+                    hook=hook_name,
+                    source_phase=hook_phase,
+                )
+                from .engine import _RouteControl
+
+                return _RouteControl(
+                    control="finish",
+                    destination=FINISH,
+                    terminal=FINISH,
+                    source_hook=hook_name,
+                    source_phase=hook_phase,
+                )
+            if control == FAIL:
+                runtime_control = "fail"
+                self._events.emit_runtime_event(
+                    "hook_runtime_control",
+                    **step_runtime_event_payload(step=step, context=context),
+                    control="fail",
+                    hook=hook_name,
+                    source_phase=hook_phase,
+                )
+                from .engine import _RouteControl
+
+                return _RouteControl(
+                    control="fail",
+                    destination=FAIL,
+                    terminal=FAIL,
+                    source_hook=hook_name,
+                    source_phase=hook_phase,
+                )
             if isinstance(control, RequestInput):
                 pending_input = self._build_pending_input(step.name, hook_name, hook_phase, control)
                 pending_input_id = pending_input.pending_input_id

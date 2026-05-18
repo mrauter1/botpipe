@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from collections.abc import Callable
+from copy import deepcopy
+from dataclasses import asdict, is_dataclass
 from typing import Literal
 
+from ..errors import FailureContext, WorkflowExecutionError, exception_failure_context, replace_execution_error
 from ..prompts import ResolvedPrompt
 from .models import (
     LLMRequest,
@@ -46,7 +50,7 @@ class RenderedLLMProvider:
         return _outcome_response(result)
 
     async def run_llm(self, request: LLMRequest) -> OutcomeResponse:
-        result = await self._run_turn(_step_context(request, turn_kind="step", prompt=request.prompt))
+        result = await self._run_turn(_step_context(request, turn_kind=request.turn_kind, prompt=request.prompt))
         return _outcome_response(result)
 
     def run_operation(self, request: OperationRequest) -> OperationResponse:
@@ -96,7 +100,10 @@ def _producer_response(result) -> ProducerResponse:
 
 
 def _outcome_response(result) -> OutcomeResponse:
-    outcome = parse_outcome_json(result.raw_text)
+    try:
+        outcome = parse_outcome_json(result.raw_text)
+    except WorkflowExecutionError as exc:
+        raise _with_failed_turn_snapshot(exc, result) from exc
     return OutcomeResponse(
         outcome=outcome,
         session=result.session,
@@ -118,7 +125,7 @@ def run_provider_coro_sync(awaitable):
 def _step_context(
     request: ProducerRequest | VerifierRequest | LLMRequest,
     *,
-    turn_kind: Literal["producer", "verifier", "step"],
+    turn_kind: Literal["producer", "verifier", "step", "outcome_repair"],
     prompt: ResolvedPrompt,
 ) -> ProviderTurnContext:
     return ProviderTurnContext(
@@ -196,3 +203,78 @@ def _resume_rendered_prompt_text(context: object, *, turn_kind: str, attempt: in
         return None
     prompt_text = cursor.get("prompt_text")
     return prompt_text if isinstance(prompt_text, str) else None
+
+
+def _with_failed_turn_snapshot(exc: WorkflowExecutionError, result: ProviderTurnResult) -> WorkflowExecutionError:
+    failure_context = exception_failure_context(exc)
+    if failure_context is None:
+        return exc
+    if failure_context.kind != "malformed_provider_output":
+        return exc
+    if failure_context.details.get("provider_failure_stage") != "outcome_contract":
+        return exc
+    details = dict(failure_context.details)
+    details.setdefault("provider_raw_output_sha256", hashlib.sha256(result.raw_text.encode("utf-8")).hexdigest())
+    details.setdefault("provider_raw_output_excerpt", _bounded_output_excerpt(result.raw_text))
+    session_payload = _session_payload(result.session)
+    if session_payload is not None:
+        details.setdefault("failed_provider_session", session_payload)
+    usage_payload = _usage_payload(result.usage)
+    if usage_payload is not None:
+        details.setdefault("failed_provider_usage", usage_payload)
+    return replace_execution_error(
+        exc,
+        failure_context=FailureContext(
+            kind=failure_context.kind,
+            step_name=failure_context.step_name,
+            candidate_route=failure_context.candidate_route,
+            final_route=failure_context.final_route,
+            runtime_control=failure_context.runtime_control,
+            provider_attributable=failure_context.provider_attributable,
+            source_hook=failure_context.source_hook,
+            source_phase=failure_context.source_phase,
+            target_step=failure_context.target_step,
+            pending_input_id=failure_context.pending_input_id,
+            details=details,
+        ),
+    )
+
+
+def _bounded_output_excerpt(text: str, *, limit: int = 2_000) -> str:
+    if len(text) <= limit:
+        return text
+    half = max((limit - 5) // 2, 0)
+    return f"{text[:half]} ... {text[-half:]}"
+
+
+def _session_payload(session: object) -> dict[str, object] | None:
+    key = getattr(session, "key", None)
+    slot = getattr(key, "slot", None)
+    domain = getattr(key, "domain", None)
+    value = getattr(key, "value", None)
+    ref_name = getattr(session, "ref_name", None)
+    if not isinstance(ref_name, str) and not (
+        isinstance(slot, str) and isinstance(domain, str) and isinstance(value, str)
+    ):
+        return None
+    payload: dict[str, object] = {
+        "ref_name": ref_name,
+        "scope": getattr(session, "scope", None),
+        "session_id": getattr(session, "session_id", None),
+        "provider": getattr(session, "provider", None),
+        "provider_metadata": deepcopy(getattr(session, "provider_metadata", {}) or {}),
+        "metadata": deepcopy(getattr(session, "metadata", {}) or {}),
+    }
+    if isinstance(slot, str) and isinstance(domain, str) and isinstance(value, str):
+        payload["key"] = {"slot": slot, "domain": domain, "value": value}
+    return payload
+
+
+def _usage_payload(usage: object) -> dict[str, object] | None:
+    if usage is None:
+        return None
+    if is_dataclass(usage):
+        return {key: value for key, value in asdict(usage).items() if value is not None}
+    if isinstance(usage, dict):
+        return dict(usage)
+    return None

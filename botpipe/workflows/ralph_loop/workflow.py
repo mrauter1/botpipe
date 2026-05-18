@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from botpipe import FINISH, Md, Prompt, Route, Workflow, Worklist, produce_verify_step
+from botpipe import FINISH, Md, Prompt, Route, Session, Workflow, Worklist, produce_verify_step
 from botpipe.core import Artifact
 
 
@@ -31,7 +31,14 @@ class RalphLoop(Workflow):
         status="status",
     )
 
+    plan_session = Session.run()
+    plan_verifier_session = Session.run()
+    item_session = Session.work_item(items)
+    item_verifier_session = Session.work_item(items)
+
     plan = produce_verify_step(
+        session=plan_session,
+        verifier_session=plan_verifier_session,
         producer_prompt=Prompt.inline(
             """
             Read {{ message }}. Inspect the repository.
@@ -82,6 +89,8 @@ class RalphLoop(Workflow):
 
     implement = produce_verify_step(
         scope=items,
+        session=item_session,
+        verifier_session=item_verifier_session,
         requires=[plan.work],
         verifier_requires=[plan.work],
         producer_prompt=Prompt.inline(
