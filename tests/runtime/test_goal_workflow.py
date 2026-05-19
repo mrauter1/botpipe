@@ -67,8 +67,8 @@ def _write_goal_state(tmp_path: Path, state: GoalState, *, task_id: str = "goal-
     state_path.write_text(state.model_dump_json(indent=2) + "\n", encoding="utf-8")
 
 
-def _goal_plan(tmp_path: Path, *, task_id: str = "goal-thread", run_id: str = "goal-run") -> dict[str, object]:
-    plan_path = tmp_path / ".botpipe" / "tasks" / task_id / "wf_goal" / "runs" / run_id / "goal_plan.json"
+def _goal_plan(tmp_path: Path, *, task_id: str = "goal-thread") -> dict[str, object]:
+    plan_path = tmp_path / ".botpipe" / "tasks" / task_id / "wf_goal" / "goal_plan.json"
     return json.loads(plan_path.read_text(encoding="utf-8"))
 
 
