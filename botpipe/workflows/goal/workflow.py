@@ -457,7 +457,7 @@ class Goal(Workflow):
 
     @python_step(
         name="select_next_item",
-        requires=[goal_plan],
+        requires=[goal_state, goal_plan],
         writes=[current_item, goal_status],
         routes={"item_selected": "execute_item", "all_items_done": "verify_goal", "failed": FAIL},
     )
@@ -529,7 +529,7 @@ class Goal(Workflow):
 
     @python_step(
         name="mark_item_done",
-        requires=[goal_plan, current_item],
+        requires=[goal_state, goal_plan, current_item],
         writes=[goal_plan, goal_status],
         routes={"item_marked": "select_next_item", "failed": FAIL},
     )
