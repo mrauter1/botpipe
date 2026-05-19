@@ -3117,6 +3117,25 @@ class RouteFinalizer:
             source_phase=result.source_phase,
         )
 
+    def _sync_route_context(
+        self,
+        context: "Context",
+        *,
+        route: RouteContract,
+        event: Event,
+        outcome: Any,
+    ) -> None:
+        context._sync_route(
+            {
+                "tag": event.tag,
+                "target": route_target_value(route.target),
+                "summary": route.summary,
+                "handoff": route.handoff,
+            }
+        )
+        context._sync_event(self._routes.event_context_payload(event))
+        context._sync_outcome(outcome)
+
     def capture(self, request: StepFinalizationRequest) -> _StepRouteResult:
         step = request.step
         context = request.context
@@ -3212,16 +3231,12 @@ class RouteFinalizer:
                 raise
             raise annotated from exc
 
-        context._sync_route(
-            {
-                "tag": final_event.tag,
-                "target": route_target_value(final_route.target),
-                "summary": final_route.summary,
-                "handoff": final_route.handoff,
-            }
+        self._sync_route_context(
+            context,
+            route=final_route,
+            event=final_event,
+            outcome=request.after_subject,
         )
-        context._sync_event(self._routes.event_context_payload(final_event))
-        context._sync_outcome(request.after_subject)
 
         final_provider_attributable = request.provider_attributable and not explicit_event_override
         final_error_cls = request.error_cls if final_provider_attributable else WorkflowExecutionError
@@ -3354,16 +3369,12 @@ class RouteFinalizer:
         try:
             while True:
                 final_route = self._routes.compiled_route_for_step(step, final_event.tag)
-                context._sync_route(
-                    {
-                        "tag": final_event.tag,
-                        "target": route_target_value(final_route.target),
-                        "summary": final_route.summary,
-                        "handoff": final_route.handoff,
-                    }
+                self._sync_route_context(
+                    context,
+                    route=final_route,
+                    event=final_event,
+                    outcome=request.after_subject,
                 )
-                context._sync_event(self._routes.event_context_payload(final_event))
-                context._sync_outcome(request.after_subject)
                 route_result = self._hooks.run_route(
                     step,
                     context,
@@ -3443,6 +3454,13 @@ class RouteFinalizer:
             if annotated is exc:
                 raise
             raise annotated from exc
+
+        self._sync_route_context(
+            context,
+            route=final_route,
+            event=final_event,
+            outcome=request.after_subject,
+        )
 
         final_provider_attributable = request.provider_attributable and not explicit_event_override
         final_error_cls = request.error_cls if final_provider_attributable else WorkflowExecutionError

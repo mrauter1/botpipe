@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 import json
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
+from hashlib import sha256
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Callable, Literal, Mapping
@@ -33,6 +34,7 @@ from .config import (
     ProviderConfig,
     ProviderPolicyRuntimeConfig,
     RuntimeConfig,
+    RuntimeConfigSources,
 )
 from .events import EventLogger
 from .git_tracking import RuntimeGitTracker
@@ -103,6 +105,9 @@ class RunnerOptions:
     record_task_message: bool = True
     runtime_config: RuntimeConfig = field(default_factory=RuntimeConfig)
     provider_policy_config: ProviderPolicyRuntimeConfig = field(default_factory=ProviderPolicyRuntimeConfig)
+    provider_config: ProviderConfig | None = None
+    config_sources: RuntimeConfigSources | None = None
+    created_by: str | None = None
     sdk_default_policy: PolicyInput = None
     run_policy: PolicyInput = None
     event_callback: Callable[[Mapping[str, object]], None] | None = None
@@ -200,7 +205,7 @@ def _execute_compiled_workflow(
     provider: LLMProvider,
     options: RunnerOptions,
 ) -> RunExecution:
-    max_steps = resolve_max_steps(options.max_steps)
+    max_steps = resolve_max_steps(options.max_steps, runtime_config=options.runtime_config)
     planned = _plan_workspaces(compiled, options, reference=reference)
     git_tracker = RuntimeGitTracker(
         root=options.root,
@@ -242,6 +247,11 @@ def _execute_compiled_workflow(
         status="running",
         pending_input=None,
         finalization=None,
+        execution_config=_execution_config_metadata(
+            options,
+            effective_max_steps=max_steps,
+            workflow_policy=prepared.compiled.provider_policy,
+        ),
     )
     if options.resume:
         resume_warning = _resume_topology_mismatch_warning(
@@ -631,6 +641,7 @@ def _prepare_workspaces(
         message=explicit_message,
         record_message=options.record_task_message,
         state_dir=planned.task_workspace.state_root,
+        created_by=options.created_by,
     )
     workflow_workspace = _ensure_workflow_workspace(compiled, task_workspace, reference=reference)
     if not options.resume:
@@ -705,12 +716,17 @@ def _plan_workspaces(
     )
 
 
-def resolve_max_steps(max_steps: int | None) -> int:
+def resolve_max_steps(max_steps: int | None, *, runtime_config: RuntimeConfig | None = None) -> int:
     if max_steps is None:
-        return DEFAULT_MAX_STEPS
-    if max_steps <= 0:
-        raise ConfigError("max_steps must be a positive integer.")
-    return max_steps
+        configured_max_steps = DEFAULT_MAX_STEPS if runtime_config is None else runtime_config.max_steps
+        return _validate_max_steps(configured_max_steps, label="runtime max_steps")
+    return _validate_max_steps(max_steps, label="max_steps")
+
+
+def _validate_max_steps(value: object, *, label: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise ConfigError(f"{label} must be a positive integer.")
+    return value
 
 
 def _runtime_observability_error(exc: BaseException) -> BaseException:
@@ -886,6 +902,9 @@ def _build_workflow_invoker(
                 record_task_message=False,
                 runtime_config=options.runtime_config,
                 provider_policy_config=options.provider_policy_config,
+                provider_config=options.provider_config,
+                config_sources=options.config_sources,
+                created_by=options.created_by,
                 sdk_default_policy=options.sdk_default_policy,
                 run_policy=options.run_policy,
                 event_callback=options.event_callback,
@@ -983,6 +1002,151 @@ def _materialize_workflow_input(
         raise WorkflowExecutionError(
             f"persisted typed input for workflow {compiled.workflow_name!r} is invalid: {exc}"
         ) from exc
+
+
+def _execution_config_metadata(
+    options: RunnerOptions,
+    *,
+    effective_max_steps: int,
+    workflow_policy: PolicyInput,
+) -> dict[str, Any]:
+    metadata: dict[str, Any] = {
+        "resume": options.resume,
+        "runtime": _runtime_config_metadata(options.runtime_config, effective_max_steps=effective_max_steps),
+        "provider_policy_config": _provider_policy_config_metadata(options.provider_policy_config),
+        "policy_layers": {
+            "sdk_default_policy_configured": options.sdk_default_policy is not None,
+            "workflow_policy_configured": workflow_policy is not None,
+            "run_policy_configured": options.run_policy is not None,
+        },
+    }
+    if options.created_by is not None:
+        metadata["created_by"] = options.created_by
+    if options.provider_config is not None:
+        metadata["provider"] = _provider_config_metadata(options.provider_config)
+    if options.config_sources is not None:
+        metadata["config_sources"] = _config_sources_metadata(options.config_sources)
+    return metadata
+
+
+def _provider_config_metadata(config: ProviderConfig) -> dict[str, Any]:
+    payload: dict[str, Any] = {"name": config.name}
+    if config.name == "codex":
+        payload["model"] = config.codex.model
+        if config.codex.model_effort is not None:
+            payload["model_effort"] = config.codex.model_effort
+    elif config.name == "claude":
+        if config.claude.model is not None:
+            payload["model"] = config.claude.model
+        if config.claude.effort is not None:
+            payload["model_effort"] = config.claude.effort
+        payload["permission_strategy"] = config.claude.permission_strategy
+    return payload
+
+
+def _runtime_config_metadata(config: RuntimeConfig, *, effective_max_steps: int) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "max_steps": effective_max_steps,
+        "full_auto": config.full_auto,
+        "replay_mismatch_behavior": config.replay_mismatch_behavior,
+        "resume_topology_mismatch_behavior": config.resume_topology_mismatch_behavior,
+        "git_tracking": {
+            "enabled": config.git_tracking.enabled,
+            "commit_policy": config.git_tracking.commit_policy,
+            "failure_policy": config.git_tracking.failure_policy,
+        },
+        "tracing": {
+            "enabled": config.tracing.enabled,
+            "path": config.tracing.path,
+            "failure_policy": config.tracing.failure_policy,
+            "include_state_snapshots": config.tracing.include_state_snapshots,
+        },
+    }
+    if effective_max_steps != config.max_steps:
+        payload["configured_max_steps"] = config.max_steps
+    return payload
+
+
+def _provider_policy_config_metadata(config: ProviderPolicyRuntimeConfig) -> dict[str, Any]:
+    default_policy = config.default
+    network = default_policy.sandbox.workspace.network
+    payload = config.model_dump(mode="json", warnings=False)
+    summary: dict[str, Any] = {
+        "redacted_hash": "sha256:" + sha256(
+            json.dumps(
+                _redacted_provider_policy_fingerprint_payload(payload),
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=True,
+            ).encode("utf-8")
+        ).hexdigest(),
+        "validation": config.validation.model_dump(mode="json", warnings=False),
+        "default": {
+            "model": {
+                "provider": default_policy.model.provider,
+                "default": default_policy.model.default,
+                "effort": default_policy.model.effort,
+                "verbosity": default_policy.model.verbosity,
+                "reasoning_summary": default_policy.model.reasoning_summary,
+                "base_url_configured": default_policy.model.base_url is not None,
+                "override_count": len(default_policy.model.overrides),
+            },
+            "permissions": {
+                "mode": default_policy.permissions.mode,
+                "allow_dangerous_bypass": default_policy.permissions.allow_dangerous_bypass,
+                "disable_dangerous_bypass": default_policy.permissions.disable_dangerous_bypass,
+            },
+            "sandbox": {
+                "enabled": default_policy.sandbox.enabled,
+                "required": default_policy.sandbox.required,
+                "mode": default_policy.sandbox.mode,
+            },
+            "network": {
+                "enabled": network.enabled,
+                "mode": network.mode,
+                "allow_domain_count": len(network.allow_domains),
+                "deny_domain_count": len(network.deny_domains),
+            },
+            "env": {"inherit": default_policy.env.inherit},
+        },
+        "strict": {"configured": config.strict is not None},
+    }
+    return summary
+
+
+_SECRET_FINGERPRINT_KEY_PARTS = ("token", "secret", "key", "password", "credential", "auth")
+_SECRET_FINGERPRINT_KEYS = {"headers", "set"}
+
+
+def _redacted_provider_policy_fingerprint_payload(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        redacted: dict[str, Any] = {}
+        for key, item in value.items():
+            key_text = str(key)
+            lowered = key_text.casefold()
+            if lowered in _SECRET_FINGERPRINT_KEYS or any(part in lowered for part in _SECRET_FINGERPRINT_KEY_PARTS):
+                redacted[key_text] = "<redacted>"
+                continue
+            redacted[key_text] = _redacted_provider_policy_fingerprint_payload(item)
+        return redacted
+    if isinstance(value, list):
+        return [_redacted_provider_policy_fingerprint_payload(item) for item in value]
+    return value
+
+
+def _config_sources_metadata(sources: RuntimeConfigSources) -> dict[str, Any]:
+    payload: dict[str, Any] = {}
+    if sources.user_config is not None:
+        payload["user_config"] = str(sources.user_config)
+    if sources.workspace_config is not None:
+        payload["workspace_config"] = str(sources.workspace_config)
+    if sources.policy_file is not None:
+        payload["policy_file"] = str(sources.policy_file)
+    if sources.cli_overrides:
+        payload["cli_overrides"] = list(sources.cli_overrides)
+    if sources.sdk_overrides:
+        payload["sdk_overrides"] = list(sources.sdk_overrides)
+    return payload
 
 
 def _typed_output_metadata(

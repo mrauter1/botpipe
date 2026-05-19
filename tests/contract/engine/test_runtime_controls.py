@@ -820,7 +820,7 @@ def test_on_taken_goto_skips_declared_route_target_and_emits_runtime_control(tmp
     ]
 def test_on_taken_goto_handoff_reaches_target_provider_step(tmp_path: Path):
     def on_draft_taken(ctx):
-        return Goto("publish", reason="Ship it.", handoff="Use the pre-approved publish checklist.")
+        return Goto("publish", reason="Ship it.", handoff="Use {{ event.tag }} pre-approved publish checklist.")
 
     def _gotohandoffworkflow_on_ask(ctx):
         return None
@@ -863,7 +863,7 @@ def test_on_taken_goto_handoff_reaches_target_provider_step(tmp_path: Path):
 
     assert result.terminal == FINISH
     assert [call.step_name for call in provider.calls] == ["ask", "publish"]
-    assert provider.calls[1].route_handoff == "Use the pre-approved publish checklist."
+    assert provider.calls[1].route_handoff == "Use {{ event.tag }} pre-approved publish checklist."
 def test_invalid_goto_after_state_mutation_preserves_state_and_failure_context(tmp_path: Path):
     def after(ctx):
         assert ctx.route is not None

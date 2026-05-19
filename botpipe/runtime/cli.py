@@ -400,6 +400,9 @@ def _handle_run(args: argparse.Namespace, *, provider_factory: Callable[..., Any
                 workflow_params=workflow_params,
                 runtime_config=config.runtime,
                 provider_policy_config=config.provider_policy,
+                provider_config=config.provider,
+                config_sources=config.sources,
+                created_by="cli",
                 event_callback=None if progress is None else progress.event_callback,
             ),
         )
@@ -673,6 +676,9 @@ def _mutating_client(
         provider=provider,
         runtime_config=config.runtime,
         provider_policy_config=config.provider_policy,
+        provider_config=config.provider,
+        config_sources=config.sources,
+        created_by="cli",
     )
 
 

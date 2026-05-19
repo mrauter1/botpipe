@@ -642,6 +642,40 @@ def _compile_reference_graph(
             inferred_reads.extend(
                 artifact_id for artifact_id in prompt_inferred_reads if artifact_id not in inferred_reads
             )
+        route_handoff_symbols = _placeholder_symbols(step_symbol_contexts[step.name], kind="route_handoff")
+        for route_tag, route in plan.routes.get(step.name, {}).items():
+            if route.handoff is None:
+                continue
+            surface = f"step {step.name!r} route {route_tag!r} handoff template"
+            validation = validate_inline_prompt_template(
+                route.handoff,
+                surface=surface,
+                extra_roots=_jinja_prompt_extra_roots(route_handoff_symbols),
+            )
+            requirements = validation.requirements
+            builder.add_prompt_requirements(step.name, requirements)
+            refs = tuple(ref for ref in requirements.refs if ref.raw)
+            _validate_jinja_prompt_refs(
+                refs,
+                surface=surface,
+                symbols=route_handoff_symbols,
+            )
+            prompt_refs.extend(ref for ref in refs if ref not in prompt_refs)
+            handoff_inferred_reads = _infer_jinja_prompt_artifact_reads(
+                refs,
+                symbols=route_handoff_symbols,
+                inventory=inventory,
+                step_name=step.name,
+            )
+            _validate_consumed_artifact_scopes(
+                handoff_inferred_reads,
+                surface=surface,
+                symbols=route_handoff_symbols,
+                artifact_requirements=artifact_requirements,
+            )
+            inferred_reads.extend(
+                artifact_id for artifact_id in handoff_inferred_reads if artifact_id not in inferred_reads
+            )
         if isinstance(step, ChildWorkflowStepPlan) and isinstance(step.message, str):
             surface = f"workflow step {step.name!r} message template"
             message_symbols = _placeholder_symbols(step_symbol_contexts[step.name], kind="workflow_step_message")

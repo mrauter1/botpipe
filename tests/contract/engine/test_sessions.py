@@ -561,6 +561,88 @@ def test_non_scoped_work_item_session_fails_when_no_current_item_exists(tmp_path
             run_folder=run_folder,
             root=tmp_path,
         )
+def test_work_item_produce_verify_without_verifier_session_shares_current_item_session(tmp_path: Path):
+    class WorkItemPairSessionWorkflow(Workflow):
+        class State(BaseModel):
+            pass
+
+        items = Worklist.from_items(
+            name="item",
+            items=(
+                {"id": "item-7", "title": "Seven", "status": "queued"},
+                {"id": "item-8", "title": "Eight", "status": "queued"},
+            ),
+        )
+        item_session = Session.work_item(items)
+        implement = ProduceVerifyStep(
+            name="implement",
+            producer="implement.md",
+            verifier="verify.md",
+            scope=items,
+            session=item_session,
+        )
+        entry = implement
+        transitions = {
+            implement: {
+                "accepted": Route.complete_and_advance(
+                    implement,
+                    exhausted=FINISH,
+                    required_writes=[],
+                )
+            }
+        }
+
+    task_folder, run_folder = _workspace(tmp_path)
+    session_store = InMemorySessionStore()
+    producer_sessions: list[tuple[str, str]] = []
+    verifier_sessions: list[tuple[str, str]] = []
+
+    def produce(request):
+        item_id = request.context.item.id
+        assert request.session is not None
+        producer_sessions.append((item_id, request.session.session_id))
+        return ProducerResponse(
+            raw_output=f"draft {item_id}",
+            session=SessionBinding(key=request.session.key, session_id=f"producer-{item_id}"),
+        )
+
+    def verify(request):
+        item_id = request.context.item.id
+        assert request.session is not None
+        verifier_sessions.append((item_id, request.session.session_id))
+        return OutcomeResponse(
+            outcome=Outcome(raw_output=f"verify {item_id}", tag="accepted"),
+            session=SessionBinding(key=request.session.key, session_id=f"verifier-{item_id}"),
+        )
+
+    result = Engine(
+        WorkItemPairSessionWorkflow,
+        provider=ScriptedLLMProvider(
+            producer_turns=[produce, produce],
+            verifier_turns=[verify, verify],
+        ),
+        session_store=session_store,
+        checkpoint_store=InMemoryCheckpointStore(),
+    ).run(
+        task_id="task-1",
+        run_id="run-1",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+    )
+
+    snapshot = session_store.snapshot()
+
+    assert result.terminal == FINISH
+    assert [item_id for item_id, _ in producer_sessions] == ["item-7", "item-8"]
+    assert verifier_sessions == [
+        ("item-7", "producer-item-7"),
+        ("item-8", "producer-item-8"),
+    ]
+    assert producer_sessions[0][1] != producer_sessions[1][1]
+    bindings_by_key = {binding.key: binding for binding in snapshot.bindings}
+    assert bindings_by_key[SessionKey(slot="item_session", domain="work_item", value="item:item-7")].session_id == "verifier-item-7"
+    assert bindings_by_key[SessionKey(slot="item_session", domain="work_item", value="item:item-8")].session_id == "verifier-item-8"
 def test_invalid_goto_after_session_mutation_preserves_checkpoint_session_bindings(tmp_path: Path):
     def after(ctx):
         ctx.set_global_session("hook-mutated-session")

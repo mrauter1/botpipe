@@ -329,6 +329,35 @@ def test_workflows_show_cli_serializes_packaged_workflow_with_worklist(
     assert payload["routes"]["steps"]["implement"]["accepted"] == "implement"
 
 
+def test_ralph_loop_implementation_rework_uses_shared_item_session_and_handoff() -> None:
+    from botpipe.core.compiler import compile_workflow
+    from botpipe.workflows.ralph_loop import RalphLoop
+
+    compiled = compile_workflow(RalphLoop)
+    implement = compiled.steps["implement"]
+
+    assert implement.session_name == "item_session"
+    assert implement.verifier_session_name is None
+
+    item_session = compiled.sessions["item_session"]
+    assert item_session.continuity.kind == "work_item"
+    assert item_session.continuity.worklist_name == "item"
+
+    rework_route = compiled.routes["implement"]["needs_rework"]
+    assert rework_route.target == "implement"
+    assert rework_route.handoff is not None
+    assert "{{ item.id }}" in rework_route.handoff
+    assert "{{ item.dir_key }}" in rework_route.handoff
+    assert "implementation_review.md" in rework_route.handoff
+
+    producer_prompt = implement.producer.prompt.text or ""
+    verifier_prompt = implement.verifier.prompt.text or ""
+    assert "If implementation_review.md exists for the current item, read it" in producer_prompt
+    assert "{{ workflow.folder }}/items/{{ item.dir_key }}/implementation_review.md" in producer_prompt
+    assert "Do not rely on the" in verifier_prompt
+    assert "producer's summary or claimed validation" in verifier_prompt
+
+
 def test_discover_repo_local_catalog_entries_use_workflows_namespace_defaults_and_repo_tests(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

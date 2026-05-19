@@ -8,15 +8,30 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
+import botpipe.sdk as sdk_module
+from botpipe import Botpipe, RetentionPolicy
 from botpipe.core.compiler import compile_workflow
 from botpipe.core import FINISH, Workflow
+from botpipe.core.provider_policy import PermissionPolicy, ProviderPolicy
 from botpipe.core.providers.fake import ScriptedLLMProvider
 from botpipe.core.providers.rendered import RenderedLLMProvider
 from botpipe.core.providers.retries import ProviderRetryPolicy
 from botpipe.core.providers.turns import ProviderTurnResult
-from botpipe.core.schema_registry import CHILD_RUN_SUMMARY_SCHEMA, RUN_METADATA_SCHEMA, WORKFLOW_TOPOLOGY_SCHEMA
+from botpipe.core.schema_registry import (
+    CHILD_RUN_SUMMARY_SCHEMA,
+    RUN_METADATA_SCHEMA,
+    TASK_METADATA_SCHEMA,
+    WORKFLOW_TOPOLOGY_SCHEMA,
+)
 from botpipe.core.steps import PromptStep
-from botpipe.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
+from botpipe.runtime.config import (
+    CodexProviderConfig,
+    ConfigError,
+    GitTrackingRuntimeConfig,
+    ProviderConfig,
+    ProviderPolicyRuntimeConfig,
+    RuntimeConfig,
+)
 from botpipe.core.errors import WorkflowExecutionError
 from botpipe.runtime.loader import WorkflowParameterError
 from botpipe.runtime.loader import resolve_workflow_reference
@@ -36,6 +51,7 @@ from botpipe.runtime.workspace import (
     list_task_operation_summaries,
     list_workflow_run_summaries,
     resolve_run_workflow_input,
+    update_run_metadata,
 )
 from botpipe.core.primitives import Outcome
 
@@ -114,6 +130,7 @@ def test_run_creates_task_workflow_run_layout_and_immutable_request_snapshots(tm
     assert (task_dir / "request.md").read_text(encoding="utf-8") == "First message\n"
     assert (first_run_dir / "request.md").read_text(encoding="utf-8") == "First message\n"
     assert (workflow_dir / "workflow.json").exists()
+    assert task_meta["schema"] == TASK_METADATA_SCHEMA
     assert task_meta["messages_file"] == ".botpipe/tasks/task-1/messages.jsonl"
     assert task_meta["request_file"] == ".botpipe/tasks/task-1/request.md"
     assert first_run_meta["schema"] == RUN_METADATA_SCHEMA
@@ -142,6 +159,224 @@ def test_run_creates_task_workflow_run_layout_and_immutable_request_snapshots(tm
     assert (first_run_dir / "request.md").read_text(encoding="utf-8") == "First message\n"
     assert (second_run_dir / "request.md").read_text(encoding="utf-8") == "Second message\n"
     assert workflow_meta["last_run_id"] == second_run_dir.name
+
+
+def test_task_metadata_stays_task_scoped_while_run_metadata_records_effective_config(tmp_path: Path) -> None:
+    _write_system_workflow_package(tmp_path, "config_demo", "ConfigWorkflow")
+
+    run_workflow_package(
+        "config_demo",
+        provider=ScriptedLLMProvider(),
+        options=_runner_options(
+            tmp_path,
+            task_id="task-config",
+            message="First message",
+            max_steps=5,
+            provider_config=ProviderConfig(codex=CodexProviderConfig(model="gpt-first", model_effort="medium")),
+            runtime_config=RuntimeConfig(max_steps=13, git_tracking=GitTrackingRuntimeConfig(enabled=False)),
+            created_by="cli",
+        ),
+    )
+    run_workflow_package(
+        "config_demo",
+        provider=ScriptedLLMProvider(),
+        options=_runner_options(
+            tmp_path,
+            task_id="task-config",
+            message="Second message",
+            provider_config=ProviderConfig(codex=CodexProviderConfig(model="gpt-second", model_effort="high")),
+            created_by="sdk",
+        ),
+    )
+
+    task_dir = tmp_path / ".botpipe" / "tasks" / "task-config"
+    task_meta = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
+    run_dirs = sorted((task_dir / "wf_config_demo" / "runs").iterdir())
+    run_metas = [json.loads((run_dir / "run.json").read_text(encoding="utf-8")) for run_dir in run_dirs]
+
+    assert task_meta["schema"] == TASK_METADATA_SCHEMA
+    assert task_meta["created_by"] == "cli"
+    assert "provider" not in task_meta
+    assert "model" not in task_meta
+    assert "execution_config" not in task_meta
+
+    configs = [run_meta["execution_config"]["created_with"] for run_meta in run_metas]
+    configs_by_model = {config["provider"]["model"]: config for config in configs}
+    assert configs_by_model["gpt-first"]["provider"] == {
+        "name": "codex",
+        "model": "gpt-first",
+        "model_effort": "medium",
+    }
+    assert configs_by_model["gpt-first"]["runtime"]["max_steps"] == 5
+    assert configs_by_model["gpt-first"]["runtime"]["configured_max_steps"] == 13
+    assert configs_by_model["gpt-second"]["provider"] == {
+        "name": "codex",
+        "model": "gpt-second",
+        "model_effort": "high",
+    }
+    for run_meta in run_metas:
+        created_with = run_meta["execution_config"]["created_with"]
+        assert created_with["runtime"]["git_tracking"]["enabled"] is False
+        assert "provider_policy" not in created_with
+        assert "provider_policy_config" in created_with
+        assert created_with["policy_layers"] == {
+            "sdk_default_policy_configured": False,
+            "workflow_policy_configured": False,
+            "run_policy_configured": False,
+        }
+        assert run_meta["execution_config"]["last_used"] == created_with
+
+
+def test_existing_task_without_created_by_is_not_backfilled(tmp_path: Path) -> None:
+    task_workspace = ensure_workspace(tmp_path, "legacy-task", message="Initial message")
+    task_meta = json.loads(task_workspace.task_meta_file.read_text(encoding="utf-8"))
+    task_meta.pop("created_by", None)
+    task_workspace.task_meta_file.write_text(json.dumps(task_meta, indent=2) + "\n", encoding="utf-8")
+
+    ensure_workspace(tmp_path, "legacy-task", message="Next message", created_by="cli")
+
+    updated = json.loads(task_workspace.task_meta_file.read_text(encoding="utf-8"))
+    assert "created_by" not in updated
+
+
+def test_resume_observation_without_created_execution_config_is_not_marked_created(tmp_path: Path) -> None:
+    task_workspace = ensure_workspace(tmp_path, "legacy-run-task", message="Initial message")
+    workflow_workspace = ensure_workflow_workspace(
+        task_workspace,
+        "legacy_run_demo",
+        package_dir=tmp_path,
+        reference="legacy_run_demo",
+    )
+    run_workspace = create_run(workflow_workspace, run_id="run-legacy", message="Initial message")
+
+    update_run_metadata(
+        run_workspace,
+        execution_config={
+            "resume": True,
+            "runtime": {"max_steps": 100},
+            "provider_policy_config": {"hash": "sha256:test"},
+        },
+    )
+
+    run_meta = json.loads(run_workspace.run_meta_file.read_text(encoding="utf-8"))
+    execution_config = run_meta["execution_config"]
+    assert "created_with" not in execution_config
+    assert execution_config["first_recorded_with"]["resume"] is True
+    assert execution_config["last_used"] == execution_config["first_recorded_with"]
+
+
+def test_runtime_config_max_steps_is_used_when_runner_options_max_steps_is_unset(tmp_path: Path) -> None:
+    _write_two_step_continue_workflow_package(tmp_path, "runtime_budget_demo", "RuntimeBudgetWorkflow")
+
+    with pytest.raises(WorkflowExecutionError, match="max_steps=1"):
+        run_workflow_package(
+            "runtime_budget_demo",
+            provider=ScriptedLLMProvider(llm_turns=[Outcome(raw_output="next", tag="next")]),
+            options=_runner_options(
+                tmp_path,
+                task_id="runtime-budget-task",
+                message="Use runtime budget",
+                runtime_config=RuntimeConfig(max_steps=1, git_tracking=GitTrackingRuntimeConfig(enabled=False)),
+            ),
+        )
+
+    run_dir = next((tmp_path / ".botpipe" / "tasks" / "runtime-budget-task" / "wf_runtime_budget_demo" / "runs").iterdir())
+    run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    runtime_meta = run_meta["execution_config"]["created_with"]["runtime"]
+    assert runtime_meta["max_steps"] == 1
+    assert "configured_max_steps" not in runtime_meta
+
+
+def test_runner_rejects_bool_max_steps_values(tmp_path: Path) -> None:
+    _write_system_workflow_package(tmp_path, "bool_budget_demo", "BoolBudgetWorkflow")
+
+    with pytest.raises(ConfigError, match="max_steps must be a positive integer"):
+        run_workflow_package(
+            "bool_budget_demo",
+            provider=ScriptedLLMProvider(),
+            options=_runner_options(
+                tmp_path,
+                task_id="bool-budget-explicit",
+                message="Reject bool max steps",
+                max_steps=True,
+            ),
+        )
+
+    with pytest.raises(ConfigError, match="runtime max_steps must be a positive integer"):
+        run_workflow_package(
+            "bool_budget_demo",
+            provider=ScriptedLLMProvider(),
+            options=_runner_options(
+                tmp_path,
+                task_id="bool-budget-runtime",
+                message="Reject bool runtime max steps",
+                runtime_config=RuntimeConfig(max_steps=True, git_tracking=GitTrackingRuntimeConfig(enabled=False)),
+            ),
+        )
+
+
+def test_provider_policy_config_fingerprint_is_redacted(tmp_path: Path) -> None:
+    _write_system_workflow_package(tmp_path, "policy_fingerprint_demo", "PolicyFingerprintWorkflow")
+
+    def run_with_policy(task_id: str, provider_policy_config: ProviderPolicyRuntimeConfig) -> str:
+        run_workflow_package(
+            "policy_fingerprint_demo",
+            provider=ScriptedLLMProvider(),
+            options=_runner_options(
+                tmp_path,
+                task_id=task_id,
+                message="Record policy fingerprint",
+                provider_policy_config=provider_policy_config,
+            ),
+        )
+        run_dir = next((tmp_path / ".botpipe" / "tasks" / task_id / "wf_policy_fingerprint_demo" / "runs").iterdir())
+        run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+        policy_config_meta = run_meta["execution_config"]["created_with"]["provider_policy_config"]
+        assert "hash" not in policy_config_meta
+        return policy_config_meta["redacted_hash"]
+
+    alpha_secret_hash = run_with_policy(
+        "policy-secret-alpha",
+        ProviderPolicyRuntimeConfig(
+            default=ProviderPolicy.model_validate({"env": {"set": {"SECRET_TOKEN": "alpha"}}})
+        ),
+    )
+    beta_secret_hash = run_with_policy(
+        "policy-secret-beta",
+        ProviderPolicyRuntimeConfig(
+            default=ProviderPolicy.model_validate({"env": {"set": {"SECRET_TOKEN": "beta"}}})
+        ),
+    )
+    permission_hash = run_with_policy(
+        "policy-permission-change",
+        ProviderPolicyRuntimeConfig(default=ProviderPolicy(permissions=PermissionPolicy(mode="deny_all"))),
+    )
+
+    assert alpha_secret_hash == beta_secret_hash
+    assert permission_hash != alpha_secret_hash
+
+
+def test_sdk_provider_overrides_are_recorded_as_sdk_config_sources(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_system_workflow_package(tmp_path, "sdk_source_demo", "SdkSourceWorkflow")
+    provider = ScriptedLLMProvider()
+    monkeypatch.setattr(sdk_module, "resolve_provider_backend", lambda *, config: provider)
+
+    client = Botpipe(
+        workspace=tmp_path,
+        provider="codex",
+        model="sdk-model",
+        model_effort="high",
+        runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False)),
+    )
+    result = client.run("sdk_source_demo", "Run from SDK", retention=RetentionPolicy.keep_all())
+
+    run_meta = json.loads((result.debug.run_dir / "run.json").read_text(encoding="utf-8"))
+    created_with = run_meta["execution_config"]["created_with"]
+    assert created_with["provider"] == {"name": "codex", "model": "sdk-model", "model_effort": "high"}
+    assert created_with["config_sources"]["sdk_overrides"] == ["provider", "model", "model_effort"]
 
 
 def test_runner_full_auto_hides_default_question_route_from_provider_contract(tmp_path: Path) -> None:

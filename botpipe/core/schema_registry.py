@@ -10,6 +10,7 @@ CHECKPOINT_SCHEMA = "botpipe.checkpoint/v1"
 RUNTIME_TRACE_SCHEMA = "botpipe.runtime_trace/v1"
 RUNTIME_EVENT_SCHEMA = "botpipe.runtime_event/v1"
 CHILD_RUN_SUMMARY_SCHEMA = "botpipe.child_run_summary/v1"
+TASK_METADATA_SCHEMA = "botpipe.task_metadata/v1"
 OPERATION_REPLAY_SCHEMA = "botpipe.operation_replay/v2"
 GIT_TRACKING_SCHEMA = "botpipe.git_tracking/v1"
 WORKFLOW_STATIC_STEP_GRAPH_SCHEMA = "botpipe.workflow_static_step_graph/v1"
@@ -80,6 +81,7 @@ __all__ = [
     "RUN_METADATA_SCHEMA",
     "RUNTIME_EVENT_SCHEMA",
     "RUNTIME_TRACE_SCHEMA",
+    "TASK_METADATA_SCHEMA",
     "WORKFLOW_ARTIFACT_CONTRACTS_SCHEMA",
     "WORKFLOW_OPTIMIZATION_EXCLUDED_RUN_REPORT_SCHEMA",
     "WORKFLOW_OPTIMIZATION_FAILURE_SCENARIO_SEEDS_SCHEMA",

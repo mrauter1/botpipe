@@ -34,7 +34,6 @@ class RalphLoop(Workflow):
     plan_session = Session.run()
     plan_verifier_session = Session.run()
     item_session = Session.work_item(items)
-    item_verifier_session = Session.work_item(items)
 
     plan = produce_verify_step(
         session=plan_session,
@@ -90,7 +89,6 @@ class RalphLoop(Workflow):
     implement = produce_verify_step(
         scope=items,
         session=item_session,
-        verifier_session=item_verifier_session,
         requires=[plan.work],
         verifier_requires=[plan.work],
         producer_prompt=Prompt.inline(
@@ -102,6 +100,13 @@ class RalphLoop(Workflow):
             - title: {{ item.title }}
             - payload: {{ item.payload }}
 
+            If implementation_review.md exists for the current item, read it
+            first. If it contains NEEDS_REWORK or blocking findings, address
+            every listed finding before making unrelated changes.
+
+            Review path:
+            {{ workflow.folder }}/items/{{ item.dir_key }}/implementation_review.md
+
             Implement this item completely and correctly in the repository.
             Edit files, add or update tests, run validation, and fix failures.
             """.strip()
@@ -109,6 +114,10 @@ class RalphLoop(Workflow):
         verifier_prompt=Prompt.inline(
             """
             Verify the repository implementation for the current item.
+
+            Independently verify the repository state. Do not rely on the
+            producer's summary or claimed validation. Inspect source, tests,
+            artifacts, and command output yourself.
 
             Check work.json, the item payload, repo diff, source files, tests,
             and relevant command output.
@@ -135,6 +144,11 @@ class RalphLoop(Workflow):
             ),
             "needs_rework": Route.to(
                 "implement",
+                handoff=(
+                    "The verifier rejected item {{ item.id }}. Read "
+                    "{{ workflow.folder }}/items/{{ item.dir_key }}/implementation_review.md "
+                    "and address every required change before continuing."
+                ),
                 required_writes=["implementation_review"],
             ),
         },

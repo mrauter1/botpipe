@@ -811,6 +811,64 @@ def test_handoff_route_to_provider_step_compiles():
     assert route.handoff == "Carry the unresolved feedback forward."
 
 
+def test_route_handoff_template_rejects_unknown_jinja_variable():
+    with pytest.raises(WorkflowValidationError, match=r"unknown Jinja variable\(s\): missing"):
+
+        def _unknownhandoffworkflow_on_ask(ctx):
+            return None
+
+        def _unknownhandoffworkflow_on_review(ctx):
+            return None
+
+        class UnknownHandoffWorkflow(Workflow):
+            class State(BaseModel):
+                pass
+
+            ask = PromptStep(name="ask", producer="ask.md")
+            review = PromptStep(name="review", producer="review.md")
+            entry = ask
+            transitions = {
+                ask: {"done": Route.to(review, handoff="Read {{ missing.value }} before retrying.")},
+                review: {"complete": FINISH},
+            }
+
+        UnknownHandoffWorkflow.ask.after = _chain_hooks(_unknownhandoffworkflow_on_ask, UnknownHandoffWorkflow.ask.after)
+        UnknownHandoffWorkflow.review.after = _chain_hooks(_unknownhandoffworkflow_on_review, UnknownHandoffWorkflow.review.after)
+
+        compile_workflow(UnknownHandoffWorkflow)
+
+
+def test_route_handoff_template_rejects_item_without_source_scope():
+    with pytest.raises(WorkflowValidationError, match=r"requires scope=\.\.\. on the same step"):
+
+        def _unscopedhandoffworkflow_on_ask(ctx):
+            return None
+
+        def _unscopedhandoffworkflow_on_review(ctx):
+            return None
+
+        class UnscopedHandoffWorkflow(Workflow):
+            class State(BaseModel):
+                pass
+
+            items = Worklist.from_items(
+                name="item",
+                items=({"id": "item-1", "title": "One"},),
+            )
+            ask = PromptStep(name="ask", producer="ask.md")
+            review = PromptStep(name="review", producer="review.md", scope=items)
+            entry = ask
+            transitions = {
+                ask: {"done": Route.to(review, handoff="Review {{ item.id }}.")},
+                review: {"complete": FINISH},
+            }
+
+        UnscopedHandoffWorkflow.ask.after = _chain_hooks(_unscopedhandoffworkflow_on_ask, UnscopedHandoffWorkflow.ask.after)
+        UnscopedHandoffWorkflow.review.after = _chain_hooks(_unscopedhandoffworkflow_on_review, UnscopedHandoffWorkflow.review.after)
+
+        compile_workflow(UnscopedHandoffWorkflow)
+
+
 def test_validation_rejects_handoff_route_to_system_step():
     with pytest.raises(WorkflowValidationError, match="cannot deliver handoff metadata to PythonStep 'finish'"):
 

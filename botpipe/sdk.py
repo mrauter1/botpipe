@@ -61,6 +61,7 @@ from botpipe.runtime.config import (
     ProviderPolicyRuntimeConfig,
     ResolvedRuntimeConfig,
     RuntimeConfig,
+    RuntimeConfigSources,
     resolve_runtime_config,
 )
 from botpipe.runtime.loader import (
@@ -470,6 +471,9 @@ class Botpipe:
         model_effort: str | None = None,
         runtime_config: RuntimeConfig | None = None,
         provider_policy_config: ProviderPolicyRuntimeConfig | None = None,
+        provider_config: ProviderConfig | None = None,
+        config_sources: RuntimeConfigSources | None = None,
+        created_by: str = "sdk",
         state_dir: str | Path | None = None,
         retention: RetentionPolicy | None = None,
     ) -> None:
@@ -488,13 +492,27 @@ class Botpipe:
         resolved_config = resolve_runtime_config(self.root, argparse.Namespace())
         self.runtime_config = runtime_config or resolved_config.runtime
         self.provider_policy_config = provider_policy_config or resolved_config.provider_policy
-        self.state_dir = primary_state_root(self.root) if state_dir is None else Path(state_dir).resolve()
-        self.retention = retention or RetentionPolicy.sdk_default()
-        self._provider_config = _provider_config_with_overrides(
-            resolved_config.provider,
+        self.config_sources = config_sources or _runtime_config_sources_with_sdk_overrides(
+            resolved_config.sources,
             provider=provider,
             model=model,
             model_effort=model_effort,
+            provider_config=provider_config,
+        )
+        self.created_by = created_by
+        self.state_dir = primary_state_root(self.root) if state_dir is None else Path(state_dir).resolve()
+        self.retention = retention or RetentionPolicy.sdk_default()
+        base_provider_config = provider_config or resolved_config.provider
+        self._provider_config = _provider_config_with_overrides(
+            base_provider_config,
+            provider=provider,
+            model=model,
+            model_effort=model_effort,
+        )
+        self._metadata_provider_config = (
+            None
+            if provider is not None and not isinstance(provider, str) and provider_config is None
+            else self._provider_config
         )
         self._provider = _resolve_sdk_provider(
             provider=provider,
@@ -615,12 +633,15 @@ class Botpipe:
                         resume=resume,
                         answer=answer,
                         state_dir=self.state_dir,
-                        max_steps=max_steps,
+                        max_steps=max_steps if max_steps is not None else runtime_config.max_steps,
                         workflow_params=structured_params,
                         workflow_input=structured_input,
                         record_task_message=options.record_task_message if options is not None else True,
                         runtime_config=runtime_config,
                         provider_policy_config=self.provider_policy_config,
+                        provider_config=self._metadata_provider_config,
+                        config_sources=self.config_sources,
+                        created_by=self.created_by,
                         sdk_default_policy=self.default_policy,
                         run_policy=normalized_policy,
                         event_callback=on_event,
@@ -1186,6 +1207,9 @@ class RunsClient:
                     max_steps=max_steps if max_steps is not None else self._client.runtime_config.max_steps,
                     runtime_config=runtime_config,
                     provider_policy_config=self._client.provider_policy_config,
+                    provider_config=self._client._metadata_provider_config,
+                    config_sources=self._client.config_sources,
+                    created_by=self._client.created_by,
                     sdk_default_policy=self._client.default_policy,
                     run_policy=normalized_policy,
                     event_callback=on_event,
@@ -1838,6 +1862,30 @@ def _provider_config_with_overrides(
             ),
         )
     return updated
+
+
+def _runtime_config_sources_with_sdk_overrides(
+    sources: RuntimeConfigSources,
+    *,
+    provider: str | LLMProvider | None,
+    model: str | None,
+    model_effort: str | None,
+    provider_config: ProviderConfig | None,
+) -> RuntimeConfigSources:
+    overrides: list[str] = list(sources.sdk_overrides)
+    if isinstance(provider, str):
+        overrides.append("provider")
+    elif provider is not None:
+        overrides.append("provider_object")
+    if model is not None:
+        overrides.append("model")
+    if model_effort is not None:
+        overrides.append("model_effort")
+    if provider_config is not None:
+        overrides.append("provider_config")
+    if not overrides:
+        return sources
+    return replace(sources, sdk_overrides=tuple(dict.fromkeys(overrides)))
 
 
 def _resolve_and_compile_workflow(root: Path, workflow: type[object] | str) -> tuple[Any, WorkflowPlan]:

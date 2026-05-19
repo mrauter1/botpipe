@@ -1391,7 +1391,13 @@ class RouteRuntimeService:
     ) -> tuple[PendingHandoff, ...]:
         messages: list[str] = []
         if route.handoff is not None:
-            messages.append(route.handoff)
+            messages.append(
+                render_inline_prompt_template(
+                    route.handoff,
+                    context,
+                    placeholder_label=f"step {source_step!r} route {route.tag!r} handoff template",
+                )
+            )
         if event is not None and event.handoff is not None:
             messages.append(event.handoff)
         if not messages:

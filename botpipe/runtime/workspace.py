@@ -19,6 +19,7 @@ from botpipe.core.schema_registry import (
     CHILD_RUN_SUMMARY_SCHEMA,
     CHECKPOINT_SCHEMA,
     RUN_METADATA_SCHEMA,
+    TASK_METADATA_SCHEMA,
     migrate_schemaless_payload,
     validate_persisted_schema,
 )
@@ -278,6 +279,7 @@ def ensure_workspace(
     record_message: bool = True,
     *,
     state_dir: Path | None = None,
+    created_by: str | None = None,
 ) -> TaskWorkspace:
     workspace = resolve_task_workspace(root, task_id, state_dir=state_dir)
     resolved_root = workspace.root
@@ -308,11 +310,15 @@ def ensure_workspace(
     if request_updated or not had_request or not task_request_file.exists():
         task_request_file.write_text(body.rstrip() + "\n", encoding="utf-8")
 
+    is_new_task_metadata = not task_meta_file.exists()
     now = _utcnow()
     task_meta = _load_json(task_meta_file, default={"task_id": task_id, "created_at": now})
+    task_meta["schema"] = TASK_METADATA_SCHEMA
     task_meta["task_id"] = task_id
     task_meta["request_file"] = str(task_root_rel / "request.md")
     task_meta["messages_file"] = str(task_root_rel / "messages.jsonl")
+    if created_by is not None and is_new_task_metadata:
+        task_meta.setdefault("created_by", created_by)
     if request_updated or "request_updated_at" not in task_meta:
         task_meta["request_updated_at"] = now
     task_meta["updated_at"] = now
@@ -760,6 +766,7 @@ def update_run_metadata(
     error: str | None = None,
     topology: Mapping[str, Any] | None = None,
     finalization: Mapping[str, Any] | None | object = _UNSET,
+    execution_config: Mapping[str, Any] | None = None,
 ) -> None:
     workflow_workspace = run_workspace.workflow_workspace
     task_workspace = workflow_workspace.task_workspace
@@ -827,9 +834,36 @@ def update_run_metadata(
             payload["finalization"] = normalize_mapping(finalization)
         else:
             payload.pop("finalization", None)
+    if execution_config is not None:
+        _record_execution_config(payload, execution_config, recorded_at=now)
     payload["updated_at"] = now
     _write_json(run_workspace.run_meta_file, payload)
     update_workflow_metadata(workflow_workspace, last_run_id=run_workspace.run_id, last_status=payload.get("status"))
+
+
+def _record_execution_config(
+    payload: dict[str, Any],
+    execution_config: Mapping[str, Any],
+    *,
+    recorded_at: str,
+) -> None:
+    entry = normalize_mapping(execution_config)
+    entry["recorded_at"] = recorded_at
+    metadata = payload.get("execution_config")
+    if not isinstance(metadata, dict):
+        metadata = {}
+        payload["execution_config"] = metadata
+    if "created_with" not in metadata and "first_recorded_with" not in metadata:
+        if entry.get("resume") is True:
+            metadata["first_recorded_with"] = entry
+        else:
+            metadata["created_with"] = entry
+    metadata["last_used"] = entry
+    invocations = metadata.get("invocations")
+    if not isinstance(invocations, list):
+        invocations = []
+        metadata["invocations"] = invocations
+    invocations.append(entry)
 
 
 def touch_run_heartbeat(run_dir: Path, event: Mapping[str, Any]) -> None:

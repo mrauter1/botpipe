@@ -770,7 +770,7 @@ def test_rendered_provider_invalid_question_retry_exhaustion_marks_failure_conte
     assert checkpoint.failure_context["retry_exhausted"] is True
 def test_route_handoff_combines_static_and_dynamic_messages_for_target_provider_step(tmp_path: Path):
     def _handoffworkflow_on_start(ctx):
-        return Event('review', handoff='Dynamic handoff.')
+        return Event('review', handoff='Dynamic {{ event.tag }} handoff.')
 
     def _handoffworkflow_on_review(ctx):
         ctx.state = ctx.state.model_copy(update={'done': True})
@@ -788,7 +788,7 @@ def test_route_handoff_combines_static_and_dynamic_messages_for_target_provider_
         finish = PythonStep(name="finish", handler=_handoffworkflow_on_finish)
         entry = start
         transitions = {
-            start: {"review": Route.to(review, handoff="Static handoff.")},
+            start: {"review": Route.to(review, handoff="Static {{ event.tag }} handoff.")},
             review: {"done": finish},
             finish: {"complete": FINISH},
         }
@@ -813,7 +813,61 @@ def test_route_handoff_combines_static_and_dynamic_messages_for_target_provider_
     )
 
     assert result.terminal == FINISH
-    assert provider.calls[0].route_handoff == "Static handoff.\n\nDynamic handoff."
+    assert provider.calls[0].route_handoff == "Static review handoff.\n\nDynamic {{ event.tag }} handoff."
+def test_route_handoff_template_uses_final_event_after_same_tag_on_taken_override(tmp_path: Path):
+    def _finaleventhandoffworkflow_on_start(ctx):
+        return Event('review', reason='initial reason')
+
+    def on_review_taken(ctx):
+        return Event('review', reason='updated reason', handoff='Dynamic {{ event.reason }} handoff.')
+
+    def _finaleventhandoffworkflow_on_review(ctx):
+        ctx.state = ctx.state.model_copy(update={'done': True})
+        return None
+
+    class FinalEventHandoffWorkflow(Workflow):
+        class State(BaseModel):
+            done: bool = False
+
+        start = PythonStep(name="start", handler=_finaleventhandoffworkflow_on_start)
+        review = PromptStep(name="review", producer="review.md")
+        entry = start
+        transitions = {
+            start: {
+                "review": Route.to(
+                    review,
+                    handoff="Static {{ event.reason }} handoff for {{ route.tag }}.",
+                    on_taken=on_review_taken,
+                )
+            },
+            review: {"done": FINISH},
+        }
+    FinalEventHandoffWorkflow.review.after = _chain_hooks(
+        _finaleventhandoffworkflow_on_review,
+        FinalEventHandoffWorkflow.review.after,
+    )
+
+    task_folder, run_folder = _workspace(tmp_path)
+    provider = ScriptedLLMProvider(llm_turns=[Outcome(raw_output="ok", tag="done")])
+    engine = Engine(
+        FinalEventHandoffWorkflow,
+        provider=provider,
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    )
+
+    result = engine.run(
+        task_id="task-1",
+        run_id="run-1",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+    )
+
+    assert result.terminal == FINISH
+    assert provider.calls[0].route_handoff == (
+        "Static updated reason handoff for review.\n\nDynamic {{ event.reason }} handoff."
+    )
 def test_route_handoff_is_consumed_after_first_dispatch(tmp_path: Path):
     def _consumeonceworkflow_on_start(ctx):
         return Event('ask')
@@ -868,8 +922,7 @@ def test_route_handoff_is_consumed_after_first_dispatch(tmp_path: Path):
 def test_route_handoff_is_scoped_to_the_active_worklist_item(tmp_path: Path):
     def _scopedhandoffworkflow_on_outcome(ctx):
         if ctx.outcome.tag == 'review':
-            item_id = str(ctx.outcome.payload['item_id'])
-            return Event('review', handoff=f'handoff:{item_id}')
+            return Event('review')
         return None
 
     def _scopedhandoffworkflow_on_draft(ctx):
@@ -904,7 +957,7 @@ def test_route_handoff_is_scoped_to_the_active_worklist_item(tmp_path: Path):
         finish = PythonStep(name="finish", handler=_scopedhandoffworkflow_on_finish)
         entry = draft
         transitions = {
-            draft: {"review": review},
+            draft: {"review": Route.to(review, handoff="handoff:{{ item.id }}")},
             review: {"next": advance, "done": finish},
             advance: {"draft": draft},
             finish: {"complete": FINISH},
@@ -965,7 +1018,7 @@ def test_route_handoff_survives_checkpoint_resume_before_dispatch_consumes_it(tm
         finish = PythonStep(name="finish", handler=_resumehandoffworkflow_on_finish)
         entry = start
         transitions = {
-            start: {"review": Route.to(review, handoff="Resume this handoff.")},
+            start: {"review": Route.to(review, handoff="Resume {{ event.tag }} handoff.")},
             review: {"done": finish},
             finish: {"complete": FINISH},
         }
@@ -993,6 +1046,7 @@ def test_route_handoff_survives_checkpoint_resume_before_dispatch_consumes_it(tm
     checkpoint = checkpoint_store.load()
     assert checkpoint is not None
     assert checkpoint.pending_handoffs
+    assert checkpoint.pending_handoffs[0].message == "Resume review handoff."
 
     resumed_provider = ScriptedLLMProvider(llm_turns=[Outcome(raw_output="ok", tag="done")])
     resumed_engine = Engine(
@@ -1011,7 +1065,7 @@ def test_route_handoff_survives_checkpoint_resume_before_dispatch_consumes_it(tm
     )
 
     assert result.terminal == FINISH
-    assert resumed_provider.calls[0].route_handoff == "Resume this handoff."
+    assert resumed_provider.calls[0].route_handoff == "Resume review handoff."
 def test_route_handoff_targeting_system_step_is_dropped_before_later_provider_step(tmp_path: Path):
     def _systemtargethandoffworkflow_on_outcome(ctx):
         if ctx.outcome.tag == 'bridge':

@@ -117,10 +117,20 @@ class RuntimeConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class RuntimeConfigSources:
+    user_config: Path | None = None
+    workspace_config: Path | None = None
+    policy_file: Path | None = None
+    cli_overrides: tuple[str, ...] = ()
+    sdk_overrides: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class ResolvedRuntimeConfig:
     provider: ProviderConfig
     runtime: RuntimeConfig
     provider_policy: ProviderPolicyRuntimeConfig = field(default_factory=ProviderPolicyRuntimeConfig)
+    sources: RuntimeConfigSources = field(default_factory=RuntimeConfigSources)
 
 
 @dataclass(frozen=True, slots=True)
@@ -499,7 +509,37 @@ def resolve_runtime_config(root: Path, args: argparse.Namespace) -> ResolvedRunt
             runtime=runtime,
             args=args,
         ),
+        sources=RuntimeConfigSources(
+            user_config=global_config_path,
+            workspace_config=local_config_path,
+            policy_file=policy_file_path,
+            cli_overrides=_cli_override_names(args),
+        ),
     )
+
+
+def _cli_override_names(args: argparse.Namespace) -> tuple[str, ...]:
+    candidates = (
+        "provider",
+        "model",
+        "model_effort",
+        "max_steps",
+        "no_git",
+        "git_commit_policy",
+        "no_trace",
+        "policy_validation_unsupported",
+        "policy_validation_lossy",
+        "policy_validation_unsafe_expansion",
+    )
+    names: list[str] = []
+    for name in candidates:
+        value = getattr(args, name, None)
+        if value is None or value is False:
+            continue
+        names.append(name)
+    if getattr(args, "policy_file", None) is not None:
+        names.append("policy_file")
+    return tuple(names)
 
 
 def _merge_provider_config(
