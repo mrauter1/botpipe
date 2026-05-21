@@ -296,6 +296,37 @@ def validate_workflow_parameters(
     return coerce_workflow_parameter_mapping(parameters_cls, payload)
 
 
+def validate_workflow_parameter_overrides(
+    parameters_cls: type[Any] | None,
+    raw_pairs: Sequence[tuple[str, str]] | None,
+) -> dict[str, Any]:
+    """Validate ordered resume ``-wf`` pairs without applying omitted-field defaults."""
+
+    ordered_pairs = tuple(raw_pairs or ())
+    if parameters_cls is None:
+        if ordered_pairs:
+            raise WorkflowParameterError("workflow does not declare Params and does not accept -wf arguments")
+        return {}
+
+    fields = workflow_parameter_fields(parameters_cls)
+    known_fields = {field.name: field for field in fields}
+    payload: dict[str, Any] = {}
+    for name, raw_value in ordered_pairs:
+        field = known_fields.get(name)
+        if field is None:
+            raise WorkflowParameterError(f"unknown workflow parameter {name!r}")
+        if field.supports_multiple:
+            payload.setdefault(name, []).append(raw_value)
+            continue
+        if name in payload:
+            raise WorkflowParameterError(
+                f"workflow parameter {name!r} was provided multiple times but does not accept repeated values"
+            )
+        payload[name] = raw_value
+
+    return payload
+
+
 def coerce_workflow_parameter_mapping(
     parameters_cls: type[Any] | None,
     raw_values: Mapping[str, Any] | None,
@@ -1399,6 +1430,7 @@ __all__ = [
     "materialize_workflow_params",
     "resolve_workflow_package",
     "resolve_workflow_reference",
+    "validate_workflow_parameter_overrides",
     "validate_workflow_parameters",
     "workflow_parameter_fields",
 ]

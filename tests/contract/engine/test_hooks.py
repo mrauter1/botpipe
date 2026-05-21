@@ -1256,6 +1256,67 @@ def test_route_complete_and_advance_finish_enforces_required_writes_on_exhaustio
     assert checkpoint.failure_context["final_route"] == "accepted"
 
 
+def test_route_complete_and_advance_finish_preserves_scoped_artifact_path_on_exhaustion(tmp_path: Path):
+    def after_assess(ctx):
+        ctx.artifacts.report.write_text(f"report for {ctx.item.id}\n")
+
+    class RouteFinishScopedRequiredWritesWorkflow(Workflow):
+        board = Artifact.json("{{ task.folder }}/gates.json", required=True)
+        report = Artifact.md("{{ workflow.folder }}/reports/{{ item.dir_key }}.md")
+        gates = Worklist.from_artifact(
+            name="gate",
+            artifact=board,
+            collection="gates",
+            item_id="gate_id",
+            title="title",
+            status="status",
+        )
+        assess = PromptStep(
+            name="assess",
+            producer="assess.md",
+            scope=gates,
+            writes={"report": report},
+            after=after_assess,
+            retry_policy=ProviderRetryPolicy(max_attempts=1),
+        )
+        entry = assess
+        transitions = {
+            assess: {
+                "accepted": Route.complete_and_advance(
+                    assess,
+                    exhausted=FINISH,
+                    required_writes=("report",),
+                )
+            }
+        }
+
+    task_folder, run_folder = _workspace(tmp_path)
+    (task_folder / "gates.json").write_text(
+        '{"gates":[{"gate_id":"alpha","title":"Alpha","status":"queued"}]}\n',
+        encoding="utf-8",
+    )
+
+    result = Engine(
+        RouteFinishScopedRequiredWritesWorkflow,
+        provider=ScriptedLLMProvider(llm_turns=[Outcome(raw_output="ok", tag="accepted")]),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    ).run(
+        task_id="task-route-finish-scoped-required-writes",
+        run_id="run-route-finish-scoped-required-writes",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+    )
+
+    assert result.terminal == FINISH
+    assert result.last_transition is not None
+    assert result.last_transition.runtime_control == "finish"
+    assert (
+        task_folder / "wf_route_finish_scoped_required_writes_workflow" / "reports" / "alpha.md"
+    ).read_text(encoding="utf-8") == "report for alpha\n"
+
+
 def test_route_hook_may_return_direct_worklist_effect_for_active_scoped_worklist(tmp_path: Path):
     def _complete_current_item(_ctx):
         return WorklistEffect.complete_and_advance(exhausted="done")

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "botpipe"
-version = "0.0.0"
+version = "0.5.0"
 description = "Runtime for executable SOPs on top of agentic provider harnesses."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -48,4 +48,10 @@ include = ["botpipe*", "botpipe_optimizer*"]
 [tool.setuptools.package-data]
 botpipe = [
   "workflows/**/*",
+]
+
+[tool.setuptools.exclude-package-data]
+botpipe = [
+  "**/__pycache__/*",
+  "**/*.py[cod]",
 ]

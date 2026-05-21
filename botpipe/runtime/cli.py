@@ -21,6 +21,7 @@ from .loader import (
     discover_workflow_packages,
     inspect_workflow_reference,
     resolve_workflow_reference,
+    validate_workflow_parameter_overrides,
     validate_workflow_parameters,
     workflow_parameter_fields,
 )
@@ -98,7 +99,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         dest="policy_validation_unsafe_expansion",
         help="Override handling for unsafe provider policy expansions.",
     )
-    mutate.add_argument("--max-steps", type=int, help="Maximum workflow steps to execute before failing.")
+    mutate.add_argument("--max-steps", type=int, help="Maximum workflow steps before failing; 0 disables the limit.")
     mutate.add_argument("--no-git", action="store_true", help="Disable runtime git tracking for this command.")
     mutate.add_argument(
         "--git-commit-policy",
@@ -161,6 +162,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
     resume_parser.add_argument("workflow", help="Workflow reference (name, file, module, or optional :Class).")
     resume_parser.add_argument("task_id", help="Stable task identifier.")
     resume_parser.add_argument("--run-id", help="Explicit run id to resume.")
+    resume_parser.add_argument(
+        "-wf",
+        dest="workflow_params",
+        action="append",
+        nargs=2,
+        metavar=("NAME", "VALUE"),
+        default=[],
+        help="Workflow-specific parameter override.",
+    )
     resume_parser.set_defaults(handler=_handle_resume)
 
     answer_parser = subparsers.add_parser("answer", parents=[mutate], help="Answer an awaiting-input workflow run.")
@@ -411,6 +421,11 @@ def _handle_run(args: argparse.Namespace, *, provider_factory: Callable[..., Any
 
 
 def _handle_resume(args: argparse.Namespace, *, provider_factory: Callable[..., Any] | None = None) -> int:
+    workflow_params = None
+    if args.workflow_params:
+        root = args.root.resolve()
+        resolved = resolve_workflow_reference(root, args.workflow)
+        workflow_params = validate_workflow_parameter_overrides(resolved.parameters_cls, args.workflow_params)
     client = _mutating_client(args, provider_factory=provider_factory)
     progress = build_run_progress_printer(args.progress)
     progress_context = progress if progress is not None else nullcontext()
@@ -419,6 +434,7 @@ def _handle_resume(args: argparse.Namespace, *, provider_factory: Callable[..., 
             args.workflow,
             args.task_id,
             run_id=args.run_id,
+            workflow_params=workflow_params,
             on_event=None if progress is None else progress.event_callback,
         )
     _emit_json(_workflow_result_summary_payload(client, result))

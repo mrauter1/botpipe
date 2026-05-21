@@ -116,7 +116,7 @@ Arguments:
 - `params`: `None`, a mapping, or an instance of the workflow's `Params` model.
 - `on_input`: handler for `RequestInput(...)` or provider question pauses.
 - `max_pauses`: maximum handled pause/resume cycles before `TooManyPauses`.
-- `max_steps`: forwarded to the runtime as the step budget.
+- `max_steps`: forwarded to the runtime as the step budget; `0` disables the limit.
 - `provider_questions`: whether provider-selected question routes are allowed.
 - `options`: advanced run options; normally omit.
 - `retention`: per-call retention override.

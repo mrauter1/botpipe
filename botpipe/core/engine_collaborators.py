@@ -3397,8 +3397,6 @@ class RouteFinalizer:
                     final_source_phase = route_redirect.phase
                     continue
                 if route_result.control is not None:
-                    finalized_artifacts = self._artifacts.resolve_artifacts(context)
-                    context._sync_artifacts(finalized_artifacts)
                     final_provider_attributable = request.provider_attributable and not explicit_event_override
                     final_error_cls = request.error_cls if final_provider_attributable else WorkflowExecutionError
                     self._artifacts.enforce_artifact_contracts(

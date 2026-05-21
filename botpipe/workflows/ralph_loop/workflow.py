@@ -21,6 +21,11 @@ class RalphLoop(Workflow):
         name="work",
         required=True,
     )
+    plan_review = Md(
+        "plan_review",
+        path="{{ workflow.folder }}/plan_review.md",
+        required=False,
+    )
 
     items = Worklist.from_artifact(
         name="item",
@@ -38,9 +43,17 @@ class RalphLoop(Workflow):
     plan = produce_verify_step(
         session=plan_session,
         verifier_session=plan_verifier_session,
+        reads=[plan_review],
         producer_prompt=Prompt.inline(
             """
             Read {{ message }}. Inspect the repository.
+
+            If plan_review.md exists, read it first. If it contains
+            `needs_rework` or required rework, update work.json to address
+            every listed issue. Do not re-emit the prior plan unchanged.
+
+            Review path:
+            {{ workflow.folder }}/plan_review.md
 
             Write work.json with a complete implementation plan decomposed into
             independently implementable items.
@@ -72,7 +85,7 @@ class RalphLoop(Workflow):
         ),
         producer_writes=[work],
         verifier_writes=[
-            Md("plan_review", path="{{ workflow.folder }}/plan_review.md", required=True),
+            plan_review,
         ],
         routes={
             "accepted": Route.to(
@@ -81,6 +94,11 @@ class RalphLoop(Workflow):
             ),
             "needs_rework": Route.to(
                 "plan",
+                handoff=(
+                    "The verifier rejected the plan. Read "
+                    "{{ workflow.folder }}/plan_review.md and address every "
+                    "required rework item before rewriting work.json."
+                ),
                 required_writes=["plan_review"],
             ),
         },

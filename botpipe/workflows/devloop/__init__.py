@@ -2,4 +2,6 @@
 
 from .workflow import DevLoop
 
-__all__ = ["DevLoop"]
+Params = DevLoop.Params
+
+__all__ = ["DevLoop", "Params"]

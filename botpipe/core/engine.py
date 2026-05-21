@@ -326,7 +326,7 @@ class Engine:
         initial_state: BaseModel | None = None,
         resume: bool = False,
         answer: str | None = None,
-        max_steps: int = 100,
+        max_steps: int = 0,
     ) -> RunResult:
         return run_awaitable_sync(
             lambda: self.run_async(
@@ -372,7 +372,7 @@ class Engine:
         initial_state: BaseModel | None = None,
         resume: bool = False,
         answer: str | None = None,
-        max_steps: int = 100,
+        max_steps: int = 0,
     ) -> RunResult:
         env = self._prepare_run_environment(
             task_id=task_id,
@@ -647,7 +647,10 @@ class Engine:
         *,
         max_steps: int,
     ) -> RunResult:
-        for _ in range(max_steps):
+        if isinstance(max_steps, bool) or not isinstance(max_steps, int) or max_steps < 0:
+            raise WorkflowExecutionError("max_steps must be a non-negative integer")
+        steps_executed = 0
+        while max_steps == 0 or steps_executed < max_steps:
             resume_cursor = loop.resume_cursor
             frame = self._prepare_step_frame(env, loop, resume_cursor=resume_cursor)
             step_result = await self._execute_step_frame(env, loop, frame)
@@ -655,6 +658,7 @@ class Engine:
             terminal = self._handle_step_result(env, loop, frame, step_result)
             if terminal is not None:
                 return terminal
+            steps_executed += 1
         raise WorkflowExecutionError(f"workflow exceeded max_steps={max_steps}")
 
     def _prepare_step_frame(
@@ -1135,7 +1139,7 @@ class Engine:
         workflow_input: BaseModel | None = None,
         workflow_invoker: Callable[..., Any] | None = None,
         answer: str | None = None,
-        max_steps: int = 100,
+        max_steps: int = 0,
     ) -> RunResult:
         return run_awaitable_sync(
             lambda: self.resume_async(
@@ -1177,7 +1181,7 @@ class Engine:
         workflow_input: BaseModel | None = None,
         workflow_invoker: Callable[..., Any] | None = None,
         answer: str | None = None,
-        max_steps: int = 100,
+        max_steps: int = 0,
     ) -> RunResult:
         return await self.run_async(
             task_id=task_id,

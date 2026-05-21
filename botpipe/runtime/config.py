@@ -34,7 +34,7 @@ DEFAULT_PROVIDER_NAME = "codex"
 SUPPORTED_PROVIDER_NAMES = frozenset({"codex", "claude"})
 DEFAULT_CLAUDE_PERMISSION_STRATEGY = "inherit"
 SUPPORTED_CLAUDE_PERMISSION_STRATEGIES = frozenset({"inherit", "allow_core_tools", "bypass"})
-DEFAULT_MAX_STEPS = 100
+DEFAULT_MAX_STEPS = 0
 SUPPORTED_GIT_COMMIT_POLICIES = frozenset({"off", "run", "step"})
 SUPPORTED_EXTENSION_FAILURE_POLICIES = frozenset({"propagate", "record_and_continue"})
 SUPPORTED_REPLAY_MISMATCH_BEHAVIORS = frozenset({"warn", "fail"})
@@ -421,7 +421,7 @@ def parse_runtime_config(payload: object, source: Path) -> RuntimeConfigLayer:
         ),
     )
     runtime = RuntimeConfigOverride(
-        max_steps=_optional_positive_int(runtime_payload.get("max_steps"), "runtime.max_steps", source),
+        max_steps=_optional_non_negative_int(runtime_payload.get("max_steps"), "runtime.max_steps", source),
         full_auto=_optional_bool(runtime_payload.get("full_auto"), "runtime.full_auto", source),
         replay_mismatch_behavior=_optional_replay_mismatch_behavior(
             runtime_payload.get("replay_mismatch_behavior"),
@@ -653,8 +653,8 @@ def _merge_runtime_config(
 
     cli_max_steps = getattr(args, "max_steps", None)
     if cli_max_steps is not None:
-        if isinstance(cli_max_steps, bool) or not isinstance(cli_max_steps, int) or cli_max_steps <= 0:
-            raise ConfigError("CLI runtime max_steps must be a positive integer when provided.")
+        if isinstance(cli_max_steps, bool) or not isinstance(cli_max_steps, int) or cli_max_steps < 0:
+            raise ConfigError("CLI runtime max_steps must be a non-negative integer when provided.")
         max_steps = cli_max_steps
 
     cli_no_git = _optional_cli_bool(getattr(args, "no_git", None), "no_git")
@@ -877,6 +877,14 @@ def _optional_positive_int(raw_value: object, label: str, source: Path) -> int |
         return None
     if isinstance(raw_value, bool) or not isinstance(raw_value, int) or raw_value <= 0:
         raise ConfigError(f"{source}: {label} must be a positive integer when provided.")
+    return raw_value
+
+
+def _optional_non_negative_int(raw_value: object, label: str, source: Path) -> int | None:
+    if raw_value is None:
+        return None
+    if isinstance(raw_value, bool) or not isinstance(raw_value, int) or raw_value < 0:
+        raise ConfigError(f"{source}: {label} must be a non-negative integer when provided.")
     return raw_value
 
 

@@ -1,28 +1,121 @@
 # Devloop Prompts
 
-Package-local prompts for the default devloop workflow live in this directory.
+These prompts belong to the packaged `devloop` workflow.
 
-## Shared README Boundary
+Devloop runs a phased software-delivery loop:
 
-Keep the common runtime contract wording aligned with the active workflow prompt READMEs.
+1. `plan`: produce and verify `phase_plan.json`.
+2. `validate_plan_completion`: deterministically validates the plan JSON and plan checklist.
+3. `activate_next_phase`: selects the next phase.
+4. `implement`: implements the active phase.
+5. `validate_implement_completion`: deterministically validates the implementation checklist.
+6. `test`: validates the active phase.
+7. `validate_test_completion`: deterministically validates the test checklist.
+8. Repeat from `activate_next_phase` until all phases complete.
 
-## Keep In Each Prompt
+## Required phase-plan contract
 
-- Treat declared artifacts as governed output surfaces, not an exclusive allow-list.
-- Provider raw output is runtime telemetry, not an authoritative contract surface.
+The planner must write strict JSON to:
 
-## Step Surface
+```text
+{{ task.folder }}/plan/phase_plan.json
+```
 
-- Respect readable inputs and required inputs separately.
-- Use the workflow-authored prompt as the task-specific instruction body.
+Do not write YAML. Do not write markdown. Do not wrap the JSON in a code fence.
 
-## Route Surface
+Required top-level shape:
 
-- route metadata supplies route summaries and any route-specific required writes.
-- treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
-- default `question` and `blocked` helper routes are interactive-only; default `failed` remains provider-visible in full-auto mode unless the workflow overrides or suppresses it.
-- use `outcome.route_fields.questions` for question routes and nullable `outcome.route_fields.reason` for blocked or failed routes.
+```json
+{
+  "version": 1,
+  "task_id": "exact runtime task id",
+  "request_snapshot_ref": "exact runtime request file path",
+  "status": "planned",
+  "phases": []
+}
+```
 
-## Verifier Payloads
+Each phase must include:
 
-- Verifier payloads should justify the chosen route and cite the required artifacts when relevant.
+```json
+{
+  "phase_id": "p01-example",
+  "title": "Short phase title",
+  "objective": "What this phase accomplishes",
+  "status": "planned",
+  "scope": {
+    "in_scope": ["Concrete included work"],
+    "out_of_scope": ["Concrete excluded work"]
+  },
+  "dependencies": [],
+  "criteria": [
+    {
+      "id": "AC-1",
+      "text": "Acceptance criterion"
+    }
+  ],
+  "deliverables": ["Concrete output"],
+  "risks": ["Risk or empty list"],
+  "rollback": ["Rollback action or empty list"]
+}
+```
+
+Rules:
+
+- `version` must be `1`.
+- `task_id` must match the runtime task id.
+- `request_snapshot_ref` must match the runtime request snapshot path.
+- Initial root `status` should be `planned`.
+- Initial executable phase `status` should be `planned`.
+- `phase_id` must be unique, non-empty, no more than 96 UTF-8 bytes.
+- Prefer path-safe phase ids such as `p01-frame`, `p02-implement-api`, `p03-tests`.
+- If a dependency names another `phase_id`, that dependency must reference an earlier phase.
+- Every phase must include at least one criterion and one deliverable.
+
+## Checklist contract
+
+Verifier prompts must write criteria files as markdown checklists.
+
+A criteria file passes the deterministic completion gate only when it:
+
+- exists;
+- is not empty;
+- contains at least one markdown checkbox;
+- has every checkbox checked with `- [x]`.
+
+Use unchecked boxes only when the route should repair or replan.
+
+Valid accepted checklist example:
+
+```markdown
+# Plan Criteria
+
+- [x] `phase_plan.json` is strict JSON.
+- [x] All phases are ordered and dependency-safe.
+- [x] The plan fully covers the request.
+```
+
+Invalid/incomplete checklist example:
+
+```markdown
+# Plan Criteria
+
+- [x] `phase_plan.json` is strict JSON.
+- [ ] The plan fully covers the request.
+```
+
+## Route discipline
+
+The runtime injects the authoritative route and artifact contract. Use only routes available in the current step.
+
+Prompt-level route intent:
+
+- Plan verifier:
+  - `plan_ready`: plan is valid and checklist is fully checked.
+  - `needs_replan`: plan must be rewritten.
+- Implement verifier:
+  - `implemented`: active phase implementation is complete and checklist is fully checked.
+  - `needs_replan`: implementation exposes a planning/scope problem requiring a new plan.
+- Test verifier:
+  - `phase_passed`: active phase is validated and checklist is fully checked.
+  - `needs_replan`: tests or validation expose a planning/scope problem requiring a new plan.

@@ -40,6 +40,7 @@ from .events import EventLogger
 from .git_tracking import RuntimeGitTracker
 from .loader import (
     WorkflowReference,
+    WorkflowParameterError,
     coerce_workflow_parameter_mapping,
     inspect_workflow_reference,
     materialize_workflow_params,
@@ -234,7 +235,11 @@ def _execute_compiled_workflow(
         event_callback=options.event_callback,
     )
     resume_git_tracking_warnings = _resume_git_tracking_warnings(prepared.run_workspace, options)
-    resolved_workflow_params = resolve_run_workflow_params(prepared.run_workspace, options.workflow_params)
+    resolved_workflow_params = _resolve_effective_workflow_params(
+        parameters_cls,
+        prepared.run_workspace,
+        options,
+    )
     resolved_params = materialize_workflow_params(parameters_cls, resolved_workflow_params)
     resolved_workflow_input_payload = resolve_run_workflow_input(prepared.run_workspace, options.workflow_input)
     resolved_workflow_input = _materialize_workflow_input(effective_compiled, resolved_workflow_input_payload)
@@ -724,8 +729,8 @@ def resolve_max_steps(max_steps: int | None, *, runtime_config: RuntimeConfig | 
 
 
 def _validate_max_steps(value: object, *, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
-        raise ConfigError(f"{label} must be a positive integer.")
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ConfigError(f"{label} must be a non-negative integer.")
     return value
 
 
@@ -961,6 +966,33 @@ def _normalize_execution_options(
     if normalized_params is options.workflow_params and normalized_input is options.workflow_input:
         return options
     return replace(options, workflow_params=normalized_params, workflow_input=normalized_input)
+
+
+def _resolve_effective_workflow_params(
+    parameters_cls: type[Any] | None,
+    run_workspace: RunWorkspace,
+    options: RunnerOptions,
+) -> dict[str, Any]:
+    if not options.resume:
+        return resolve_run_workflow_params(run_workspace, options.workflow_params)
+
+    stored_params = resolve_run_workflow_params(run_workspace, None)
+    if options.workflow_params is None:
+        if parameters_cls is None:
+            return normalize_mapping(stored_params)
+        return coerce_workflow_parameter_mapping(parameters_cls, stored_params)
+
+    override_params = normalize_mapping(options.workflow_params)
+    if parameters_cls is None:
+        if override_params:
+            raise WorkflowParameterError("workflow does not declare Params and does not accept workflow parameters")
+        return normalize_mapping(stored_params)
+
+    candidate = {
+        **stored_params,
+        **override_params,
+    }
+    return coerce_workflow_parameter_mapping(parameters_cls, candidate)
 
 
 def _coerce_workflow_input_payload(

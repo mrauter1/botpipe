@@ -1,39 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-import sys
-import types
 
 import pytest
 from pydantic import BaseModel
-
-_sdk = types.ModuleType("botpipe.sdk")
-for _name in (
-    "ArtifactMap",
-    "Botpipe",
-    "BotpipeSDKError",
-    "BestSuppositionInput",
-    "CleanupResult",
-    "ConsoleInput",
-    "HandledInput",
-    "InputRequest",
-    "InputRequired",
-    "InputResponseValidationError",
-    "MappingInput",
-    "RetentionInfo",
-    "RetentionPolicy",
-    "ResultArtifact",
-    "SDKDebugInfo",
-    "SDKExecutionError",
-    "StaticInput",
-    "StepResult",
-    "TooManyPauses",
-    "WorkflowInputError",
-    "WorkflowParameterError",
-    "WorkflowResult",
-):
-    setattr(_sdk, _name, type(_name, (), {}))
-sys.modules.setdefault("botpipe.sdk", _sdk)
 
 from botpipe import simple
 from botpipe.core import FAIL, FINISH, Workflow
@@ -114,6 +84,66 @@ def test_engine_max_steps_exhaustion_emits_fatal_terminal_with_latest_checkpoint
     assert checkpoint.stage == "spin"
     assert checkpoint.state.passes == 2
     assert seen == [("fatal", "spin", 2)]
+
+
+def test_engine_default_zero_max_steps_runs_until_terminal(tmp_path: Path) -> None:
+    def _boundedloopworkflow_on_spin(ctx):
+        next_passes = ctx.state.passes + 1
+        ctx.state = ctx.state.model_copy(update={"passes": next_passes})
+        return Event("done" if next_passes == 3 else "again")
+
+    class BoundedLoopWorkflow(Workflow):
+        class State(BaseModel):
+            passes: int = 0
+
+        spin = PythonStep(name="spin", handler=_boundedloopworkflow_on_spin)
+        entry = spin
+        transitions = {spin: {"again": spin, "done": FINISH}}
+
+    task_folder, run_folder = _workspace(tmp_path)
+    engine = Engine(
+        BoundedLoopWorkflow,
+        provider=ScriptedLLMProvider(),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    )
+
+    result = engine.run(
+        task_id="task-unbounded-default",
+        run_id="run-unbounded-default",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+    )
+
+    assert result.terminal == FINISH
+    assert result.state.passes == 3
+
+
+def test_engine_rejects_bool_and_negative_max_steps(tmp_path: Path) -> None:
+    class OneStepWorkflow(Workflow):
+        done = PythonStep(name="done", handler=lambda ctx: Event("done"))
+        entry = done
+        transitions = {done: {"done": FINISH}}
+
+    task_folder, run_folder = _workspace(tmp_path)
+    engine = Engine(
+        OneStepWorkflow,
+        provider=ScriptedLLMProvider(),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    )
+
+    for value in (False, -1):
+        with pytest.raises(WorkflowExecutionError, match="max_steps must be a non-negative integer"):
+            engine.run(
+                task_id="task-invalid-max-steps",
+                run_id=f"run-invalid-{value!r}",
+                task_folder=task_folder,
+                run_folder=run_folder,
+                root=tmp_path,
+                max_steps=value,
+            )
 
 
 def test_engine_resume_input_failure_preserves_fatal_terminal_step_context(tmp_path: Path) -> None:

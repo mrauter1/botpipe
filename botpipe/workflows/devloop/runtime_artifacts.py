@@ -90,7 +90,16 @@ class _DevLoopRuntimeArtifactsRuntime:
                 workflow=self.binding.workflow_name,
                 phase_id=next_phase_id,
             )
-        if event.step_name == "test" and event.outcome is not None and event.outcome.tag == "phase_passed":
+        phase_completed = (
+            event.step_name == "test"
+            and event.outcome is not None
+            and event.outcome.tag == "phase_passed"
+        ) or (
+            event.step_name == "maybe_test"
+            and event.event is not None
+            and event.event.tag == "tests_skipped"
+        )
+        if phase_completed:
             completed_phase_id = current_phase_id or next_phase_id
             if completed_phase_id is not None:
                 _emit_runtime_event(

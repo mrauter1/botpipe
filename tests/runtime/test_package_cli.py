@@ -1322,7 +1322,7 @@ class Params(BaseModel):
     assert sdk_client.runs.show("review", "task-42").normalized_status == "awaiting_input"
 
     resume_exit = cli.main(
-        ["resume", "review", "task-42", "--workspace", str(tmp_path), "--no-git"],
+        ["resume", "review", "task-42", "--workspace", str(tmp_path), "--no-git", "-wf", "mode", "relaxed"],
         provider_factory=_provider_factory,
     )
     resume_output = json.loads(capsys.readouterr().out)
@@ -1352,7 +1352,7 @@ class Params(BaseModel):
     assert final_show["status"] == "success"
     assert final_show["awaiting_input"] is False
     assert result_payload["answer"] == "Use OAuth"
-    assert result_payload["workflow_params"] == {"mode": "focused", "reviewers": ["alice", "bob"]}
+    assert result_payload["workflow_params"] == {"mode": "relaxed", "reviewers": ["alice", "bob"]}
 
 
 def test_cli_durable_handlers_delegate_to_sdk_facade(
@@ -1413,9 +1413,9 @@ def test_cli_durable_handlers_delegate_to_sdk_facade(
             calls.append(("repair", workflow, task_id, run_id, force))
             return {"repaired": True, "run_id": run_id}
 
-        def resume(self, workflow, task_id, *, run_id=None, answer=None, on_event=None):
+        def resume(self, workflow, task_id, *, run_id=None, answer=None, workflow_params=None, on_event=None):
             assert on_event is None
-            calls.append(("resume", workflow, task_id, run_id, answer))
+            calls.append(("resume", workflow, task_id, run_id, answer, workflow_params))
             return object()
 
         def events_text(self, workflow, task_id, *, run_id=None):
@@ -1501,8 +1501,8 @@ def test_cli_durable_handlers_delegate_to_sdk_facade(
         ("repair", "review", "task-42", "run-1", False),
         ("events_text", "review", "task-42", None),
         ("trace_text", "review", "task-42", None),
-        ("resume", "review", "task-42", "run-1", None),
-        ("resume", "review", "task-42", "run-1", "Use OAuth"),
+        ("resume", "review", "task-42", "run-1", None, None),
+        ("resume", "review", "task-42", "run-1", "Use OAuth", None),
     ]
 
 

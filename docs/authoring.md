@@ -349,7 +349,7 @@ provider:
   model: gpt-5.4
   model_effort: medium
 runtime:
-  max_steps: 100
+  max_steps: 0
 ```
 
 `provider.name` selects the built-in backend. Generic `provider.model` and `provider.model_effort` overrides target that selected provider.

@@ -144,7 +144,7 @@ Mutating commands also accept generic runtime controls:
 - `--provider`
 - `--model`
 - `--model-effort`
-- `--max-steps`
+- `--max-steps` (`0` disables the step limit)
 
 ## Provider Selection
 
@@ -182,7 +182,7 @@ provider_policy:
       required: true
       allowed_modes: ["read_only", "workspace_write"]
 runtime:
-  max_steps: 100
+  max_steps: 0
 ```
 
 Contract:

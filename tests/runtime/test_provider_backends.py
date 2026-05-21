@@ -980,7 +980,7 @@ def test_cli_resolve_provider_preserves_non_public_injection_seam_precedence() -
 def test_resolve_runtime_config_defaults_enable_git_tracking_and_tracing(tmp_path: Path) -> None:
     resolved = resolve_runtime_config(tmp_path, _runtime_args())
 
-    assert resolved.runtime.max_steps == 100
+    assert resolved.runtime.max_steps == 0
     assert resolved.runtime.git_tracking.enabled is True
     assert resolved.runtime.git_tracking.commit_policy == "step"
     assert resolved.runtime.git_tracking.failure_policy == "propagate"
@@ -989,6 +989,28 @@ def test_resolve_runtime_config_defaults_enable_git_tracking_and_tracing(tmp_pat
     assert resolved.runtime.tracing.failure_policy == "propagate"
     assert resolved.runtime.tracing.include_state_snapshots is True
     assert resolved.runtime.resume_topology_mismatch_behavior == "warn"
+
+
+def test_resolve_runtime_config_accepts_zero_max_steps_from_cli(tmp_path: Path) -> None:
+    resolved = resolve_runtime_config(tmp_path, _runtime_args(max_steps=0))
+
+    assert resolved.runtime.max_steps == 0
+
+
+def test_resolve_runtime_config_rejects_negative_max_steps_from_cli(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match="CLI runtime max_steps must be a non-negative integer"):
+        resolve_runtime_config(tmp_path, _runtime_args(max_steps=-1))
+
+
+def test_parse_runtime_config_accepts_zero_max_steps(tmp_path: Path) -> None:
+    layer = runtime_config.parse_runtime_config({"runtime": {"max_steps": 0}}, tmp_path / "botpipe.yaml")
+
+    assert layer.runtime.max_steps == 0
+
+
+def test_parse_runtime_config_rejects_negative_max_steps(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match=r"runtime\.max_steps must be a non-negative integer"):
+        runtime_config.parse_runtime_config({"runtime": {"max_steps": -1}}, tmp_path / "botpipe.yaml")
 
 
 def test_parse_runtime_config_rejects_invalid_git_commit_policy(tmp_path: Path) -> None:
@@ -1080,7 +1102,7 @@ def test_resolve_runtime_config_merges_runtime_file_overrides_and_preserves_defa
 
     resolved = resolve_runtime_config(tmp_path, _runtime_args())
 
-    assert resolved.runtime.max_steps == 100
+    assert resolved.runtime.max_steps == 0
     assert resolved.runtime.git_tracking.enabled is True
     assert resolved.runtime.git_tracking.commit_policy == "run"
     assert resolved.runtime.git_tracking.failure_policy == "record_and_continue"

@@ -303,8 +303,11 @@ def test_distributed_package_catalog_exposes_default_workflows(tmp_path: Path) -
 
     assert resolved_by_name.reference.package_dir == devloop.package_dir
     assert resolved_by_name.reference.workflow_module == "botpipe.workflows.devloop.workflow"
+    assert resolved_by_name.parameters_cls is not None
+    assert "skip_test_phase" in resolved_by_name.parameters_cls.model_fields
     assert resolved_by_alias.reference.package_dir == devloop.package_dir
     assert resolved_by_alias.reference.workflow_name == "devloop"
+    assert resolved_by_alias.parameters_cls is resolved_by_name.parameters_cls
     assert resolved_ralph_by_name.reference.package_dir == ralph_loop.package_dir
     assert resolved_ralph_by_name.reference.workflow_module == "botpipe.workflows.ralph_loop.workflow"
     assert resolved_ralph_by_alias.reference.workflow_name == "ralph_loop"
@@ -356,6 +359,36 @@ def test_ralph_loop_implementation_rework_uses_shared_item_session_and_handoff()
     assert "{{ workflow.folder }}/items/{{ item.dir_key }}/implementation_review.md" in producer_prompt
     assert "Do not rely on the" in verifier_prompt
     assert "producer's summary or claimed validation" in verifier_prompt
+
+
+def test_ralph_loop_plan_rework_feeds_review_back_to_producer() -> None:
+    from botpipe.core.compiler import compile_workflow
+    from botpipe.workflows.ralph_loop import RalphLoop
+
+    compiled = compile_workflow(RalphLoop)
+    plan = compiled.steps["plan"]
+
+    producer_reads = {artifact.name for artifact in plan.producer_reads}
+    verifier_writes = {artifact.name for artifact in plan.verifier_writes}
+    assert "plan_review" in producer_reads
+    assert "plan_review" in verifier_writes
+
+    review_read = next(artifact for artifact in plan.producer_reads if artifact.name == "plan_review")
+    review_artifact = compiled.artifact_spec(review_read)
+    assert review_artifact.name == "plan_review"
+    assert review_artifact.required is False
+    assert review_artifact.template == "{{ workflow.folder }}/plan_review.md"
+
+    producer_prompt = plan.producer.prompt.text or ""
+    assert "If plan_review.md exists, read it first" in producer_prompt
+    assert "Do not re-emit the prior plan unchanged" in producer_prompt
+    assert "{{ workflow.folder }}/plan_review.md" in producer_prompt
+
+    rework_route = compiled.routes["plan"]["needs_rework"]
+    assert rework_route.target == "plan"
+    assert rework_route.handoff is not None
+    assert "plan_review.md" in rework_route.handoff
+    assert "before rewriting work.json" in rework_route.handoff
 
 
 def test_discover_repo_local_catalog_entries_use_workflows_namespace_defaults_and_repo_tests(

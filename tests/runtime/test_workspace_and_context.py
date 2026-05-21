@@ -287,10 +287,38 @@ def test_runtime_config_max_steps_is_used_when_runner_options_max_steps_is_unset
     assert "configured_max_steps" not in runtime_meta
 
 
+def test_default_zero_max_steps_runs_until_terminal(tmp_path: Path) -> None:
+    _write_two_step_continue_workflow_package(tmp_path, "default_unbounded_demo", "DefaultUnboundedWorkflow")
+
+    result = run_workflow_package(
+        "default_unbounded_demo",
+        provider=ScriptedLLMProvider(
+            llm_turns=[
+                Outcome(raw_output="next", tag="next"),
+                Outcome(raw_output="done", tag="done"),
+            ]
+        ),
+        options=_runner_options(
+            tmp_path,
+            task_id="default-unbounded-task",
+            message="Use default unbounded budget",
+        ),
+    )
+
+    run_dir = next(
+        (tmp_path / ".botpipe" / "tasks" / "default-unbounded-task" / "wf_default_unbounded_demo" / "runs").iterdir()
+    )
+    run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    runtime_meta = run_meta["execution_config"]["created_with"]["runtime"]
+    assert result.terminal == FINISH
+    assert runtime_meta["max_steps"] == 0
+    assert "configured_max_steps" not in runtime_meta
+
+
 def test_runner_rejects_bool_max_steps_values(tmp_path: Path) -> None:
     _write_system_workflow_package(tmp_path, "bool_budget_demo", "BoolBudgetWorkflow")
 
-    with pytest.raises(ConfigError, match="max_steps must be a positive integer"):
+    with pytest.raises(ConfigError, match="max_steps must be a non-negative integer"):
         run_workflow_package(
             "bool_budget_demo",
             provider=ScriptedLLMProvider(),
@@ -302,7 +330,7 @@ def test_runner_rejects_bool_max_steps_values(tmp_path: Path) -> None:
             ),
         )
 
-    with pytest.raises(ConfigError, match="runtime max_steps must be a positive integer"):
+    with pytest.raises(ConfigError, match="runtime max_steps must be a non-negative integer"):
         run_workflow_package(
             "bool_budget_demo",
             provider=ScriptedLLMProvider(),
@@ -311,6 +339,34 @@ def test_runner_rejects_bool_max_steps_values(tmp_path: Path) -> None:
                 task_id="bool-budget-runtime",
                 message="Reject bool runtime max steps",
                 runtime_config=RuntimeConfig(max_steps=True, git_tracking=GitTrackingRuntimeConfig(enabled=False)),
+            ),
+        )
+
+
+def test_runner_rejects_negative_max_steps_values(tmp_path: Path) -> None:
+    _write_system_workflow_package(tmp_path, "negative_budget_demo", "NegativeBudgetWorkflow")
+
+    with pytest.raises(ConfigError, match="max_steps must be a non-negative integer"):
+        run_workflow_package(
+            "negative_budget_demo",
+            provider=ScriptedLLMProvider(),
+            options=_runner_options(
+                tmp_path,
+                task_id="negative-budget-explicit",
+                message="Reject negative max steps",
+                max_steps=-1,
+            ),
+        )
+
+    with pytest.raises(ConfigError, match="runtime max_steps must be a non-negative integer"):
+        run_workflow_package(
+            "negative_budget_demo",
+            provider=ScriptedLLMProvider(),
+            options=_runner_options(
+                tmp_path,
+                task_id="negative-budget-runtime",
+                message="Reject negative runtime max steps",
+                runtime_config=RuntimeConfig(max_steps=-1, git_tracking=GitTrackingRuntimeConfig(enabled=False)),
             ),
         )
 
@@ -1042,8 +1098,13 @@ def test_resume_preserves_persisted_workflow_params_when_not_resupplied(tmp_path
     assert resumed_meta["workflow_params"] == {"mode": "strict"}
 
 
-def test_resume_ignores_explicit_workflow_param_override_for_existing_run(tmp_path: Path) -> None:
-    _write_pause_resume_workflow_package(tmp_path, "resume_override_demo", "ResumeOverrideWorkflow")
+def test_resume_applies_explicit_workflow_param_override_for_existing_run(tmp_path: Path) -> None:
+    _write_pause_resume_workflow_package(
+        tmp_path,
+        "resume_override_demo",
+        "ResumeOverrideWorkflow",
+        export_parameters=True,
+    )
     provider = ScriptedLLMProvider(
         llm_turns=[
             lambda request: (
@@ -1107,9 +1168,55 @@ def test_resume_ignores_explicit_workflow_param_override_for_existing_run(tmp_pa
 
     assert paused.terminal == "AWAIT_INPUT"
     assert resumed.terminal == "FINISH"
-    assert resumed_context["workflow_params"] == {"mode": "strict"}
+    assert resumed_context["workflow_params"] == {"mode": "loose"}
     assert resumed_context["answer"] == "42"
-    assert resumed_meta["workflow_params"] == {"mode": "strict"}
+    assert resumed_meta["workflow_params"] == {"mode": "loose"}
+
+
+def test_resume_rejects_explicit_param_override_for_workflow_without_params(tmp_path: Path) -> None:
+    _write_pause_resume_workflow_package(tmp_path, "resume_no_params_demo", "ResumeNoParamsWorkflow")
+    provider = ScriptedLLMProvider(
+        llm_turns=[
+            lambda request: (
+                request.artifacts.context_dump.write_text(
+                    json.dumps({"workflow_params": request.context.workflow_params})
+                ),
+                Outcome(raw_output="Need answer", tag="question", question="What value?"),
+            )[1],
+        ]
+    )
+
+    paused = run_workflow_package(
+        "resume_no_params_demo",
+        provider=provider,
+        options=_runner_options(
+            tmp_path,
+            task_id="task-no-params-override",
+            message="Need workflow parameters",
+            workflow_params={"legacy": "kept"},
+        ),
+    )
+
+    workflow_dir = tmp_path / ".botpipe" / "tasks" / "task-no-params-override" / "wf_resume_no_params_demo"
+    run_dir = next((workflow_dir / "runs").iterdir())
+
+    with pytest.raises(WorkflowParameterError, match="does not declare Params"):
+        run_workflow_package(
+            "resume_no_params_demo",
+            provider=provider,
+            options=_runner_options(
+                tmp_path,
+                task_id="task-no-params-override",
+                run_id=run_dir.name,
+                resume=True,
+                answer="42",
+                workflow_params={"mode": "loose"},
+            ),
+        )
+
+    run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    assert paused.terminal == "AWAIT_INPUT"
+    assert run_meta["workflow_params"] == {"legacy": "kept"}
 
 
 def test_resume_context_message_uses_run_local_request_snapshot_not_mutated_task_request(tmp_path: Path) -> None:
@@ -1436,7 +1543,7 @@ class Params(BaseModel):
     assert run_meta["workflow_params"] == {"retries": 5, "mode": "strict"}
 
 
-def test_resume_restores_typed_params_from_persisted_run_metadata(tmp_path: Path) -> None:
+def test_resume_overrides_typed_params_and_preserves_omitted_fields(tmp_path: Path) -> None:
     _write_pause_resume_workflow_package(
         tmp_path,
         "typed_resume_demo",
@@ -1448,6 +1555,7 @@ from pydantic import BaseModel
 
 class Params(BaseModel):
     mode: str = "strict"
+    retries: int = 2
 """.strip(),
     )
     provider = ScriptedLLMProvider(
@@ -1488,7 +1596,7 @@ class Params(BaseModel):
             tmp_path,
             task_id="task-typed-resume",
             message="Need typed params",
-            workflow_params={"mode": "strict"},
+            workflow_params={"mode": "strict", "retries": "5"},
         ),
     )
 
@@ -1509,13 +1617,88 @@ class Params(BaseModel):
     )
 
     payload = json.loads((run_dir / "context.json").read_text(encoding="utf-8"))
+    resumed_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
 
     assert paused.terminal == "AWAIT_INPUT"
     assert resumed.terminal == "FINISH"
-    assert payload["typed_mode"] == "strict"
-    assert payload["typed_params"] == {"mode": "strict"}
-    assert payload["workflow_params"] == {"mode": "strict"}
+    assert payload["typed_mode"] == "loose"
+    assert payload["typed_params"] == {"mode": "loose", "retries": 5}
+    assert payload["workflow_params"] == {"mode": "loose", "retries": 5}
     assert payload["answer"] == "42"
+    assert resumed_meta["workflow_params"] == {"mode": "loose", "retries": 5}
+
+
+def test_resume_validates_typed_param_overrides_before_execution(tmp_path: Path) -> None:
+    _write_pause_resume_workflow_package(
+        tmp_path,
+        "typed_resume_invalid_demo",
+        "TypedResumeInvalidWorkflow",
+        export_parameters=True,
+        parameters_source="""
+from pydantic import BaseModel
+
+
+class Params(BaseModel):
+    retries: int = 2
+    mode: str = "strict"
+""".strip(),
+    )
+    provider = ScriptedLLMProvider(
+        llm_turns=[
+            lambda request: (
+                request.artifacts.context_dump.write_text(
+                    json.dumps({"workflow_params": request.context.workflow_params})
+                ),
+                Outcome(raw_output="Need answer", tag="question", question="What value?"),
+            )[1],
+        ]
+    )
+
+    paused = run_workflow_package(
+        "typed_resume_invalid_demo",
+        provider=provider,
+        options=_runner_options(
+            tmp_path,
+            task_id="task-typed-resume-invalid",
+            message="Need typed params",
+            workflow_params={"retries": "5"},
+        ),
+    )
+
+    workflow_dir = tmp_path / ".botpipe" / "tasks" / "task-typed-resume-invalid" / "wf_typed_resume_invalid_demo"
+    run_dir = next((workflow_dir / "runs").iterdir())
+
+    with pytest.raises(WorkflowParameterError, match="unknown workflow parameter 'unknown'"):
+        run_workflow_package(
+            "typed_resume_invalid_demo",
+            provider=provider,
+            options=_runner_options(
+                tmp_path,
+                task_id="task-typed-resume-invalid",
+                run_id=run_dir.name,
+                resume=True,
+                answer="42",
+                workflow_params={"unknown": "value"},
+            ),
+        )
+
+    with pytest.raises(WorkflowParameterError, match="Input should be a valid integer"):
+        run_workflow_package(
+            "typed_resume_invalid_demo",
+            provider=provider,
+            options=_runner_options(
+                tmp_path,
+                task_id="task-typed-resume-invalid",
+                run_id=run_dir.name,
+                resume=True,
+                answer="42",
+                workflow_params={"retries": "not-an-int"},
+            ),
+        )
+
+    run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    assert paused.terminal == "AWAIT_INPUT"
+    assert run_meta["workflow_params"] == {"retries": 5, "mode": "strict"}
 
 
 def test_new_runs_validate_workflow_params_before_persisting_run_metadata(tmp_path: Path) -> None:
