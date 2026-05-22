@@ -475,7 +475,12 @@ def parse_policy_runtime_config(payload: object, source: Path) -> RuntimeConfigL
     return parse_runtime_config({"provider_policy": payload}, source)
 
 
-def resolve_runtime_config(root: Path, args: argparse.Namespace) -> ResolvedRuntimeConfig:
+def resolve_runtime_config(
+    root: Path,
+    args: argparse.Namespace,
+    *,
+    source_args: argparse.Namespace | None = None,
+) -> ResolvedRuntimeConfig:
     global_config_path = discover_config_file(user_config_dir())
     local_config_path = discover_config_file(root)
     policy_file_path = _optional_cli_path(getattr(args, "policy_file", None), "policy_file")
@@ -513,7 +518,7 @@ def resolve_runtime_config(root: Path, args: argparse.Namespace) -> ResolvedRunt
             user_config=global_config_path,
             workspace_config=local_config_path,
             policy_file=policy_file_path,
-            cli_overrides=_cli_override_names(args),
+            cli_overrides=_cli_override_names(args if source_args is None else source_args),
         ),
     )
 

@@ -767,6 +767,7 @@ def update_run_metadata(
     topology: Mapping[str, Any] | None = None,
     finalization: Mapping[str, Any] | None | object = _UNSET,
     execution_config: Mapping[str, Any] | None = None,
+    sticky_overrides: Mapping[str, Any] | None | object = _UNSET,
 ) -> None:
     workflow_workspace = run_workspace.workflow_workspace
     task_workspace = workflow_workspace.task_workspace
@@ -834,6 +835,11 @@ def update_run_metadata(
             payload["finalization"] = normalize_mapping(finalization)
         else:
             payload.pop("finalization", None)
+    if sticky_overrides is not _UNSET:
+        if isinstance(sticky_overrides, Mapping):
+            payload["sticky_overrides"] = normalize_mapping(sticky_overrides)
+        else:
+            payload.pop("sticky_overrides", None)
     if execution_config is not None:
         _record_execution_config(payload, execution_config, recorded_at=now)
     payload["updated_at"] = now

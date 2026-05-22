@@ -315,6 +315,263 @@ def test_default_zero_max_steps_runs_until_terminal(tmp_path: Path) -> None:
     assert "configured_max_steps" not in runtime_meta
 
 
+def test_resume_preserves_recorded_max_steps_when_unset(tmp_path: Path) -> None:
+    _write_pause_resume_workflow_package(tmp_path, "resume_budget_demo", "ResumeBudgetWorkflow")
+    provider = ScriptedLLMProvider(
+        llm_turns=[
+            Outcome(raw_output="Need answer", tag="question", question="What value?"),
+            Outcome(raw_output="Answered", tag="answered", payload={"answer": "42"}),
+        ]
+    )
+
+    paused = run_workflow_package(
+        "resume_budget_demo",
+        provider=provider,
+        options=_runner_options(
+            tmp_path,
+            task_id="task-resume-budget",
+            message="Need answer",
+            max_steps=100,
+            runtime_config=RuntimeConfig(max_steps=0, git_tracking=GitTrackingRuntimeConfig(enabled=False)),
+        ),
+    )
+
+    workflow_dir = tmp_path / ".botpipe" / "tasks" / "task-resume-budget" / "wf_resume_budget_demo"
+    run_dir = next((workflow_dir / "runs").iterdir())
+
+    resumed = run_workflow_package(
+        "resume_budget_demo",
+        provider=provider,
+        options=_runner_options(
+            tmp_path,
+            task_id="task-resume-budget",
+            run_id=run_dir.name,
+            resume=True,
+            answer="42",
+            runtime_config=RuntimeConfig(max_steps=0, git_tracking=GitTrackingRuntimeConfig(enabled=False)),
+        ),
+    )
+
+    run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    runtime_meta = run_meta["execution_config"]["last_used"]["runtime"]
+    assert paused.terminal == "AWAIT_INPUT"
+    assert resumed.terminal == FINISH
+    assert run_meta["sticky_overrides"] == {"runtime": {"max_steps": 100}}
+    assert runtime_meta["max_steps"] == 100
+    assert runtime_meta["configured_max_steps"] == 0
+
+
+def test_resume_explicit_max_steps_override_becomes_latest_value(tmp_path: Path) -> None:
+    _write_pause_resume_workflow_package(tmp_path, "resume_budget_override_demo", "ResumeBudgetOverrideWorkflow")
+    provider = ScriptedLLMProvider(
+        llm_turns=[
+            Outcome(raw_output="Need answer", tag="question", question="What value?"),
+            Outcome(raw_output="Need answer again", tag="question", question="What value?"),
+            Outcome(raw_output="Answered", tag="answered", payload={"answer": "42"}),
+        ]
+    )
+
+    paused = run_workflow_package(
+        "resume_budget_override_demo",
+        provider=provider,
+        options=_runner_options(
+            tmp_path,
+            task_id="task-resume-budget-override",
+            message="Need answer",
+            max_steps=100,
+        ),
+    )
+
+    workflow_dir = (
+        tmp_path / ".botpipe" / "tasks" / "task-resume-budget-override" / "wf_resume_budget_override_demo"
+    )
+    run_dir = next((workflow_dir / "runs").iterdir())
+
+    still_paused = run_workflow_package(
+        "resume_budget_override_demo",
+        provider=provider,
+        options=_runner_options(
+            tmp_path,
+            task_id="task-resume-budget-override",
+            run_id=run_dir.name,
+            resume=True,
+            max_steps=50,
+        ),
+    )
+    after_override_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+
+    resumed = run_workflow_package(
+        "resume_budget_override_demo",
+        provider=provider,
+        options=_runner_options(
+            tmp_path,
+            task_id="task-resume-budget-override",
+            run_id=run_dir.name,
+            resume=True,
+            answer="42",
+            runtime_config=RuntimeConfig(max_steps=0, git_tracking=GitTrackingRuntimeConfig(enabled=False)),
+        ),
+    )
+
+    run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    runtime_meta = run_meta["execution_config"]["last_used"]["runtime"]
+    assert paused.terminal == "AWAIT_INPUT"
+    assert still_paused.terminal == "AWAIT_INPUT"
+    assert after_override_meta["execution_config"]["last_used"]["runtime"]["max_steps"] == 50
+    assert after_override_meta["sticky_overrides"] == {"runtime": {"max_steps": 50}}
+    assert resumed.terminal == FINISH
+    assert run_meta["sticky_overrides"] == {"runtime": {"max_steps": 50}}
+    assert runtime_meta["max_steps"] == 50
+    assert runtime_meta["configured_max_steps"] == 0
+
+
+def test_resume_falls_back_to_created_max_steps_for_legacy_execution_config(tmp_path: Path) -> None:
+    _write_pause_resume_workflow_package(tmp_path, "resume_budget_legacy_demo", "ResumeBudgetLegacyWorkflow")
+    provider = ScriptedLLMProvider(
+        llm_turns=[
+            Outcome(raw_output="Need answer", tag="question", question="What value?"),
+            Outcome(raw_output="Answered", tag="answered", payload={"answer": "42"}),
+        ]
+    )
+
+    run_workflow_package(
+        "resume_budget_legacy_demo",
+        provider=provider,
+        options=_runner_options(
+            tmp_path,
+            task_id="task-resume-budget-legacy",
+            message="Need answer",
+            max_steps=73,
+        ),
+    )
+
+    workflow_dir = tmp_path / ".botpipe" / "tasks" / "task-resume-budget-legacy" / "wf_resume_budget_legacy_demo"
+    run_dir = next((workflow_dir / "runs").iterdir())
+    run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    run_meta["execution_config"] = {"created_with": run_meta["execution_config"]["created_with"]}
+    run_meta.pop("sticky_overrides", None)
+    (run_dir / "run.json").write_text(json.dumps(run_meta, indent=2) + "\n", encoding="utf-8")
+
+    resumed = run_workflow_package(
+        "resume_budget_legacy_demo",
+        provider=provider,
+        options=_runner_options(
+            tmp_path,
+            task_id="task-resume-budget-legacy",
+            run_id=run_dir.name,
+            resume=True,
+            answer="42",
+            runtime_config=RuntimeConfig(max_steps=0, git_tracking=GitTrackingRuntimeConfig(enabled=False)),
+        ),
+    )
+
+    resumed_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    runtime_meta = resumed_meta["execution_config"]["last_used"]["runtime"]
+    assert resumed.terminal == FINISH
+    assert resumed_meta["sticky_overrides"] == {"runtime": {"max_steps": 73}}
+    assert runtime_meta["max_steps"] == 73
+    assert runtime_meta["configured_max_steps"] == 0
+
+
+def test_resume_uses_runtime_config_when_stored_max_steps_is_missing_or_malformed(tmp_path: Path) -> None:
+    _write_pause_resume_workflow_package(tmp_path, "resume_budget_malformed_demo", "ResumeBudgetMalformedWorkflow")
+    provider = ScriptedLLMProvider(
+        llm_turns=[
+            Outcome(raw_output="Need answer", tag="question", question="What value?"),
+            Outcome(raw_output="Answered", tag="answered", payload={"answer": "42"}),
+        ]
+    )
+
+    run_workflow_package(
+        "resume_budget_malformed_demo",
+        provider=provider,
+        options=_runner_options(
+            tmp_path,
+            task_id="task-resume-budget-malformed",
+            message="Need answer",
+            max_steps=100,
+        ),
+    )
+
+    workflow_dir = (
+        tmp_path / ".botpipe" / "tasks" / "task-resume-budget-malformed" / "wf_resume_budget_malformed_demo"
+    )
+    run_dir = next((workflow_dir / "runs").iterdir())
+    run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    run_meta["execution_config"] = {
+        "last_used": {"runtime": {"max_steps": "bad"}},
+        "invocations": [{"runtime": {"max_steps": False}}],
+        "created_with": {"runtime": {"max_steps": -1}},
+    }
+    run_meta["sticky_overrides"] = {"runtime": {"max_steps": "bad"}}
+    (run_dir / "run.json").write_text(json.dumps(run_meta, indent=2) + "\n", encoding="utf-8")
+
+    resumed = run_workflow_package(
+        "resume_budget_malformed_demo",
+        provider=provider,
+        options=_runner_options(
+            tmp_path,
+            task_id="task-resume-budget-malformed",
+            run_id=run_dir.name,
+            resume=True,
+            answer="42",
+            runtime_config=RuntimeConfig(max_steps=7, git_tracking=GitTrackingRuntimeConfig(enabled=False)),
+        ),
+    )
+
+    resumed_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    runtime_meta = resumed_meta["execution_config"]["last_used"]["runtime"]
+    assert resumed.terminal == FINISH
+    assert resumed_meta["sticky_overrides"] == {}
+    assert runtime_meta["max_steps"] == 7
+    assert "configured_max_steps" not in runtime_meta
+
+
+def test_resume_preserves_recorded_zero_max_steps_when_unset(tmp_path: Path) -> None:
+    _write_pause_resume_workflow_package(tmp_path, "resume_budget_zero_demo", "ResumeBudgetZeroWorkflow")
+    provider = ScriptedLLMProvider(
+        llm_turns=[
+            Outcome(raw_output="Need answer", tag="question", question="What value?"),
+            Outcome(raw_output="Answered", tag="answered", payload={"answer": "42"}),
+        ]
+    )
+
+    run_workflow_package(
+        "resume_budget_zero_demo",
+        provider=provider,
+        options=_runner_options(
+            tmp_path,
+            task_id="task-resume-budget-zero",
+            message="Need answer",
+            max_steps=0,
+            runtime_config=RuntimeConfig(max_steps=100, git_tracking=GitTrackingRuntimeConfig(enabled=False)),
+        ),
+    )
+
+    workflow_dir = tmp_path / ".botpipe" / "tasks" / "task-resume-budget-zero" / "wf_resume_budget_zero_demo"
+    run_dir = next((workflow_dir / "runs").iterdir())
+
+    resumed = run_workflow_package(
+        "resume_budget_zero_demo",
+        provider=provider,
+        options=_runner_options(
+            tmp_path,
+            task_id="task-resume-budget-zero",
+            run_id=run_dir.name,
+            resume=True,
+            answer="42",
+            runtime_config=RuntimeConfig(max_steps=100, git_tracking=GitTrackingRuntimeConfig(enabled=False)),
+        ),
+    )
+
+    run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    runtime_meta = run_meta["execution_config"]["last_used"]["runtime"]
+    assert resumed.terminal == FINISH
+    assert run_meta["sticky_overrides"] == {"runtime": {"max_steps": 0}}
+    assert runtime_meta["max_steps"] == 0
+    assert runtime_meta["configured_max_steps"] == 100
+
+
 def test_runner_rejects_bool_max_steps_values(tmp_path: Path) -> None:
     _write_system_workflow_package(tmp_path, "bool_budget_demo", "BoolBudgetWorkflow")
 

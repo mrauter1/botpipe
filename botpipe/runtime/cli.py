@@ -7,10 +7,11 @@ import json
 import sys
 from contextlib import nullcontext
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Mapping
 
 from ..sdk import Botpipe, SDKExecutionError, WorkflowResult
 from ..core.errors import WorkflowExecutionError
+from ..core.mappings import normalize_mapping
 from .config import ConfigError, SUPPORTED_PROVIDER_NAMES, resolve_runtime_config
 from .loader import (
     WorkflowDiscoveryError,
@@ -394,6 +395,7 @@ def _handle_run(args: argparse.Namespace, *, provider_factory: Callable[..., Any
     resolved = resolve_workflow_reference(root, args.workflow)
     workflow_params = validate_workflow_parameters(resolved.parameters_cls, args.workflow_params)
     config = resolve_runtime_config(root, args)
+    sticky_overrides = _explicit_cli_sticky_overrides(args, provider_config=config.provider)
     provider = _resolve_provider(config=config, args=args, provider_factory=provider_factory)
     task_id = args.task_id or _generate_cli_task_id(root=root, workflow_name=resolved.reference.workflow_name, message=message)
     progress = build_run_progress_printer(args.progress)
@@ -406,12 +408,13 @@ def _handle_run(args: argparse.Namespace, *, provider_factory: Callable[..., Any
                 root=root,
                 task_id=task_id,
                 message=message,
-                max_steps=config.runtime.max_steps,
+                max_steps=args.max_steps,
                 workflow_params=workflow_params,
                 runtime_config=config.runtime,
                 provider_policy_config=config.provider_policy,
                 provider_config=config.provider,
                 config_sources=config.sources,
+                sticky_overrides=sticky_overrides,
                 created_by="cli",
                 event_callback=None if progress is None else progress.event_callback,
             ),
@@ -421,12 +424,16 @@ def _handle_run(args: argparse.Namespace, *, provider_factory: Callable[..., Any
 
 
 def _handle_resume(args: argparse.Namespace, *, provider_factory: Callable[..., Any] | None = None) -> int:
+    root = args.root.resolve()
     workflow_params = None
     if args.workflow_params:
-        root = args.root.resolve()
         resolved = resolve_workflow_reference(root, args.workflow)
         workflow_params = validate_workflow_parameter_overrides(resolved.parameters_cls, args.workflow_params)
-    client = _mutating_client(args, provider_factory=provider_factory)
+    stored_sticky_overrides = _stored_cli_sticky_overrides(args, selector="latest_resumable")
+    config_args = _args_with_sticky_provider_overrides(args, stored_sticky_overrides)
+    config = resolve_runtime_config(root, config_args, source_args=args)
+    sticky_overrides = _explicit_cli_sticky_overrides(args, provider_config=config.provider)
+    client = _mutating_client(config_args, provider_factory=provider_factory, config=config)
     progress = build_run_progress_printer(args.progress)
     progress_context = progress if progress is not None else nullcontext()
     with progress_context:
@@ -435,6 +442,8 @@ def _handle_resume(args: argparse.Namespace, *, provider_factory: Callable[..., 
             args.task_id,
             run_id=args.run_id,
             workflow_params=workflow_params,
+            max_steps=args.max_steps,
+            _sticky_overrides=sticky_overrides,
             on_event=None if progress is None else progress.event_callback,
         )
     _emit_json(_workflow_result_summary_payload(client, result))
@@ -442,7 +451,12 @@ def _handle_resume(args: argparse.Namespace, *, provider_factory: Callable[..., 
 
 
 def _handle_answer(args: argparse.Namespace, *, provider_factory: Callable[..., Any] | None = None) -> int:
-    client = _mutating_client(args, provider_factory=provider_factory)
+    root = args.root.resolve()
+    stored_sticky_overrides = _stored_cli_sticky_overrides(args, selector="latest_paused")
+    config_args = _args_with_sticky_provider_overrides(args, stored_sticky_overrides)
+    config = resolve_runtime_config(root, config_args, source_args=args)
+    sticky_overrides = _explicit_cli_sticky_overrides(args, provider_config=config.provider)
+    client = _mutating_client(config_args, provider_factory=provider_factory, config=config)
     progress = build_run_progress_printer(args.progress)
     progress_context = progress if progress is not None else nullcontext()
     with progress_context:
@@ -451,6 +465,8 @@ def _handle_answer(args: argparse.Namespace, *, provider_factory: Callable[..., 
             args.task_id,
             run_id=args.run_id,
             answer=args.answer,
+            max_steps=args.max_steps,
+            _sticky_overrides=sticky_overrides,
             on_event=None if progress is None else progress.event_callback,
         )
     _emit_json(_workflow_result_summary_payload(client, result))
@@ -675,6 +691,110 @@ class _ReadOnlyProvider:
 _READ_ONLY_PROVIDER = _ReadOnlyProvider()
 
 
+def _stored_cli_sticky_overrides(args: argparse.Namespace, *, selector: str) -> dict[str, Any]:
+    try:
+        root = args.root.resolve()
+        resolved = resolve_workflow_reference(root, args.workflow)
+        record = resolve_run_record(
+            root,
+            workflow_name=resolved.reference.workflow_name,
+            task_id=args.task_id,
+            run_id=args.run_id,
+            selector=selector,
+        )
+    except (ConfigError, FileNotFoundError, WorkflowDiscoveryError, WorkflowManifestError, ValueError):
+        return {}
+
+    sticky_overrides = record.metadata.get("sticky_overrides")
+    if not isinstance(sticky_overrides, Mapping):
+        return {}
+    return normalize_mapping(sticky_overrides)
+
+
+def _args_with_sticky_provider_overrides(
+    args: argparse.Namespace,
+    sticky_overrides: Mapping[str, Any],
+) -> argparse.Namespace:
+    provider = sticky_overrides.get("provider")
+    if not isinstance(provider, Mapping):
+        return args
+
+    values = vars(args).copy()
+    changed = False
+    sticky_provider_name = _sticky_string(provider.get("name"))
+    if values.get("provider") is None and sticky_provider_name in SUPPORTED_PROVIDER_NAMES:
+        values["provider"] = sticky_provider_name
+        changed = True
+
+    provider_name = values.get("provider")
+    if provider_name not in SUPPORTED_PROVIDER_NAMES:
+        return argparse.Namespace(**values) if changed else args
+
+    family = provider.get(provider_name)
+    if isinstance(family, Mapping):
+        model = _sticky_string(family.get("model"))
+        if values.get("model") is None and model is not None:
+            values["model"] = model
+            changed = True
+
+        effort_key = "model_effort" if provider_name == "codex" else "effort"
+        model_effort = _sticky_string(family.get(effort_key))
+        if values.get("model_effort") is None and model_effort is not None:
+            values["model_effort"] = model_effort
+            changed = True
+
+    return argparse.Namespace(**values) if changed else args
+
+
+def _explicit_cli_sticky_overrides(
+    args: argparse.Namespace,
+    *,
+    provider_config: Any,
+) -> dict[str, Any]:
+    sticky: dict[str, Any] = {}
+
+    max_steps = getattr(args, "max_steps", None)
+    if max_steps is not None:
+        sticky["runtime"] = {"max_steps": max_steps}
+
+    provider_sticky: dict[str, Any] = {}
+    provider_name = getattr(provider_config, "name", None)
+    if getattr(args, "provider", None) is not None and provider_name in SUPPORTED_PROVIDER_NAMES:
+        provider_sticky["name"] = provider_name
+
+    model_is_explicit = _sticky_string(getattr(args, "model", None)) is not None
+    effort_is_explicit = _sticky_string(getattr(args, "model_effort", None)) is not None
+    if (model_is_explicit or effort_is_explicit) and provider_name in SUPPORTED_PROVIDER_NAMES:
+        provider_sticky.setdefault("name", provider_name)
+        if provider_name == "codex":
+            codex_sticky: dict[str, str] = {}
+            if model_is_explicit:
+                codex_sticky["model"] = provider_config.codex.model
+            if effort_is_explicit and provider_config.codex.model_effort is not None:
+                codex_sticky["model_effort"] = provider_config.codex.model_effort
+            if codex_sticky:
+                provider_sticky["codex"] = codex_sticky
+        elif provider_name == "claude":
+            claude_sticky: dict[str, str] = {}
+            if model_is_explicit and provider_config.claude.model is not None:
+                claude_sticky["model"] = provider_config.claude.model
+            if effort_is_explicit and provider_config.claude.effort is not None:
+                claude_sticky["effort"] = provider_config.claude.effort
+            if claude_sticky:
+                provider_sticky["claude"] = claude_sticky
+
+    if provider_sticky:
+        sticky["provider"] = provider_sticky
+    return sticky
+
+
+def _sticky_string(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    stripped = value.strip()
+    return stripped or None
+
+
 def _readonly_client(args: argparse.Namespace) -> Botpipe:
     return Botpipe(workspace=args.root.resolve(), provider=_READ_ONLY_PROVIDER)
 
@@ -683,9 +803,11 @@ def _mutating_client(
     args: argparse.Namespace,
     *,
     provider_factory: Callable[..., Any] | None,
+    config: Any | None = None,
 ) -> Botpipe:
     root = args.root.resolve()
-    config = resolve_runtime_config(root, args)
+    if config is None:
+        config = resolve_runtime_config(root, args)
     provider = _resolve_provider(config=config, args=args, provider_factory=provider_factory)
     return Botpipe(
         workspace=root,

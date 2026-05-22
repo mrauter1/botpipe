@@ -35,6 +35,7 @@ from .config import (
     ProviderPolicyRuntimeConfig,
     RuntimeConfig,
     RuntimeConfigSources,
+    SUPPORTED_PROVIDER_NAMES,
 )
 from .events import EventLogger
 from .git_tracking import RuntimeGitTracker
@@ -108,6 +109,7 @@ class RunnerOptions:
     provider_policy_config: ProviderPolicyRuntimeConfig = field(default_factory=ProviderPolicyRuntimeConfig)
     provider_config: ProviderConfig | None = None
     config_sources: RuntimeConfigSources | None = None
+    sticky_overrides: Mapping[str, Any] | None = None
     created_by: str | None = None
     sdk_default_policy: PolicyInput = None
     run_policy: PolicyInput = None
@@ -206,7 +208,6 @@ def _execute_compiled_workflow(
     provider: LLMProvider,
     options: RunnerOptions,
 ) -> RunExecution:
-    max_steps = resolve_max_steps(options.max_steps, runtime_config=options.runtime_config)
     planned = _plan_workspaces(compiled, options, reference=reference)
     git_tracker = RuntimeGitTracker(
         root=options.root,
@@ -223,6 +224,8 @@ def _execute_compiled_workflow(
         reference=reference,
         planned=planned,
     )
+    max_steps = _resolve_effective_max_steps(options, run_workspace)
+    sticky_overrides = _resolve_effective_sticky_overrides(options, run_workspace)
     effective_compiled, workflow_git_tracking_warnings = _runtime_compiled_workflow(compiled)
     session_path_strategy = resolve_session_path_strategy(effective_compiled)
     prepared = prepare_runtime_services(
@@ -257,6 +260,7 @@ def _execute_compiled_workflow(
             effective_max_steps=max_steps,
             workflow_policy=prepared.compiled.provider_policy,
         ),
+        sticky_overrides=sticky_overrides,
     )
     if options.resume:
         resume_warning = _resume_topology_mismatch_warning(
@@ -734,6 +738,198 @@ def _validate_max_steps(value: object, *, label: str) -> int:
     return value
 
 
+def _resolve_effective_max_steps(options: RunnerOptions, run_workspace: RunWorkspace) -> int:
+    if not options.resume or options.max_steps is not None:
+        return resolve_max_steps(options.max_steps, runtime_config=options.runtime_config)
+
+    _validate_max_steps(options.runtime_config.max_steps, label="runtime max_steps")
+    current_max_steps = _runtime_max_steps_from_sticky_overrides(options.sticky_overrides)
+    if current_max_steps is not None:
+        return resolve_max_steps(current_max_steps, runtime_config=options.runtime_config)
+
+    sticky_exists, sticky_overrides = _load_sticky_overrides(run_workspace)
+    if sticky_exists:
+        sticky_max_steps = _runtime_max_steps_from_sticky_overrides(sticky_overrides)
+        if sticky_max_steps is not None:
+            return resolve_max_steps(sticky_max_steps, runtime_config=options.runtime_config)
+        return resolve_max_steps(None, runtime_config=options.runtime_config)
+
+    stored_max_steps = _latest_recorded_runtime_max_steps(run_workspace)
+    if stored_max_steps is not None:
+        return resolve_max_steps(stored_max_steps, runtime_config=options.runtime_config)
+    return resolve_max_steps(None, runtime_config=options.runtime_config)
+
+
+def _resolve_effective_sticky_overrides(options: RunnerOptions, run_workspace: RunWorkspace) -> dict[str, Any]:
+    stored_exists, stored_sticky = _load_sticky_overrides(run_workspace)
+    current_sticky = _normalize_sticky_overrides(options.sticky_overrides)
+    if options.max_steps is not None:
+        current_sticky = _merge_sticky_overrides(
+            current_sticky,
+            {"runtime": {"max_steps": _validate_max_steps(options.max_steps, label="max_steps")}},
+        )
+
+    legacy_sticky: dict[str, Any] = {}
+    if (
+        options.resume
+        and not stored_exists
+        and _runtime_max_steps_from_sticky_overrides(current_sticky) is None
+    ):
+        legacy_max_steps = _latest_recorded_runtime_max_steps(run_workspace)
+        if legacy_max_steps is not None:
+            legacy_sticky = {"runtime": {"max_steps": legacy_max_steps}}
+
+    return _sanitize_sticky_overrides(
+        _merge_sticky_overrides(stored_sticky, legacy_sticky, current_sticky)
+    )
+
+
+def _load_sticky_overrides(run_workspace: RunWorkspace) -> tuple[bool, dict[str, Any]]:
+    try:
+        payload = _load_run_metadata_payload(run_workspace.run_meta_file)
+    except (json.JSONDecodeError, OSError):
+        return False, {}
+    if "sticky_overrides" not in payload:
+        return False, {}
+    sticky_overrides = payload.get("sticky_overrides")
+    if not isinstance(sticky_overrides, Mapping):
+        return True, {}
+    return True, normalize_mapping(sticky_overrides)
+
+
+def _normalize_sticky_overrides(sticky_overrides: Mapping[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(sticky_overrides, Mapping):
+        return {}
+    return normalize_mapping(sticky_overrides)
+
+
+def _merge_sticky_overrides(*payloads: Mapping[str, Any]) -> dict[str, Any]:
+    merged: dict[str, Any] = {}
+    for payload in payloads:
+        for section in ("runtime", "provider"):
+            section_payload = payload.get(section)
+            if not isinstance(section_payload, Mapping):
+                continue
+            section_target = merged.setdefault(section, {})
+            if not isinstance(section_target, dict):  # pragma: no cover - defensive
+                section_target = {}
+                merged[section] = section_target
+            for key, value in section_payload.items():
+                if isinstance(value, Mapping):
+                    existing = section_target.get(key)
+                    nested = dict(existing) if isinstance(existing, Mapping) else {}
+                    nested.update(normalize_mapping(value))
+                    section_target[key] = nested
+                else:
+                    section_target[key] = value
+    return merged
+
+
+def _sanitize_sticky_overrides(payload: Mapping[str, Any]) -> dict[str, Any]:
+    sticky: dict[str, Any] = {}
+
+    runtime = payload.get("runtime")
+    if isinstance(runtime, Mapping):
+        max_steps = runtime.get("max_steps")
+        if _is_valid_max_steps(max_steps):
+            sticky["runtime"] = {"max_steps": max_steps}
+
+    provider = _sanitize_provider_sticky_overrides(payload.get("provider"))
+    if provider:
+        sticky["provider"] = provider
+
+    return sticky
+
+
+def _sanitize_provider_sticky_overrides(provider: object) -> dict[str, Any]:
+    if not isinstance(provider, Mapping):
+        return {}
+    name = provider.get("name")
+    if not isinstance(name, str) or name not in SUPPORTED_PROVIDER_NAMES:
+        return {}
+
+    sticky: dict[str, Any] = {"name": name}
+    if name == "codex":
+        codex = provider.get("codex")
+        if isinstance(codex, Mapping):
+            codex_sticky: dict[str, str] = {}
+            model = _non_empty_string(codex.get("model"))
+            model_effort = _non_empty_string(codex.get("model_effort"))
+            if model is not None:
+                codex_sticky["model"] = model
+            if model_effort is not None:
+                codex_sticky["model_effort"] = model_effort
+            if codex_sticky:
+                sticky["codex"] = codex_sticky
+    elif name == "claude":
+        claude = provider.get("claude")
+        if isinstance(claude, Mapping):
+            claude_sticky: dict[str, str] = {}
+            model = _non_empty_string(claude.get("model"))
+            effort = _non_empty_string(claude.get("effort"))
+            if model is not None:
+                claude_sticky["model"] = model
+            if effort is not None:
+                claude_sticky["effort"] = effort
+            if claude_sticky:
+                sticky["claude"] = claude_sticky
+    return sticky
+
+
+def _non_empty_string(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    stripped = value.strip()
+    return stripped or None
+
+
+def _runtime_max_steps_from_sticky_overrides(sticky_overrides: Mapping[str, Any] | None) -> int | None:
+    if not isinstance(sticky_overrides, Mapping):
+        return None
+    runtime = sticky_overrides.get("runtime")
+    if not isinstance(runtime, Mapping):
+        return None
+    max_steps = runtime.get("max_steps")
+    return max_steps if _is_valid_max_steps(max_steps) else None
+
+
+def _latest_recorded_runtime_max_steps(run_workspace: RunWorkspace) -> int | None:
+    try:
+        payload = _load_run_metadata_payload(run_workspace.run_meta_file)
+    except (json.JSONDecodeError, OSError):
+        return None
+
+    execution_config = payload.get("execution_config")
+    if not isinstance(execution_config, dict):
+        return None
+
+    candidates: list[object] = [execution_config.get("last_used")]
+    invocations = execution_config.get("invocations")
+    if isinstance(invocations, list):
+        candidates.extend(reversed(invocations))
+    candidates.extend((execution_config.get("created_with"), execution_config.get("first_recorded_with")))
+
+    for candidate in candidates:
+        max_steps = _runtime_max_steps_from_execution_config(candidate)
+        if max_steps is not None:
+            return max_steps
+    return None
+
+
+def _runtime_max_steps_from_execution_config(entry: object) -> int | None:
+    if not isinstance(entry, Mapping):
+        return None
+    runtime = entry.get("runtime")
+    if not isinstance(runtime, Mapping):
+        return None
+    max_steps = runtime.get("max_steps")
+    return max_steps if _is_valid_max_steps(max_steps) else None
+
+
+def _is_valid_max_steps(value: object) -> bool:
+    return not isinstance(value, bool) and isinstance(value, int) and value >= 0
+
+
 def _runtime_observability_error(exc: BaseException) -> BaseException:
     cause = exc.__cause__
     if isinstance(cause, BaseException):
@@ -909,6 +1105,7 @@ def _build_workflow_invoker(
                 provider_policy_config=options.provider_policy_config,
                 provider_config=options.provider_config,
                 config_sources=options.config_sources,
+                sticky_overrides=options.sticky_overrides,
                 created_by=options.created_by,
                 sdk_default_policy=options.sdk_default_policy,
                 run_policy=options.run_policy,

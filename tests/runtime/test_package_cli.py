@@ -1139,6 +1139,193 @@ def test_cli_mutating_commands_route_public_provider_selection_through_typed_con
     assert config.provider.claude.effort == "max"
 
 
+def test_cli_resume_reuses_explicit_provider_model_sticky_overrides(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    seen_configs: list[object] = []
+
+    def inspect_provider_factory(**kwargs: object) -> _UnusedProvider:
+        seen_configs.append(kwargs["config"])
+        return _UnusedProvider()
+
+    _write_workflow_package(
+        tmp_path,
+        "sticky_provider",
+        workflow_name="sticky_provider",
+        class_name="StickyProviderWorkflow",
+        workflow_source=_paused_workflow_source("StickyProviderWorkflow", "sticky_provider"),
+    )
+
+    run_exit = cli.main(
+        [
+            "run",
+            "sticky_provider",
+            "Pause with explicit provider config",
+            "--workspace",
+            str(tmp_path),
+            "--task",
+            "task-sticky-provider",
+            "--no-git",
+            "--provider",
+            "claude",
+            "--model",
+            "claude-opus",
+            "--model-effort",
+            "max",
+        ],
+        provider_factory=inspect_provider_factory,
+    )
+    run_payload = json.loads(capsys.readouterr().out)
+    run_id = run_payload["run_id"]
+
+    answer_exit = cli.main(
+        [
+            "answer",
+            "sticky_provider",
+            "task-sticky-provider",
+            "--workspace",
+            str(tmp_path),
+            "--run-id",
+            run_id,
+            "--answer",
+            "42",
+            "--no-git",
+        ],
+        provider_factory=inspect_provider_factory,
+    )
+    capsys.readouterr()
+
+    run_meta = json.loads(
+        (
+            tmp_path
+            / ".botpipe"
+            / "tasks"
+            / "task-sticky-provider"
+            / "wf_sticky_provider"
+            / "runs"
+            / run_id
+            / "run.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    assert run_exit == 0
+    assert answer_exit == 0
+    assert len(seen_configs) == 2
+    assert seen_configs[0].provider.name == "claude"
+    assert seen_configs[0].provider.claude.model == "claude-opus"
+    assert seen_configs[0].provider.claude.effort == "max"
+    assert seen_configs[1].provider.name == "claude"
+    assert seen_configs[1].provider.claude.model == "claude-opus"
+    assert seen_configs[1].provider.claude.effort == "max"
+    assert run_meta["sticky_overrides"]["provider"] == {
+        "name": "claude",
+        "claude": {"model": "claude-opus", "effort": "max"},
+    }
+    assert run_meta["execution_config"]["created_with"]["config_sources"]["cli_overrides"] == [
+        "provider",
+        "model",
+        "model_effort",
+        "no_git",
+    ]
+    assert run_meta["execution_config"]["last_used"]["config_sources"]["cli_overrides"] == ["no_git"]
+
+
+def test_cli_resume_current_provider_model_overrides_stored_sticky_overrides(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    seen_configs: list[object] = []
+
+    def inspect_provider_factory(**kwargs: object) -> _UnusedProvider:
+        seen_configs.append(kwargs["config"])
+        return _UnusedProvider()
+
+    _write_workflow_package(
+        tmp_path,
+        "sticky_provider_override",
+        workflow_name="sticky_provider_override",
+        class_name="StickyProviderOverrideWorkflow",
+        workflow_source=_paused_workflow_source("StickyProviderOverrideWorkflow", "sticky_provider_override"),
+    )
+
+    run_exit = cli.main(
+        [
+            "run",
+            "sticky_provider_override",
+            "Pause with explicit provider config",
+            "--workspace",
+            str(tmp_path),
+            "--task",
+            "task-sticky-provider-override",
+            "--no-git",
+            "--provider",
+            "claude",
+            "--model",
+            "claude-opus",
+            "--model-effort",
+            "max",
+        ],
+        provider_factory=inspect_provider_factory,
+    )
+    run_payload = json.loads(capsys.readouterr().out)
+    run_id = run_payload["run_id"]
+
+    answer_exit = cli.main(
+        [
+            "answer",
+            "sticky_provider_override",
+            "task-sticky-provider-override",
+            "--workspace",
+            str(tmp_path),
+            "--run-id",
+            run_id,
+            "--answer",
+            "42",
+            "--no-git",
+            "--provider",
+            "codex",
+            "--model",
+            "gpt-test",
+            "--model-effort",
+            "high",
+        ],
+        provider_factory=inspect_provider_factory,
+    )
+    capsys.readouterr()
+
+    run_meta = json.loads(
+        (
+            tmp_path
+            / ".botpipe"
+            / "tasks"
+            / "task-sticky-provider-override"
+            / "wf_sticky_provider_override"
+            / "runs"
+            / run_id
+            / "run.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    assert run_exit == 0
+    assert answer_exit == 0
+    assert len(seen_configs) == 2
+    assert seen_configs[0].provider.name == "claude"
+    assert seen_configs[1].provider.name == "codex"
+    assert seen_configs[1].provider.codex.model == "gpt-test"
+    assert seen_configs[1].provider.codex.model_effort == "high"
+    assert run_meta["sticky_overrides"]["provider"] == {
+        "name": "codex",
+        "codex": {"model": "gpt-test", "model_effort": "high"},
+    }
+    assert run_meta["execution_config"]["last_used"]["config_sources"]["cli_overrides"] == [
+        "provider",
+        "model",
+        "model_effort",
+        "no_git",
+    ]
+
+
 def test_cli_mutating_commands_route_runtime_git_and_trace_overrides_through_typed_config(
     tmp_path: Path,
     capsys,
@@ -1413,9 +1600,20 @@ def test_cli_durable_handlers_delegate_to_sdk_facade(
             calls.append(("repair", workflow, task_id, run_id, force))
             return {"repaired": True, "run_id": run_id}
 
-        def resume(self, workflow, task_id, *, run_id=None, answer=None, workflow_params=None, on_event=None):
+        def resume(
+            self,
+            workflow,
+            task_id,
+            *,
+            run_id=None,
+            answer=None,
+            workflow_params=None,
+            max_steps=None,
+            _sticky_overrides=None,
+            on_event=None,
+        ):
             assert on_event is None
-            calls.append(("resume", workflow, task_id, run_id, answer, workflow_params))
+            calls.append(("resume", workflow, task_id, run_id, answer, workflow_params, max_steps, _sticky_overrides))
             return object()
 
         def events_text(self, workflow, task_id, *, run_id=None):
@@ -1469,7 +1667,18 @@ def test_cli_durable_handlers_delegate_to_sdk_facade(
     capsys.readouterr()
     assert (
         cli.main(
-            ["resume", "review", "task-42", "--workspace", str(tmp_path), "--run-id", "run-1", "--no-git"],
+            [
+                "resume",
+                "review",
+                "task-42",
+                "--workspace",
+                str(tmp_path),
+                "--run-id",
+                "run-1",
+                "--max-steps",
+                "77",
+                "--no-git",
+            ],
             provider_factory=_provider_factory,
         )
         == 0
@@ -1487,6 +1696,8 @@ def test_cli_durable_handlers_delegate_to_sdk_facade(
                 "run-1",
                 "--answer",
                 "Use OAuth",
+                "--max-steps",
+                "88",
                 "--no-git",
             ],
             provider_factory=_provider_factory,
@@ -1501,8 +1712,8 @@ def test_cli_durable_handlers_delegate_to_sdk_facade(
         ("repair", "review", "task-42", "run-1", False),
         ("events_text", "review", "task-42", None),
         ("trace_text", "review", "task-42", None),
-        ("resume", "review", "task-42", "run-1", None, None),
-        ("resume", "review", "task-42", "run-1", "Use OAuth", None),
+        ("resume", "review", "task-42", "run-1", None, None, 77, {"runtime": {"max_steps": 77}}),
+        ("resume", "review", "task-42", "run-1", "Use OAuth", None, 88, {"runtime": {"max_steps": 88}}),
     ]
 
 
