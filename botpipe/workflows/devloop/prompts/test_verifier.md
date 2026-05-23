@@ -115,7 +115,7 @@ Write `feedback.md` with:
 # Test Feedback: {{ state.phase.id }}
 
 ## Decision
-Phase passed | Needs replan
+Phase passed | Needs rework
 
 ## Findings
 - Finding 1
@@ -134,4 +134,4 @@ Return `phase_passed` only if:
 - every checkbox in `criteria.md` is checked;
 - `feedback.md` records acceptance.
 
-Return `needs_replan` if tests or validation reveal a planning, scope, dependency, or acceptance-criteria problem that requires revising the plan.
+Return `needs_rework` if validation shows the implementation does not satisfy the active phase and must return to implementation.

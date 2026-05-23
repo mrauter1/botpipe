@@ -131,7 +131,7 @@ Write `feedback.md` with:
 # Plan Feedback
 
 ## Decision
-Accepted | Needs replan
+Accepted | Needs rework
 
 ## Findings
 - Finding 1
@@ -149,4 +149,4 @@ Return `plan_ready` only if:
 - every checkbox in `criteria.md` is checked;
 - `feedback.md` records acceptance.
 
-Return `needs_replan` if any required condition is not satisfied.
+Return `needs_rework` if any required condition is not satisfied.

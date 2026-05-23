@@ -112,11 +112,39 @@ Implementation completion-gate feedback, if present:
 {{ task.folder }}/implement/phases/{{ state.phase.dir_key }}/completion_gate_feedback.md
 ```
 
+Test verifier feedback, if present:
+
+```text
+{{ task.folder }}/test/phases/{{ state.phase.dir_key }}/feedback.md
+```
+
+Test completion-gate feedback, if present:
+
+```text
+{{ task.folder }}/test/phases/{{ state.phase.dir_key }}/completion_gate_feedback.md
+```
+
+Phase item review, if present:
+
+```text
+{{ task.folder }}/plan/phases/{{ state.phase.dir_key }}/item_review.md
+```
+
+Phase item review feedback, if present:
+
+```text
+{{ task.folder }}/plan/phases/{{ state.phase.dir_key }}/item_review_feedback.md
+```
+
 ## Required actions
 
 Implement the active phase completely and correctly.
 
 If implementation feedback or completion-gate feedback exists, read it first and address every issue before rewriting implementation notes.
+
+If test feedback exists and rejects the phase, address that feedback before unrelated changes.
+
+If a phase item review exists, treat the reviewed active phase as authoritative and implement that item.
 
 You may modify repository code, tests, docs, configuration, or fixtures when needed for the active phase.
 

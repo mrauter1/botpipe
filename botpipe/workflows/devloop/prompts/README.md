@@ -9,9 +9,11 @@ Devloop runs a phased software-delivery loop:
 3. `activate_next_phase`: selects the next phase.
 4. `implement`: implements the active phase.
 5. `validate_implement_completion`: deterministically validates the implementation checklist.
-6. `test`: validates the active phase.
-7. `validate_test_completion`: deterministically validates the test checklist.
-8. Repeat from `activate_next_phase` until all phases complete.
+6. `review_phase_item`: narrowly repairs the active phase-plan item when implementation proves it is not executable as authored.
+7. `validate_phase_item_review`: deterministically validates the item review and refreshes active phase state.
+8. `test`: validates the active phase.
+9. `validate_test_completion`: deterministically validates the test checklist.
+10. Repeat from `activate_next_phase` until all phases complete.
 
 ## Required phase-plan contract
 
@@ -83,7 +85,7 @@ A criteria file passes the deterministic completion gate only when it:
 - contains at least one markdown checkbox;
 - has every checkbox checked with `- [x]`.
 
-Use unchecked boxes only when the route should repair or replan.
+Use unchecked boxes only when the route should repair or rework.
 
 Valid accepted checklist example:
 
@@ -112,10 +114,14 @@ Prompt-level route intent:
 
 - Plan verifier:
   - `plan_ready`: plan is valid and checklist is fully checked.
-  - `needs_replan`: plan must be rewritten.
+  - `needs_rework`: plan must be rewritten.
 - Implement verifier:
   - `implemented`: active phase implementation is complete and checklist is fully checked.
-  - `needs_replan`: implementation exposes a planning/scope problem requiring a new plan.
+  - `needs_rework`: current implementation or implementation evidence needs local rework.
+  - `needs_phase_item_review`: active phase item is impossible, contradictory, missing required dependencies, mis-scoped, or cannot be executed without changing that item.
+- Phase item review verifier:
+  - `phase_item_reviewed`: active phase item was narrowly repaired and checklist is fully checked.
+  - `needs_rework`: item review is incomplete, unsafe, or violates the live phase-plan contract.
 - Test verifier:
   - `phase_passed`: active phase is validated and checklist is fully checked.
-  - `needs_replan`: tests or validation expose a planning/scope problem requiring a new plan.
+  - `needs_rework`: validation shows the implementation does not satisfy the active phase and must return to implementation.

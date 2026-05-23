@@ -201,6 +201,53 @@ def _validate_test_completion(ctx) -> ValidationResult:
     return ValidationResult.valid()
 
 
+def _validate_phase_item_review(ctx) -> ValidationResult:
+    issues: list[str] = []
+    active_phase = ctx.state.phase
+    active_index = ctx.state.phase_index
+    previous_phases = list(ctx.state.phases)
+    phases: list[Phase] = []
+
+    if active_phase is None:
+        issues.append("phase item review requires an active phase")
+    elif active_index < 0 or active_index >= len(previous_phases):
+        issues.append("phase item review requires a valid active phase index")
+    elif previous_phases[active_index].id != active_phase.id:
+        issues.append("active phase state is inconsistent with the phase index")
+
+    try:
+        document = _load_phase_plan_document(
+            _read_artifact_text(ctx.artifacts.phase_plan, "phase plan"),
+            expected_task_id=ctx.task_id,
+            expected_request_snapshot_ref=str(ctx.request.file),
+            allow_live_statuses=True,
+        )
+        phases = [_phase_from_plan_phase(phase) for phase in document.phases]
+        issues.extend(
+            _phase_item_review_issues(
+                document,
+                phases,
+                previous_phases=previous_phases,
+                active_phase=active_phase,
+                active_index=active_index,
+            )
+        )
+    except PhasePlanError as exc:
+        issues.append(str(exc))
+
+    issues.extend(_non_empty_artifact_issues(ctx.artifacts.phase_item_review, "phase item review"))
+    issues.extend(_checklist_issues(ctx.artifacts.phase_item_review_criteria, "phase item review criteria"))
+
+    if issues:
+        return _invalid("Phase item review gate failed.", issues)
+
+    ctx.state.phases = phases
+    ctx.state.phase_index = active_index
+    ctx.state.phase = phases[active_index]
+    ctx.state.phase_dir_key = phases[active_index].dir_key
+    return ValidationResult.valid()
+
+
 def _validate_audit_completion(ctx) -> ValidationResult:
     issues: list[str] = []
     audit_result: AuditResult | None = None
@@ -277,6 +324,22 @@ class DevLoop(Workflow):
     plan_gate_feedback = Artifact.md(
         "{{ task.folder }}/plan/completion_gate_feedback.md",
         name="plan_gate_feedback",
+    )
+    phase_item_review = Artifact.md(
+        "{{ task.folder }}/plan/phases/{{ state.phase_dir_key }}/item_review.md",
+        name="phase_item_review",
+    )
+    phase_item_review_criteria = Artifact.md(
+        "{{ task.folder }}/plan/phases/{{ state.phase_dir_key }}/item_review_criteria.md",
+        name="phase_item_review_criteria",
+    )
+    phase_item_review_feedback = Artifact.md(
+        "{{ task.folder }}/plan/phases/{{ state.phase_dir_key }}/item_review_feedback.md",
+        name="phase_item_review_feedback",
+    )
+    phase_item_review_gate_feedback = Artifact.md(
+        "{{ task.folder }}/plan/phases/{{ state.phase_dir_key }}/item_review_gate_feedback.md",
+        name="phase_item_review_gate_feedback",
     )
 
     impl_notes = Artifact.md(
@@ -361,7 +424,10 @@ class DevLoop(Workflow):
                 "validate_plan_completion",
                 required_writes=("phase_plan", "plan_criteria"),
             ),
-            "needs_replan": "plan",
+            "needs_rework": Route.to(
+                "plan",
+                required_writes=("plan_criteria", "plan_feedback"),
+            ),
         },
     )
 
@@ -383,7 +449,15 @@ class DevLoop(Workflow):
         verifier_prompt=Prompt.file("prompts/implement_verifier.md"),
         session=phase_session,
         requires=[phase_plan],
-        reads=[impl_feedback, impl_gate_feedback],
+        reads=[
+            impl_feedback,
+            impl_gate_feedback,
+            test_feedback,
+            test_gate_feedback,
+            phase_item_review,
+            phase_item_review_feedback,
+            phase_item_review_gate_feedback,
+        ],
         producer_writes=[impl_notes],
         verifier_writes=[impl_criteria, impl_feedback],
         routes={
@@ -391,8 +465,60 @@ class DevLoop(Workflow):
                 "validate_implement_completion",
                 required_writes=("impl_notes", "impl_criteria"),
             ),
-            "needs_replan": "plan",
+            "needs_rework": Route.to(
+                "implement",
+                required_writes=("impl_criteria", "impl_feedback"),
+            ),
+            "needs_phase_item_review": Route.to(
+                "review_phase_item",
+                required_writes=("impl_criteria", "impl_feedback"),
+            ),
         },
+    )
+
+    review_phase_item = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/phase_item_review_producer.md"),
+        verifier_prompt=Prompt.file("prompts/phase_item_review_verifier.md"),
+        session=phase_session,
+        requires=[phase_plan],
+        reads=[
+            impl_feedback,
+            impl_gate_feedback,
+            test_feedback,
+            test_gate_feedback,
+            phase_item_review_feedback,
+            phase_item_review_gate_feedback,
+        ],
+        producer_writes=[phase_plan, phase_item_review],
+        verifier_writes=[phase_item_review_criteria, phase_item_review_feedback],
+        routes={
+            "phase_item_reviewed": Route.to(
+                "validate_phase_item_review",
+                required_writes=(
+                    "phase_plan",
+                    "phase_item_review",
+                    "phase_item_review_criteria",
+                    "phase_item_review_feedback",
+                ),
+            ),
+            "needs_rework": Route.to(
+                "review_phase_item",
+                required_writes=("phase_item_review_criteria", "phase_item_review_feedback"),
+            ),
+        },
+    )
+
+    validate_phase_item_review = validation_step(
+        _validate_phase_item_review,
+        name="validate_phase_item_review",
+        feedback=phase_item_review_gate_feedback,
+        reads=[phase_plan, phase_item_review, phase_item_review_criteria],
+        routes={
+            "phase_item_review_checked": "implement",
+            "phase_item_review_needs_repair": "review_phase_item",
+        },
+        success="phase_item_review_checked",
+        repair="phase_item_review_needs_repair",
     )
 
     validate_implement_completion = validation_step(
@@ -484,7 +610,10 @@ class DevLoop(Workflow):
                 "validate_test_completion",
                 required_writes=("test_strat", "test_criteria"),
             ),
-            "needs_replan": "plan",
+            "needs_rework": Route.to(
+                "implement",
+                required_writes=("test_criteria", "test_feedback"),
+            ),
         },
     )
 
@@ -688,15 +817,32 @@ def _load_phase_plan(
     *,
     expected_task_id: str,
     expected_request_snapshot_ref: str,
+    allow_live_statuses: bool = False,
 ) -> list[Phase]:
+    document = _load_phase_plan_document(
+        raw,
+        expected_task_id=expected_task_id,
+        expected_request_snapshot_ref=expected_request_snapshot_ref,
+        allow_live_statuses=allow_live_statuses,
+    )
+    return [_phase_from_plan_phase(phase) for phase in document.phases]
+
+
+def _load_phase_plan_document(
+    raw: str,
+    *,
+    expected_task_id: str,
+    expected_request_snapshot_ref: str,
+    allow_live_statuses: bool = False,
+) -> PhasePlanDocument:
     payload = _parse_phase_plan_payload(raw)
-    document = _validate_phase_plan_document(payload)
+    document = _validate_phase_plan_document(payload, allow_live_statuses=allow_live_statuses)
     _validate_phase_plan_metadata(
         document,
         expected_task_id=expected_task_id,
         expected_request_snapshot_ref=expected_request_snapshot_ref,
     )
-    return [_phase_from_plan_phase(phase) for phase in document.phases]
+    return document
 
 
 def _parse_phase_plan_payload(raw: str) -> Mapping[str, Any]:
@@ -711,7 +857,11 @@ def _parse_phase_plan_payload(raw: str) -> Mapping[str, Any]:
     return payload
 
 
-def _validate_phase_plan_document(payload: Mapping[str, Any]) -> PhasePlanDocument:
+def _validate_phase_plan_document(
+    payload: Mapping[str, Any],
+    *,
+    allow_live_statuses: bool = False,
+) -> PhasePlanDocument:
     try:
         document = PhasePlanDocument.model_validate(payload)
     except ValidationError as exc:
@@ -722,7 +872,12 @@ def _validate_phase_plan_document(payload: Mapping[str, Any]) -> PhasePlanDocume
             f"phase plan version must be {PHASE_PLAN_VERSION}, got {document.version!r}"
         )
 
-    if document.status != PHASE_STATUS_PLANNED:
+    if allow_live_statuses:
+        if document.status not in PHASE_STATUSES:
+            raise PhasePlanError(
+                f"phase plan root status must be one of {sorted(PHASE_STATUSES)}, got {document.status!r}"
+            )
+    elif document.status != PHASE_STATUS_PLANNED:
         raise PhasePlanError("phase plan root status must be 'planned' in a new phase plan")
 
     if not document.phases:
@@ -746,7 +901,12 @@ def _validate_phase_plan_document(payload: Mapping[str, Any]) -> PhasePlanDocume
         _non_empty(phase.title, f"{label}.title")
         _non_empty(phase.objective, f"{label}.objective")
 
-        if phase.status != PHASE_STATUS_PLANNED:
+        if allow_live_statuses:
+            if phase.status not in PHASE_STATUSES:
+                raise PhasePlanError(
+                    f"{label}.status must be one of {sorted(PHASE_STATUSES)}, got {phase.status!r}"
+                )
+        elif phase.status != PHASE_STATUS_PLANNED:
             raise PhasePlanError(f"{label}.status must be 'planned' in a new phase plan")
 
         _string_list(phase.scope.in_scope, f"{label}.scope.in_scope", allow_empty=False)
@@ -786,6 +946,61 @@ def _validate_phase_plan_document(payload: Mapping[str, Any]) -> PhasePlanDocume
         seen_phase_ids.add(phase_id)
 
     return document
+
+
+def _phase_item_review_issues(
+    document: PhasePlanDocument,
+    phases: Sequence[Phase],
+    *,
+    previous_phases: Sequence[Phase],
+    active_phase: Phase | None,
+    active_index: int,
+) -> list[str]:
+    if active_phase is None or active_index < 0 or active_index >= len(previous_phases):
+        return []
+
+    issues: list[str] = []
+    if active_index >= len(phases):
+        return ["phase item review removed the active phase position"]
+
+    reviewed_active = phases[active_index]
+    if reviewed_active.id != active_phase.id:
+        issues.append(
+            "phase item review must keep the active phase_id unchanged at the active phase position "
+            f"({active_phase.id!r})"
+        )
+
+    if reviewed_active.status != PHASE_STATUS_IN_PROGRESS:
+        issues.append("active phase status must remain 'in_progress' after phase item review")
+
+    previous_ids = {phase.id for phase in previous_phases}
+    for index, previous_phase in enumerate(previous_phases[:active_index]):
+        if index >= len(phases):
+            issues.append(f"phase item review removed prior phase {previous_phase.id!r}")
+            continue
+        reviewed_phase = phases[index]
+        if reviewed_phase.id != previous_phase.id:
+            issues.append(
+                f"phase item review changed prior phase order at index {index}: "
+                f"expected {previous_phase.id!r}, got {reviewed_phase.id!r}"
+            )
+        if previous_phase.status == PHASE_STATUS_COMPLETED and reviewed_phase.status != PHASE_STATUS_COMPLETED:
+            issues.append(f"completed prior phase {previous_phase.id!r} must remain completed")
+
+    for reviewed_phase in phases[:active_index]:
+        if reviewed_phase.id not in previous_ids:
+            issues.append(
+                f"phase item review inserted new phase {reviewed_phase.id!r} before the active phase"
+            )
+
+    expected_status = _aggregate_phase_plan_status([phase.model_dump(mode="python") for phase in phases])
+    if document.status != expected_status:
+        issues.append(
+            f"phase plan root status must be {expected_status!r} for current phase statuses, "
+            f"got {document.status!r}"
+        )
+
+    return issues
 
 
 def _validate_phase_plan_metadata(

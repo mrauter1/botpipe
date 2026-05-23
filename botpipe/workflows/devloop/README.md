@@ -8,7 +8,8 @@ The workflow is intentionally small and general:
 
 - `plan`: produce and verify a phase plan.
 - `implement`: execute the active phase.
-- `test`: verify the active phase and either continue or request replanning.
+- `review_phase_item`: narrowly repair the active phase item when implementation proves it is not executable as authored.
+- `test`: verify the active phase and either continue or send implementation back for rework.
 
 It is installed with the `botpipe` package and is discoverable as:
 
@@ -16,4 +17,3 @@ It is installed with the `botpipe` package and is discoverable as:
 botpipe workflows show devloop
 botpipe workflows show default
 ```
-

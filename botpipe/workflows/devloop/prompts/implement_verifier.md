@@ -126,7 +126,7 @@ Write `feedback.md` with:
 # Implementation Feedback: {{ state.phase.id }}
 
 ## Decision
-Implemented | Needs replan
+Implemented | Needs rework | Needs phase item review
 
 ## Findings
 - Finding 1
@@ -145,4 +145,6 @@ Return `implemented` only if:
 - every checkbox in `criteria.md` is checked;
 - `feedback.md` records acceptance.
 
-Return `needs_replan` if the implementation reveals a planning, scope, dependency, or acceptance-criteria problem that requires revising the plan.
+Return `needs_rework` if the current implementation, evidence, or notes are incomplete, incorrect, stale, out of scope, or below the active phase acceptance criteria, and the active phase item can still be executed as authored.
+
+Return `needs_phase_item_review` only if the active phase-plan item itself is impossible, contradictory, missing required dependencies, mis-scoped, or cannot be executed without changing that item. Do not use phase item review for ordinary acceptance failures or incomplete implementation work.
