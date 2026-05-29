@@ -1,0 +1,4 @@
+name = "code_to_workflow"
+title = "Code To Workflow"
+description = "Distill a codebase into an equivalent runnable Botpipe workflow."
+aliases = ["repo_to_workflow"]

@@ -374,7 +374,7 @@ For `produce_verify_step(...)` verifiers and provider-backed `step(...)` prompts
 
 Runtime tracing is enabled by default.
 
-Runtime git tracking is runtime-owned and enabled by default when the repository is clean.
+Runtime git tracking is runtime-owned and attempted by default. If git is unavailable, the workspace is not a git repository, or the repository is dirty at run start, Botpipe records a warning and continues with git tracking disabled. Use `--git` or `runtime.git_tracking.required: true` to require fail-fast git tracking.
 
 Workflow authors do not declare `GitTracking` or `Tracing`; runtime observability is configured through typed runtime config files and CLI controls.
 
@@ -382,7 +382,7 @@ Runtime-owned observability writes `trace.jsonl`, `git_tracking.jsonl`, `static_
 
 Provider raw output is runtime telemetry and runtime-owned evidence for debugging and replay, not a workflow-authored prompt surface.
 
-Git commits are the workspace replay boundary, so operators should start from a clean repository before a git-tracked run or resume.
+Git commits are the workspace replay boundary for git-tracked runs, so operators should start from a clean repository when git tracking is required.
 
 ## Compact Prompt Contract Style
 

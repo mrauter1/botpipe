@@ -1,0 +1,4 @@
+name = "image-to-game"
+title = "Image to Game"
+description = "Builds a complete goal prompt for reference-driven browser game generation, then runs the goal workflow."
+aliases = ["image_to_game", "web_game_goal_builder", "game-goal-builder", "web-game-builder"]

@@ -1,0 +1,4 @@
+name = "goal"
+title = "Goal"
+description = "Persistent subgoal-based long-running objective workflow equivalent to Codex /goal."
+aliases = []

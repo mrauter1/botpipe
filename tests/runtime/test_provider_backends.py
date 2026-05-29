@@ -63,6 +63,7 @@ def _runtime_args(**overrides: object) -> argparse.Namespace:
         "model": None,
         "model_effort": None,
         "max_steps": None,
+        "git": False,
         "no_git": False,
         "git_commit_policy": None,
         "no_trace": False,
@@ -593,7 +594,29 @@ def test_resolve_codex_cli_commands_no_longer_bakes_policy_flags_or_model_overri
     )
 
 
-def test_resolve_codex_cli_commands_skips_git_repo_check_when_git_tracking_is_disabled(
+def test_resolve_codex_cli_commands_skips_git_repo_check_when_git_tracking_is_not_required(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(codex_runtime_provider.shutil, "which", lambda name: "/usr/bin/codex")
+
+    def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        if command == ["codex", "exec", "--help"]:
+            return _completed(args=command, stdout="--json\n-m, --model <MODEL>\n--skip-git-repo-check\n")
+        if command == ["codex", "exec", "resume", "--help"]:
+            return _completed(args=command, stdout="--json\n-m, --model <MODEL>\n--skip-git-repo-check\n")
+        raise AssertionError(f"unexpected command: {command!r}")
+
+    monkeypatch.setattr(codex_runtime_provider.subprocess, "run", fake_run)
+
+    commands = codex_runtime_provider.resolve_codex_cli_commands(_resolved_config("codex"))
+
+    assert commands == CodexCLICommand(
+        start_command=("codex", "exec", "--json", "--skip-git-repo-check"),
+        resume_command=("codex", "exec", "resume", "--json", "--skip-git-repo-check"),
+    )
+
+
+def test_resolve_codex_cli_commands_keeps_git_repo_check_when_git_tracking_is_required(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(codex_runtime_provider.shutil, "which", lambda name: "/usr/bin/codex")
@@ -608,12 +631,12 @@ def test_resolve_codex_cli_commands_skips_git_repo_check_when_git_tracking_is_di
     monkeypatch.setattr(codex_runtime_provider.subprocess, "run", fake_run)
 
     config = _resolved_config("codex")
-    config = replace(config, runtime=replace(config.runtime, git_tracking=replace(config.runtime.git_tracking, enabled=False)))
+    config = replace(config, runtime=replace(config.runtime, git_tracking=replace(config.runtime.git_tracking, required=True)))
     commands = codex_runtime_provider.resolve_codex_cli_commands(config)
 
     assert commands == CodexCLICommand(
-        start_command=("codex", "exec", "--json", "--skip-git-repo-check"),
-        resume_command=("codex", "exec", "resume", "--json", "--skip-git-repo-check"),
+        start_command=("codex", "exec", "--json"),
+        resume_command=("codex", "exec", "resume", "--json"),
     )
 
 
@@ -982,6 +1005,7 @@ def test_resolve_runtime_config_defaults_enable_git_tracking_and_tracing(tmp_pat
 
     assert resolved.runtime.max_steps == 0
     assert resolved.runtime.git_tracking.enabled is True
+    assert resolved.runtime.git_tracking.required is False
     assert resolved.runtime.git_tracking.commit_policy == "step"
     assert resolved.runtime.git_tracking.failure_policy == "propagate"
     assert resolved.runtime.tracing.enabled is True
@@ -1029,6 +1053,15 @@ def test_parse_runtime_config_rejects_non_mapping_git_tracking_section(tmp_path:
         )
 
 
+def test_parse_runtime_config_accepts_git_tracking_required(tmp_path: Path) -> None:
+    layer = runtime_config.parse_runtime_config(
+        {"runtime": {"git_tracking": {"required": True}}},
+        tmp_path / "botpipe.yaml",
+    )
+
+    assert layer.runtime.git_tracking.required is True
+
+
 def test_parse_runtime_config_rejects_non_mapping_tracing_section(tmp_path: Path) -> None:
     with pytest.raises(ConfigError, match=r"runtime\.tracing must be a mapping"):
         runtime_config.parse_runtime_config(
@@ -1041,6 +1074,15 @@ def test_resolve_runtime_config_no_git_disables_git_tracking(tmp_path: Path) -> 
     resolved = resolve_runtime_config(tmp_path, _runtime_args(no_git=True))
 
     assert resolved.runtime.git_tracking.enabled is False
+    assert resolved.runtime.git_tracking.required is False
+    assert resolved.runtime.git_tracking.commit_policy == "step"
+
+
+def test_resolve_runtime_config_git_requires_git_tracking(tmp_path: Path) -> None:
+    resolved = resolve_runtime_config(tmp_path, _runtime_args(git=True))
+
+    assert resolved.runtime.git_tracking.enabled is True
+    assert resolved.runtime.git_tracking.required is True
     assert resolved.runtime.git_tracking.commit_policy == "step"
 
 
@@ -1048,6 +1090,7 @@ def test_resolve_runtime_config_git_commit_policy_off_disables_git_tracking(tmp_
     resolved = resolve_runtime_config(tmp_path, _runtime_args(git_commit_policy="off"))
 
     assert resolved.runtime.git_tracking.enabled is False
+    assert resolved.runtime.git_tracking.required is False
     assert resolved.runtime.git_tracking.commit_policy == "off"
 
 
@@ -1055,6 +1098,7 @@ def test_resolve_runtime_config_git_commit_policy_run_enables_run_policy(tmp_pat
     resolved = resolve_runtime_config(tmp_path, _runtime_args(git_commit_policy="run"))
 
     assert resolved.runtime.git_tracking.enabled is True
+    assert resolved.runtime.git_tracking.required is True
     assert resolved.runtime.git_tracking.commit_policy == "run"
 
 
@@ -1062,6 +1106,7 @@ def test_resolve_runtime_config_git_commit_policy_step_enables_step_policy(tmp_p
     resolved = resolve_runtime_config(tmp_path, _runtime_args(git_commit_policy="step", no_git=True))
 
     assert resolved.runtime.git_tracking.enabled is True
+    assert resolved.runtime.git_tracking.required is True
     assert resolved.runtime.git_tracking.commit_policy == "step"
 
 
@@ -1104,6 +1149,7 @@ def test_resolve_runtime_config_merges_runtime_file_overrides_and_preserves_defa
 
     assert resolved.runtime.max_steps == 0
     assert resolved.runtime.git_tracking.enabled is True
+    assert resolved.runtime.git_tracking.required is True
     assert resolved.runtime.git_tracking.commit_policy == "run"
     assert resolved.runtime.git_tracking.failure_policy == "record_and_continue"
     assert resolved.runtime.tracing.enabled is True

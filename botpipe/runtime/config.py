@@ -94,6 +94,7 @@ class ProviderConfig:
 @dataclass(frozen=True, slots=True)
 class GitTrackingRuntimeConfig:
     enabled: bool = True
+    required: bool = False
     commit_policy: GitCommitPolicy = "step"
     failure_policy: ExtensionFailurePolicy = "propagate"
 
@@ -158,6 +159,7 @@ class ProviderConfigOverride:
 @dataclass(frozen=True, slots=True)
 class GitTrackingRuntimeConfigOverride:
     enabled: bool | None = None
+    required: bool | None = None
     commit_policy: GitCommitPolicy | None = None
     failure_policy: ExtensionFailurePolicy | None = None
 
@@ -394,7 +396,12 @@ def parse_runtime_config(payload: object, source: Path) -> RuntimeConfigLayer:
     if not isinstance(tracing_payload, dict):
         raise ConfigError(f"{source}: runtime.tracing must be a mapping when provided.")
 
-    _reject_unknown_keys(source, "runtime.git_tracking", git_tracking_payload, {"enabled", "commit_policy", "failure_policy"})
+    _reject_unknown_keys(
+        source,
+        "runtime.git_tracking",
+        git_tracking_payload,
+        {"enabled", "required", "commit_policy", "failure_policy"},
+    )
     _reject_unknown_keys(
         source,
         "runtime.tracing",
@@ -435,6 +442,7 @@ def parse_runtime_config(payload: object, source: Path) -> RuntimeConfigLayer:
         ),
         git_tracking=GitTrackingRuntimeConfigOverride(
             enabled=_optional_bool(git_tracking_payload.get("enabled"), "runtime.git_tracking.enabled", source),
+            required=_optional_bool(git_tracking_payload.get("required"), "runtime.git_tracking.required", source),
             commit_policy=_optional_git_commit_policy(
                 git_tracking_payload.get("commit_policy"),
                 "runtime.git_tracking.commit_policy",
@@ -529,6 +537,7 @@ def _cli_override_names(args: argparse.Namespace) -> tuple[str, ...]:
         "model",
         "model_effort",
         "max_steps",
+        "git",
         "no_git",
         "git_commit_policy",
         "no_trace",
@@ -622,6 +631,7 @@ def _merge_runtime_config(
     replay_mismatch_behavior: Literal["warn", "fail"] = "warn"
     resume_topology_mismatch_behavior: Literal["warn", "fail"] = "warn"
     git_tracking_enabled = True
+    git_tracking_required = False
     git_tracking_commit_policy: GitCommitPolicy = "step"
     git_tracking_failure_policy: ExtensionFailurePolicy = "propagate"
     tracing_enabled = True
@@ -640,8 +650,13 @@ def _merge_runtime_config(
             resume_topology_mismatch_behavior = layer.resume_topology_mismatch_behavior
         if layer.git_tracking.enabled is not None:
             git_tracking_enabled = layer.git_tracking.enabled
+            git_tracking_required = layer.git_tracking.enabled
         if layer.git_tracking.commit_policy is not None:
             git_tracking_commit_policy = layer.git_tracking.commit_policy
+            git_tracking_enabled = layer.git_tracking.commit_policy != "off"
+            git_tracking_required = layer.git_tracking.commit_policy != "off"
+        if layer.git_tracking.required is not None:
+            git_tracking_required = layer.git_tracking.required
         if layer.git_tracking.failure_policy is not None:
             git_tracking_failure_policy = layer.git_tracking.failure_policy
         if layer.tracing.enabled is not None:
@@ -655,6 +670,7 @@ def _merge_runtime_config(
 
     if git_tracking_commit_policy == "off":
         git_tracking_enabled = False
+        git_tracking_required = False
 
     cli_max_steps = getattr(args, "max_steps", None)
     if cli_max_steps is not None:
@@ -662,13 +678,19 @@ def _merge_runtime_config(
             raise ConfigError("CLI runtime max_steps must be a non-negative integer when provided.")
         max_steps = cli_max_steps
 
+    cli_git = _optional_cli_bool(getattr(args, "git", None), "git")
+    if cli_git:
+        git_tracking_enabled = True
+        git_tracking_required = True
     cli_no_git = _optional_cli_bool(getattr(args, "no_git", None), "no_git")
     if cli_no_git:
         git_tracking_enabled = False
+        git_tracking_required = False
     cli_git_commit_policy = _optional_cli_git_commit_policy(getattr(args, "git_commit_policy", None))
     if cli_git_commit_policy is not None:
         git_tracking_commit_policy = cli_git_commit_policy
         git_tracking_enabled = cli_git_commit_policy != "off"
+        git_tracking_required = cli_git_commit_policy != "off"
 
     cli_no_trace = _optional_cli_bool(getattr(args, "no_trace", None), "no_trace")
     if cli_no_trace:
@@ -676,6 +698,9 @@ def _merge_runtime_config(
 
     if git_tracking_commit_policy == "off":
         git_tracking_enabled = False
+        git_tracking_required = False
+    if not git_tracking_enabled:
+        git_tracking_required = False
 
     return RuntimeConfig(
         max_steps=max_steps,
@@ -684,6 +709,7 @@ def _merge_runtime_config(
         resume_topology_mismatch_behavior=resume_topology_mismatch_behavior,
         git_tracking=GitTrackingRuntimeConfig(
             enabled=git_tracking_enabled,
+            required=git_tracking_required,
             commit_policy=git_tracking_commit_policy,
             failure_policy=git_tracking_failure_policy,
         ),

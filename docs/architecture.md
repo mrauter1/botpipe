@@ -287,10 +287,10 @@ The task `request.md` is the latest rendered request snapshot for the task. Each
 
 ## Runtime Observability
 
-Runtime observability is runtime-owned and enabled by default.
+Runtime observability is runtime-owned and enabled by default. Git tracking is attempted by default and automatically disabled with a warning when git is unavailable or unsafe to use; explicit required git tracking fails fast.
 
 - Runtime git tracking uses `git add --all` plus deterministic `botpipe: ...` commit messages.
-- The repository must be clean before a git-tracked run or resume starts.
+- The repository must be clean before a required git-tracked run or resume starts.
 - Git commits are the workspace replay boundary.
 - Botpipe does not classify changed paths for replay.
 - `trace.jsonl`, `git_tracking.jsonl`, `static_step_graph.json`, and runtime-owned `raw/` outputs are written without requiring workflow declarations.

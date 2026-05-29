@@ -39,17 +39,28 @@ class RuntimeGitTracker:
         self._config = config
         self._repo: GitRepo | None = None
         self._prepared_payload: dict[str, Any] = self._disabled_payload()
+        self._prepare_warnings: list[dict[str, str]] = []
 
     def prepare_before_workspace_creation(self) -> dict[str, object]:
+        self._prepare_warnings = []
         if not self._runtime_enabled:
             self._prepared_payload = self._disabled_payload()
             return dict(self._prepared_payload)
 
-        repo = GitRepo.discover(self._root)
+        try:
+            repo = GitRepo.discover(self._root)
+        except FileNotFoundError:
+            return self._handle_prepare_error("git tracking disabled because git executable was not found")
+        except Exception as exc:
+            return self._handle_prepare_error(f"git tracking disabled because repository discovery failed: {exc}")
         if repo is None:
             return self._handle_prepare_error("git tracking disabled because no git repository was found")
-        if repo.is_dirty():
-            return self._handle_prepare_error("git tracking disabled because repository was dirty at run start")
+        try:
+            if repo.is_dirty():
+                return self._handle_prepare_error("git tracking disabled because repository was dirty at run start")
+            commit_before_run = repo.head()
+        except Exception as exc:
+            return self._handle_prepare_error(f"git tracking disabled because repository could not be inspected: {exc}")
 
         self._repo = repo
         self._prepared_payload = {
@@ -57,10 +68,14 @@ class RuntimeGitTracker:
             "eligible": True,
             "commit_policy": self._config.commit_policy,
             "repo_root": str(repo.root),
-            "commit_before_run": repo.head(),
+            "commit_before_run": commit_before_run,
             "git_tracking_file": GIT_TRACKING_FILENAME,
         }
         return dict(self._prepared_payload)
+
+    @property
+    def prepare_warnings(self) -> tuple[dict[str, str], ...]:
+        return tuple(dict(warning) for warning in self._prepare_warnings)
 
     def bind_run_dir(self, run_dir: Path) -> None:
         self._run_dir = run_dir.resolve()
@@ -138,9 +153,16 @@ class RuntimeGitTracker:
         return self._run_dir
 
     def _handle_prepare_error(self, message: str) -> dict[str, object]:
-        if self._config.failure_policy == "record_and_continue":
+        if self._config.failure_policy == "record_and_continue" or not self._config.required:
             self._repo = None
             self._prepared_payload = self._disabled_payload(error=message)
+            if not self._config.required:
+                self._prepare_warnings.append(
+                    {
+                        "event_type": "runtime_git_tracking_auto_disabled",
+                        "message": f"{message}; continuing without runtime git tracking.",
+                    }
+                )
             return dict(self._prepared_payload)
         raise RuntimeGitTrackingError(message)
 

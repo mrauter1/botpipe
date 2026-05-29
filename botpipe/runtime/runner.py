@@ -218,6 +218,7 @@ def _execute_compiled_workflow(
         config=options.runtime_config.git_tracking,
     )
     git_tracker.prepare_before_workspace_creation()
+    git_tracking_prepare_warnings = git_tracker.prepare_warnings
     task_workspace, workflow_workspace, run_workspace = _prepare_workspaces(
         compiled,
         options,
@@ -290,6 +291,14 @@ def _execute_compiled_workflow(
         topology=_run_topology_metadata(prepared.run_workspace, prepared.compiled),
     )
     git_tracker.bind_run_dir(prepared.run_workspace.run_dir)
+    for warning in git_tracking_prepare_warnings:
+        append_run_warning(prepared.run_workspace.run_dir, warning)
+        prepared.logger.emit(
+            warning["event_type"],
+            workflow=prepared.compiled.workflow_name,
+            task_id=prepared.task_workspace.task_id,
+            message=warning["message"],
+        )
     for warning in resume_git_tracking_warnings:
         append_run_warning(prepared.run_workspace.run_dir, warning)
     for warning in workflow_git_tracking_warnings:
@@ -1281,6 +1290,7 @@ def _runtime_config_metadata(config: RuntimeConfig, *, effective_max_steps: int)
         "resume_topology_mismatch_behavior": config.resume_topology_mismatch_behavior,
         "git_tracking": {
             "enabled": config.git_tracking.enabled,
+            "required": config.git_tracking.required,
             "commit_policy": config.git_tracking.commit_policy,
             "failure_policy": config.git_tracking.failure_policy,
         },

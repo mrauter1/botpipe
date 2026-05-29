@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+import botpipe.extensions.git.repo as git_repo_module
 from botpipe.runtime.config import GitTrackingRuntimeConfig
 from botpipe.core.schema_registry import GIT_TRACKING_SCHEMA
 from botpipe.runtime.git_tracking import RuntimeGitTracker, RuntimeGitTrackingError
@@ -54,7 +55,7 @@ def test_git_tracking_disabled_does_not_require_repo(tmp_path: Path) -> None:
     }
 
 
-def test_git_tracking_enabled_requires_repo_by_default(tmp_path: Path) -> None:
+def test_git_tracking_enabled_auto_disables_when_repo_is_missing_by_default(tmp_path: Path) -> None:
     tracker = RuntimeGitTracker(
         root=tmp_path,
         run_dir=None,
@@ -64,11 +65,37 @@ def test_git_tracking_enabled_requires_repo_by_default(tmp_path: Path) -> None:
         config=GitTrackingRuntimeConfig(),
     )
 
+    payload = tracker.prepare_before_workspace_creation()
+
+    assert payload == {
+        "enabled": False,
+        "eligible": False,
+        "commit_policy": "step",
+        "error": "git tracking disabled because no git repository was found",
+    }
+    assert tracker.prepare_warnings == (
+        {
+            "event_type": "runtime_git_tracking_auto_disabled",
+            "message": "git tracking disabled because no git repository was found; continuing without runtime git tracking.",
+        },
+    )
+
+
+def test_git_tracking_required_requires_repo(tmp_path: Path) -> None:
+    tracker = RuntimeGitTracker(
+        root=tmp_path,
+        run_dir=None,
+        workflow_name="demo",
+        task_id="task-1",
+        run_id="run-1",
+        config=GitTrackingRuntimeConfig(required=True),
+    )
+
     with pytest.raises(RuntimeGitTrackingError, match="no git repository was found"):
         tracker.prepare_before_workspace_creation()
 
 
-def test_git_tracking_enabled_requires_clean_repo_before_run_workspace_creation(tmp_path: Path) -> None:
+def test_git_tracking_enabled_auto_disables_when_repo_is_dirty_by_default(tmp_path: Path) -> None:
     _init_repo(tmp_path)
     (tmp_path / "dirty.txt").write_text("dirty\n", encoding="utf-8")
     tracker = RuntimeGitTracker(
@@ -80,10 +107,55 @@ def test_git_tracking_enabled_requires_clean_repo_before_run_workspace_creation(
         config=GitTrackingRuntimeConfig(),
     )
 
+    payload = tracker.prepare_before_workspace_creation()
+
+    assert payload["enabled"] is False
+    assert payload["eligible"] is False
+    assert payload["error"] == "git tracking disabled because repository was dirty at run start"
+    assert tracker.prepare_warnings[-1]["event_type"] == "runtime_git_tracking_auto_disabled"
+    assert not _run_dir(tmp_path).exists()
+
+
+def test_git_tracking_required_requires_clean_repo_before_run_workspace_creation(tmp_path: Path) -> None:
+    _init_repo(tmp_path)
+    (tmp_path / "dirty.txt").write_text("dirty\n", encoding="utf-8")
+    tracker = RuntimeGitTracker(
+        root=tmp_path,
+        run_dir=None,
+        workflow_name="demo",
+        task_id="task-1",
+        run_id="run-1",
+        config=GitTrackingRuntimeConfig(required=True),
+    )
+
     with pytest.raises(RuntimeGitTrackingError, match="repository was dirty at run start"):
         tracker.prepare_before_workspace_creation()
 
     assert not _run_dir(tmp_path).exists()
+
+
+def test_git_tracking_enabled_auto_disables_when_git_executable_is_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_run(*_: object, **__: object) -> subprocess.CompletedProcess[str]:
+        raise FileNotFoundError("git")
+
+    monkeypatch.setattr(git_repo_module.subprocess, "run", fake_run)
+    tracker = RuntimeGitTracker(
+        root=tmp_path,
+        run_dir=None,
+        workflow_name="demo",
+        task_id="task-1",
+        run_id="run-1",
+        config=GitTrackingRuntimeConfig(),
+    )
+
+    payload = tracker.prepare_before_workspace_creation()
+
+    assert payload["enabled"] is False
+    assert payload["error"] == "git tracking disabled because git executable was not found"
+    assert tracker.prepare_warnings[-1]["event_type"] == "runtime_git_tracking_auto_disabled"
 
 
 def test_git_tracking_dirty_repo_failure_policy_record_and_continue_disables_tracking_for_run(tmp_path: Path) -> None:

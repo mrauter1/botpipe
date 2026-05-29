@@ -261,7 +261,7 @@ class FatalTraceWorkflow(Workflow):
     assert str(excinfo.value.__cause__) == "workflow boom"
 
 
-def test_dirty_repo_fails_before_runner_creates_run_workspace(tmp_path: Path) -> None:
+def test_required_git_dirty_repo_fails_before_runner_creates_run_workspace(tmp_path: Path) -> None:
     _clear_workflow_modules()
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
@@ -300,7 +300,12 @@ class DirtyWorkflow(Workflow):
         run_workflow_package(
             "dirty_workflow",
             provider=ScriptedLLMProvider(llm_turns=[Outcome(raw_output="ok\n", tag="done")]),
-            options=RunnerOptions(root=repo_root, task_id="dirty-task", message="Run it"),
+            options=RunnerOptions(
+                root=repo_root,
+                task_id="dirty-task",
+                message="Run it",
+                runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(required=True)),
+            ),
         )
 
     assert not (repo_root / STATE_DIRNAME / "tasks" / "dirty-task" / "wf_dirty_workflow" / "runs").exists()

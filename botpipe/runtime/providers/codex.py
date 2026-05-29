@@ -115,9 +115,9 @@ def resolve_codex_cli_commands(config: ResolvedRuntimeConfig) -> CodexCLICommand
 
     start_command = ["codex", "exec", "--json"]
     resume_command = ["codex", "exec", "resume", "--json"]
-    if not config.runtime.git_tracking.enabled and surface.start_supports_skip_git_repo_check:
+    if not config.runtime.git_tracking.required and surface.start_supports_skip_git_repo_check:
         start_command.append("--skip-git-repo-check")
-    if not config.runtime.git_tracking.enabled and surface.resume_supports_skip_git_repo_check:
+    if not config.runtime.git_tracking.required and surface.resume_supports_skip_git_repo_check:
         resume_command.append("--skip-git-repo-check")
 
     return CodexCLICommand(

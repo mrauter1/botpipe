@@ -251,6 +251,7 @@ def test_cli_mutating_command_help_exposes_provider_and_hides_provider_factory(c
         assert "--policy-validation-unsupported" in help_text
         assert "--policy-validation-lossy" in help_text
         assert "--policy-validation-unsafe-expansion" in help_text
+        assert "--git" in help_text
         assert "--no-git" in help_text
         assert "--git-commit-policy" in help_text
         assert "--no-trace" in help_text
@@ -515,6 +516,77 @@ def test_cli_run_progress_off_suppresses_progress_output(
     assert exit_code == 0
     assert json.loads(captured.out)["task_id"] == "task-quiet"
     assert captured.err == ""
+
+
+def test_cli_run_defaults_to_no_git_with_warning_when_workspace_is_not_git_repo(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    _write_workflow_package(
+        tmp_path,
+        "auto_no_git_task",
+        workflow_name="auto_no_git_task",
+        class_name="AutoNoGitTaskWorkflow",
+    )
+
+    exit_code = cli.main(
+        [
+            "run",
+            "auto_no_git_task",
+            "Run outside git",
+            "--task",
+            "task-auto-no-git",
+            "--workspace",
+            str(tmp_path),
+            "--progress",
+            "off",
+        ],
+        provider_factory=_provider_factory,
+    )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    run_dir = Path(payload["run_folder"])
+    run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+
+    assert exit_code == 0
+    assert "warning: git tracking disabled because no git repository was found" in captured.err
+    assert run_meta["git_tracking"]["enabled"] is False
+    assert run_meta["git_tracking"]["error"] == "git tracking disabled because no git repository was found"
+    assert run_meta["warnings"][-1]["event_type"] == "runtime_git_tracking_auto_disabled"
+    assert not (run_dir / "git_tracking.jsonl").exists()
+
+
+def test_cli_run_git_requires_git_workspace(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    _write_workflow_package(
+        tmp_path,
+        "required_git_task",
+        workflow_name="required_git_task",
+        class_name="RequiredGitTaskWorkflow",
+    )
+
+    exit_code = cli.main(
+        [
+            "run",
+            "required_git_task",
+            "Require git",
+            "--task",
+            "task-required-git",
+            "--workspace",
+            str(tmp_path),
+            "--git",
+            "--progress",
+            "off",
+        ],
+        provider_factory=_provider_factory,
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == cli.EXIT_RUNTIME_ERROR
+    assert captured.out == ""
+    assert "git tracking disabled because no git repository was found" in captured.err
 
 
 def test_cli_run_progress_plain_reports_disabled_trace(
@@ -1367,6 +1439,7 @@ def test_cli_mutating_commands_route_runtime_git_and_trace_overrides_through_typ
     assert len(seen_configs) == 1
     config = seen_configs[0]
     assert config.runtime.git_tracking.enabled is True
+    assert config.runtime.git_tracking.required is True
     assert config.runtime.git_tracking.commit_policy == "run"
     assert config.runtime.tracing.enabled is False
 

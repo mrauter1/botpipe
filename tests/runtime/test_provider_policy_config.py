@@ -20,6 +20,7 @@ def _runtime_args(**overrides: object) -> argparse.Namespace:
         "policy_validation_lossy": None,
         "policy_validation_unsafe_expansion": None,
         "max_steps": None,
+        "git": False,
         "no_git": False,
         "git_commit_policy": None,
         "no_trace": False,

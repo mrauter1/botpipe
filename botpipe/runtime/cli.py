@@ -101,7 +101,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Override handling for unsafe provider policy expansions.",
     )
     mutate.add_argument("--max-steps", type=int, help="Maximum workflow steps before failing; 0 disables the limit.")
-    mutate.add_argument("--no-git", action="store_true", help="Disable runtime git tracking for this command.")
+    git_group = mutate.add_mutually_exclusive_group()
+    git_group.add_argument("--git", action="store_true", help="Require runtime git tracking for this command.")
+    git_group.add_argument("--no-git", action="store_true", help="Disable runtime git tracking for this command.")
     mutate.add_argument(
         "--git-commit-policy",
         choices=("off", "run", "step"),
@@ -419,6 +421,7 @@ def _handle_run(args: argparse.Namespace, *, provider_factory: Callable[..., Any
                 event_callback=None if progress is None else progress.event_callback,
             ),
         )
+    _emit_git_auto_warnings_to_stderr(execution.run_workspace.run_dir)
     _emit_json(_run_summary_payload(execution))
     return EXIT_SUCCESS
 
@@ -436,6 +439,7 @@ def _handle_resume(args: argparse.Namespace, *, provider_factory: Callable[..., 
     client = _mutating_client(config_args, provider_factory=provider_factory, config=config)
     progress = build_run_progress_printer(args.progress)
     progress_context = progress if progress is not None else nullcontext()
+    warning_offset = _cli_run_warning_count(args, selector="latest_resumable")
     with progress_context:
         result = client.runs.resume(
             args.workflow,
@@ -446,6 +450,7 @@ def _handle_resume(args: argparse.Namespace, *, provider_factory: Callable[..., 
             _sticky_overrides=sticky_overrides,
             on_event=None if progress is None else progress.event_callback,
         )
+    _emit_git_auto_warnings_from_result(result, warning_offset=warning_offset)
     _emit_json(_workflow_result_summary_payload(client, result))
     return EXIT_SUCCESS
 
@@ -459,6 +464,7 @@ def _handle_answer(args: argparse.Namespace, *, provider_factory: Callable[..., 
     client = _mutating_client(config_args, provider_factory=provider_factory, config=config)
     progress = build_run_progress_printer(args.progress)
     progress_context = progress if progress is not None else nullcontext()
+    warning_offset = _cli_run_warning_count(args, selector="latest_paused")
     with progress_context:
         result = client.runs.resume(
             args.workflow,
@@ -469,6 +475,7 @@ def _handle_answer(args: argparse.Namespace, *, provider_factory: Callable[..., 
             _sticky_overrides=sticky_overrides,
             on_event=None if progress is None else progress.event_callback,
         )
+    _emit_git_auto_warnings_from_result(result, warning_offset=warning_offset)
     _emit_json(_workflow_result_summary_payload(client, result))
     return EXIT_SUCCESS
 
@@ -709,6 +716,53 @@ def _stored_cli_sticky_overrides(args: argparse.Namespace, *, selector: str) -> 
     if not isinstance(sticky_overrides, Mapping):
         return {}
     return normalize_mapping(sticky_overrides)
+
+
+def _cli_run_warning_count(args: argparse.Namespace, *, selector: str) -> int:
+    try:
+        root = args.root.resolve()
+        resolved = resolve_workflow_reference(root, args.workflow)
+        record = resolve_run_record(
+            root,
+            workflow_name=resolved.reference.workflow_name,
+            task_id=args.task_id,
+            run_id=args.run_id,
+            selector=selector,
+        )
+    except (ConfigError, FileNotFoundError, WorkflowDiscoveryError, WorkflowManifestError, ValueError):
+        return 0
+    warnings = record.metadata.get("warnings")
+    return len(warnings) if isinstance(warnings, list) else 0
+
+
+def _emit_git_auto_warnings_to_stderr(run_dir: Path, *, warning_offset: int = 0) -> None:
+    run_meta_file = run_dir / "run.json"
+    if not run_meta_file.is_file():
+        return
+    try:
+        payload = json.loads(run_meta_file.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+    if not isinstance(payload, dict):
+        return
+    warnings = payload.get("warnings")
+    if not isinstance(warnings, list):
+        return
+    for warning in warnings[max(0, warning_offset) :]:
+        if not isinstance(warning, Mapping):
+            continue
+        if warning.get("event_type") != "runtime_git_tracking_auto_disabled":
+            continue
+        message = warning.get("message")
+        if isinstance(message, str) and message:
+            print(f"warning: {message}", file=sys.stderr)
+
+
+def _emit_git_auto_warnings_from_result(result: object, *, warning_offset: int) -> None:
+    debug = getattr(result, "debug", None)
+    run_dir = getattr(debug, "run_dir", None)
+    if isinstance(run_dir, Path):
+        _emit_git_auto_warnings_to_stderr(run_dir, warning_offset=warning_offset)
 
 
 def _args_with_sticky_provider_overrides(
