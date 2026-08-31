@@ -44,6 +44,7 @@ from .verification import (
     _prepare_completion_packet,
 )
 
+
 def _initialize(ctx):
     options = ctx.input
     assert options is not None
@@ -78,9 +79,9 @@ def _validate_action(ctx):
     action = ActionRequest.model_validate(ctx.artifacts.action_request.read_json())
 
     if action.kind == "blocked":
-        blackboard.terminal_reason = action.rationale
-        ctx.state.last_reason = action.rationale
-        _write_blackboard(ctx, blackboard)
+        reason = f"orchestrator reported blocked: {action.rationale}"
+        if _reject_selected_action(ctx, blackboard, action, reason):
+            return "reselect"
         return "blocked"
 
     capability = None
@@ -353,4 +354,3 @@ def _reconcile(ctx):
 
     _write_blackboard(ctx, blackboard)
     return "continue"
-
