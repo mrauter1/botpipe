@@ -1,0 +1,116 @@
+"""Child-capability dispatch protocol helpers for adaptive goals."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+from .contracts import (
+    ActionCapabilityResult,
+    ActionRequest,
+    Blackboard,
+    CapabilitySpec,
+    MissionSpec,
+    VerifierCapabilityResult,
+)
+
+def _dispatch_message(
+    *,
+    ctx,
+    action: ActionRequest,
+    mission: MissionSpec,
+    blackboard: Blackboard,
+    capability: CapabilitySpec | None,
+) -> str:
+    target_contracts = []
+    criteria = mission.criterion_map()
+    for criterion_id in action.target_criteria:
+        criterion = criteria[criterion_id]
+        state = blackboard.criteria[criterion_id]
+        target_contracts.append(
+            {
+                "id": criterion.id,
+                "description": criterion.description,
+                "required": criterion.required,
+                "current_status": state.status,
+                "verifier": criterion.verifier,
+                "acceptance": [rule.model_dump(mode="json") for rule in criterion.acceptance],
+                "failure_policy": criterion.failure_policy,
+            }
+        )
+
+    payload = {
+        "mission_id": mission.id,
+        "mission_objective": mission.objective,
+        "mission_constraints": mission.constraints,
+        "action": action.model_dump(mode="json"),
+        "target_criteria": target_contracts,
+        # Child workflows receive the minimum semantic contract they need.
+        # Parent governance artifact locations are intentionally not disclosed.
+        "capability": capability.model_dump(mode="json") if capability is not None else None,
+    }
+    return (
+        "Execute the following bounded adaptive-goal action. Treat the JSON below "
+        "as the action contract. Do not change the parent mission, criteria, "
+        "thresholds, or verification ledger. Complete only the requested action "
+        "within your own workflow contract.\n\n"
+        + json.dumps(payload, indent=2, ensure_ascii=False)
+    )
+
+
+def _child_result_summary(child_result: Any) -> tuple[str | None, str | None, str | None, str | None]:
+    workflow_name = getattr(child_result, "workflow_name", None)
+    run_id = getattr(child_result, "run_id", None)
+    status = getattr(child_result, "status", None)
+    terminal = getattr(child_result, "terminal", None)
+    return (
+        str(workflow_name) if workflow_name is not None else None,
+        str(run_id) if run_id is not None else None,
+        str(status) if status is not None else None,
+        str(terminal) if terminal is not None else None,
+    )
+
+
+def _read_child_protocol_result(
+    *,
+    child_result: Any,
+    capability: CapabilitySpec | None,
+    action: ActionRequest,
+) -> tuple[ActionCapabilityResult | None, VerifierCapabilityResult | None, str | None, str | None]:
+    child_folder_raw = getattr(child_result, "workflow_folder", None)
+    if child_folder_raw is None:
+        return None, None, None, "child workflow result did not expose workflow_folder"
+
+    child_folder = Path(child_folder_raw)
+    if action.kind == "ad_hoc":
+        artifact_name = "capability_result.json"
+        expected_kind = "action"
+    else:
+        assert capability is not None
+        artifact_name = capability.result_artifact or (
+            "verification_result.json" if capability.kind == "verifier" else "capability_result.json"
+        )
+        expected_kind = capability.kind
+
+    result_path = child_folder / artifact_name
+    if not result_path.exists():
+        return None, None, str(result_path), (
+            f"child capability protocol artifact is missing: {result_path}"
+        )
+
+    try:
+        if expected_kind == "verifier":
+            result = VerifierCapabilityResult.model_validate_json(
+                result_path.read_text(encoding="utf-8")
+            )
+            return None, result, str(result_path), None
+        result = ActionCapabilityResult.model_validate_json(
+            result_path.read_text(encoding="utf-8")
+        )
+        return result, None, str(result_path), None
+    except Exception as exc:  # schema failures are parent-runtime failures, not model claims
+        return None, None, str(result_path), (
+            f"invalid child capability protocol artifact {result_path}: {exc}"
+        )
+
