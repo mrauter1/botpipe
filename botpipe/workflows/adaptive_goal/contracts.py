@@ -495,18 +495,33 @@ def fingerprint_paths(root: Path, patterns: list[str]) -> str | None:
         digest.update(b"PATTERN\0")
         digest.update(pattern.encode("utf-8", errors="surrogateescape"))
         matches: list[Path] = []
-        for candidate in root.glob(pattern):
+
+        def add_candidate(candidate: Path) -> None:
             try:
                 resolved = candidate.resolve()
                 resolved.relative_to(root)
             except (OSError, ValueError):
-                continue
+                return
 
             rel = resolved.relative_to(root)
             if not rel.parts or rel.parts[0] in {".git", ".botpipe"}:
-                continue
+                return
             if resolved.is_file():
                 matches.append(resolved)
+
+        for candidate in root.glob(pattern):
+            add_candidate(candidate)
+            # pathlib's `**` may yield the directory itself for patterns such
+            # as `site/**`. A verifier contract over a directory means the
+            # files below it are part of the observed subject too.
+            try:
+                resolved_candidate = candidate.resolve()
+                resolved_candidate.relative_to(root)
+            except (OSError, ValueError):
+                continue
+            if resolved_candidate.is_dir():
+                for descendant in resolved_candidate.rglob("*"):
+                    add_candidate(descendant)
 
         matches = sorted(set(matches), key=lambda path: path.relative_to(root).as_posix())
         if not matches:
