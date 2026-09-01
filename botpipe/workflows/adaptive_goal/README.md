@@ -25,96 +25,155 @@ reconcile state / invalidate stale verification
                          └── complete
 ```
 
+## Verification philosophy
+
+Most important real-world criteria are not accurately reducible to deterministic
+scores. A visual-design LLM that invents `87/100` has not made the judgment more
+objective. The useful information is *why* the design works or fails, against a
+clear rubric and grounded evidence.
+
+Adaptive Goal therefore supports three criterion modes:
+
+- `judgment`: a designated verifier evaluates a descriptive rubric and emits an
+  evidence-backed qualitative verdict.
+- `deterministic`: the runtime evaluates objective observations against hard rules
+  such as `broken_links == 0`.
+- `hybrid`: qualitative judgment plus genuine hard checks.
+
+Optional ratings such as 1-5 are diagnostic summaries only. They are never the
+basis for subjective PASS/FAIL.
+
 ## Design invariants
 
 1. **The mission is immutable.** `mission.json` is snapshotted from typed run
-   input. The orchestrator never gets authority to change criteria, thresholds,
-   verifier assignments, or constraints.
+   input. The orchestrator never gets authority to change criteria, rubrics,
+   hard checks, verifier assignments, or constraints.
 
-2. **Only verifiers can supply criterion observations.** A verifier does not
-   write `PASS`; it publishes metrics in `verification_result.json`. The parent
-   runtime evaluates those metrics against the mission's deterministic
-   `AcceptanceRule`s.
+2. **The designated verifier owns subjective judgment.** For a judgment criterion
+   it must explicitly assess every authored rubric item, provide reasoning and
+   evidence, and return `satisfied`, `not_satisfied`, or
+   `insufficient_evidence`. The parent runtime does not manufacture a verdict by
+   thresholding an LLM-produced score.
 
-3. **PASS is freshness-bound.** A passing receipt records the exact filesystem
-   patterns observed by the verifier and a SHA-256 subject fingerprint. Any
-   later action that changes that subject automatically marks the criterion
-   `STALE`. External/time-sensitive criteria can additionally use a TTL.
+3. **The runtime still governs verification authority.** It verifies the correct
+   designated verifier was used, complete rubric coverage, internal coherence,
+   hard checks for deterministic/hybrid criteria, and evidence freshness. A
+   verifier cannot silently skip a mandatory rubric item or contradict a `gate`
+   finding with an overall `satisfied` verdict.
 
-4. **Actions and criteria are separate.** Criteria describe what must be true.
+4. **PASS is freshness-bound.** A passing receipt records the exact filesystem
+   patterns observed by the verifier and a SHA-256 subject fingerprint. Any later
+   action that changes that subject automatically marks the criterion `STALE`.
+   External/time-sensitive criteria can additionally use a TTL.
+
+5. **Actions and criteria are separate.** Criteria describe what must be true.
    Capabilities describe work that may help make criteria true. The orchestrator
    chooses one next action from current state instead of executing a precomputed
    SOP.
 
-5. **Unknown work does not generate trusted Botpipe Python on the fly.**
+6. **Verifier reasoning is operational state.** The blackboard carries the
+   judgment summary, detailed reasoning, rubric findings, evidence and recommended
+   corrective actions so the orchestrator can choose work that resolves concrete
+   deficiencies rather than trying to increase a generic score.
+
+7. **Unknown work does not generate trusted Botpipe Python on the fly.**
    `kind="ad_hoc"` dispatches the pre-authored `ad_hoc_executor` workflow. That
    workflow is sandboxed, workspace-write, no-network, and independently
    verified.
 
-6. **External side effects require preapproval.** Any capability marked
+8. **External side effects require preapproval.** Any capability marked
    `external_reversible`, `external_irreversible`, or
    `preapproval_required=true` is rejected unless its id is listed in
    `preapproved_capabilities`.
 
-7. **Final local PASS receipts are not enough.** A fresh global audit verifies
-   the original objective/constraints. It may reopen existing criteria, but may
-   not invent new mandatory criteria or weaken the mission.
+9. **Final local PASS receipts are not enough.** A fresh global audit verifies the
+   original objective/constraints using the substantive verifier reasoning and
+   evidence. It may reopen existing criteria, but may not invent new mandatory
+   criteria or weaken the mission.
 
-8. **Child workflow output is durable.** Capabilities publish a standard protocol
-   artifact in their own Botpipe workflow folder. The parent reads and validates
-   that file after `ctx.invoke_workflow(...)`.
+10. **Child workflow output is durable.** Capabilities publish a standard protocol
+    artifact in their own Botpipe workflow folder. The parent reads and validates
+    that file after `ctx.invoke_workflow(...)`.
 
-## Capability protocol
+## Judgment verifier protocol
 
-A registered action capability must write the path named by
-`CapabilitySpec.result_artifact` (default `capability_result.json`) using:
-
-```json
-{
-  "schema": "botpipe.adaptive-goal.action-result/v1",
-  "status": "completed",
-  "summary": "What happened",
-  "evidence": ["artifact/or/command evidence"],
-  "changed_paths": ["relative/path"],
-  "metrics": {}
-}
-```
-
-A verifier capability must write `verification_result.json` by default:
+A qualitative verifier writes `verification_result.json` such as:
 
 ```json
 {
-  "schema": "botpipe.adaptive-goal.verifier-result/v1",
-  "status": "observed",
+  "schema": "botpipe.adaptive-goal.verifier-result/v2",
+  "status": "evaluated",
   "verifier_id": "verify.visual",
   "summary": "Visual audit completed.",
-  "observations": {
-    "visual_quality": {"score": 91},
-    "mobile_quality": {"score": 88}
+  "judgments": {
+    "visual_quality": {
+      "verdict": "not_satisfied",
+      "summary": "Strong structure, but the page still lacks professional visual hierarchy.",
+      "reasoning": "The hero does not establish the business proposition quickly enough and the service cards compete equally for attention. Typography and spacing are otherwise coherent.",
+      "findings": [
+        {
+          "rubric_item_id": "hierarchy",
+          "status": "not_satisfied",
+          "reasoning": "Hero headline, supporting copy and CTA have nearly equal visual weight.",
+          "evidence": ["qa/desktop.png", "qa/mobile.png"]
+        },
+        {
+          "rubric_item_id": "industry_appropriateness",
+          "status": "satisfied",
+          "reasoning": "The restrained visual language is appropriate for an industrial supplier.",
+          "evidence": ["qa/desktop.png"]
+        }
+      ],
+      "rating": 3,
+      "confidence": "high",
+      "recommended_actions": [
+        "Strengthen hero headline/CTA hierarchy",
+        "Reduce visual competition in the first service row"
+      ]
+    }
   },
-  "evidence": ["qa/mobile.png", "qa/desktop.png"],
+  "observations": {},
+  "evidence": ["qa/desktop.png", "qa/mobile.png"],
   "observed_paths": {
-    "visual_quality": ["site/**"],
-    "mobile_quality": ["site/**"]
+    "visual_quality": ["site/**"]
   }
 }
 ```
 
-The verifier's `status="observed"` is intentionally **not** a pass/fail verdict.
-The parent evaluates `score >= 85`, or whatever the immutable mission declares.
+The `rating` may help compare iterations, but it does not decide PASS. The
+semantic verdict and its supporting reasoning do.
 
-## Minimal mission
+## Deterministic and hybrid criteria
+
+Use hard rules only for properties that are actually mechanical:
 
 ```python
-from botpipe import Botpipe
+MissionCriterion(
+    id="link_integrity",
+    description="The generated site has no broken internal links.",
+    verifier="verify.links",
+    verification_mode="deterministic",
+    deterministic_rules=[
+        DeterministicRule(metric="broken_links", operator="eq", value=0)
+    ],
+    observed_paths=["site/**"],
+)
+```
+
+A hybrid criterion can require both a qualitative judgment and an objective hard
+condition.
+
+## Minimal judgment mission
+
+```python
 from botpipe.workflows.adaptive_goal import (
-    AcceptanceRule,
     AdaptiveGoalInput,
     AdaptiveGoalWorkflow,
     CapabilityRegistry,
     CapabilitySpec,
     MissionCriterion,
     MissionSpec,
+    RubricItem,
 )
 
 mission = MissionSpec(
@@ -123,105 +182,50 @@ mission = MissionSpec(
     criteria=[
         MissionCriterion(
             id="visual_quality",
-            description="The rendered redesign is visually strong.",
+            description="The rendered redesign is visually strong and appropriate for the business.",
             verifier="verify.visual",
-            acceptance=[
-                AcceptanceRule(metric="score", operator="ge", value=85)
+            verification_mode="judgment",
+            rubric=[
+                RubricItem(
+                    id="hierarchy",
+                    description="The page has clear visual hierarchy and immediate comprehension.",
+                    importance="gate",
+                ),
+                RubricItem(
+                    id="typography",
+                    description="Typography is coherent, legible, and professionally composed.",
+                ),
+                RubricItem(
+                    id="industry_appropriateness",
+                    description="The visual language is credible for the actual business and audience.",
+                    importance="gate",
+                ),
+                RubricItem(
+                    id="mobile",
+                    description="The design remains coherent and persuasive on mobile.",
+                    importance="gate",
+                ),
             ],
             observed_paths=["site/**"],
-        ),
-        MissionCriterion(
-            id="redesign_worthwhile",
-            description="The existing site has enough improvement opportunity.",
-            verifier="verify.current_site",
-            acceptance=[
-                AcceptanceRule(metric="deficiency_score", operator="ge", value=65)
-            ],
-            failure_policy="terminal_unsatisfied",
-            ttl_seconds=86400,
-        ),
+        )
     ],
-)
-
-registry = CapabilityRegistry(
-    capabilities=[
-        CapabilitySpec(
-            id="design",
-            kind="action",
-            workflow="website_design",
-            description="Improve the website design.",
-            helps=["visual_quality"],
-            may_invalidate=["visual_quality"],
-            side_effect="workspace",
-        ),
-        CapabilitySpec(
-            id="verify.visual",
-            kind="verifier",
-            workflow="verify_visual",
-            description="Score current rendered redesign.",
-            verifies=["visual_quality"],
-            observed_paths=["site/**"],
-        ),
-        CapabilitySpec(
-            id="verify.current_site",
-            kind="verifier",
-            workflow="verify_current_site",
-            description="Verify that the current official site is a redesign candidate.",
-            verifies=["redesign_worthwhile"],
-        ),
-    ]
-)
-
-client = Botpipe(workspace=".", provider="codex")
-result = client.run(
-    AdaptiveGoalWorkflow,
-    "Complete the adaptive mission.",
-    input=AdaptiveGoalInput(mission=mission, registry=registry),
-    max_steps=0,
 )
 ```
 
 ## Action selection
 
-The orchestrator receives only the immutable mission, trusted capability
-metadata, blackboard, status report, and verification ledger. It returns one
-`ActionRequest`.
-
-Registered action:
+The orchestrator receives the immutable mission, capability metadata, blackboard,
+status report, and verification ledger. A failed criterion is represented by
+specific findings rather than merely a score. An action can therefore say:
 
 ```json
 {
   "kind": "capability",
   "capability_id": "design",
-  "objective": "Repair the weak hero hierarchy found by the visual verifier.",
+  "objective": "Repair the hero hierarchy and first service row.",
   "target_criteria": ["visual_quality"],
-  "rationale": "visual_quality is FAIL at 78/100.",
-  "expected_evidence": ["new desktop/mobile render"]
-}
-```
-
-Verifier:
-
-```json
-{
-  "kind": "verifier",
-  "capability_id": "verify.visual",
-  "objective": "Measure the current redesign after the hero repair.",
-  "target_criteria": ["visual_quality"],
-  "rationale": "The relevant site files changed and the old receipt is stale.",
-  "expected_evidence": ["visual score and screenshots"]
-}
-```
-
-Unforeseen local action:
-
-```json
-{
-  "kind": "ad_hoc",
-  "objective": "Extract the product taxonomy from the already-downloaded PDF catalogue.",
-  "target_criteria": ["information_sufficient"],
-  "rationale": "No registered capability handles this local catalogue format.",
-  "expected_evidence": ["structured product taxonomy with page references"]
+  "rationale": "The visual verifier found that the hero headline, copy and CTA have equal weight and the first service row competes with the hero.",
+  "expected_evidence": ["new desktop/mobile renders resolving both findings"]
 }
 ```
 
