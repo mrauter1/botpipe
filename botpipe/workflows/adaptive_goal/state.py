@@ -15,6 +15,7 @@ from .contracts import (
     utc_now,
 )
 
+
 def _load_mission(ctx) -> MissionSpec:
     return MissionSpec.model_validate(ctx.artifacts.mission.read_json())
 
@@ -72,17 +73,45 @@ def _write_status(ctx, blackboard: Blackboard) -> None:
     for criterion in mission.criteria:
         state = blackboard.criteria[criterion.id]
         required = "required" if criterion.required else "optional"
-        score_bits = []
-        for key, value in sorted(state.metrics.items()):
-            if isinstance(value, (str, int, float, bool)) or value is None:
-                score_bits.append(f"{key}={value!r}")
-        metrics = f" ({', '.join(score_bits)})" if score_bits else ""
         lines.append(
-            f"- `{criterion.id}` [{state.status.upper()}] {required}: "
-            f"{criterion.description}{metrics}"
+            f"- `{criterion.id}` [{state.status.upper()}] {required}; "
+            f"mode={criterion.verification_mode}: {criterion.description}"
         )
-        if state.reason:
-            lines.append(f"  - reason: {state.reason}")
+        if state.judgment is not None:
+            rating = f"; rating={state.judgment.rating}/5" if state.judgment.rating else ""
+            confidence = (
+                f"; confidence={state.judgment.confidence}"
+                if state.judgment.confidence
+                else ""
+            )
+            lines.append(
+                f"  - judgment: {state.judgment.verdict}{rating}{confidence}: "
+                f"{state.judgment.summary}"
+            )
+            lines.append(f"  - reasoning: {state.judgment.reasoning}")
+            for finding in state.judgment.findings:
+                lines.append(
+                    f"  - rubric `{finding.rubric_item_id}` [{finding.status}]: "
+                    f"{finding.reasoning}"
+                )
+            if state.judgment.recommended_actions:
+                lines.append("  - recommended next actions:")
+                lines.extend(
+                    f"    - {item}" for item in state.judgment.recommended_actions
+                )
+        if state.metrics:
+            score_bits = []
+            for key, value in sorted(state.metrics.items()):
+                if isinstance(value, (str, int, float, bool)) or value is None:
+                    score_bits.append(f"{key}={value!r}")
+            if score_bits:
+                lines.append(
+                    f"  - objective observations: {', '.join(score_bits)}"
+                )
+        if state.reason and (
+            state.judgment is None or state.reason != state.judgment.reasoning
+        ):
+            lines.append(f"  - runtime reason: {state.reason}")
         if state.verification_id:
             lines.append(f"  - verification: `{state.verification_id}`")
     lines.extend(
@@ -120,7 +149,6 @@ def _persist_final_audit_payload(ctx) -> None:
         return
     decision = GlobalAuditDecision.model_validate(ctx.outcome.payload)
     ctx.artifacts.global_audit.write_model(decision)
-
 
 
 def _reject_selected_action(ctx, blackboard: Blackboard, action: ActionRequest, reason: str) -> bool:
@@ -230,4 +258,3 @@ def _needs_preapproval(capability: CapabilitySpec) -> bool:
         "external_reversible",
         "external_irreversible",
     }
-
