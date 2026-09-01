@@ -1,15 +1,18 @@
-"""Contracts and deterministic helpers for the adaptive goal runtime.
+"""Contracts and verification helpers for the adaptive goal runtime.
 
-The adaptive goal workflow deliberately separates:
-- immutable mission criteria;
+The adaptive runtime separates:
+- immutable mission criteria and descriptive rubrics;
 - trusted capability metadata;
 - mutable runtime blackboard state;
 - agent-selected actions;
-- verifier observations; and
-- runtime-owned acceptance/freshness decisions.
+- designated-verifier judgments/observations; and
+- runtime-owned authority, coherence, freshness, and completion decisions.
 
-No model is allowed to mark a criterion PASS directly. Verifiers report
-observations/metrics; the parent runtime applies the mission's acceptance rules.
+For subjective criteria, the designated verifier owns the qualitative judgment.
+The parent runtime does not manufacture truth by thresholding an LLM-invented
+score. Optional ordinal ratings are diagnostic only. Deterministic rules remain
+available for properties that are genuinely mechanical, and hybrid criteria can
+combine qualitative judgment with true hard checks.
 """
 
 from __future__ import annotations
@@ -23,12 +26,12 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
-SCHEMA_MISSION = "botpipe.adaptive-goal.mission/v1"
-SCHEMA_REGISTRY = "botpipe.adaptive-goal.capabilities/v1"
-SCHEMA_BLACKBOARD = "botpipe.adaptive-goal.blackboard/v1"
-SCHEMA_ACTION_RESULT = "botpipe.adaptive-goal.action-result/v1"
-SCHEMA_VERIFIER_RESULT = "botpipe.adaptive-goal.verifier-result/v1"
-SCHEMA_RECEIPTS = "botpipe.adaptive-goal.verification-ledger/v1"
+SCHEMA_MISSION = "botpipe.adaptive-goal.mission/v2"
+SCHEMA_REGISTRY = "botpipe.adaptive-goal.capabilities/v2"
+SCHEMA_BLACKBOARD = "botpipe.adaptive-goal.blackboard/v2"
+SCHEMA_ACTION_RESULT = "botpipe.adaptive-goal.action-result/v2"
+SCHEMA_VERIFIER_RESULT = "botpipe.adaptive-goal.verifier-result/v2"
+SCHEMA_RECEIPTS = "botpipe.adaptive-goal.verification-ledger/v2"
 
 
 CriterionStatus = Literal["unknown", "pass", "fail", "stale", "blocked"]
@@ -41,6 +44,16 @@ SideEffectClass = Literal[
     "external_reversible",
     "external_irreversible",
 ]
+VerificationMode = Literal["judgment", "deterministic", "hybrid"]
+RubricImportance = Literal["gate", "major", "minor"]
+FindingStatus = Literal[
+    "satisfied",
+    "partially_satisfied",
+    "not_satisfied",
+    "unknown",
+]
+JudgmentVerdict = Literal["satisfied", "not_satisfied", "insufficient_evidence"]
+ConfidenceLevel = Literal["low", "medium", "high"]
 RuleOperator = Literal[
     "eq",
     "ne",
@@ -63,21 +76,40 @@ class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
 
-class AcceptanceRule(StrictModel):
-    """One deterministic rule applied to a verifier metric."""
+class DeterministicRule(StrictModel):
+    """A hard rule for a genuinely mechanical verifier observation."""
 
     metric: str = "value"
     operator: RuleOperator = "truthy"
     value: Any = None
 
     @model_validator(mode="after")
-    def validate_rule(self) -> "AcceptanceRule":
+    def validate_rule(self) -> "DeterministicRule":
         if not self.metric.strip():
-            raise ValueError("acceptance metric must be non-empty")
+            raise ValueError("deterministic metric must be non-empty")
         if self.operator in {"in", "not_in"} and not isinstance(
             self.value, (list, tuple, set, frozenset)
         ):
             raise ValueError(f"operator {self.operator!r} requires a sequence value")
+        return self
+
+
+class RubricItem(StrictModel):
+    """One descriptive aspect the verifier must explicitly assess."""
+
+    id: str
+    description: str
+    importance: RubricImportance = "major"
+    guidance: str | None = None
+
+    @model_validator(mode="after")
+    def validate_item(self) -> "RubricItem":
+        if not self.id.strip():
+            raise ValueError("rubric item id must be non-empty")
+        if not self.description.strip():
+            raise ValueError(f"rubric item {self.id!r} description must be non-empty")
+        if self.guidance is not None and not self.guidance.strip():
+            raise ValueError(f"rubric item {self.id!r} guidance must be non-empty when provided")
         return self
 
 
@@ -86,7 +118,9 @@ class MissionCriterion(StrictModel):
     description: str
     required: bool = True
     verifier: str
-    acceptance: list[AcceptanceRule]
+    verification_mode: VerificationMode = "judgment"
+    rubric: list[RubricItem] = Field(default_factory=list)
+    deterministic_rules: list[DeterministicRule] = Field(default_factory=list)
     failure_policy: FailurePolicy = "repairable"
     observed_paths: list[str] = Field(default_factory=list)
     ttl_seconds: int | None = Field(default=None, gt=0)
@@ -99,14 +133,37 @@ class MissionCriterion(StrictModel):
             raise ValueError(f"criterion {self.id!r} description must be non-empty")
         if not self.verifier.strip():
             raise ValueError(f"criterion {self.id!r} verifier must be non-empty")
-        if not self.acceptance:
-            raise ValueError(f"criterion {self.id!r} requires at least one acceptance rule")
-        _validate_relative_patterns(self.observed_paths, field_name=f"criterion {self.id!r} observed_paths")
+
+        rubric_ids = [item.id for item in self.rubric]
+        if len(rubric_ids) != len(set(rubric_ids)):
+            raise ValueError(f"criterion {self.id!r} rubric item ids must be unique")
+
+        if self.verification_mode in {"judgment", "hybrid"} and not self.rubric:
+            raise ValueError(
+                f"criterion {self.id!r} mode {self.verification_mode!r} requires a descriptive rubric"
+            )
+        if self.verification_mode in {"deterministic", "hybrid"} and not self.deterministic_rules:
+            raise ValueError(
+                f"criterion {self.id!r} mode {self.verification_mode!r} requires deterministic_rules"
+            )
+        if self.verification_mode == "judgment" and self.deterministic_rules:
+            raise ValueError(
+                f"criterion {self.id!r} is judgment-only; use hybrid mode for hard rules"
+            )
+        if self.verification_mode == "deterministic" and self.rubric:
+            raise ValueError(
+                f"criterion {self.id!r} is deterministic-only; use hybrid mode for a rubric"
+            )
+
+        _validate_relative_patterns(
+            self.observed_paths,
+            field_name=f"criterion {self.id!r} observed_paths",
+        )
         return self
 
 
 class MissionSpec(StrictModel):
-    schema: Literal["botpipe.adaptive-goal.mission/v1"] = SCHEMA_MISSION
+    schema: Literal["botpipe.adaptive-goal.mission/v2"] = SCHEMA_MISSION
     id: str
     objective: str
     constraints: list[str] = Field(default_factory=list)
@@ -164,13 +221,15 @@ class CapabilitySpec(StrictModel):
         )
         path = Path(artifact)
         if path.is_absolute() or ".." in path.parts:
-            raise ValueError(f"capability {self.id!r} result_artifact must stay inside child workflow folder")
+            raise ValueError(
+                f"capability {self.id!r} result_artifact must stay inside child workflow folder"
+            )
         self.result_artifact = artifact
         return self
 
 
 class CapabilityRegistry(StrictModel):
-    schema: Literal["botpipe.adaptive-goal.capabilities/v1"] = SCHEMA_REGISTRY
+    schema: Literal["botpipe.adaptive-goal.capabilities/v2"] = SCHEMA_REGISTRY
     capabilities: list[CapabilitySpec]
 
     @model_validator(mode="after")
@@ -206,8 +265,51 @@ class AdaptiveGoalInput(StrictModel):
         return self
 
 
+class RubricFinding(StrictModel):
+    rubric_item_id: str
+    status: FindingStatus
+    reasoning: str
+    evidence: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_finding(self) -> "RubricFinding":
+        if not self.rubric_item_id.strip():
+            raise ValueError("rubric_item_id must be non-empty")
+        if not self.reasoning.strip():
+            raise ValueError("rubric finding reasoning must be non-empty")
+        return self
+
+
+class CriterionJudgment(StrictModel):
+    """The designated LLM verifier's substantive judgment for one criterion.
+
+    `rating` is deliberately diagnostic only. Runtime PASS/FAIL does not come
+    from thresholding it. `reasoning`, findings, and evidence are first-class.
+    """
+
+    verdict: JudgmentVerdict
+    summary: str
+    reasoning: str
+    findings: list[RubricFinding]
+    rating: int | None = Field(default=None, ge=1, le=5)
+    confidence: ConfidenceLevel | None = None
+    recommended_actions: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_judgment(self) -> "CriterionJudgment":
+        if not self.summary.strip():
+            raise ValueError("criterion judgment summary must be non-empty")
+        if not self.reasoning.strip():
+            raise ValueError("criterion judgment reasoning must be non-empty")
+        ids = [item.rubric_item_id for item in self.findings]
+        if len(ids) != len(set(ids)):
+            raise ValueError("criterion judgment rubric findings must be unique")
+        return self
+
+
 class CriterionState(StrictModel):
     status: CriterionStatus = "unknown"
+    judgment: CriterionJudgment | None = None
     metrics: dict[str, Any] = Field(default_factory=dict)
     evidence: list[str] = Field(default_factory=list)
     reason: str | None = None
@@ -252,7 +354,7 @@ class ActionRequest(StrictModel):
 
 
 class ActionCapabilityResult(StrictModel):
-    schema: Literal["botpipe.adaptive-goal.action-result/v1"] = SCHEMA_ACTION_RESULT
+    schema: Literal["botpipe.adaptive-goal.action-result/v2"] = SCHEMA_ACTION_RESULT
     status: Literal["completed", "blocked", "failed"]
     summary: str
     evidence: list[str] = Field(default_factory=list)
@@ -261,10 +363,11 @@ class ActionCapabilityResult(StrictModel):
 
 
 class VerifierCapabilityResult(StrictModel):
-    schema: Literal["botpipe.adaptive-goal.verifier-result/v1"] = SCHEMA_VERIFIER_RESULT
-    status: Literal["observed", "blocked", "failed"]
+    schema: Literal["botpipe.adaptive-goal.verifier-result/v2"] = SCHEMA_VERIFIER_RESULT
+    status: Literal["evaluated", "blocked", "failed"]
     verifier_id: str
     summary: str
+    judgments: dict[str, CriterionJudgment] = Field(default_factory=dict)
     observations: dict[str, dict[str, Any]] = Field(default_factory=dict)
     evidence: list[str] = Field(default_factory=list)
     observed_paths: dict[str, list[str]] = Field(default_factory=dict)
@@ -296,6 +399,7 @@ class VerificationReceipt(StrictModel):
     criterion_id: str
     verifier_id: str
     verdict: Literal["pass", "fail", "blocked"]
+    judgment: CriterionJudgment | None = None
     metrics: dict[str, Any] = Field(default_factory=dict)
     evidence: list[str] = Field(default_factory=list)
     reason: str | None = None
@@ -305,7 +409,7 @@ class VerificationReceipt(StrictModel):
 
 
 class VerificationLedger(StrictModel):
-    schema: Literal["botpipe.adaptive-goal.verification-ledger/v1"] = SCHEMA_RECEIPTS
+    schema: Literal["botpipe.adaptive-goal.verification-ledger/v2"] = SCHEMA_RECEIPTS
     receipts: list[VerificationReceipt] = Field(default_factory=list)
 
 
@@ -323,7 +427,7 @@ class ActionRecord(StrictModel):
 
 
 class Blackboard(StrictModel):
-    schema: Literal["botpipe.adaptive-goal.blackboard/v1"] = SCHEMA_BLACKBOARD
+    schema: Literal["botpipe.adaptive-goal.blackboard/v2"] = SCHEMA_BLACKBOARD
     mission_id: str
     criteria: dict[str, CriterionState]
     action_count: int = 0
@@ -417,12 +521,14 @@ def _lookup_metric(metrics: dict[str, Any], dotted: str) -> tuple[bool, Any]:
     return True, current
 
 
-def evaluate_acceptance(
+def evaluate_deterministic_rules(
     criterion: MissionCriterion,
     metrics: dict[str, Any],
 ) -> tuple[bool, list[str]]:
+    """Apply only operator-authored hard rules to objective observations."""
+
     failures: list[str] = []
-    for rule in criterion.acceptance:
+    for rule in criterion.deterministic_rules:
         found, observed = _lookup_metric(metrics, rule.metric)
         if not found:
             failures.append(f"missing metric {rule.metric!r}")
@@ -468,13 +574,86 @@ def evaluate_acceptance(
     return not failures, failures
 
 
+def evaluate_judgment(
+    criterion: MissionCriterion,
+    judgment: CriterionJudgment | None,
+) -> tuple[Literal["pass", "fail", "blocked"], str | None]:
+    """Validate designated-verifier rubric coverage and accept its judgment.
+
+    The runtime does not infer subjective quality from a score. It verifies that
+    every authored rubric item was actually considered and that an overall
+    `satisfied` verdict is not internally inconsistent with an authored gate.
+    """
+
+    if judgment is None:
+        return "blocked", "designated verifier did not provide a qualitative judgment"
+
+    expected = {item.id: item for item in criterion.rubric}
+    actual = {item.rubric_item_id: item for item in judgment.findings}
+    missing = sorted(set(expected) - set(actual))
+    unknown = sorted(set(actual) - set(expected))
+    if missing or unknown:
+        parts: list[str] = []
+        if missing:
+            parts.append(f"missing rubric findings: {missing}")
+        if unknown:
+            parts.append(f"unknown rubric findings: {unknown}")
+        return "blocked", "; ".join(parts)
+
+    if judgment.verdict == "insufficient_evidence":
+        return "blocked", judgment.reasoning
+    if judgment.verdict == "not_satisfied":
+        return "fail", judgment.reasoning
+
+    inconsistent_gates = [
+        item.id
+        for item in criterion.rubric
+        if item.importance == "gate"
+        and actual[item.id].status != "satisfied"
+    ]
+    if inconsistent_gates:
+        return (
+            "blocked",
+            "overall judgment was satisfied but gate findings were not fully satisfied: "
+            f"{inconsistent_gates}",
+        )
+
+    return "pass", judgment.reasoning
+
+
+def evaluate_verification(
+    criterion: MissionCriterion,
+    *,
+    judgment: CriterionJudgment | None,
+    metrics: dict[str, Any],
+) -> tuple[Literal["pass", "fail", "blocked"], str | None]:
+    """Evaluate a verifier result according to the criterion's authored mode."""
+
+    if criterion.verification_mode == "judgment":
+        return evaluate_judgment(criterion, judgment)
+
+    if criterion.verification_mode == "deterministic":
+        passed, failures = evaluate_deterministic_rules(criterion, metrics)
+        return ("pass", None) if passed else ("fail", "; ".join(failures))
+
+    judgment_verdict, judgment_reason = evaluate_judgment(criterion, judgment)
+    if judgment_verdict != "pass":
+        return judgment_verdict, judgment_reason
+    passed, failures = evaluate_deterministic_rules(criterion, metrics)
+    if not passed:
+        return "fail", "; ".join(failures)
+    return "pass", judgment_reason
+
+
 def _validate_relative_patterns(patterns: list[str], *, field_name: str) -> None:
     for pattern in patterns:
         if not isinstance(pattern, str) or not pattern.strip():
             raise ValueError(f"{field_name} entries must be non-empty strings")
         path = Path(pattern)
         if path.is_absolute() or ".." in path.parts:
-            raise ValueError(f"{field_name} patterns must stay inside the workspace: {pattern!r}")
+            raise ValueError(
+                f"{field_name} patterns must stay inside the workspace: {pattern!r}"
+            )
 
 
 def fingerprint_paths(root: Path, patterns: list[str]) -> str | None:
@@ -511,9 +690,6 @@ def fingerprint_paths(root: Path, patterns: list[str]) -> str | None:
 
         for candidate in root.glob(pattern):
             add_candidate(candidate)
-            # pathlib's `**` may yield the directory itself for patterns such
-            # as `site/**`. A verifier contract over a directory means the
-            # files below it are part of the observed subject too.
             try:
                 resolved_candidate = candidate.resolve()
                 resolved_candidate.relative_to(root)
@@ -523,7 +699,9 @@ def fingerprint_paths(root: Path, patterns: list[str]) -> str | None:
                 for descendant in resolved_candidate.rglob("*"):
                     add_candidate(descendant)
 
-        matches = sorted(set(matches), key=lambda path: path.relative_to(root).as_posix())
+        matches = sorted(
+            set(matches), key=lambda path: path.relative_to(root).as_posix()
+        )
         if not matches:
             digest.update(b"\0NO_MATCH\0")
             continue
