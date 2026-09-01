@@ -15,6 +15,7 @@ from .contracts import (
     VerifierCapabilityResult,
 )
 
+
 def _dispatch_message(
     *,
     ctx,
@@ -35,8 +36,20 @@ def _dispatch_message(
                 "required": criterion.required,
                 "current_status": state.status,
                 "verifier": criterion.verifier,
-                "acceptance": [rule.model_dump(mode="json") for rule in criterion.acceptance],
+                "verification_mode": criterion.verification_mode,
+                "rubric": [item.model_dump(mode="json") for item in criterion.rubric],
+                "deterministic_rules": [
+                    rule.model_dump(mode="json")
+                    for rule in criterion.deterministic_rules
+                ],
                 "failure_policy": criterion.failure_policy,
+                "previous_judgment": (
+                    state.judgment.model_dump(mode="json")
+                    if state.judgment is not None
+                    else None
+                ),
+                "previous_runtime_reason": state.reason,
+                "previous_evidence": state.evidence,
             }
         )
 
@@ -53,8 +66,10 @@ def _dispatch_message(
     return (
         "Execute the following bounded adaptive-goal action. Treat the JSON below "
         "as the action contract. Do not change the parent mission, criteria, "
-        "thresholds, or verification ledger. Complete only the requested action "
-        "within your own workflow contract.\n\n"
+        "rubrics, hard checks, or verification ledger. Complete only the requested "
+        "action within your own workflow contract. For subjective verification, "
+        "reason directly against every rubric item and ground findings in observable "
+        "evidence; optional ratings are diagnostic only.\n\n"
         + json.dumps(payload, indent=2, ensure_ascii=False)
     )
 
@@ -113,4 +128,3 @@ def _read_child_protocol_result(
         return None, None, str(result_path), (
             f"invalid child capability protocol artifact {result_path}: {exc}"
         )
-
