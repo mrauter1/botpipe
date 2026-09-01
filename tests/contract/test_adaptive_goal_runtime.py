@@ -8,13 +8,15 @@ from botpipe.core.primitives import Event, FINISH, Outcome
 from botpipe.core.providers.fake import ScriptedLLMProvider
 from botpipe.core.stores import InMemoryCheckpointStore, InMemorySessionStore
 from botpipe.workflows.adaptive_goal import (
-    AcceptanceRule,
     AdaptiveGoalInput,
     AdaptiveGoalWorkflow,
     CapabilityRegistry,
     CapabilitySpec,
+    CriterionJudgment,
     MissionCriterion,
     MissionSpec,
+    RubricFinding,
+    RubricItem,
 )
 from botpipe.workflows.adaptive_goal.contracts import (
     ActionCapabilityResult,
@@ -62,6 +64,25 @@ def _child_result(
     )
 
 
+def _judgment(criterion: str, *, reasoning: str) -> CriterionJudgment:
+    item = "hierarchy" if criterion == "visual_quality" else "completeness"
+    return CriterionJudgment(
+        verdict="satisfied",
+        summary=f"{criterion} satisfies its rubric.",
+        reasoning=reasoning,
+        findings=[
+            RubricFinding(
+                rubric_item_id=item,
+                status="satisfied",
+                reasoning=reasoning,
+                evidence=[f"qa/{criterion}.txt"],
+            )
+        ],
+        rating=4,
+        confidence="high",
+    )
+
+
 def test_adaptive_runtime_invalidates_changed_verified_subject_and_reverifies(
     tmp_path: Path,
 ) -> None:
@@ -77,14 +98,28 @@ def test_adaptive_runtime_invalidates_changed_verified_subject_and_reverifies(
                 id="visual_quality",
                 description="Visual quality is high.",
                 verifier="verify.visual",
-                acceptance=[AcceptanceRule(metric="score", operator="ge", value=85)],
+                verification_mode="judgment",
+                rubric=[
+                    RubricItem(
+                        id="hierarchy",
+                        description="The rendered page has strong visual hierarchy.",
+                        importance="gate",
+                    )
+                ],
                 observed_paths=["site/**"],
             ),
             MissionCriterion(
                 id="content_quality",
-                description="Content is complete.",
+                description="Content is complete and useful.",
                 verifier="verify.content",
-                acceptance=[AcceptanceRule(metric="complete", operator="truthy")],
+                verification_mode="judgment",
+                rubric=[
+                    RubricItem(
+                        id="completeness",
+                        description="The page contains enough useful business content.",
+                        importance="gate",
+                    )
+                ],
                 observed_paths=["site/**"],
             ),
         ],
@@ -95,7 +130,7 @@ def test_adaptive_runtime_invalidates_changed_verified_subject_and_reverifies(
                 id="verify.visual",
                 kind="verifier",
                 workflow="verify_visual",
-                description="Verify visual quality.",
+                description="Judge visual quality.",
                 verifies=["visual_quality"],
                 observed_paths=["site/**"],
             ),
@@ -112,7 +147,7 @@ def test_adaptive_runtime_invalidates_changed_verified_subject_and_reverifies(
                 id="verify.content",
                 kind="verifier",
                 workflow="verify_content",
-                description="Verify content quality.",
+                description="Judge content quality.",
                 verifies=["content_quality"],
                 observed_paths=["site/**"],
             ),
@@ -191,10 +226,15 @@ def test_adaptive_runtime_invalidates_changed_verified_subject_and_reverifies(
         if workflow_name == "verify_visual":
             (child_folder / "verification_result.json").write_text(
                 VerifierCapabilityResult(
-                    status="observed",
+                    status="evaluated",
                     verifier_id="verify.visual",
-                    summary="Visual quality measured.",
-                    observations={"visual_quality": {"score": 90}},
+                    summary="Visual quality judged against rubric.",
+                    judgments={
+                        "visual_quality": _judgment(
+                            "visual_quality",
+                            reasoning="Hierarchy is clear and coherent in the current render.",
+                        )
+                    },
                     evidence=["visual-test"],
                     observed_paths={"visual_quality": ["site/**"]},
                 ).model_dump_json(indent=2),
@@ -217,10 +257,15 @@ def test_adaptive_runtime_invalidates_changed_verified_subject_and_reverifies(
         elif workflow_name == "verify_content":
             (child_folder / "verification_result.json").write_text(
                 VerifierCapabilityResult(
-                    status="observed",
+                    status="evaluated",
                     verifier_id="verify.content",
-                    summary="Content quality measured.",
-                    observations={"content_quality": {"complete": True}},
+                    summary="Content judged against rubric.",
+                    judgments={
+                        "content_quality": _judgment(
+                            "content_quality",
+                            reasoning="The business content is complete enough for the intended page.",
+                        )
+                    },
                     evidence=["content-test"],
                     observed_paths={"content_quality": ["site/**"]},
                 ).model_dump_json(indent=2),
@@ -261,6 +306,8 @@ def test_adaptive_runtime_invalidates_changed_verified_subject_and_reverifies(
     )
     assert blackboard.criteria["visual_quality"].status == "pass"
     assert blackboard.criteria["content_quality"].status == "pass"
+    assert blackboard.criteria["visual_quality"].judgment is not None
+    assert "Hierarchy is clear" in blackboard.criteria["visual_quality"].judgment.reasoning
     assert blackboard.action_count == 4
 
     second_action = blackboard.recent_actions[1]
