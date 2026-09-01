@@ -9,20 +9,39 @@ from botpipe.core.discovery import get_workflow_definition
 from botpipe.workflows.ad_hoc_executor import AdHocExecutorWorkflow
 from botpipe.workflows.adaptive_goal import AdaptiveGoalWorkflow
 from botpipe.workflows.adaptive_goal.contracts import (
-    AcceptanceRule,
     ActionRequest,
     Blackboard,
     CapabilityRegistry,
     CapabilitySpec,
+    CriterionJudgment,
     CriterionState,
+    DeterministicRule,
     MissionCriterion,
     MissionSpec,
-    evaluate_acceptance,
+    RubricFinding,
+    RubricItem,
+    VerifierCapabilityResult,
+    evaluate_verification,
     fingerprint_paths,
     terminal_unsatisfied_criteria,
     validate_registry_against_mission,
 )
 from botpipe.workflows.adaptive_goal.verification import _criterion_observed_paths
+
+
+def _visual_rubric() -> list[RubricItem]:
+    return [
+        RubricItem(
+            id="hierarchy",
+            description="Visual hierarchy makes the proposition immediately understandable.",
+            importance="gate",
+        ),
+        RubricItem(
+            id="appropriateness",
+            description="The design is credible and appropriate for the business.",
+            importance="major",
+        ),
+    ]
 
 
 def _mission() -> MissionSpec:
@@ -32,16 +51,20 @@ def _mission() -> MissionSpec:
         criteria=[
             MissionCriterion(
                 id="visual_quality",
-                description="Visual quality reaches the target.",
+                description="Visual quality is genuinely strong.",
                 verifier="verify.visual",
-                acceptance=[AcceptanceRule(metric="score", operator="ge", value=85)],
+                verification_mode="judgment",
+                rubric=_visual_rubric(),
                 observed_paths=["site/**"],
             ),
             MissionCriterion(
                 id="active_business",
                 description="Business is currently active.",
                 verifier="verify.activity",
-                acceptance=[AcceptanceRule(metric="active", operator="truthy")],
+                verification_mode="deterministic",
+                deterministic_rules=[
+                    DeterministicRule(metric="active", operator="truthy")
+                ],
                 failure_policy="terminal_unsatisfied",
                 ttl_seconds=86400,
             ),
@@ -65,7 +88,7 @@ def _registry() -> CapabilityRegistry:
                 id="verify.visual",
                 kind="verifier",
                 workflow="verify_visual",
-                description="Measure visual quality.",
+                description="Judge visual quality against the authored rubric.",
                 verifies=["visual_quality"],
                 observed_paths=["site/**"],
             ),
@@ -77,6 +100,36 @@ def _registry() -> CapabilityRegistry:
                 verifies=["active_business"],
             ),
         ]
+    )
+
+
+def _visual_judgment(
+    *,
+    verdict: str = "satisfied",
+    hierarchy: str = "satisfied",
+    appropriateness: str = "satisfied",
+    rating: int | None = 4,
+) -> CriterionJudgment:
+    return CriterionJudgment(
+        verdict=verdict,
+        summary="Visual rubric evaluated.",
+        reasoning="The page was assessed against hierarchy and industry appropriateness.",
+        findings=[
+            RubricFinding(
+                rubric_item_id="hierarchy",
+                status=hierarchy,
+                reasoning="Hierarchy finding.",
+                evidence=["qa/desktop.png"],
+            ),
+            RubricFinding(
+                rubric_item_id="appropriateness",
+                status=appropriateness,
+                reasoning="Appropriateness finding.",
+                evidence=["qa/desktop.png"],
+            ),
+        ],
+        rating=rating,
+        confidence="high",
     )
 
 
@@ -93,16 +146,114 @@ def test_registry_must_cover_designated_verifiers() -> None:
         validate_registry_against_mission(mission, broken)
 
 
-def test_acceptance_is_runtime_owned_and_deterministic() -> None:
+def test_judgment_verdict_is_not_derived_from_optional_rating() -> None:
     criterion = _mission().criterion_map()["visual_quality"]
-    passed, failures = evaluate_acceptance(criterion, {"score": 91})
-    assert passed is True
-    assert failures == []
 
-    passed, failures = evaluate_acceptance(criterion, {"score": 82})
-    assert passed is False
-    assert failures
-    assert "expected ge 85" in failures[0]
+    verdict, _ = evaluate_verification(
+        criterion,
+        judgment=_visual_judgment(verdict="not_satisfied", rating=5),
+        metrics={},
+    )
+    assert verdict == "fail"
+
+    verdict, _ = evaluate_verification(
+        criterion,
+        judgment=_visual_judgment(verdict="satisfied", rating=1),
+        metrics={},
+    )
+    assert verdict == "pass"
+
+
+def test_judgment_requires_complete_rubric_coverage() -> None:
+    criterion = _mission().criterion_map()["visual_quality"]
+    judgment = _visual_judgment().model_copy(deep=True)
+    judgment.findings = judgment.findings[:1]
+
+    verdict, reason = evaluate_verification(
+        criterion,
+        judgment=judgment,
+        metrics={},
+    )
+    assert verdict == "blocked"
+    assert reason is not None and "missing rubric findings" in reason
+
+
+def test_satisfied_judgment_cannot_contradict_gate_finding() -> None:
+    criterion = _mission().criterion_map()["visual_quality"]
+    verdict, reason = evaluate_verification(
+        criterion,
+        judgment=_visual_judgment(
+            verdict="satisfied",
+            hierarchy="partially_satisfied",
+        ),
+        metrics={},
+    )
+    assert verdict == "blocked"
+    assert reason is not None and "gate findings" in reason
+
+
+def test_deterministic_criteria_still_support_true_hard_checks() -> None:
+    criterion = _mission().criterion_map()["active_business"]
+
+    verdict, _ = evaluate_verification(
+        criterion,
+        judgment=None,
+        metrics={"active": True},
+    )
+    assert verdict == "pass"
+
+    verdict, reason = evaluate_verification(
+        criterion,
+        judgment=None,
+        metrics={"active": False},
+    )
+    assert verdict == "fail"
+    assert reason is not None
+
+
+def test_hybrid_requires_both_judgment_and_hard_check() -> None:
+    criterion = MissionCriterion(
+        id="mobile_quality",
+        description="Mobile experience is qualitatively strong and has no horizontal overflow.",
+        verifier="verify.mobile",
+        verification_mode="hybrid",
+        rubric=[
+            RubricItem(
+                id="usability",
+                description="Mobile layout is coherent and usable.",
+                importance="gate",
+            )
+        ],
+        deterministic_rules=[
+            DeterministicRule(metric="horizontal_overflow", operator="falsy")
+        ],
+    )
+    judgment = CriterionJudgment(
+        verdict="satisfied",
+        summary="Mobile experience is strong.",
+        reasoning="The rendered mobile layout is coherent.",
+        findings=[
+            RubricFinding(
+                rubric_item_id="usability",
+                status="satisfied",
+                reasoning="Controls and hierarchy remain usable.",
+            )
+        ],
+    )
+
+    verdict, _ = evaluate_verification(
+        criterion,
+        judgment=judgment,
+        metrics={"horizontal_overflow": False},
+    )
+    assert verdict == "pass"
+
+    verdict, _ = evaluate_verification(
+        criterion,
+        judgment=judgment,
+        metrics={"horizontal_overflow": True},
+    )
+    assert verdict == "fail"
 
 
 def test_fingerprint_changes_when_observed_subject_changes(tmp_path: Path) -> None:
@@ -190,13 +341,11 @@ def test_verifier_may_broaden_but_not_narrow_operator_observed_paths() -> None:
     criterion = mission.criterion_map()["visual_quality"]
     capability = _registry().capability_map()["verify.visual"]
 
-    from botpipe.workflows.adaptive_goal.contracts import VerifierCapabilityResult
-
     result = VerifierCapabilityResult(
-        status="observed",
+        status="evaluated",
         verifier_id="verify.visual",
         summary="checked",
-        observations={"visual_quality": {"score": 90}},
+        judgments={"visual_quality": _visual_judgment()},
         observed_paths={"visual_quality": ["site/index.html"]},
     )
 
