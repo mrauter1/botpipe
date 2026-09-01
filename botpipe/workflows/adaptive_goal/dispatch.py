@@ -29,29 +29,34 @@ def _dispatch_message(
     for criterion_id in action.target_criteria:
         criterion = criteria[criterion_id]
         state = blackboard.criteria[criterion_id]
-        target_contracts.append(
-            {
-                "id": criterion.id,
-                "description": criterion.description,
-                "required": criterion.required,
-                "current_status": state.status,
-                "verifier": criterion.verifier,
-                "verification_mode": criterion.verification_mode,
-                "rubric": [item.model_dump(mode="json") for item in criterion.rubric],
-                "deterministic_rules": [
-                    rule.model_dump(mode="json")
-                    for rule in criterion.deterministic_rules
-                ],
-                "failure_policy": criterion.failure_policy,
-                "previous_judgment": (
-                    state.judgment.model_dump(mode="json")
-                    if state.judgment is not None
-                    else None
-                ),
-                "previous_runtime_reason": state.reason,
-                "previous_evidence": state.evidence,
-            }
-        )
+        target_contract = {
+            "id": criterion.id,
+            "description": criterion.description,
+            "required": criterion.required,
+            "current_status": state.status,
+            "verifier": criterion.verifier,
+            "verification_mode": criterion.verification_mode,
+            "rubric": [item.model_dump(mode="json") for item in criterion.rubric],
+            "deterministic_rules": [
+                rule.model_dump(mode="json")
+                for rule in criterion.deterministic_rules
+            ],
+            "failure_policy": criterion.failure_policy,
+        }
+
+        # Repair/action workers benefit from exact prior verifier findings. A
+        # verifier should instead judge the current subject independently so a
+        # re-verification is not anchored by its own previous conclusion.
+        if action.kind != "verifier":
+            target_contract["previous_judgment"] = (
+                state.judgment.model_dump(mode="json")
+                if state.judgment is not None
+                else None
+            )
+            target_contract["previous_runtime_reason"] = state.reason
+            target_contract["previous_evidence"] = state.evidence
+
+        target_contracts.append(target_contract)
 
     payload = {
         "mission_id": mission.id,
