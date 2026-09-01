@@ -17,11 +17,12 @@ from .contracts import (
     VerificationLedger,
     VerificationReceipt,
     VerifierCapabilityResult,
-    evaluate_acceptance,
+    evaluate_verification,
     fingerprint_paths,
     utc_now,
 )
 from .state import _criterion_by_id, _load_blackboard, _load_ledger, _load_mission
+
 
 def _criterion_observed_paths(
     *,
@@ -126,35 +127,37 @@ def _apply_verifier_result(
         )
         fingerprint = fingerprint_paths(root, observed_paths)
 
+        judgment = result.judgments.get(criterion_id)
+        metrics = dict(result.observations.get(criterion_id, {}))
+
         if result.status == "blocked":
             verdict = "blocked"
-            metrics: dict[str, Any] = {}
             reason = result.summary or "Verifier was blocked."
         elif result.status == "failed":
             verdict = "blocked"
-            metrics = {}
             reason = result.summary or "Verifier execution failed."
         else:
-            if criterion_id not in result.observations:
-                verdict = "blocked"
-                metrics = {}
-                reason = (
-                    f"Verifier {capability.id!r} did not return observations for "
-                    f"criterion {criterion_id!r}."
-                )
-            else:
-                metrics = dict(result.observations[criterion_id])
-                passed, failures = evaluate_acceptance(criterion, metrics)
-                verdict = "pass" if passed else "fail"
-                reason = None if passed else "; ".join(failures)
+            verdict, reason = evaluate_verification(
+                criterion,
+                judgment=judgment,
+                metrics=metrics,
+            )
+
+        criterion_evidence = list(result.evidence)
+        if judgment is not None:
+            for finding in judgment.findings:
+                for item in finding.evidence:
+                    if item not in criterion_evidence:
+                        criterion_evidence.append(item)
 
         receipt = VerificationReceipt(
             verification_id=verification_id,
             criterion_id=criterion_id,
             verifier_id=capability.id,
             verdict=verdict,
+            judgment=judgment,
             metrics=metrics,
-            evidence=list(result.evidence),
+            evidence=criterion_evidence,
             reason=reason,
             observed_paths=observed_paths,
             subject_fingerprint=fingerprint,
@@ -163,8 +166,9 @@ def _apply_verifier_result(
         ledger.receipts.append(receipt)
 
         state.status = verdict
+        state.judgment = judgment
         state.metrics = metrics
-        state.evidence = list(result.evidence)
+        state.evidence = criterion_evidence
         state.reason = reason
         state.verifier_id = capability.id
         state.verification_id = verification_id
@@ -205,10 +209,37 @@ def _prepare_completion_packet(ctx) -> None:
                 "",
                 f"- Required: {criterion.required}",
                 f"- Description: {criterion.description}",
+                f"- Verification mode: {criterion.verification_mode}",
                 f"- Status: {state.status}",
                 f"- Verifier: {state.verifier_id or criterion.verifier}",
                 f"- Verification id: {state.verification_id or 'none'}",
-                f"- Metrics: `{json.dumps(state.metrics, ensure_ascii=False, sort_keys=True)}`",
+            ]
+        )
+        if state.judgment is not None:
+            lines.extend(
+                [
+                    f"- Judgment: {state.judgment.verdict}",
+                    f"- Judgment summary: {state.judgment.summary}",
+                    f"- Reasoning: {state.judgment.reasoning}",
+                    f"- Optional rating: {state.judgment.rating or 'none'}",
+                    f"- Confidence: {state.judgment.confidence or 'none'}",
+                ]
+            )
+            if state.judgment.findings:
+                lines.append("- Rubric findings:")
+                for finding in state.judgment.findings:
+                    lines.append(
+                        f"  - `{finding.rubric_item_id}` [{finding.status}]: {finding.reasoning}"
+                    )
+            if state.judgment.recommended_actions:
+                lines.append("- Recommended actions:")
+                lines.extend(f"  - {item}" for item in state.judgment.recommended_actions)
+        if state.metrics:
+            lines.append(
+                f"- Objective observations: `{json.dumps(state.metrics, ensure_ascii=False, sort_keys=True)}`"
+            )
+        lines.extend(
+            [
                 f"- Evidence: {', '.join(state.evidence) if state.evidence else 'none'}",
                 "",
             ]
@@ -258,8 +289,13 @@ def _final_report_text(
         lines.append(
             f"- `{criterion.id}` [{state.status.upper()}] {criterion.description}"
         )
-        if state.reason:
-            lines.append(f"  - {state.reason}")
+        if state.judgment is not None:
+            lines.append(
+                f"  - judgment: {state.judgment.verdict}; {state.judgment.summary}"
+            )
+            lines.append(f"  - reasoning: {state.judgment.reasoning}")
+        if state.reason and (state.judgment is None or state.reason != state.judgment.reasoning):
+            lines.append(f"  - runtime reason: {state.reason}")
     lines.extend(
         [
             "",
@@ -272,4 +308,3 @@ def _final_report_text(
         ]
     )
     return "\n".join(lines)
-
