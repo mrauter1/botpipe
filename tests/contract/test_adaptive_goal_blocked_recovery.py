@@ -8,11 +8,11 @@ from botpipe.core.primitives import Event, FINISH, Outcome
 from botpipe.core.providers.fake import ScriptedLLMProvider
 from botpipe.core.stores import InMemoryCheckpointStore, InMemorySessionStore
 from botpipe.workflows.adaptive_goal import (
-    AcceptanceRule,
     AdaptiveGoalInput,
     AdaptiveGoalWorkflow,
     CapabilityRegistry,
     CapabilitySpec,
+    DeterministicRule,
     MissionCriterion,
     MissionSpec,
 )
@@ -68,7 +68,10 @@ def test_single_orchestrator_blocked_claim_does_not_end_mission(tmp_path: Path) 
                 id="active_business",
                 description="The business is active.",
                 verifier="verify.activity",
-                acceptance=[AcceptanceRule(metric="active", operator="truthy")],
+                verification_mode="deterministic",
+                deterministic_rules=[
+                    DeterministicRule(metric="active", operator="truthy")
+                ],
             )
         ],
     )
@@ -129,7 +132,7 @@ def test_single_orchestrator_blocked_claim_does_not_end_mission(tmp_path: Path) 
         child_folder.mkdir(parents=True, exist_ok=True)
         (child_folder / "verification_result.json").write_text(
             VerifierCapabilityResult(
-                status="observed",
+                status="evaluated",
                 verifier_id="verify.activity",
                 summary="Activity verified.",
                 observations={"active_business": {"active": True}},
