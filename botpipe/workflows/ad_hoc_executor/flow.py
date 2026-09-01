@@ -88,7 +88,7 @@ class AdHocExecutorWorkflow(Workflow):
             Write {{ workflow.folder }}/capability_result.json as
             ActionCapabilityResult:
             {
-              "schema": "botpipe.adaptive-goal.action-result/v1",
+              "schema": "botpipe.adaptive-goal.action-result/v2",
               "status": "completed",
               "summary": "...",
               "evidence": ["..."],
