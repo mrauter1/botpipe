@@ -64,87 +64,27 @@ Implementation notes:
 {{ task.folder }}/implement/phases/{{ state.phase.dir_key }}/implementation_notes.md
 ```
 
-Criteria checklist to write:
+Review report to write:
 
 ```text
-{{ task.folder }}/implement/phases/{{ state.phase.dir_key }}/criteria.md
-```
-
-Feedback file to write:
-
-```text
-{{ task.folder }}/implement/phases/{{ state.phase.dir_key }}/feedback.md
+{{ task.folder }}/implement/phases/{{ state.phase.dir_key }}/review.json
 ```
 
 ## Required actions
 
-Review the repository changes and `implementation_notes.md`.
+Review the repository changes and `implementation_notes.md`. Inspect the actual changed files and relevant repository state; notes alone are not proof. Write only `review.json`.
 
-Write both:
+For each runtime criterion, determine whether the implementation supplies the requested behavior and deliverable. Also verify that:
 
-1. `criteria.md`
-2. `feedback.md`
-
-Do not implement fixes in this verifier step. Do not modify source code. Do not modify `implementation_notes.md`.
-
-## Review focus
-
-Verify that:
-
-- the implementation addresses the active phase objective;
-- every phase acceptance criterion is satisfied or explicitly accounted for;
-- the implementation stays within scope;
-- any out-of-scope changes are justified and harmless;
+- the active phase objective is implemented;
+- the implementation stays within scope and any necessary adjacent change is justified and harmless;
 - changed files are coherent and maintainable;
-- implementation notes accurately describe what changed;
+- implementation notes accurately map changes to the active phase criteria;
 - no obvious missing file, broken import, syntax issue, or unfinished placeholder remains;
-- the implementation is ready for the test phase.
+- the candidate is ready for the test phase.
 
-## Criteria checklist format
+Use findings for material scope, integrity, or readiness problems that are not captured by one acceptance criterion. If the implementation is incomplete or incorrect but the phase remains executable as authored, fail the relevant criterion or finding and use `repair_target: "candidate"`.
 
-Write `criteria.md` as a markdown checklist.
+Use `repair_target: "phase_item"` only when inspected evidence proves the authored active phase item itself is impossible, contradictory, missing required dependencies, mis-scoped, or cannot be executed without changing that item. That report must contain a `failed` criterion or finding whose evidence and reason identify the plan defect and the narrow repair needed. External missing information is `blocked`, not a phase-item repair. Do not use phase-item repair for ordinary implementation defects, missing evidence, or incomplete work.
 
-If the implementation is acceptable, every checkbox must be checked:
-
-```markdown
-# Implementation Criteria: {{ state.phase.id }}
-
-- [x] The active phase objective is implemented.
-- [x] All active phase acceptance criteria are satisfied or explicitly accounted for.
-- [x] Implementation notes accurately describe the changes.
-- [x] The implementation stays within active phase scope.
-- [x] No obvious incomplete work remains before the test phase.
-```
-
-If the implementation is not acceptable, leave at least one checkbox unchecked and explain required rework in `feedback.md`.
-
-## Feedback format
-
-Write `feedback.md` with:
-
-```markdown
-# Implementation Feedback: {{ state.phase.id }}
-
-## Decision
-Implemented | Needs rework | Needs phase item review
-
-## Findings
-- Finding 1
-
-## Required rework
-- Required rework item, or `None.`
-```
-
-## Route decision
-
-Return `implemented` only if:
-
-- the implementation satisfies the active phase;
-- `implementation_notes.md` is present and accurate;
-- `criteria.md` exists;
-- every checkbox in `criteria.md` is checked;
-- `feedback.md` records acceptance.
-
-Return `needs_rework` if the current implementation, evidence, or notes are incomplete, incorrect, stale, out of scope, or below the active phase acceptance criteria, and the active phase item can still be executed as authored.
-
-Return `needs_phase_item_review` only if the active phase-plan item itself is impossible, contradictory, missing required dependencies, mis-scoped, or cannot be executed without changing that item. Do not use phase item review for ordinary acceptance failures or incomplete implementation work.
+{% include "review_contract.md" %}

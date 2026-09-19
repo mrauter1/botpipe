@@ -82,6 +82,14 @@ class _DevLoopRuntimeArtifactsRuntime:
 
         current_phase_id = _phase_id(event.state_before)
         next_phase_id = _phase_id(event.state_after)
+        if event.step_name == "activate_next_phase" and current_phase_id is not None:
+            _emit_runtime_event(
+                self.binding.run_folder / "events.jsonl",
+                self.binding.run_id,
+                "phase_completed",
+                workflow=self.binding.workflow_name,
+                phase_id=current_phase_id,
+            )
         if event.step_name == "activate_next_phase" and event.event.tag == "phase_selected" and next_phase_id is not None:
             _emit_runtime_event(
                 self.binding.run_folder / "events.jsonl",
@@ -90,25 +98,6 @@ class _DevLoopRuntimeArtifactsRuntime:
                 workflow=self.binding.workflow_name,
                 phase_id=next_phase_id,
             )
-        phase_completed = (
-            event.step_name == "test"
-            and event.outcome is not None
-            and event.outcome.tag == "phase_passed"
-        ) or (
-            event.step_name == "maybe_test"
-            and event.event is not None
-            and event.event.tag == "tests_skipped"
-        )
-        if phase_completed:
-            completed_phase_id = current_phase_id or next_phase_id
-            if completed_phase_id is not None:
-                _emit_runtime_event(
-                    self.binding.run_folder / "events.jsonl",
-                    self.binding.run_id,
-                    "phase_completed",
-                    workflow=self.binding.workflow_name,
-                    phase_id=completed_phase_id,
-                )
 
     def on_terminal(self, event: TerminalFinish) -> None:
         if event.step_name is None or event.event is None:

@@ -70,10 +70,10 @@ Item review to write:
 {{ task.folder }}/plan/phases/{{ state.phase.dir_key }}/item_review.md
 ```
 
-Implementation feedback, if present:
+Implementation review report, if present:
 
 ```text
-{{ task.folder }}/implement/phases/{{ state.phase.dir_key }}/feedback.md
+{{ task.folder }}/implement/phases/{{ state.phase.dir_key }}/review.json
 ```
 
 Implementation completion-gate feedback, if present:
@@ -82,15 +82,35 @@ Implementation completion-gate feedback, if present:
 {{ task.folder }}/implement/phases/{{ state.phase.dir_key }}/completion_gate_feedback.md
 ```
 
-Test feedback, if present:
+Test review report, if present:
 
 ```text
-{{ task.folder }}/test/phases/{{ state.phase.dir_key }}/feedback.md
+{{ task.folder }}/test/phases/{{ state.phase.dir_key }}/review.json
+```
+
+Test completion-gate feedback, if present:
+
+```text
+{{ task.folder }}/test/phases/{{ state.phase.dir_key }}/completion_gate_feedback.md
+```
+
+Prior item review report, if present:
+
+```text
+{{ task.folder }}/plan/phases/{{ state.phase.dir_key }}/item_review.json
+```
+
+Item-review completion-gate feedback, if present:
+
+```text
+{{ task.folder }}/plan/phases/{{ state.phase.dir_key }}/item_review_gate_feedback.md
 ```
 
 ## Required actions
 
 Review and repair only the active phase item in `phase_plan.json`.
+
+Read any existing review reports and completion-gate feedback first. Address every failed or blocked criterion, finding, or contract diagnostic, and do not repeat a rejected repair unchanged.
 
 You must:
 
@@ -104,7 +124,7 @@ You must:
 
 You may update the active phase title, objective, scope, dependencies, criteria, deliverables, risks, and rollback so the item is executable. If the active item must be split, keep `{{ state.phase.id }}` for the immediately executable active item and add any new follow-up phase after it.
 
-Do not modify source code, implementation notes, test strategy, criteria, or feedback files in this step.
+Do not modify source code, implementation notes, test strategy, review reports, or completion-gate diagnostics in this step.
 
 ## Item review format
 

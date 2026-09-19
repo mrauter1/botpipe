@@ -106,6 +106,42 @@ def _write_audit_passed(request, summary: str) -> str:
     return "audit ready"
 
 
+def _write_review(
+    request,
+    *,
+    verdict: str = "passed",
+    reason: str | None = None,
+    evidence: list[str] | None = None,
+    findings: list[dict[str, object]] | None = None,
+    repair_target: str = "candidate",
+) -> None:
+    """Write a report against the live request created by ``before_verifier``."""
+    review = request.context.state.review
+    artifact_names = {
+        "plan": "plan_review",
+        "implement": "impl_review",
+        "test": "test_review",
+        "review_phase_item": "phase_item_review_report",
+        "audit": "audit_review",
+    }
+    report = {
+        "review_id": review.id,
+        "criteria": [
+            {
+                "id": criterion.id,
+                "verdict": verdict,
+                "evidence": evidence if evidence is not None else [f"Reviewed {criterion.id}."],
+                "reason": reason or f"{criterion.id} is {verdict}.",
+            }
+            for criterion in review.criteria
+        ],
+        "findings": findings or [],
+        "summary": f"Review {verdict}.",
+        "repair_target": repair_target,
+    }
+    getattr(request.artifacts, artifact_names[request.step_name]).write_json(report)
+
+
 def _review_second_phase(request) -> str:
     payload = json.loads(request.artifacts.phase_plan.read_text())
     second_phase = payload["phases"][1]
@@ -194,20 +230,17 @@ def test_devloop_skip_test_phase_writes_explicit_artifacts_and_completes_phase(t
         ],
         verifier_turns=[
             lambda request: (
-                request.artifacts.plan_criteria.write_text("# Plan Criteria\n\n- [x] Plan is valid.\n"),
-                request.artifacts.plan_feedback.write_text("# Plan Feedback\n\nAccepted.\n"),
+                _write_review(request),
                 Outcome(raw_output="plan ready", tag="plan_ready", payload={}),
-            )[2],
+            )[1],
             lambda request: (
-                request.artifacts.impl_criteria.write_text("# Implementation Criteria\n\n- [x] Implementation is valid.\n"),
-                request.artifacts.impl_feedback.write_text("# Implementation Feedback\n\nAccepted.\n"),
+                _write_review(request),
                 Outcome(raw_output="implemented", tag="implemented", payload={}),
-            )[2],
+            )[1],
             lambda request: (
-                request.artifacts.audit_criteria.write_text("# Audit Criteria\n\n- [x] Audit is valid.\n"),
-                request.artifacts.audit_feedback.write_text("# Audit Feedback\n\nAccepted.\n"),
+                _write_review(request),
                 Outcome(raw_output="audit ready", tag="audit_ready", payload={}),
-            )[2],
+            )[1],
         ],
     )
 
@@ -235,9 +268,22 @@ def test_devloop_skip_test_phase_writes_explicit_artifacts_and_completes_phase(t
     assert phase_plan["status"] == "completed"
     assert phase_plan["phases"][0]["status"] == "completed"
     assert "skip_test_phase=true" in (test_dir / "test_strategy.md").read_text(encoding="utf-8")
-    assert "- [x] Test phase was intentionally skipped" in (test_dir / "criteria.md").read_text(encoding="utf-8")
-    assert "reduced validation" in (test_dir / "feedback.md").read_text(encoding="utf-8")
+    assert "reduced workflow assurance" in (test_dir / "test_strategy.md").read_text(encoding="utf-8")
+    assert not (test_dir / "review.json").exists()
     assert not (test_dir / "completion_gate_feedback.md").exists()
+    task_dir = tmp_path / ".botpipe" / "tasks" / "task-skip-tests"
+    plan_review = json.loads((task_dir / "plan" / "review.json").read_text(encoding="utf-8"))
+    impl_review = json.loads(
+        (task_dir / "implement" / "phases" / "p01-demo" / "review.json").read_text(encoding="utf-8")
+    )
+    audit_review = json.loads((task_dir / "audit" / "review.json").read_text(encoding="utf-8"))
+    assert [item["id"] for item in plan_review["criteria"]] == ["request_coverage", "executable_plan"]
+    assert [item["id"] for item in impl_review["criteria"]] == ["P01-AC1"]
+    assert [item["id"] for item in audit_review["criteria"]] == [
+        "grounded_audit",
+        "consistent_findings",
+        "actionable_followup",
+    ]
     assert [call.step_name for call in provider.calls] == [
         "plan",
         "plan",
@@ -281,25 +327,21 @@ def test_devloop_runs_normal_test_phase_when_skip_test_phase_is_false(tmp_path: 
         ],
         verifier_turns=[
             lambda request: (
-                request.artifacts.plan_criteria.write_text("# Plan Criteria\n\n- [x] Plan is valid.\n"),
-                request.artifacts.plan_feedback.write_text("# Plan Feedback\n\nAccepted.\n"),
+                _write_review(request),
                 Outcome(raw_output="plan ready", tag="plan_ready", payload={}),
-            )[2],
+            )[1],
             lambda request: (
-                request.artifacts.impl_criteria.write_text("# Implementation Criteria\n\n- [x] Implementation is valid.\n"),
-                request.artifacts.impl_feedback.write_text("# Implementation Feedback\n\nAccepted.\n"),
+                _write_review(request),
                 Outcome(raw_output="implemented", tag="implemented", payload={}),
-            )[2],
+            )[1],
             lambda request: (
-                request.artifacts.test_criteria.write_text("# Test Criteria\n\n- [x] Normal validation passed.\n"),
-                request.artifacts.test_feedback.write_text("# Test Feedback\n\nPhase passed.\n"),
+                _write_review(request),
                 Outcome(raw_output="phase passed", tag="phase_passed", payload={}),
-            )[2],
+            )[1],
             lambda request: (
-                request.artifacts.audit_criteria.write_text("# Audit Criteria\n\n- [x] Audit is valid.\n"),
-                request.artifacts.audit_feedback.write_text("# Audit Feedback\n\nAccepted.\n"),
+                _write_review(request),
                 Outcome(raw_output="audit ready", tag="audit_ready", payload={}),
-            )[2],
+            )[1],
         ],
     )
 
@@ -324,8 +366,9 @@ def test_devloop_runs_normal_test_phase_when_skip_test_phase_is_false(tmp_path: 
 
     assert result.terminal == "FINISH"
     assert "Ran normal validation." in (test_dir / "test_strategy.md").read_text(encoding="utf-8")
-    assert "Normal validation passed." in (test_dir / "criteria.md").read_text(encoding="utf-8")
-    assert "Phase passed." in (test_dir / "feedback.md").read_text(encoding="utf-8")
+    review = json.loads((test_dir / "review.json").read_text(encoding="utf-8"))
+    assert [criterion["id"] for criterion in review["criteria"]] == ["P01-AC1"]
+    assert {criterion["verdict"] for criterion in review["criteria"]} == {"passed"}
     assert "skip_test_phase=true" not in (test_dir / "test_strategy.md").read_text(encoding="utf-8")
     assert [call.step_name for call in provider.calls] == [
         "plan",
@@ -364,29 +407,26 @@ def test_devloop_implementation_rework_loops_to_implementation_not_plan(tmp_path
         ],
         verifier_turns=[
             lambda request: (
-                request.artifacts.plan_criteria.write_text("# Plan Criteria\n\n- [x] Plan is valid.\n"),
-                request.artifacts.plan_feedback.write_text("# Plan Feedback\n\nAccepted.\n"),
+                _write_review(request),
                 Outcome(raw_output="plan ready", tag="plan_ready", payload={}),
-            )[2],
+            )[1],
             lambda request: (
-                request.artifacts.impl_criteria.write_text(
-                    "# Implementation Criteria\n\n- [ ] Implementation is incomplete.\n"
+                _write_review(
+                    request,
+                    verdict="failed",
+                    reason="Implementation is incomplete.",
+                    evidence=[],
                 ),
-                request.artifacts.impl_feedback.write_text(
-                    "# Implementation Feedback\n\n## Decision\nNeeds rework\n"
-                ),
-                Outcome(raw_output="needs rework", tag="needs_rework", payload={}),
-            )[2],
-            lambda request: (
-                request.artifacts.impl_criteria.write_text("# Implementation Criteria\n\n- [x] Implementation is valid.\n"),
-                request.artifacts.impl_feedback.write_text("# Implementation Feedback\n\nAccepted.\n"),
                 Outcome(raw_output="implemented", tag="implemented", payload={}),
-            )[2],
+            )[1],
             lambda request: (
-                request.artifacts.audit_criteria.write_text("# Audit Criteria\n\n- [x] Audit is valid.\n"),
-                request.artifacts.audit_feedback.write_text("# Audit Feedback\n\nAccepted.\n"),
+                _write_review(request),
+                Outcome(raw_output="implemented", tag="implemented", payload={}),
+            )[1],
+            lambda request: (
+                _write_review(request),
                 Outcome(raw_output="audit ready", tag="audit_ready", payload={}),
-            )[2],
+            )[1],
         ],
     )
 
@@ -442,52 +482,39 @@ def test_devloop_phase_item_review_validates_live_plan_and_refreshes_phase_state
         ],
         verifier_turns=[
             lambda request: (
-                request.artifacts.plan_criteria.write_text("# Plan Criteria\n\n- [x] Plan is valid.\n"),
-                request.artifacts.plan_feedback.write_text("# Plan Feedback\n\nAccepted.\n"),
+                _write_review(request),
                 Outcome(raw_output="plan ready", tag="plan_ready", payload={}),
-            )[2],
+            )[1],
             lambda request: (
-                request.artifacts.impl_criteria.write_text("# Implementation Criteria\n\n- [x] P01 is valid.\n"),
-                request.artifacts.impl_feedback.write_text("# Implementation Feedback\n\nAccepted.\n"),
+                _write_review(request),
                 Outcome(raw_output="implemented", tag="implemented", payload={}),
-            )[2],
+            )[1],
             lambda request: (
-                request.artifacts.impl_criteria.write_text(
-                    "# Implementation Criteria\n\n- [ ] Active item is not executable.\n"
-                ),
-                request.artifacts.impl_feedback.write_text(
-                    "# Implementation Feedback: p02-demo\n\n## Decision\nNeeds phase item review\n"
+                _write_review(
+                    request,
+                    verdict="failed",
+                    reason="The active item is not executable.",
+                    evidence=[],
+                    repair_target="phase_item",
                 ),
                 Outcome(
-                    raw_output="needs phase item review",
-                    tag="needs_phase_item_review",
+                    raw_output="implemented",
+                    tag="implemented",
                     payload={},
                 ),
-            )[2],
+            )[1],
             lambda request: (
-                request.artifacts.phase_item_review_criteria.write_text(
-                    "# Phase Item Review Criteria: p02-demo\n\n"
-                    "- [x] The active phase id is preserved.\n"
-                    "- [x] Completed prior phases are preserved.\n"
-                    "- [x] The active item is executable after the review.\n"
-                    "- [x] Live phase-plan statuses are consistent.\n"
-                    "- [x] `item_review.md` explains the defect and changes.\n"
-                ),
-                request.artifacts.phase_item_review_feedback.write_text(
-                    "# Phase Item Review Feedback: p02-demo\n\n## Decision\nReviewed\n"
-                ),
+                _write_review(request),
                 Outcome(raw_output="phase item reviewed", tag="phase_item_reviewed", payload={}),
-            )[2],
+            )[1],
             lambda request: (
-                request.artifacts.impl_criteria.write_text("# Implementation Criteria\n\n- [x] P02 is valid.\n"),
-                request.artifacts.impl_feedback.write_text("# Implementation Feedback\n\nAccepted.\n"),
+                _write_review(request),
                 Outcome(raw_output="implemented", tag="implemented", payload={}),
-            )[2],
+            )[1],
             lambda request: (
-                request.artifacts.audit_criteria.write_text("# Audit Criteria\n\n- [x] Audit is valid.\n"),
-                request.artifacts.audit_feedback.write_text("# Audit Feedback\n\nAccepted.\n"),
+                _write_review(request),
                 Outcome(raw_output="audit ready", tag="audit_ready", payload={}),
-            )[2],
+            )[1],
         ],
     )
 
@@ -523,6 +550,11 @@ def test_devloop_phase_item_review_validates_live_plan_and_refreshes_phase_state
     assert phase_plan["phases"][1]["status"] == "completed"
     assert phase_plan["phases"][1]["objective"] == "Write reviewed second phase implementation notes."
     assert "original second phase objective was not executable" in item_review.read_text(encoding="utf-8")
+    item_review_report = json.loads((item_review.parent / "item_review.json").read_text(encoding="utf-8"))
+    assert [criterion["id"] for criterion in item_review_report["criteria"]] == [
+        "bounded_repair",
+        "executable_item",
+    ]
     assert [call.step_name for call in provider.calls] == [
         "plan",
         "plan",
