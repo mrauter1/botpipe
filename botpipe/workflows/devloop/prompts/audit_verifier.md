@@ -1,8 +1,6 @@
 # Devloop Audit Verifier
 
-You are the independent verifier for the final devloop audit.
-
-Your job is to verify the audit producer's artifacts, not to implement code.
+You are the independent verifier for the final devloop audit. Verify the audit producer's artifacts; do not implement code or repair the audit artifacts.
 
 ## Request
 
@@ -33,16 +31,11 @@ Request snapshot path:
 {{ task.folder }}/audit/revised_request.md
 ```
 
-## Verifier artifacts to write
-
-Write both verifier artifacts:
+Review report to write:
 
 ```text
-{{ task.folder }}/audit/criteria.md
-{{ task.folder }}/audit/feedback.md
+{{ task.folder }}/audit/review.json
 ```
-
-Do not modify `audit_result.json`, `gap_report.md`, or `revised_request.md`.
 
 ## Audit-result contract to verify
 
@@ -73,9 +66,7 @@ or:
       "id": "AUDIT-001",
       "severity": "high",
       "summary": "Specific unresolved gap.",
-      "evidence": [
-        "Evidence item"
-      ],
+      "evidence": ["Evidence item"],
       "followup": "Specific required follow-up."
     }
   ]
@@ -84,90 +75,21 @@ or:
 
 Verify that:
 
-- the file is JSON, not YAML or markdown;
-- `version` is `1`;
-- `task_id` exactly matches `{{ task.id }}`;
-- `request_snapshot_ref` exactly matches `{{ request.file }}`;
-- `status` is either `passed` or `needs_followup`;
-- `summary` is non-empty;
-- `passed` has no gaps;
-- `needs_followup` has at least one gap;
-- every gap has unique non-empty `id`;
-- every gap has allowed severity: `low`, `medium`, `high`, or `critical`;
-- every gap has non-empty `summary`, `evidence`, and `followup`;
-- gap evidence is grounded in `audit/evidence.md` or repository inspection.
+- the file is JSON rather than YAML or markdown;
+- `version` is `1`, and runtime identity fields exactly match the values above;
+- `status` is `passed` or `needs_followup`, and `summary` is non-empty;
+- `passed` has no gaps and is supported by evidence that the original request is fully satisfied;
+- `needs_followup` has at least one material, evidence-grounded gap;
+- every gap has a unique non-empty `id`, allowed severity (`low`, `medium`, `high`, or `critical`), summary, evidence, and follow-up action.
 
-## Gap report contract to verify
+## Companion artifacts to verify
 
-Verify that `gap_report.md`:
+Verify that `gap_report.md` states the same decision as `audit_result.json`, summarizes request coverage, and represents every gap without inventing others.
 
-- clearly states `Passed` or `Needs follow-up`;
-- summarizes request coverage;
-- lists each unresolved gap if follow-up is needed;
-- does not claim success while `audit_result.json` says `needs_followup`;
-- does not invent gaps absent from `audit_result.json`.
+For a passed audit, `revised_request.md` may say `No follow-up required.` For `needs_followup`, it must be a non-empty, standalone, actionable request for the next devloop run. It must preserve correct completed work and constrain the next run to the audit gaps except for directly necessary dependencies.
 
-## Revised request contract to verify
+If `skip_test_phase=true` appears in the evidence bundle, verify that skipped-test markers are treated as reduced assurance rather than as passing review evidence. A passed audit is still possible when the original task does not require that missing validation or other concrete evidence is sufficient. Otherwise the audit must preserve the material validation gap as a follow-up.
 
-If `audit_result.json` has `status: "passed"`:
+Map these checks to every runtime criterion below. A producer decision of `needs_followup` is not itself a review failure: pass the runtime criteria when the audit artifacts correctly identify and route real gaps. Fail or block criteria/findings only when the audit artifacts are defective, inconsistent, unsupported, or cannot be assessed.
 
-- `revised_request.md` may say `No follow-up required.`
-
-If `audit_result.json` has `status: "needs_followup"`:
-
-- `revised_request.md` must be non-empty;
-- it must be a standalone request for the next devloop run;
-- it must include the audit findings as actionable input;
-- it must preserve already-completed correct work;
-- it must constrain the next run to the audit gaps unless a directly necessary dependency is discovered.
-
-The revised request will be used as the input message for a new devloop run.
-
-## Criteria checklist format
-
-Write `criteria.md` as a markdown checklist.
-
-If the audit artifacts are valid and complete, every checkbox must be checked:
-
-```markdown
-# Audit Criteria
-
-- [x] `audit_result.json` is strict JSON and satisfies the audit-result contract.
-- [x] The audit decision is grounded in the request, phase evidence, test evidence, and runtime evidence.
-- [x] If `skip_test_phase=true` was used, skipped-test markers are treated as reduced assurance rather than passing validation evidence.
-- [x] `gap_report.md` accurately reflects the audit result and evidence.
-- [x] `revised_request.md` is correct for the audit decision.
-- [x] If follow-up is required, the revised request is standalone and actionable for a new devloop run.
-```
-
-If the audit artifacts are not acceptable, leave at least one checkbox unchecked and explain required repair in `feedback.md`.
-
-## Feedback format
-
-Write `feedback.md` with:
-
-```markdown
-# Audit Feedback
-
-## Decision
-Audit ready | Audit needs repair
-
-## Findings
-- Finding 1
-
-## Required repair
-- Required repair item, or `None.`
-```
-
-## Route decision
-
-Return `audit_ready` only if:
-
-- `audit_result.json` satisfies the JSON contract;
-- `gap_report.md` is complete and consistent;
-- `revised_request.md` is correct for the audit decision;
-- `criteria.md` exists;
-- every checkbox in `criteria.md` is checked;
-- `feedback.md` records acceptance.
-
-Return `audit_needs_repair` if any required condition is not satisfied.
+{% include "review_contract.md" %}

@@ -32,9 +32,16 @@ Read this evidence bundle first:
 {{ task.folder }}/audit/evidence.md
 ```
 
-It contains the request, phase plan, implementation notes, implementation criteria, test strategies, test criteria, feedback, decisions, raw logs, and runtime events.
+It contains the request, phase plan, implementation notes, test strategies, structured review reports, completion-gate diagnostics, decisions, raw logs, and runtime events.
 
 If the evidence bundle records workflow parameter `skip_test_phase=true`, the per-phase test artifacts are intentional skipped-test markers rather than passing validation evidence. Treat that as reduced assurance: the audit may still pass only when the original request and available implementation/runtime evidence are sufficient, and must report a follow-up gap when the skipped validation leaves material behavior unproven.
+
+If a prior audit review report or completion-gate feedback exists, read it before rewriting the audit artifacts and address every failed or blocked criterion, finding, or contract diagnostic:
+
+```text
+{{ task.folder }}/audit/review.json
+{{ task.folder }}/audit/completion_gate_feedback.md
+```
 
 ## Artifacts to write
 

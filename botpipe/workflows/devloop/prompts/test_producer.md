@@ -60,10 +60,10 @@ Test strategy to write:
 {{ task.folder }}/test/phases/{{ state.phase.dir_key }}/test_strategy.md
 ```
 
-Test verifier feedback, if present:
+Test review report, if present:
 
 ```text
-{{ task.folder }}/test/phases/{{ state.phase.dir_key }}/feedback.md
+{{ task.folder }}/test/phases/{{ state.phase.dir_key }}/review.json
 ```
 
 Test completion-gate feedback, if present:
@@ -78,9 +78,9 @@ Validate the active phase implementation.
 
 Use the repository's normal test, lint, type-check, build, or inspection commands when available and relevant. Add or update tests when needed and in scope.
 
-If test feedback or completion-gate feedback exists, read it first and address every issue before rewriting the test strategy.
+If a prior review report or completion-gate feedback exists, read it first and address every failed or blocked criterion, finding, or contract diagnostic before rewriting the test strategy.
 
-Do not modify verifier-owned criteria or feedback files.
+Do not modify verifier-owned review reports or completion-gate diagnostics.
 
 Do not manually update phase status in `phase_plan.json`; the workflow updates phase status.
 

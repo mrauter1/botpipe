@@ -28,30 +28,17 @@ Plan artifact:
 {{ task.folder }}/plan/phase_plan.json
 ```
 
-Criteria checklist to write:
+Review report to write:
 
 ```text
-{{ task.folder }}/plan/criteria.md
-```
-
-Feedback file to write:
-
-```text
-{{ task.folder }}/plan/feedback.md
+{{ task.folder }}/plan/review.json
 ```
 
 ## Required actions
 
-Review `phase_plan.json` against the request and the devloop phase-plan contract.
+Review `phase_plan.json` against the request, the phase-plan contract, and every runtime criterion below. Inspect the repository when necessary to judge whether the plan is executable. Write only `review.json`.
 
-Write both:
-
-1. `criteria.md`
-2. `feedback.md`
-
-Do not modify `phase_plan.json`.
-
-## Plan contract to verify
+## Phase-plan contract to verify
 
 The plan must be strict JSON with this top-level shape:
 
@@ -90,63 +77,18 @@ Each phase must include:
 }
 ```
 
-Verify that:
+Verify the file is JSON rather than YAML or markdown, and verify:
 
-- the file is JSON, not YAML;
 - `version` is `1`;
 - `task_id` exactly matches `{{ task.id }}`;
 - `request_snapshot_ref` exactly matches `{{ request.file }}`;
-- root `status` is consistent with initial phase statuses;
-- every initial executable phase has `status: "planned"`;
+- the root and initial executable phase statuses are `planned`;
 - every `phase_id` is unique, non-empty, and no more than 96 UTF-8 bytes;
 - every dependency that names a phase id references an earlier phase;
-- every phase has non-empty `scope.in_scope`;
-- every phase has at least one criterion;
-- every phase has at least one deliverable;
+- every phase has non-empty `scope.in_scope`, at least one criterion, and at least one deliverable;
 - scope, criteria, deliverables, risks, and rollback are concrete enough for implementation;
-- the phase set fully covers the request without adding unrelated work.
+- the ordered phase set fully covers the request without unrelated work.
 
-## Criteria checklist format
+Map those observations to the runtime criteria. Put a cross-cutting contract defect in `findings` only when it is not already represented by a criterion. A valid plan is a candidate that satisfies every runtime criterion and has no failed or blocked finding.
 
-Write `criteria.md` as a markdown checklist.
-
-If the plan is acceptable, every checkbox must be checked:
-
-```markdown
-# Plan Criteria
-
-- [x] `phase_plan.json` is strict JSON and uses `phase_plan.json`, not YAML.
-- [x] Top-level metadata matches the runtime task id and request snapshot path.
-- [x] Phase statuses, dependencies, scope, criteria, deliverables, risks, and rollback satisfy the devloop contract.
-- [x] The phase plan fully covers the request without unrelated work.
-```
-
-If the plan is not acceptable, leave at least one checkbox unchecked and explain required rework in `feedback.md`.
-
-## Feedback format
-
-Write `feedback.md` with:
-
-```markdown
-# Plan Feedback
-
-## Decision
-Accepted | Needs rework
-
-## Findings
-- Finding 1
-
-## Required rework
-- Required rework item, or `None.`
-```
-
-## Route decision
-
-Return `plan_ready` only if:
-
-- `phase_plan.json` satisfies the contract;
-- `criteria.md` exists;
-- every checkbox in `criteria.md` is checked;
-- `feedback.md` records acceptance.
-
-Return `needs_rework` if any required condition is not satisfied.
+{% include "review_contract.md" %}

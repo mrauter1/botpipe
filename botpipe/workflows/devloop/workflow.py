@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import json
-import re
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from botpipe import (
     FAIL,
@@ -27,6 +26,15 @@ from botpipe.extensions import SessionPaths
 
 from .conventions import DevLoopSessionPathStrategy, phase_dir_key
 from .runtime_artifacts import DevLoopRuntimeArtifacts
+from .reviews import (
+    PhaseCriterion,
+    ReviewReport,
+    ReviewRequest,
+    StrictModel,
+    begin_review,
+    finish_review,
+    review_issues,
+)
 
 
 PHASE_PLAN_VERSION = 1
@@ -66,16 +74,6 @@ FOLLOWUP_STATUS_SKIPPED = "skipped"
 FOLLOWUP_STATUS_FAILED = "failed"
 
 _INACTIVE_PHASE_DIR_KEY = "_inactive"
-_CHECKBOX_RE = re.compile(r"(?m)^\s*[-*]\s+\[(?P<mark>[ xX])\](?:\s|$)")
-
-
-class StrictModel(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-
-class PhaseCriterion(StrictModel):
-    id: str
-    text: str
 
 
 class PhaseScope(StrictModel):
@@ -174,7 +172,7 @@ def _validate_plan_completion(ctx) -> ValidationResult:
         phases = []
         issues.append(str(exc))
 
-    issues.extend(_checklist_issues(ctx.artifacts.plan_criteria, "plan criteria"))
+    issues.extend(review_issues(ctx, "plan"))
 
     if issues:
         return _invalid("Plan completion gate failed.", issues)
@@ -188,14 +186,14 @@ def _validate_plan_completion(ctx) -> ValidationResult:
 
 
 def _validate_implement_completion(ctx) -> ValidationResult:
-    issues = _checklist_issues(ctx.artifacts.impl_criteria, "implementation criteria")
+    issues = review_issues(ctx, "implement")
     if issues:
         return _invalid("Implementation completion gate failed.", issues)
     return ValidationResult.valid()
 
 
 def _validate_test_completion(ctx) -> ValidationResult:
-    issues = _checklist_issues(ctx.artifacts.test_criteria, "test criteria")
+    issues = review_issues(ctx, "test")
     if issues:
         return _invalid("Test completion gate failed.", issues)
     return ValidationResult.valid()
@@ -236,7 +234,7 @@ def _validate_phase_item_review(ctx) -> ValidationResult:
         issues.append(str(exc))
 
     issues.extend(_non_empty_artifact_issues(ctx.artifacts.phase_item_review, "phase item review"))
-    issues.extend(_checklist_issues(ctx.artifacts.phase_item_review_criteria, "phase item review criteria"))
+    issues.extend(review_issues(ctx, "review_phase_item"))
 
     if issues:
         return _invalid("Phase item review gate failed.", issues)
@@ -266,7 +264,7 @@ def _validate_audit_completion(ctx) -> ValidationResult:
         issues.append(str(exc))
 
     issues.extend(_non_empty_artifact_issues(ctx.artifacts.gap_report, "gap report"))
-    issues.extend(_checklist_issues(ctx.artifacts.audit_criteria, "audit criteria"))
+    issues.extend(review_issues(ctx, "audit"))
 
     if audit_result is not None and audit_result.status == AUDIT_STATUS_NEEDS_FOLLOWUP:
         issues.extend(_non_empty_artifact_issues(ctx.artifacts.revised_request, "revised request"))
@@ -297,6 +295,7 @@ class DevLoop(Workflow):
         phase: Phase | None = None
         phase_dir_key: str = _INACTIVE_PHASE_DIR_KEY
         audit_status: str | None = None
+        review: ReviewRequest | None = None
 
     plan_session = Session(open=True)
     phase_session = Session()
@@ -313,13 +312,10 @@ class DevLoop(Workflow):
         schema=PhasePlanDocument,
         name="phase_plan",
     )
-    plan_criteria = Artifact.md(
-        "{{ task.folder }}/plan/criteria.md",
-        name="plan_criteria",
-    )
-    plan_feedback = Artifact.md(
-        "{{ task.folder }}/plan/feedback.md",
-        name="plan_feedback",
+    plan_review = Artifact.json(
+        "{{ task.folder }}/plan/review.json",
+        schema=ReviewReport,
+        name="plan_review",
     )
     plan_gate_feedback = Artifact.md(
         "{{ task.folder }}/plan/completion_gate_feedback.md",
@@ -329,13 +325,10 @@ class DevLoop(Workflow):
         "{{ task.folder }}/plan/phases/{{ state.phase_dir_key }}/item_review.md",
         name="phase_item_review",
     )
-    phase_item_review_criteria = Artifact.md(
-        "{{ task.folder }}/plan/phases/{{ state.phase_dir_key }}/item_review_criteria.md",
-        name="phase_item_review_criteria",
-    )
-    phase_item_review_feedback = Artifact.md(
-        "{{ task.folder }}/plan/phases/{{ state.phase_dir_key }}/item_review_feedback.md",
-        name="phase_item_review_feedback",
+    phase_item_review_report = Artifact.json(
+        "{{ task.folder }}/plan/phases/{{ state.phase_dir_key }}/item_review.json",
+        schema=ReviewReport,
+        name="phase_item_review_report",
     )
     phase_item_review_gate_feedback = Artifact.md(
         "{{ task.folder }}/plan/phases/{{ state.phase_dir_key }}/item_review_gate_feedback.md",
@@ -346,13 +339,10 @@ class DevLoop(Workflow):
         "{{ task.folder }}/implement/phases/{{ state.phase_dir_key }}/implementation_notes.md",
         name="impl_notes",
     )
-    impl_criteria = Artifact.md(
-        "{{ task.folder }}/implement/phases/{{ state.phase_dir_key }}/criteria.md",
-        name="impl_criteria",
-    )
-    impl_feedback = Artifact.md(
-        "{{ task.folder }}/implement/phases/{{ state.phase_dir_key }}/feedback.md",
-        name="impl_feedback",
+    impl_review = Artifact.json(
+        "{{ task.folder }}/implement/phases/{{ state.phase_dir_key }}/review.json",
+        schema=ReviewReport,
+        name="impl_review",
     )
     impl_gate_feedback = Artifact.md(
         "{{ task.folder }}/implement/phases/{{ state.phase_dir_key }}/completion_gate_feedback.md",
@@ -363,13 +353,10 @@ class DevLoop(Workflow):
         "{{ task.folder }}/test/phases/{{ state.phase_dir_key }}/test_strategy.md",
         name="test_strat",
     )
-    test_criteria = Artifact.md(
-        "{{ task.folder }}/test/phases/{{ state.phase_dir_key }}/criteria.md",
-        name="test_criteria",
-    )
-    test_feedback = Artifact.md(
-        "{{ task.folder }}/test/phases/{{ state.phase_dir_key }}/feedback.md",
-        name="test_feedback",
+    test_review = Artifact.json(
+        "{{ task.folder }}/test/phases/{{ state.phase_dir_key }}/review.json",
+        schema=ReviewReport,
+        name="test_review",
     )
     test_gate_feedback = Artifact.md(
         "{{ task.folder }}/test/phases/{{ state.phase_dir_key }}/completion_gate_feedback.md",
@@ -393,13 +380,10 @@ class DevLoop(Workflow):
         "{{ task.folder }}/audit/revised_request.md",
         name="revised_request",
     )
-    audit_criteria = Artifact.md(
-        "{{ task.folder }}/audit/criteria.md",
-        name="audit_criteria",
-    )
-    audit_feedback = Artifact.md(
-        "{{ task.folder }}/audit/feedback.md",
-        name="audit_feedback",
+    audit_review = Artifact.json(
+        "{{ task.folder }}/audit/review.json",
+        schema=ReviewReport,
+        name="audit_review",
     )
     audit_gate_feedback = Artifact.md(
         "{{ task.folder }}/audit/completion_gate_feedback.md",
@@ -413,20 +397,24 @@ class DevLoop(Workflow):
 
     plan = produce_verify_step(
         producer_prompt=Prompt.file("prompts/plan_producer.md"),
+        before_verifier=begin_review,
+        after_verifier=finish_review,
         verifier_prompt=Prompt.file("prompts/plan_verifier.md"),
         session=plan_session,
         requires=[request],
-        reads=[plan_feedback, plan_gate_feedback],
+        reads=[plan_review, plan_gate_feedback],
         producer_writes=[phase_plan],
-        verifier_writes=[plan_criteria, plan_feedback],
+        verifier_writes=[plan_review],
         routes={
+            "blocked": Route.blocked(),
+            "review_invalid": Route.hidden("validate_plan_completion", required_writes=()),
             "plan_ready": Route.to(
                 "validate_plan_completion",
-                required_writes=("phase_plan", "plan_criteria"),
+                required_writes=("phase_plan", "plan_review"),
             ),
             "needs_rework": Route.to(
                 "plan",
-                required_writes=("plan_criteria", "plan_feedback"),
+                required_writes=("plan_review",),
             ),
         },
     )
@@ -435,7 +423,7 @@ class DevLoop(Workflow):
         _validate_plan_completion,
         name="validate_plan_completion",
         feedback=plan_gate_feedback,
-        reads=[phase_plan, plan_criteria],
+        reads=[phase_plan, plan_review],
         routes={
             "plan_checked": "activate_next_phase",
             "plan_needs_repair": "plan",
@@ -446,64 +434,71 @@ class DevLoop(Workflow):
 
     implement = produce_verify_step(
         producer_prompt=Prompt.file("prompts/implement_producer.md"),
+        before_verifier=begin_review,
+        after_verifier=finish_review,
         verifier_prompt=Prompt.file("prompts/implement_verifier.md"),
         session=phase_session,
         requires=[phase_plan],
         reads=[
-            impl_feedback,
+            impl_review,
             impl_gate_feedback,
-            test_feedback,
+            test_review,
             test_gate_feedback,
             phase_item_review,
-            phase_item_review_feedback,
+            phase_item_review_report,
             phase_item_review_gate_feedback,
         ],
         producer_writes=[impl_notes],
-        verifier_writes=[impl_criteria, impl_feedback],
+        verifier_writes=[impl_review],
         routes={
+            "blocked": Route.blocked(),
+            "review_invalid": Route.hidden("validate_implement_completion", required_writes=()),
             "implemented": Route.to(
                 "validate_implement_completion",
-                required_writes=("impl_notes", "impl_criteria"),
+                required_writes=("impl_notes", "impl_review"),
             ),
             "needs_rework": Route.to(
                 "implement",
-                required_writes=("impl_criteria", "impl_feedback"),
+                required_writes=("impl_review",),
             ),
             "needs_phase_item_review": Route.to(
                 "review_phase_item",
-                required_writes=("impl_criteria", "impl_feedback"),
+                required_writes=("impl_review",),
             ),
         },
     )
 
     review_phase_item = produce_verify_step(
         producer_prompt=Prompt.file("prompts/phase_item_review_producer.md"),
+        before_verifier=begin_review,
+        after_verifier=finish_review,
         verifier_prompt=Prompt.file("prompts/phase_item_review_verifier.md"),
         session=phase_session,
         requires=[phase_plan],
         reads=[
-            impl_feedback,
+            impl_review,
             impl_gate_feedback,
-            test_feedback,
+            test_review,
             test_gate_feedback,
-            phase_item_review_feedback,
+            phase_item_review_report,
             phase_item_review_gate_feedback,
         ],
         producer_writes=[phase_plan, phase_item_review],
-        verifier_writes=[phase_item_review_criteria, phase_item_review_feedback],
+        verifier_writes=[phase_item_review_report],
         routes={
+            "blocked": Route.blocked(),
+            "review_invalid": Route.hidden("validate_phase_item_review", required_writes=()),
             "phase_item_reviewed": Route.to(
                 "validate_phase_item_review",
                 required_writes=(
                     "phase_plan",
                     "phase_item_review",
-                    "phase_item_review_criteria",
-                    "phase_item_review_feedback",
+                    "phase_item_review_report",
                 ),
             ),
             "needs_rework": Route.to(
                 "review_phase_item",
-                required_writes=("phase_item_review_criteria", "phase_item_review_feedback"),
+                required_writes=("phase_item_review_report",),
             ),
         },
     )
@@ -512,7 +507,7 @@ class DevLoop(Workflow):
         _validate_phase_item_review,
         name="validate_phase_item_review",
         feedback=phase_item_review_gate_feedback,
-        reads=[phase_plan, phase_item_review, phase_item_review_criteria],
+        reads=[phase_plan, phase_item_review, phase_item_review_report],
         routes={
             "phase_item_review_checked": "implement",
             "phase_item_review_needs_repair": "review_phase_item",
@@ -525,7 +520,7 @@ class DevLoop(Workflow):
         _validate_implement_completion,
         name="validate_implement_completion",
         feedback=impl_gate_feedback,
-        reads=[impl_criteria],
+        reads=[impl_review],
         routes={
             "implement_checked": "maybe_test",
             "implement_needs_repair": "implement",
@@ -536,11 +531,11 @@ class DevLoop(Workflow):
 
     @python_step(
         name="maybe_test",
-        reads=[phase_plan, impl_notes],
-        writes=[test_strat, test_criteria, test_feedback],
+        reads=[phase_plan, impl_notes, test_review],
+        writes=[test_strat],
         routes={
             "run_tests": "test",
-            "tests_skipped": "validate_test_completion",
+            "tests_skipped": "activate_next_phase",
         },
     )
     def maybe_test(ctx):
@@ -569,50 +564,31 @@ class DevLoop(Workflow):
                 )
             )
         )
-        ctx.artifacts.test_criteria.write_text(
-            "\n".join(
-                (
-                    f"# Test Criteria: {phase_id}",
-                    "",
-                    "- [x] Test phase was intentionally skipped by workflow parameter `skip_test_phase=true`.",
-                    "- [x] Implementation completion gate passed before the skipped-test marker was written.",
-                    "",
-                )
-            )
-        )
-        ctx.artifacts.test_feedback.write_text(
-            "\n".join(
-                (
-                    f"# Test Feedback: {phase_id}",
-                    "",
-                    "## Decision",
-                    "Skipped",
-                    "",
-                    "## Findings",
-                    "- The test phase was intentionally skipped by workflow parameter `skip_test_phase=true`.",
-                    "- This is reduced validation, not a passing test result.",
-                    "",
-                )
-            )
-        )
+        # A previous run may have tested this task-scoped path. A skip must
+        # leave no passing review that a later audit could mistake for this run.
+        ctx.artifacts.test_review.path.unlink(missing_ok=True)
         return "tests_skipped"
 
     test = produce_verify_step(
         producer_prompt=Prompt.file("prompts/test_producer.md"),
+        before_verifier=begin_review,
+        after_verifier=finish_review,
         verifier_prompt=Prompt.file("prompts/test_verifier.md"),
         session=phase_session,
         requires=[phase_plan, impl_notes],
-        reads=[test_feedback, test_gate_feedback],
+        reads=[test_review, test_gate_feedback],
         producer_writes=[test_strat],
-        verifier_writes=[test_criteria, test_feedback],
+        verifier_writes=[test_review],
         routes={
+            "blocked": Route.blocked(),
+            "review_invalid": Route.hidden("validate_test_completion", required_writes=()),
             "phase_passed": Route.to(
                 "validate_test_completion",
-                required_writes=("test_strat", "test_criteria"),
+                required_writes=("test_strat", "test_review"),
             ),
             "needs_rework": Route.to(
                 "implement",
-                required_writes=("test_criteria", "test_feedback"),
+                required_writes=("test_review",),
             ),
         },
     )
@@ -621,7 +597,7 @@ class DevLoop(Workflow):
         _validate_test_completion,
         name="validate_test_completion",
         feedback=test_gate_feedback,
-        reads=[test_criteria],
+        reads=[test_review],
         routes={
             "test_checked": "activate_next_phase",
             "test_needs_repair": "test",
@@ -632,23 +608,26 @@ class DevLoop(Workflow):
 
     audit = produce_verify_step(
         producer_prompt=Prompt.file("prompts/audit_producer.md"),
+        before_verifier=begin_review,
+        after_verifier=finish_review,
         verifier_prompt=Prompt.file("prompts/audit_verifier.md"),
         session=audit_session,
         requires=[phase_plan, audit_evidence],
-        reads=[audit_feedback, audit_gate_feedback],
+        reads=[audit_review, audit_gate_feedback],
         producer_writes=[audit_result, gap_report, revised_request],
-        verifier_writes=[audit_criteria, audit_feedback],
+        verifier_writes=[audit_review],
         routes={
+            "blocked": Route.blocked(),
+            "review_invalid": Route.hidden("validate_audit_completion", required_writes=()),
             "audit_ready": Route.to(
                 "validate_audit_completion",
                 required_writes=(
                     "audit_result",
                     "gap_report",
-                    "audit_criteria",
-                    "audit_feedback",
+                    "audit_review",
                 ),
             ),
-            "audit_needs_repair": "audit",
+            "audit_needs_repair": Route.to("audit", required_writes=("audit_review",)),
         },
     )
 
@@ -656,7 +635,7 @@ class DevLoop(Workflow):
         _validate_audit_completion,
         name="validate_audit_completion",
         feedback=audit_gate_feedback,
-        reads=[audit_result, gap_report, revised_request, audit_criteria],
+        reads=[audit_result, gap_report, revised_request, audit_review],
         routes={
             "audit_checked": "finish_audit",
             "audit_needs_repair": "audit",
@@ -1120,32 +1099,6 @@ def _parse_audit_result_payload(raw: str) -> Mapping[str, Any]:
     return payload
 
 
-def _checklist_issues(artifact, label: str) -> list[str]:
-    if not artifact.exists():
-        return [f"{label} checklist is missing: {artifact.path}"]
-
-    try:
-        text = artifact.read_text()
-    except OSError as exc:
-        return [f"{label} checklist could not be read: {artifact.path}: {exc}"]
-
-    if not text.strip():
-        return [f"{label} checklist is empty: {artifact.path}"]
-
-    marks = [match.group("mark") for match in _CHECKBOX_RE.finditer(text)]
-    if not marks:
-        return [f"{label} checklist must contain at least one markdown checkbox"]
-
-    unchecked_count = sum(1 for mark in marks if mark == " ")
-    if unchecked_count:
-        return [
-            f"{label} checklist has {unchecked_count} unchecked item(s); "
-            "all completion criteria must be checked before this route can continue"
-        ]
-
-    return []
-
-
 def _non_empty_artifact_issues(artifact, label: str) -> list[str]:
     if not artifact.exists():
         return [f"{label} is missing: {artifact.path}"]
@@ -1269,13 +1222,8 @@ def _build_audit_evidence(ctx) -> str:
         )
         _append_file_section(
             lines,
-            impl_dir / "criteria.md",
-            f"Implementation criteria for {phase.id}",
-        )
-        _append_file_section(
-            lines,
-            impl_dir / "feedback.md",
-            f"Implementation feedback for {phase.id}",
+            impl_dir / "review.json",
+            f"Implementation review for {phase.id}",
         )
         _append_file_section(
             lines,
@@ -1289,13 +1237,8 @@ def _build_audit_evidence(ctx) -> str:
         )
         _append_file_section(
             lines,
-            test_dir / "criteria.md",
-            f"Test criteria for {phase.id}",
-        )
-        _append_file_section(
-            lines,
-            test_dir / "feedback.md",
-            f"Test feedback for {phase.id}",
+            test_dir / "review.json",
+            f"Test review for {phase.id}",
         )
         _append_file_section(
             lines,

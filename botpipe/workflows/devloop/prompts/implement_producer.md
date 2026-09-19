@@ -100,10 +100,10 @@ Implementation notes to write:
 {{ task.folder }}/implement/phases/{{ state.phase.dir_key }}/implementation_notes.md
 ```
 
-Implementation verifier feedback, if present:
+Implementation review report, if present:
 
 ```text
-{{ task.folder }}/implement/phases/{{ state.phase.dir_key }}/feedback.md
+{{ task.folder }}/implement/phases/{{ state.phase.dir_key }}/review.json
 ```
 
 Implementation completion-gate feedback, if present:
@@ -112,10 +112,10 @@ Implementation completion-gate feedback, if present:
 {{ task.folder }}/implement/phases/{{ state.phase.dir_key }}/completion_gate_feedback.md
 ```
 
-Test verifier feedback, if present:
+Test review report, if present:
 
 ```text
-{{ task.folder }}/test/phases/{{ state.phase.dir_key }}/feedback.md
+{{ task.folder }}/test/phases/{{ state.phase.dir_key }}/review.json
 ```
 
 Test completion-gate feedback, if present:
@@ -130,27 +130,33 @@ Phase item review, if present:
 {{ task.folder }}/plan/phases/{{ state.phase.dir_key }}/item_review.md
 ```
 
-Phase item review feedback, if present:
+Phase item review report, if present:
 
 ```text
-{{ task.folder }}/plan/phases/{{ state.phase.dir_key }}/item_review_feedback.md
+{{ task.folder }}/plan/phases/{{ state.phase.dir_key }}/item_review.json
+```
+
+Phase item review completion-gate feedback, if present:
+
+```text
+{{ task.folder }}/plan/phases/{{ state.phase.dir_key }}/item_review_gate_feedback.md
 ```
 
 ## Required actions
 
 Implement the active phase completely and correctly.
 
-If implementation feedback or completion-gate feedback exists, read it first and address every issue before rewriting implementation notes.
+If an implementation review report or completion-gate feedback exists, read it first and address every failed or blocked criterion, finding, or contract diagnostic before rewriting implementation notes.
 
-If test feedback exists and rejects the phase, address that feedback before unrelated changes.
+If a test review report rejects or blocks the phase, address its evidence and reasons before unrelated changes.
 
-If a phase item review exists, treat the reviewed active phase as authoritative and implement that item.
+If a phase item review exists, treat the reviewed active phase as authoritative. Read its review report and gate diagnostics when present before implementing that item.
 
 You may modify repository code, tests, docs, configuration, or fixtures when needed for the active phase.
 
 Stay within the active phase scope. Do not intentionally perform work from later phases unless it is an unavoidable prerequisite for this phase and you document it.
 
-Do not modify verifier-owned criteria or feedback files.
+Do not modify verifier-owned review reports or completion-gate diagnostics.
 
 Do not manually update phase status in `phase_plan.json`; the workflow updates phase status.
 

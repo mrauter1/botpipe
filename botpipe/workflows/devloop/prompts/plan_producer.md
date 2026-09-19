@@ -28,10 +28,10 @@ Plan artifact to write:
 {{ task.folder }}/plan/phase_plan.json
 ```
 
-Existing plan feedback, if present:
+Existing plan review report, if present:
 
 ```text
-{{ task.folder }}/plan/feedback.md
+{{ task.folder }}/plan/review.json
 ```
 
 Existing deterministic completion-gate feedback, if present:
@@ -44,7 +44,7 @@ Existing deterministic completion-gate feedback, if present:
 
 Inspect the request and repository enough to produce a complete, ordered, implementation-ready phase plan.
 
-If feedback files exist, read them first and address every issue. Do not re-emit a prior rejected plan unchanged.
+If a prior review report or completion-gate feedback exists, read it first and address every failed or blocked criterion, finding, or contract diagnostic. Do not re-emit a prior rejected plan unchanged.
 
 ## Required output
 
