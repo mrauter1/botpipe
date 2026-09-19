@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Callable, Mapping
 from uuid import uuid4
 
+from botpipe.core.errors import WorkflowExecutionError
 from botpipe.core.mappings import normalize_mapping
 from botpipe.core.schema_registry import (
     CHILD_RUN_SUMMARY_SCHEMA,
@@ -1252,6 +1253,29 @@ def _workflow_origin_payload(
         "workflow_module": workflow_module,
     }
     return payload
+
+
+def _load_run_metadata_file(path: Path, *, artifact_name: str | None = None) -> dict[str, Any]:
+    """Read existing run metadata without hiding malformed or missing files."""
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise WorkflowExecutionError(f"{path} must contain a JSON object")
+    validate_persisted_schema(
+        payload,
+        expected=RUN_METADATA_SCHEMA,
+        artifact_name=str(path) if artifact_name is None else artifact_name,
+        legacy_migrator=lambda value: migrate_schemaless_payload(value, expected=RUN_METADATA_SCHEMA),
+    )
+    return payload
+
+
+def _merge_run_metadata(run_workspace: RunWorkspace, metadata: Mapping[str, Any]) -> None:
+    """Merge explicit fields using atomic file replacement, preserving unrelated fields."""
+    if not metadata:
+        return
+    payload = _load_run_metadata_file(run_workspace.run_meta_file)
+    payload.update(metadata)
+    _write_json(run_workspace.run_meta_file, payload)
 
 
 def _update_run_metadata_file(run_dir: Path, mutator: Callable[[dict[str, Any]], None]) -> None:

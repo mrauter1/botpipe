@@ -310,7 +310,9 @@ class WorkflowResult:
             state=execution.result.state,
             output=execution.result.output,
             output_validation_error=execution.result.output_validation_error,
-            artifacts=ArtifactMap(_sdk_result_artifacts(execution, message=message)),
+            artifacts=_result_artifact_map_from_declared_writes(
+                _collect_declared_write_artifacts(execution, message=message)
+            ),
             history=tuple(execution.result.history),
             last_event=execution.result.last_event,
             last_outcome=execution.result.last_outcome,
@@ -2092,30 +2094,6 @@ def _sdk_debug_info(execution: RunExecution) -> SDKDebugInfo:
     )
 
 
-def _sdk_result_artifacts(
-    execution: RunExecution,
-    *,
-    message: str | None,
-) -> dict[str, ResultArtifact]:
-    context = _sdk_artifact_context(execution, message=message)
-    artifacts: dict[str, ResultArtifact] = {}
-    for name, artifact in execution.compiled.artifact_items(authoritative=False):
-        if not _sdk_artifact_root_resolvable(execution, artifact):
-            continue
-        path = _resolve_sdk_artifact_path(artifact, context)
-        artifacts[name] = ResultArtifact(
-            name=name,
-            path=path,
-            kind=artifact.kind,
-            schema=artifact.schema,
-            source_path=path,
-            promoted=False,
-            required=artifact.required,
-            qualified_name=artifact.qualified_name,
-        )
-    return artifacts
-
-
 def _sdk_artifact_root_resolvable(execution: RunExecution, artifact: ArtifactSpec) -> bool:
     requirements = execution.compiled.reference_graph.artifact_template_requirements.get(artifact.qualified_name)
     if requirements is None:
@@ -2130,10 +2108,6 @@ def _sdk_tasks_root(root: Path, state_dir: Path) -> Path:
 
 def _sdk_readable_tasks_roots(root: Path, state_dir: Path) -> tuple[Path, ...]:
     return (_sdk_tasks_root(root, state_dir.resolve()),)
-
-
-def _sdk_artifact_context(execution: RunExecution, *, message: str | None) -> Any:
-    return _runtime_equivalent_artifact_context(execution, message=message)
 
 
 def _runtime_equivalent_artifact_context(execution: RunExecution, *, message: str | None) -> Any:

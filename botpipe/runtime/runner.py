@@ -25,7 +25,7 @@ from botpipe.core.mappings import normalize_mapping
 from botpipe.core.primitives import AWAIT_INPUT, FINISH
 from botpipe.core.providers.models import RuntimeInteractionPolicy
 from botpipe.core.providers.protocols import LLMProvider
-from botpipe.core.schema_registry import RUN_METADATA_SCHEMA, WORKFLOW_TOPOLOGY_SCHEMA, migrate_schemaless_payload, validate_persisted_schema
+from botpipe.core.schema_registry import WORKFLOW_TOPOLOGY_SCHEMA, migrate_schemaless_payload, validate_persisted_schema
 from botpipe.core.statuses import terminal_to_run_status
 from botpipe.extensions.session_paths import extract_session_path_strategy
 from .config import (
@@ -75,6 +75,8 @@ from .workspace import (
     ensure_workspace,
     ensure_workflow_workspace,
     latest_run_id,
+    _load_run_metadata_file,
+    _merge_run_metadata,
     next_observability_sequence,
     resolve_run_record,
     resolve_run_workspace,
@@ -441,7 +443,7 @@ def _execute_compiled_workflow(
         )
         _ensure_default_session_binding(prepared)
         child_metadata = _typed_output_metadata(execution_result=result, compiled=prepared.compiled)
-        _persist_child_runtime_metadata(prepared.run_workspace, child_metadata)
+        _merge_run_metadata(prepared.run_workspace, child_metadata)
         runtime_observability.commit_terminal(terminal=result.terminal)
         execution = RunExecution(
             result=result,
@@ -795,7 +797,7 @@ def _resolve_effective_sticky_overrides(options: RunnerOptions, run_workspace: R
 
 def _load_sticky_overrides(run_workspace: RunWorkspace) -> tuple[bool, dict[str, Any]]:
     try:
-        payload = _load_run_metadata_payload(run_workspace.run_meta_file)
+        payload = _load_run_metadata_file(run_workspace.run_meta_file)
     except (json.JSONDecodeError, OSError):
         return False, {}
     if "sticky_overrides" not in payload:
@@ -904,7 +906,7 @@ def _runtime_max_steps_from_sticky_overrides(sticky_overrides: Mapping[str, Any]
 
 def _latest_recorded_runtime_max_steps(run_workspace: RunWorkspace) -> int | None:
     try:
-        payload = _load_run_metadata_payload(run_workspace.run_meta_file)
+        payload = _load_run_metadata_file(run_workspace.run_meta_file)
     except (json.JSONDecodeError, OSError):
         return None
 
@@ -1011,7 +1013,7 @@ def _load_saved_run_topology_payload(run_workspace: RunWorkspace) -> dict[str, A
             raise WorkflowExecutionError(f"{topology_file} must contain a JSON object")
         return _validate_saved_run_topology_payload(payload, artifact_name=str(topology_file))
     if run_workspace.run_meta_file.is_file():
-        payload = _load_run_metadata_payload(run_workspace.run_meta_file)
+        payload = _load_run_metadata_file(run_workspace.run_meta_file)
         topology = payload.get("topology")
         if isinstance(topology, dict):
             return _validate_saved_run_topology_payload(
@@ -1064,7 +1066,7 @@ def _runtime_compiled_workflow(compiled: WorkflowPlan) -> tuple[WorkflowPlan, tu
 def _resume_git_tracking_warnings(run_workspace: RunWorkspace, options: RunnerOptions) -> tuple[dict[str, str], ...]:
     if not options.resume or not run_workspace.run_meta_file.exists():
         return ()
-    payload = _load_run_metadata_payload(run_workspace.run_meta_file)
+    payload = _load_run_metadata_file(run_workspace.run_meta_file)
     git_tracking = payload.get("git_tracking")
     if not isinstance(git_tracking, dict):
         return ()
@@ -1413,19 +1415,10 @@ def _typed_output_metadata(
     return metadata
 
 
-def _persist_child_runtime_metadata(run_workspace: RunWorkspace, metadata: dict[str, Any]) -> None:
-    if not metadata:
-        return
-    payload = _load_run_metadata_payload(run_workspace.run_meta_file)
-    payload.setdefault("schema", RUN_METADATA_SCHEMA)
-    payload.update(metadata)
-    run_workspace.run_meta_file.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-
-
 def _load_child_runtime_metadata(run_workspace: RunWorkspace) -> dict[str, Any]:
     if not run_workspace.run_meta_file.exists():
         return {}
-    payload = _load_run_metadata_payload(run_workspace.run_meta_file)
+    payload = _load_run_metadata_file(run_workspace.run_meta_file)
     metadata: dict[str, Any] = {}
     typed_output = payload.get("typed_output")
     if isinstance(typed_output, dict):
@@ -1437,19 +1430,6 @@ def _load_child_runtime_metadata(run_workspace: RunWorkspace) -> dict[str, Any]:
     if isinstance(pending_input, dict):
         metadata["pending_input"] = dict(pending_input)
     return metadata
-
-
-def _load_run_metadata_payload(path: Path) -> dict[str, Any]:
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        raise WorkflowExecutionError(f"{path} must contain a JSON object")
-    validate_persisted_schema(
-        payload,
-        expected=RUN_METADATA_SCHEMA,
-        artifact_name=str(path),
-        legacy_migrator=lambda value: migrate_schemaless_payload(value, expected=RUN_METADATA_SCHEMA),
-    )
-    return payload
 
 
 def _json_safe_output_value(output: Any | None) -> Any | None:

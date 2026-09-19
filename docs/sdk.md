@@ -477,6 +477,11 @@ Retention modes:
 - `RetentionPolicy.ephemeral()`: delete all SDK-managed task scratch and omit
   task-local declared writes from the result artifact map; workspace writes stay.
 
+Task-local branch/worklist outputs that are omitted from the root artifact map
+are not currently promoted by default retention. Use `RetentionPolicy.keep_all()`
+when those outputs must remain available in their runtime locations. Sharing the
+result and retention collector does not resolve this scoped-output limitation.
+
 `result.retention` records:
 
 - `policy`

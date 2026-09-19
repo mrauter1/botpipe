@@ -218,9 +218,9 @@ def _render_branch_detail(branch: BranchResult) -> list[str]:
             )
     else:
         lines.append("- Artifacts: (none)")
-    if isinstance(branch.error, Mapping):
+    if branch.error is not None:
         lines.append("- Error summary:")
-        lines.append("  - " + (branch_error_summary(branch) or "(no error summary)"))
+        lines.append("  - " + (_branch_error_summary(branch) or "(no error summary)"))
     else:
         lines.append("- Error summary: (none)")
     return lines
@@ -252,7 +252,7 @@ def _render_list_or_none(
 
 
 def _render_failed_branch_summary(branch: BranchResult) -> list[str]:
-    return [f"- {branch.name}: {branch_error_summary(branch) or branch.reason or '(no error summary)'}"]
+    return [f"- {branch.name}: {_branch_error_summary(branch) or branch.reason or '(no error summary)'}"]
 
 
 def _render_needs_input_branch_summary(branch: BranchResult) -> list[str]:
@@ -271,9 +271,9 @@ def _status_counts(branches: list[BranchResult]) -> dict[str, int]:
     return counts
 
 
-def branch_error_summary(branch: BranchResult | Mapping[str, Any]) -> str | None:
-    error = branch.error if isinstance(branch, BranchResult) else branch.get("error")
-    if not isinstance(error, Mapping):
+def _branch_error_summary(branch: BranchResult) -> str | None:
+    error = branch.error
+    if error is None:
         return None
     error_type = error.get("type", "Error")
     message = error.get("message", "") or "(no message)"

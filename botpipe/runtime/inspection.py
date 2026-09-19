@@ -8,7 +8,6 @@ from typing import Any
 
 from botpipe.core.history import HistoryReader
 from botpipe.core.schema_registry import (
-    RUN_METADATA_SCHEMA,
     WORKFLOW_TOPOLOGY_SCHEMA,
     migrate_schemaless_payload,
     validate_persisted_schema,
@@ -28,6 +27,7 @@ from .loader import ResolvedWorkflow, resolve_workflow_package, resolve_workflow
 from .static_graph import TOPOLOGY_FILENAME
 from .workspace import (
     RunRecord,
+    _load_run_metadata_file,
     list_run_records,
     list_task_operation_summaries,
     list_workflow_run_summaries,
@@ -74,14 +74,7 @@ def load_run_topology(run: RunRecord | str | Path) -> dict[str, Any]:
 
 def load_run_metadata(run: RunRecord | str | Path) -> dict[str, Any]:
     run_dir = _run_dir(run)
-    payload = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
-    validate_persisted_schema(
-        payload,
-        expected=RUN_METADATA_SCHEMA,
-        artifact_name="run.json",
-        legacy_migrator=lambda value: migrate_schemaless_payload(value, expected=RUN_METADATA_SCHEMA),
-    )
-    return payload
+    return _load_run_metadata_file(run_dir / "run.json", artifact_name="run.json")
 
 
 def load_run_history(run: RunRecord | str | Path) -> HistoryReader:
