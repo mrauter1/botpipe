@@ -15,7 +15,6 @@ TRACE_CORPUS_SCHEMA = "botpipe.code_to_workflow.trace_corpus/v1"
 PUBLICATION_RECEIPT_SCHEMA = "botpipe.code_to_workflow.publication_receipt/v1"
 
 _DEFAULT_EXCLUDED_DIRS = {
-    ".autoloop",
     ".botpipe",
     ".cache",
     ".git",
@@ -121,7 +120,6 @@ def collect_trace_corpus(root: Path, *, exclude_run_dir: Path | None = None) -> 
     workspace = root.resolve()
     excluded = exclude_run_dir.resolve() if exclude_run_dir is not None else None
     botpipe_runs = _collect_botpipe_runs(workspace, excluded)
-    legacy_runs = _collect_legacy_autoloop_runs(workspace)
     codex_rollouts = _collect_nested_codex_rollouts(workspace, excluded)
     return {
         "schema": TRACE_CORPUS_SCHEMA,
@@ -132,7 +130,6 @@ def collect_trace_corpus(root: Path, *, exclude_run_dir: Path | None = None) -> 
             "max_error_excerpts": _MAX_ERROR_EXCERPTS,
         },
         "botpipe_runs": botpipe_runs,
-        "legacy_autoloop_runs": legacy_runs,
         "codex_rollout_refs": codex_rollouts,
     }
 
@@ -306,27 +303,6 @@ def _collect_botpipe_runs(workspace: Path, excluded: Path | None) -> list[dict[s
                 "step_outcomes": step_outcomes[:_MAX_TRACE_EVENTS_PER_RUN],
                 "errors": _error_excerpts(trace_records),
                 "raw_output_refs": _raw_output_refs(trace_records),
-            }
-        )
-    return runs
-
-
-def _collect_legacy_autoloop_runs(workspace: Path) -> list[dict[str, Any]]:
-    runs_root = workspace / ".autoloop" / "tasks"
-    candidates = sorted(runs_root.glob("*/runs/*"), key=_mtime_sort_key, reverse=True)
-    runs: list[dict[str, Any]] = []
-    for run_dir in candidates[:_MAX_TRACE_RUNS]:
-        events = _read_jsonl_objects(run_dir / "events.jsonl", limit=_MAX_TRACE_EVENTS_PER_RUN)
-        if not events:
-            continue
-        event_counts = Counter(str(event.get("event") or event.get("type") or "unknown") for event in events)
-        runs.append(
-            {
-                "run_dir": _relative_or_absolute(run_dir, workspace),
-                "task_id": run_dir.parents[1].name if len(run_dir.parents) >= 2 else None,
-                "run_id": run_dir.name,
-                "event_counts": dict(sorted(event_counts.items())),
-                "errors": _error_excerpts(events),
             }
         )
     return runs

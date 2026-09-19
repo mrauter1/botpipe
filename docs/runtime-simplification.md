@@ -36,6 +36,21 @@ task-local branch/worklist outputs must survive; see [SDK retention](sdk.md#rete
 Cache identity, session protocols, provider-policy fixes, child continuation,
 phased checkpoints, and adaptive-goal changes are outside this change.
 
+## Retired project compatibility
+
+A separately authorized follow-up removes the former project's trace reader,
+its trace-corpus field, and its special source, packaging, and Git exclusions.
+The internal trace corpus now contains only Botpipe run summaries and nested
+Codex rollout references, alongside its schema, root, and limits. No repository
+consumer requires the removed field; the internal schema identifier is retained.
+Former runtime directories receive ordinary source-capture treatment if present.
+
+Both authoring-guide copies and the runtime fixtures reflect the supported
+inputs. After the original legacy-identity scanner passed against the cleaned
+source, that obsolete scanner and its helpers were deleted. The three canonical
+Botpipe identity checks remain, as do the SDK sentinel-writer tests. This support
+removal does not change the B1/A1/M1 compatibility guarantees above.
+
 ## Acceptance coverage
 
 Names below are pytest test functions, including all their parameterized cases.
@@ -97,20 +112,19 @@ run `python -m pytest -q` and `git diff --check`. In environments setting
 test assumption. Both packaging tests were exercised using an isolated editable
 installation and a local wheel cache; no packaging test was excluded or weakened.
 
-Baseline full suite: **1,450 passed, one failed**. The existing failure is
-`tests/strictness/test_botpipe_identity.py::test_active_python_sources_do_not_reintroduce_legacy_product_identity`,
-which finds legacy literals in `code_to_workflow` source and its tests. The
-existing fake-provider unawaited-coroutine warning is also unrelated. Neither
-the identity test nor legacy workflow behavior is modified here.
+Baseline full suite: **1,450 passed, one failed**. The original B1/A1/M1 candidate
+had **1,480 passed, the same one failed**. The failure came from the now-retired
+identity scanner rejecting deliberate legacy trace support.
 
-Final candidate full suite: **1,480 passed, the same one failed**, with no skips
-or exclusions. All 30 added test cases pass. Focused checks passed:
-43 branch, 83 SDK, 76 metadata, and both packaging tests; these counts overlap
-with the full suite. `git diff --check` passed. Independent implementation review
-found no blocking defect.
+After removing that support, all **12 focused tests passed**, including the
+unchanged scanner. After deleting the obsolete scanner, the final full suite
+passed: **1,480 passed, zero failures or skips**, including both packaging tests.
+All 30 B1/A1/M1 regression cases remain. The existing fake-provider
+unawaited-coroutine warning remains unrelated. A tracked-file scan found no
+remaining retired-product references. `git diff --check` passed, and independent
+review found no blocking defect.
 
 Validation used Python 3.12.14, pytest 9.1.1, Pydantic 2.13.5, Jinja2 3.1.6, and
-setuptools 84.0.0 for isolated builds. Follow the repository's release policy for
-the pre-existing failure; if a green gate is required, resolve that baseline
-separately before merging. Reverting this logical change restores the prior
-implementation against the same persisted schemas.
+setuptools 84.0.0 for isolated builds. Reverting only the compatibility-removal
+commit restores the retired support and its conflicting scanner; the original
+B1/A1/M1 simplifications are a separate commit.

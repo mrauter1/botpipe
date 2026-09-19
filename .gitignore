@@ -21,8 +21,6 @@ dist/
 *.egg-info/
 
 # Local runtime state
-.autoloop/
-.autoloop_recursive/
 .codex
 
 # Local env/config
