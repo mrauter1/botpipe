@@ -475,6 +475,9 @@ def test_sdk_run_handles_typed_input_pause_loop_and_debug_artifacts(tmp_path: Pa
         assert request.reason == "Need operator approval."
         assert request.best_supposition == '{"approved": true}'
         assert request.partial.status == "awaiting_input"
+        assert tuple(request.partial.artifacts) == ("snapshot",)
+        assert request.partial.artifacts.snapshot.path == request.partial.artifacts.snapshot.source_path
+        assert request.partial.artifacts.snapshot.promoted is False
         assert request.input_schema_model is not None
         return {"approved": True}
 
@@ -2096,19 +2099,26 @@ def test_sdk_step_default_retention_deletes_task_scratch_on_success(tmp_path: Pa
     assert result.artifacts.report.read_text() == "from-step"
 
 
-def test_sdk_run_retention_keep_all_and_ephemeral_modes(tmp_path: Path) -> None:
-    workspace_output = tmp_path / "workspace-output.txt"
+def test_sdk_run_retention_keep_all_ephemeral_and_keep_declared_writes_false(tmp_path: Path) -> None:
+    workspace_before_output = tmp_path / "workspace-before.txt"
+    workspace_after_output = tmp_path / "workspace-after.txt"
+    workspace_before_artifact = simple.Text("workspace_before", path=workspace_before_output)
     task_local_artifact = simple.Text("task_local", path="{{ task.folder }}/exports/report.txt")
-    workspace_artifact = simple.Text("workspace", path=workspace_output)
+    workspace_after_artifact = simple.Text("workspace_after", path=workspace_after_output)
 
     class RetentionWorkflow(simple.Workflow):
+        workspace_before = workspace_before_artifact
         task_local = task_local_artifact
-        workspace = workspace_artifact
+        workspace_after = workspace_after_artifact
 
-        @simple.python_step(writes=[task_local_artifact, workspace_artifact], routes={"done": FINISH})
+        @simple.python_step(
+            writes=[workspace_before_artifact, task_local_artifact, workspace_after_artifact],
+            routes={"done": FINISH},
+        )
         def emit(ctx):
+            ctx.artifacts.workspace_before.write_text("workspace-before")
             ctx.artifacts.task_local.write_text("task-local")
-            ctx.artifacts.workspace.write_text("workspace")
+            ctx.artifacts.workspace_after.write_text("workspace-after")
             return Event("done")
 
     keep_all_client = _sdk_client_at_root(tmp_path / "keep_all", ScriptedLLMProvider(), retention=RetentionPolicy.keep_all())
@@ -2126,8 +2136,22 @@ def test_sdk_run_retention_keep_all_and_ephemeral_modes(tmp_path: Path) -> None:
     assert ephemeral_result.retention is not None
     assert ephemeral_result.retention.task_scratch_deleted is True
     assert "task_local" not in ephemeral_result.artifacts
-    assert ephemeral_result.artifacts.workspace.path.exists()
+    assert tuple(ephemeral_result.artifacts) == ("workspace_before", "workspace_after")
+    assert ephemeral_result.artifacts.workspace_before.path.exists()
+    assert ephemeral_result.artifacts.workspace_after.path.exists()
     assert ephemeral_result.debug.task_dir.exists() is False
+
+    explicit_client = _sdk_client_at_root(
+        tmp_path / "explicit",
+        ScriptedLLMProvider(),
+        retention=RetentionPolicy(keep_declared_writes=False),
+    )
+    explicit_result = explicit_client.run(RetentionWorkflow, "Omit task-local writes explicitly.")
+
+    assert explicit_result.retention is not None
+    assert explicit_result.retention.policy.keep_declared_writes is False
+    assert tuple(explicit_result.artifacts) == ("workspace_before", "workspace_after")
+    assert explicit_result.debug.task_dir.exists() is False
 
 
 def test_sdk_run_custom_promoted_writes_dir_uniquifies_collisions(tmp_path: Path) -> None:
@@ -2172,6 +2196,70 @@ def test_sdk_run_retention_collects_declared_writes_with_runtime_param_context(t
     assert result.artifacts.report.path.name == "strict-strict.txt"
     assert result.artifacts.report.source_path is not None
     assert result.artifacts.report.source_path.name == "strict-strict.txt"
+
+
+def test_sdk_result_preserves_declared_order_and_missing_optional_metadata(tmp_path: Path) -> None:
+    required_report_spec = simple.Text("required_report", path="{{ task.folder }}/required.txt", required=True)
+    optional_note_spec = simple.Md("optional_note", path="{{ task.folder }}/optional.md")
+
+    class DeclaredMetadataWorkflow(simple.Workflow):
+        required_report = required_report_spec
+        optional_note = optional_note_spec
+
+        @simple.python_step(writes=[required_report_spec, optional_note_spec], routes={"done": FINISH})
+        def emit(ctx):
+            ctx.artifacts.required_report.write_text("required")
+            return Event("done")
+
+    result = _sdk_client_at_root(tmp_path, ScriptedLLMProvider()).run(
+        DeclaredMetadataWorkflow,
+        "Collect declared metadata.",
+    )
+
+    assert tuple(result.artifacts) == ("required_report", "optional_note")
+    assert result.artifacts.required_report.required is True
+    assert result.artifacts.required_report.qualified_name == "emit.required_report"
+    assert result.artifacts.required_report.promoted is True
+    assert result.artifacts.optional_note.kind == "markdown"
+    assert result.artifacts.optional_note.required is False
+    assert result.artifacts.optional_note.qualified_name == "emit.optional_note"
+    assert result.artifacts.optional_note.path == result.artifacts.optional_note.source_path
+    assert result.artifacts.optional_note.promoted is False
+    assert result.artifacts.optional_note.exists() is False
+
+
+def test_sdk_task_local_directory_retention_preserves_existing_modes(tmp_path: Path) -> None:
+    directory_spec = simple.Text("directory", path="{{ task.folder }}/directory")
+
+    class DirectoryWorkflow(simple.Workflow):
+        directory = directory_spec
+
+        @simple.python_step(writes=[directory_spec], routes={"done": FINISH})
+        def emit(ctx):
+            ctx.artifacts.directory.path.mkdir(parents=True)
+            return Event("done")
+
+    with pytest.raises(SDKExecutionError, match="points to a directory"):
+        _sdk_client_at_root(tmp_path / "default", ScriptedLLMProvider()).run(
+            DirectoryWorkflow,
+            "Promote the directory.",
+        )
+
+    kept = _sdk_client_at_root(
+        tmp_path / "keep_all",
+        ScriptedLLMProvider(),
+        retention=RetentionPolicy.keep_all(),
+    ).run(DirectoryWorkflow, "Keep the directory.")
+    assert kept.artifacts.directory.path.is_dir()
+    assert kept.artifacts.directory.promoted is False
+
+    skipped = _sdk_client_at_root(
+        tmp_path / "ephemeral",
+        ScriptedLLMProvider(),
+        retention=RetentionPolicy.ephemeral(),
+    ).run(DirectoryWorkflow, "Skip the directory.")
+    assert "directory" not in skipped.artifacts
+    assert skipped.debug.task_dir.exists() is False
 
 
 def test_sdk_run_too_many_pauses_keeps_task_scratch_by_default(tmp_path: Path) -> None:

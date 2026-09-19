@@ -11,10 +11,8 @@ from ..errors import WorkflowExecutionError
 from ..primitives import Event
 
 
-def branch_is_success(branch: BranchResult | Mapping[str, Any], *, success_routes: tuple[str, ...]) -> bool:
-    if isinstance(branch, BranchResult):
-        return branch.status == "completed" and branch.route in success_routes
-    return branch.get("status") == "completed" and branch.get("route") in success_routes
+def _branch_is_success(branch: BranchResult, *, success_routes: tuple[str, ...]) -> bool:
+    return branch.status == "completed" and branch.route in success_routes
 
 
 def select_branch_group_outcome(
@@ -42,7 +40,7 @@ def select_branch_group_outcome(
 
 def _all_done(spec: Any, manifest: BranchManifest) -> Event:
     branches = list(manifest.branches)
-    if all(branch_is_success(branch, success_routes=spec.success_routes) for branch in branches):
+    if all(_branch_is_success(branch, success_routes=spec.success_routes) for branch in branches):
         return Event("done")
     if _needs_input(branches):
         return Event("question", question=_question_summary(branches), reason="One or more branches need input.")
@@ -53,56 +51,41 @@ def _all_settled(spec: Any, manifest: BranchManifest) -> Event:
     branches = list(manifest.branches)
     if _needs_input(branches):
         return Event("question", question=_question_summary(branches), reason="One or more branches need input.")
-    if all(branch_is_success(branch, success_routes=spec.success_routes) for branch in branches):
+    if all(_branch_is_success(branch, success_routes=spec.success_routes) for branch in branches):
         return Event("done")
     return Event("partial", reason=_partial_reason(branches, success_routes=spec.success_routes))
 
 
 def _any_done(spec: Any, manifest: BranchManifest) -> Event:
     branches = list(manifest.branches)
-    if any(branch_is_success(branch, success_routes=spec.success_routes) for branch in branches):
+    if any(_branch_is_success(branch, success_routes=spec.success_routes) for branch in branches):
         return Event("done")
     if _needs_input(branches):
         return Event("question", question=_question_summary(branches), reason="No branch succeeded and input is required.")
     return Event("partial", reason=_partial_reason(branches, success_routes=spec.success_routes))
 
 
-def _needs_input(branches: list[BranchResult | Mapping[str, Any]]) -> bool:
-    for branch in branches:
-        if isinstance(branch, BranchResult):
-            if branch.status == "needs_input":
-                return True
-            continue
-        if branch.get("status") == "needs_input":
-            return True
-    return False
+def _needs_input(branches: list[BranchResult]) -> bool:
+    return any(branch.status == "needs_input" for branch in branches)
 
 
-def _question_summary(branches: list[BranchResult | Mapping[str, Any]]) -> str:
-    questions: list[str] = []
-    for branch in branches:
-        if isinstance(branch, BranchResult):
-            if branch.status == "needs_input":
-                questions.append(f"{branch.name}: {branch.question or branch.reason or 'Input required.'}")
-            continue
-        if branch.get("status") == "needs_input":
-            questions.append(f"{branch.get('name')}: {branch.get('question') or branch.get('reason') or 'Input required.'}")
-    return "\n".join(questions)
+def _question_summary(branches: list[BranchResult]) -> str:
+    return "\n".join(
+        f"{branch.name}: {branch.question or branch.reason or 'Input required.'}"
+        for branch in branches
+        if branch.status == "needs_input"
+    )
 
 
 def _partial_reason(
-    branches: list[BranchResult | Mapping[str, Any]],
+    branches: list[BranchResult],
     *,
     success_routes: tuple[str, ...],
 ) -> str:
     non_success = [
-        (
-            f"{branch.name}={branch.status}/{branch.route or branch.runtime_control or 'none'}"
-            if isinstance(branch, BranchResult)
-            else f"{branch.get('name')}={branch.get('status')}/{branch.get('route') or branch.get('runtime_control') or 'none'}"
-        )
+        f"{branch.name}={branch.status}/{branch.route or branch.runtime_control or 'none'}"
         for branch in branches
-        if not branch_is_success(branch, success_routes=success_routes)
+        if not _branch_is_success(branch, success_routes=success_routes)
     ]
     return "Branch group settled without full success: " + ", ".join(non_success)
 

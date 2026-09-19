@@ -120,7 +120,6 @@ When using traces, prefer run-local and repository-local evidence:
 - `.botpipe/tasks/**/runs/**/trace.jsonl`
 - `.botpipe/tasks/**/runs/**/run.json`
 - `.botpipe/tasks/**/runs/**/static_step_graph.json`
-- legacy `.autoloop/tasks/**/runs/**/events.jsonl`
 - Codex rollout files nested inside a selected Botpipe run's provider raw artifacts
 
 Do not read broad home-level Codex history by default. Normalize traces into bounded summaries before passing them to provider prompts: retain paths, event types, step names, outcomes, errors, usage, and short excerpts; avoid copying full raw transcripts unless the user explicitly requests it.
@@ -133,7 +132,7 @@ For a workflow that recreates a codebase as Botpipe behavior, make Codex own the
 2. `design_botpipe_recreation`: design params, state, artifacts, steps, prompts, routes, and equivalence checks.
 3. `build_and_validate`: write the generated runnable workflow, run validation, repair failures, and record evidence.
 
-Wrap these with deterministic bootstrap and publication steps. Design session boundaries explicitly: each independent stage must receive enough durable artifacts to reason correctly, while rework loops inside a shared stage can lean on session continuity to avoid repeated context dumps. Exclude generated output, `.botpipe/`, `.autoloop/`, virtualenvs, caches, `build/`, and `dist/` from source mutation manifests. Treat equivalence as externally observable behavior unless the user asks for source-level fidelity.
+Wrap these with deterministic bootstrap and publication steps. Design session boundaries explicitly: each independent stage must receive enough durable artifacts to reason correctly, while rework loops inside a shared stage can lean on session continuity to avoid repeated context dumps. Exclude generated output, `.botpipe/`, virtualenvs, caches, `build/`, and `dist/` from source mutation manifests. Treat equivalence as externally observable behavior unless the user asks for source-level fidelity.
 
 ## Before finishing
 

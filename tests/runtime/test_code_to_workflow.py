@@ -58,8 +58,8 @@ def test_source_manifest_excludes_runtime_generated_and_cache_paths(tmp_path: Pa
     (tmp_path / "app.py").write_text("print('hello')\n", encoding="utf-8")
     (tmp_path / ".botpipe" / "workflows" / "converted" / "flow.py").parent.mkdir(parents=True)
     (tmp_path / ".botpipe" / "workflows" / "converted" / "flow.py").write_text("# generated\n", encoding="utf-8")
-    (tmp_path / ".autoloop" / "tasks" / "task-1" / "runs" / "run-1").mkdir(parents=True)
-    (tmp_path / ".autoloop" / "tasks" / "task-1" / "runs" / "run-1" / "events.jsonl").write_text(
+    (tmp_path / ".botpipe" / "tasks" / "task-1").mkdir(parents=True)
+    (tmp_path / ".botpipe" / "tasks" / "task-1" / "trace.jsonl").write_text(
         "{}\n",
         encoding="utf-8",
     )
@@ -76,7 +76,7 @@ def test_source_manifest_excludes_runtime_generated_and_cache_paths(tmp_path: Pa
     assert manifest["skipped"]["excluded_path"] >= 2
 
 
-def test_trace_corpus_summarizes_botpipe_legacy_and_nested_codex_traces(tmp_path: Path) -> None:
+def test_trace_corpus_summarizes_botpipe_and_nested_codex_traces(tmp_path: Path) -> None:
     run_dir = tmp_path / ".botpipe" / "tasks" / "task-1" / "wf_demo" / "runs" / "run-1"
     raw_dir = run_dir / "raw" / "provider" / "codex" / "sessions" / "2026" / "05" / "25"
     raw_dir.mkdir(parents=True)
@@ -106,19 +106,12 @@ def test_trace_corpus_summarizes_botpipe_legacy_and_nested_codex_traces(tmp_path
         json.dumps({"type": "message", "text": "sample"}) + "\n",
         encoding="utf-8",
     )
-    legacy_dir = tmp_path / ".autoloop" / "tasks" / "legacy-task" / "runs" / "legacy-run"
-    legacy_dir.mkdir(parents=True)
-    (legacy_dir / "events.jsonl").write_text(
-        json.dumps({"event": "phase_failed", "error": "legacy failed"}) + "\n",
-        encoding="utf-8",
-    )
-
     corpus = collect_trace_corpus(tmp_path)
 
+    assert set(corpus) == {"schema", "root", "limits", "botpipe_runs", "codex_rollout_refs"}
     assert corpus["botpipe_runs"][0]["workflow_name"] == "demo"
     assert corpus["botpipe_runs"][0]["event_counts"] == {"step_finished": 1, "step_started": 1}
     assert corpus["botpipe_runs"][0]["errors"] == ["validation failed"]
-    assert corpus["legacy_autoloop_runs"][0]["event_counts"] == {"phase_failed": 1}
     assert corpus["codex_rollout_refs"][0]["path"].endswith("rollout-test.jsonl")
 
 

@@ -105,6 +105,17 @@ Everything is a route. The compiled route table is the only authority for provid
 
 Worklists are lazy runtime resources. The compiler validates the declared worklist contract, but the engine does not require the backing source to exist at workflow start. Selection materialization happens when the run first touches the worklist through scoped execution, prompt rendering, session continuity, or explicit context access.
 
+Branch outcome and rendering boundaries normalize dictionary manifests to the
+existing `BranchManifest`/`BranchResult` types. Internal policy helpers use those
+types; custom outcome callbacks still receive the serialized dictionary payload
+through the existing callable-signature adapter. `all_done`, `all_settled`, and
+`any_done` retain their distinct policy names and evaluation order.
+
+SDK result construction and retention share one declared-write collector and one
+`ArtifactMap` converter. Each phase collects afresh: the collector resolves
+declarations against that phase's context, and does not track which attempt
+actually produced a file or provide a complete inventory of scoped outputs.
+
 ## CLI Contract
 
 The public executable name is `botpipe`.
@@ -303,6 +314,30 @@ Normal runs write runtime-owned evidence under each run folder:
 - `raw/`
 
 `run.json` summarizes the runtime-owned tracing and git-tracking state.
+
+Strict run-metadata parsing is owned by `runtime.workspace` and shared by the
+runner and the public `botpipe.runtime.load_run_metadata(run)` inspection API.
+The public reader accepts a `RunRecord` or a run-directory string/`Path`, reads
+`run.json`, and validates its schema. A schema-less legacy object is normalized
+in memory without rewriting the file. Missing files, invalid JSON, and unsupported
+schemas raise errors. Non-object JSON now raises `WorkflowExecutionError` instead
+of the previous incidental `AttributeError`; schema-error labels are unchanged.
+
+Child-output metadata uses a strict, shallow merge of explicitly supplied fields.
+Unspecified status, pending-input, error, timestamp, and extension fields remain
+untouched; explicit `None` becomes JSON null. An empty patch performs no I/O.
+The merge uses the existing workspace writer's temporary-file, file-fsync, and
+replacement sequence. Read, serialization, or replacement errors propagate;
+serialization or replacement failure before replacement leaves the original
+contents intact and cleans up the temporary file on the handled error path.
+
+This is atomic file replacement for Botpipe-managed regular files, not a
+concurrent read-modify-write transaction or a multi-file durability guarantee.
+The writer does not fsync the parent directory or preserve inode identity,
+hardlink/symlink-target behavior, or file metadata such as permissions and xattrs.
+JSON values remain compatible, although Unicode may be escaped in the file.
+Workspace discovery and status updates retain their separate tolerant-loading
+semantics.
 
 Workflows do not declare `GitTracking` or `Tracing`; runtime observability is configured only through `botpipe.runtime.config`.
 
