@@ -207,14 +207,14 @@ def test_restore_crash_cannot_make_stale_output_capturable(tmp_path, monkeypatch
     destination = tmp_path / "result.txt"
     destination.write_text("old")
     store.prepare(writes, "turn")
-    atomic = module._atomic
+    link = module.os.link
 
-    def interrupt_after_restore(path, data):
-        atomic(path, data)
-        if path == destination:
+    def interrupt_after_restore(source, path, **kwargs):
+        link(source, path, **kwargs)
+        if module.Path(path) == destination:
             raise KeyboardInterrupt()
 
-    monkeypatch.setattr(module, "_atomic", interrupt_after_restore)
+    monkeypatch.setattr(module.os, "link", interrupt_after_restore)
     with pytest.raises(KeyboardInterrupt):
         store.restore("turn")
     assert destination.read_text() == "old"

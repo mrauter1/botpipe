@@ -15,7 +15,6 @@ from .discovery import (
     WorkflowInputError,
     discover_workflows,
     resolve_workflow,
-    validate_workflow_inputs,
 )
 from .inspection import inspect_run, inspect_workflow
 
@@ -232,9 +231,8 @@ def _run(args: argparse.Namespace) -> int:
     client = _client(args)
     workflow = resolve_workflow(args.workflow, args.workspace)
     positional, keyword = _invocation(args)
-    bound = validate_workflow_inputs(workflow, positional, keyword)
     result = client.run(
-        workflow, *bound.args, task_id=args.task_id, run_id=args.run_id, **bound.kwargs
+        workflow, *positional, task_id=args.task_id, run_id=args.run_id, **keyword
     )
     _emit(result)
     return _result_exit_code(result)

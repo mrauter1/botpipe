@@ -21,6 +21,7 @@ from botpipe import (
     workflow,
 )
 from botpipe.providers import FakeProvider, ProviderResponse
+from botpipe.recovery import Stopped
 
 
 class Decision(BaseModel):
@@ -163,6 +164,7 @@ def test_provider_reconciliation_preserves_session_for_following_turn(tmp_path):
         return first, second
 
     provider = FakeProvider([SystemExit("response lost"), "second result"])
+    provider.recover = lambda request: Stopped("test observed callback is quiescent")
     with Botpipe(tmp_path, provider=provider) as client:
         with pytest.raises(SystemExit):
             client.run(conversation, run_id="session-crash")
@@ -426,6 +428,9 @@ def test_unresolved_provider_fences_entire_workspace_across_runs(
                 for row in first.journal.operations("orphan-owner")
                 if row["kind"] == "provider"
             )
+            first.provider.recover = lambda request: Stopped(
+                "test observed callback is quiescent"
+            )
             first.resolve(
                 "orphan-owner",
                 operation["id"],
@@ -591,6 +596,9 @@ def test_interrupted_alternate_workspace_remains_fenced_after_owner_exits(tmp_pa
                 for row in first.journal.operations("alternate-owner")
                 if row["kind"] == "provider"
             )
+            first.provider.recover = lambda request: Stopped(
+                "test observed callback is quiescent"
+            )
             first.resolve(
                 "alternate-owner",
                 operation["id"],
@@ -674,3 +682,54 @@ def test_parallel_collect_does_not_commit_an_interrupted_branch_as_error_data(tm
         assert recovered.ok, recovered.error
         assert recovered.value == ["observed receipt"]
         assert effects == ["effect reached"]
+
+
+@pytest.mark.parametrize("settle", ["all", "collect"])
+def test_parallel_replay_mismatch_cannot_be_committed_as_branch_error(
+    tmp_path, monkeypatch, settle
+):
+    settings = {"label": "original"}
+    effects = []
+
+    @activity(retry_safe=True)
+    def branch(label):
+        effects.append(label)
+        if label == "failure":
+            raise ValueError("ordinary branch failure")
+        return label
+
+    @workflow
+    def job():
+        return parallel(
+            lambda: branch("failure"),
+            lambda: branch(settings["label"]),
+            settle=settle,
+        )
+
+    with Botpipe(tmp_path, provider=FakeProvider([])) as client:
+        method = "fail" if settle == "all" else "finish"
+        original = getattr(client.journal, method)
+
+        def crash_parent(operation_id, record):
+            if client.journal.get(operation_id)["kind"] == "parallel":
+                raise SystemExit("crash before parent commit")
+            return original(operation_id, record)
+
+        monkeypatch.setattr(client.journal, method, crash_parent)
+        with pytest.raises(SystemExit):
+            client.run(job, run_id="parallel-mismatch")
+        monkeypatch.setattr(client.journal, method, original)
+        settings["label"] = "changed"
+
+        for _ in range(2):
+            replay = client.resume("parallel-mismatch", workflow=job)
+            assert replay.status == "failed"
+            assert "ReplayMismatch" in replay.error
+            group = next(
+                row
+                for row in client.journal.operations(replay.run_id)
+                if row["kind"] == "parallel"
+            )
+            assert group["status"] == "started"
+
+    assert sorted(effects) == ["failure", "original"]

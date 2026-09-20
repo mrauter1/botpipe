@@ -57,6 +57,11 @@ unsafe operation without a committed result becomes `interrupted`. Inspect the
 operation, then call `resolve(..., retry=True)` or
 `resolve(..., response=observed_value)`.
 
+For providers, both resolutions require recovery evidence. A completed receipt
+takes precedence; running or unknown attempts remain blocked. Custom providers
+should return explicit outcomes from `botpipe.recovery`. Returning `None` no
+longer authorizes replacement of an uncertain provider response.
+
 ## Discovery and CLI changes
 
 Catalog names remain supported. Direct references now point to Python functions:
@@ -83,3 +88,8 @@ source changes during a run are rejected rather than automatically migrated.
 Automatic source fingerprints follow referenced Python helpers, but they cannot
 freeze provider installations, external packages, environment values, or config
 semantics. Bump the workflow version when those dependencies change behavior.
+
+Early durable-function snapshots that stored unversioned Pydantic/dataclass
+JSON are also incompatible with the validated-state codec. Their omitted state
+cannot be reconstructed reliably. Finish those runs using their original code
+or start new runs; the decoder refuses silent revalidation as a migration.

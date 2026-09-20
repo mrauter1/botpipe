@@ -8,7 +8,7 @@ import os
 import re
 import threading
 from contextlib import ExitStack
-from dataclasses import asdict, replace
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, TypeVar, overload
 
@@ -28,13 +28,14 @@ from .policy import Policy, SandboxMode
 from .prompts import Prompt
 from .providers import (
     ProviderError,
-    ProviderInterruptedError,
     ProviderPolicyError,
     ProviderRequest,
     ProviderResponse,
     ProviderTimeoutError,
+    _response_record,
 )
 from .runtime import _async_call, current_run
+from .recovery import Completed, Stopped, recover_outcome
 
 T = TypeVar("T")
 
@@ -236,17 +237,80 @@ class Session:
                     operation_id = ctx.operation_id
                     row = ctx.journal.get(operation_id)
                     saved = row.get("response") or {}
-                    if saved.get("not_dispatched"):
-                        raise BudgetExceeded(
-                            saved.get("budget_error", "Provider budget exhausted")
-                        )
                     generation = saved.get("generation", 0)
                     authorized = saved.get("retry_authorized", False)
                     prepared_generation = generation - 1 if authorized else generation
                     artifact_operation = (
                         f"{operation_id}:generation:{prepared_generation}"
                     )
-                    destinations = store.prepare(writes, artifact_operation)
+
+                    def rollback():
+                        try:
+                            store.rollback(artifact_operation)
+                        except (OSError, ArtifactError) as exc:
+                            raise UncertainOperation(
+                                f"Artifact rollback is incomplete; resume after resolving the conflict: {exc}",
+                                operation_id,
+                            ) from exc
+
+                    def restore():
+                        try:
+                            store.restore(artifact_operation)
+                        except (OSError, ArtifactError) as exc:
+                            raise UncertainOperation(
+                                f"Artifact restoration is incomplete; resume after resolving the conflict: {exc}",
+                                operation_id,
+                            ) from exc
+
+                    if saved.get("not_dispatched"):
+                        restore()
+                        if "policy_error" in saved:
+                            raise ProviderPolicyError(saved["policy_error"])
+                        raise BudgetExceeded(
+                            saved.get("budget_error", "Provider budget exhausted")
+                        )
+
+                    if "output_error" in saved:
+                        # The provider completed, then validation failed. Finish
+                        # an interrupted rollback before replaying that failure.
+                        rollback()
+                        error = saved["output_error"]
+                        failure = (
+                            OutputValidationError if error["retryable"] else TypeError
+                        )
+                        raise failure(error["message"])
+                    if "validated_value" in saved:
+                        try:
+                            captured = store.captured(artifact_operation)
+                        except (OSError, ArtifactError) as exc:
+                            raise UncertainOperation(
+                                f"Artifact capture needs recovery: {exc}", operation_id
+                            ) from exc
+                        if captured is not None:
+                            return Result(
+                                codec.decode(saved["validated_value"]),
+                                captured,
+                                saved.get("usage", {}),
+                                operation_id,
+                            )
+                    preparing = not saved or saved.get("preparing", False)
+                    if not saved:
+                        # Validate paths before any destination can move. This
+                        # marker proves a resumed preparation has not dispatched.
+                        store.destinations(writes)
+                        saved = {"generation": generation, "preparing": True}
+                        ctx.save_response(operation_id, saved)
+                    try:
+                        destinations = (
+                            store.destinations(writes)
+                            if authorized
+                            else store.prepare(writes, artifact_operation)
+                        )
+                    except (OSError, ArtifactError) as exc:
+                        raise UncertainOperation(
+                            f"Artifact preparation is incomplete; resume after resolving the conflict: {exc}",
+                            operation_id,
+                        ) from exc
                     complete_prompt = rendered
                     if input is not None:
                         serial = (
@@ -293,6 +357,11 @@ class Session:
                     request_data = saved.get("request") or {
                         "session_id": binding.get("session_id"),
                         "receipt_dir": str(ctx.folder / "receipts"),
+                        "prompt": complete_prompt,
+                        "artifacts": {
+                            name: str(path) for name, path in destinations.items()
+                        },
+                        "reads": [str(handle.path) for handle in handles],
                     }
                     request = ProviderRequest(
                         operation_id=operation_id,
@@ -303,7 +372,7 @@ class Session:
                         policy=effective,
                         artifacts=destinations,
                         receipt_dir=ctx.folder / "receipts",
-                        timeout=ctx.client.timeout,
+                        timeout=ctx.limits.timeout,
                         attempt=prepared_generation + 1,
                         reads=tuple(handle.path for handle in handles),
                     )
@@ -311,34 +380,35 @@ class Session:
                         # Reconcile before touching destinations: the previous
                         # process may still be writing them, or its completed
                         # response may already be recoverable from a receipt.
-                        recover_fn = getattr(ctx.client.provider, "recover", None)
-                        try:
-                            recovered = recover_fn(request) if recover_fn else None
-                        except ProviderInterruptedError as exc:
-                            if exc.process_alive is not False:
-                                raise UncertainOperation(
-                                    str(exc), operation_id
-                                ) from exc
-                            recovered = None
-                        except ProviderError:
-                            recovered = None
-                        if recovered is not None:
+                        outcome = recover_outcome(ctx.client.provider, request)
+                        if isinstance(outcome, Completed):
                             generation = prepared_generation
                             saved = {
-                                **asdict(recovered),
+                                **_response_record(outcome.response),
                                 "request": request_data,
                                 "generation": generation,
                             }
-                            ctx.journal.response(
-                                operation_id, saved, session_key=self.key
-                            )
-                        else:
+                            ctx.save_response(operation_id, saved, session_key=self.key)
+                        elif isinstance(outcome, Stopped):
+                            rollback()
                             artifact_operation = (
                                 f"{operation_id}:generation:{generation}"
                             )
-                            destinations = store.prepare(writes, artifact_operation)
+                            try:
+                                destinations = store.prepare(writes, artifact_operation)
+                            except (OSError, ArtifactError) as exc:
+                                raise UncertainOperation(
+                                    f"Artifact preparation is incomplete; resume after resolving the conflict: {exc}",
+                                    operation_id,
+                                ) from exc
                             request = replace(
                                 request, artifacts=destinations, attempt=generation + 1
+                            )
+                        else:
+                            raise UncertainOperation(
+                                outcome.detail
+                                or "Provider is not confirmed stopped; retry is blocked",
+                                operation_id,
                             )
                     if "text" in saved:
                         response = ProviderResponse(
@@ -349,8 +419,8 @@ class Session:
                             }
                         )
                     else:
-                        if authorized or not recover:
-                            ctx.journal.response(
+                        if authorized or preparing or not recover:
+                            ctx.save_response(
                                 operation_id,
                                 {"request": request_data, "generation": generation},
                             )
@@ -359,17 +429,17 @@ class Session:
                             if (
                                 recover
                                 and not authorized
+                                and not preparing
                                 and not saved.get("not_dispatched")
                             ):
-                                recover_fn = getattr(
-                                    ctx.client.provider, "recover", None
-                                )
-                                response = recover_fn(request) if recover_fn else None
-                                if response is None:
+                                outcome = recover_outcome(ctx.client.provider, request)
+                                if not isinstance(outcome, Completed):
                                     raise UncertainOperation(
-                                        "Provider intent has no durable response; reconcile before retrying",
+                                        outcome.detail
+                                        or "Provider intent has no durable response; reconcile before retrying",
                                         operation_id,
                                     )
+                                response = outcome.response
                             else:
                                 if not getattr(
                                     ctx.client.provider, "_reserves_dispatch", False
@@ -403,7 +473,7 @@ class Session:
                                     response = ctx.client.provider.run(request)
                         except BudgetExceeded as exc:
                             if not dispatched:
-                                ctx.journal.response(
+                                ctx.save_response(
                                     operation_id,
                                     {
                                         "request": request_data,
@@ -412,10 +482,19 @@ class Session:
                                         "budget_error": str(exc),
                                     },
                                 )
-                                store.restore(artifact_operation)
+                                restore()
                             raise
-                        except ProviderPolicyError:
-                            store.restore(artifact_operation)
+                        except ProviderPolicyError as exc:
+                            ctx.save_response(
+                                operation_id,
+                                {
+                                    "request": request_data,
+                                    "generation": generation,
+                                    "not_dispatched": True,
+                                    "policy_error": str(exc),
+                                },
+                            )
+                            restore()
                             raise
                         except ProviderError as exc:
                             raise UncertainOperation(str(exc), operation_id) from exc
@@ -424,17 +503,37 @@ class Session:
                                 "Provider returned an invalid response; reconcile its effects",
                                 operation_id,
                             )
-                        ctx.journal.response(
+                        try:
+                            response_record = _response_record(response)
+                        except (ValueError, TypeError) as exc:
+                            message = f"Provider response cannot be stored: {exc}"
+                            ctx.save_response(
+                                operation_id,
+                                {
+                                    "request": request_data,
+                                    "generation": generation,
+                                    "output_error": {
+                                        "message": message,
+                                        "retryable": False,
+                                    },
+                                },
+                            )
+                            rollback()
+                            raise TypeError(message) from exc
+                        saved = {
+                            **response_record,
+                            "request": request_data,
+                            "generation": generation,
+                        }
+                        ctx.save_response(
                             operation_id,
-                            {
-                                **asdict(response),
-                                "request": request_data,
-                                "generation": generation,
-                            },
+                            saved,
                             session_key=self.key,
                         )
                     try:
-                        if returns is str:
+                        if "validated_value" in saved:
+                            value = codec.decode(saved["validated_value"])
+                        elif returns is str:
                             value = response.text
                         else:
                             text = response.text.strip()
@@ -444,9 +543,37 @@ class Session:
                             value = TypeAdapter(returns).validate_json(
                                 fenced.group(1) if fenced else text
                             )
+                        if "validated_value" not in saved:
+                            # Persist normalized state before capture. Recovery
+                            # can finish the same result without rerunning hooks.
+                            value_record = codec.encode(value)
+                            codec.encode(
+                                Result(
+                                    value, ArtifactMap(), response.usage, operation_id
+                                )
+                            )
+                            saved = {**saved, "validated_value": value_record}
+                            ctx.save_response(operation_id, saved, session_key=self.key)
                         artifacts = store.capture(writes, artifact_operation)
-                    except (ValueError, ArtifactError) as exc:
-                        raise OutputValidationError(str(exc)) from exc
+                    except (ValueError, TypeError) as exc:
+                        retryable = isinstance(exc, ValueError)
+                        saved = {
+                            **saved,
+                            "output_error": {
+                                "message": str(exc),
+                                "retryable": retryable,
+                            },
+                        }
+                        ctx.save_response(operation_id, saved, session_key=self.key)
+                        rollback()
+                        if retryable:
+                            raise OutputValidationError(str(exc)) from exc
+                        raise
+                    except OSError as exc:
+                        raise UncertainOperation(
+                            f"Artifact publication is incomplete; resume to finish it: {exc}",
+                            operation_id,
+                        ) from exc
                     return Result(value, artifacts, response.usage, operation_id)
 
                 # Alternate writable workspaces need the same cross-process

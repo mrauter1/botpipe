@@ -7,6 +7,7 @@ from pathlib import Path
 
 from botpipe import Artifact, Botpipe, Session, Worklist, ask, workflow
 from botpipe.providers import FakeProvider
+from botpipe.recovery import Stopped
 
 
 def test_session_snapshots_raw_binary_reads(tmp_path):
@@ -117,6 +118,10 @@ def test_provider_response_is_recorded_before_artifact_validation(tmp_path):
 
 
 def test_explicit_provider_retry_requires_new_artifact_outputs(tmp_path):
+    class ConfirmedStoppedProvider(FakeProvider):
+        def recover(self, request):
+            return Stopped("the interrupted fake attempt is confirmed stopped")
+
     def uncertain(request):
         request.artifacts["result"].write_text("uncertain old attempt")
         raise KeyboardInterrupt()
@@ -129,7 +134,7 @@ def test_explicit_provider_retry_requires_new_artifact_outputs(tmp_path):
             retries=0,
         )
 
-    provider = FakeProvider([uncertain, "retry forgot its file"])
+    provider = ConfirmedStoppedProvider([uncertain, "retry forgot its file"])
     with Botpipe(tmp_path, provider=provider) as client:
         paused = client.run(writer)
         assert paused.status == "interrupted", paused.error

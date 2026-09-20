@@ -6,6 +6,7 @@ import hashlib
 import importlib
 import json
 import os
+import stat
 import tempfile
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -19,6 +20,10 @@ from .storage import sync_directory as _sync_dir
 
 class ArtifactError(ValueError):
     """An artifact destination, content, or durable snapshot is invalid."""
+
+
+class ArtifactCaptureRecoveryError(OSError):
+    """A prepared capture cannot safely continue from mutable destinations."""
 
 
 def _json(value: Any) -> bytes:
@@ -55,6 +60,43 @@ def _atomic(path: Path, data: bytes) -> None:
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
+
+
+def _entry(path: Path) -> dict[str, Any]:
+    """Describe one directory entry without following a provider-created link."""
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return {"kind": "absent"}
+    common = {
+        "device": info.st_dev,
+        "inode": info.st_ino,
+        "mode": info.st_mode,
+        "size": info.st_size,
+        "mtime_ns": info.st_mtime_ns,
+    }
+    if stat.S_ISREG(info.st_mode):
+        return {
+            "kind": "file",
+            **common,
+            "digest": hashlib.sha256(path.read_bytes()).hexdigest(),
+        }
+    if stat.S_ISLNK(info.st_mode):
+        return {"kind": "symlink", **common, "target": os.readlink(path)}
+    if stat.S_ISDIR(info.st_mode):
+        return {"kind": "directory", **common}
+    return {"kind": "other", **common}
+
+
+def _same_entry(path: Path, expected: Mapping[str, Any]) -> bool:
+    return _entry(path) == expected
+
+
+def _assert_plain_parents(path: Path) -> None:
+    """Reject redirection of an exact destination through a replaced parent."""
+    for parent in path.parents:
+        if parent.is_symlink():
+            raise ArtifactError(f"Artifact path contains a symlink: {path}")
 
 
 def _schema_record(schema: Any) -> dict[str, Any] | None:
@@ -323,6 +365,11 @@ class ArtifactStore:
             self.root / "operations" / hashlib.sha256(operation_id.encode()).hexdigest()
         )
 
+    def destinations(self, writes: Sequence[Artifact]) -> dict[str, Path]:
+        """Resolve declarations without starting or resuming a preparation."""
+        _, paths = self._declarations(tuple(writes))
+        return paths
+
     def prepare(self, writes: Sequence[Artifact], operation_id: str) -> dict[str, Path]:
         writes = tuple(writes)
         requested = [artifact.to_record() for artifact in writes]
@@ -338,7 +385,12 @@ class ArtifactStore:
                 raise ArtifactError(
                     "Artifact preparation was restored; use a new operation attempt"
                 )
+            if (operation / "rollback.json").exists():
+                raise ArtifactError(
+                    "Artifact preparation was rolled back; use a new operation attempt"
+                )
             if manifest["prepared"]:
+                _sync_dir(manifest_path.parent)
                 return {
                     record["name"]: Path(record["path"])
                     for record in manifest["declarations"]
@@ -346,21 +398,87 @@ class ArtifactStore:
             records, paths = self._declarations(writes)
         else:
             records, paths = self._declarations(writes)
+            _mkdir(operation)
+            for path in paths.values():
+                _mkdir(path.parent)
+            # Revalidate after creating parents, before inventorying or moving a
+            # destination. Rollback uses atomic renames, never copy-and-unlink.
+            records, paths = self._declarations(writes)
+            device = operation.stat().st_dev
+            for path in paths.values():
+                if path.parent.stat().st_dev != device:
+                    raise ArtifactError(
+                        f"Artifact destination crosses the transaction filesystem: {path}"
+                    )
+            entries = [
+                {"name": name, "path": str(path), "previous": _entry(path)}
+                for name, path in paths.items()
+            ]
             manifest = {
+                "version": 2,
                 "declarations": records,
                 "requested": requested,
                 "prepared": False,
-                "existing": [name for name, path in paths.items() if path.exists()],
+                "existing": [
+                    entry["name"]
+                    for entry in entries
+                    if entry["previous"]["kind"] != "absent"
+                ],
+                "entries": entries,
             }
             _atomic(manifest_path, _json(manifest))
-        for index, (name, path) in enumerate(paths.items()):
-            _mkdir(path.parent)
+        entries = manifest.get("entries")
+        if entries is None:
+            # Compatibility with an interrupted operation from the original
+            # manifest format. Such a manifest has not yet moved all files.
+            entries = []
+            for index, (name, path) in enumerate(paths.items()):
+                backup = operation / "previous" / str(index)
+                previous_path = backup if backup.exists() else path
+                entries.append(
+                    {
+                        "name": name,
+                        "path": str(path),
+                        "previous": (
+                            _entry(previous_path)
+                            if name in manifest["existing"]
+                            else {"kind": "absent"}
+                        ),
+                    }
+                )
+            manifest["entries"] = entries
+            manifest["version"] = 2
+            _atomic(manifest_path, _json(manifest))
+        for index, entry in enumerate(entries):
+            path = Path(entry["path"])
+            _assert_plain_parents(path)
             backup = operation / "previous" / str(index)
-            if name in manifest["existing"] and not backup.exists():
+            previous = entry["previous"]
+            if previous["kind"] == "file" and not backup.exists():
+                if not _same_entry(path, previous):
+                    raise ArtifactError(
+                        f"Artifact destination changed during preparation: {path}"
+                    )
                 _mkdir(backup.parent)
                 os.replace(path, backup)
                 _sync_dir(path.parent)
                 _sync_dir(backup.parent)
+            elif previous["kind"] == "file":
+                if not _same_entry(backup, previous) or path.exists():
+                    raise ArtifactError(
+                        f"Artifact backup conflicts with its inventory: {path}"
+                    )
+                _sync_dir(path.parent)
+                _sync_dir(backup.parent)
+            elif previous["kind"] == "absent":
+                if path.exists() or path.is_symlink():
+                    raise ArtifactError(
+                        f"Artifact destination appeared during preparation: {path}"
+                    )
+            else:
+                raise ArtifactError(
+                    f"Artifact destination was not an ordinary file: {path}"
+                )
         manifest["prepared"] = True
         _atomic(manifest_path, _json(manifest))
         return paths
@@ -370,16 +488,221 @@ class ArtifactStore:
         operation = self._operation(operation_id)
         manifest_path = operation / "prepare.json"
         manifest = json.loads(manifest_path.read_text())
-        if (operation / "capture.json").exists():
-            raise ArtifactError("Cannot restore a published operation")
+        if (operation / "capture.json").exists() or (
+            operation / "capture.pending.json"
+        ).exists():
+            raise ArtifactError("Cannot restore an operation with a prepared capture")
         # Fence capture before exposing any old bytes, including after a crash.
         manifest["restored"] = True
         _atomic(manifest_path, _json(manifest))
-        for index, record in enumerate(manifest["declarations"]):
+        entries = manifest.get("entries")
+        if entries is None:
+            existing = set(manifest.get("existing", ()))
+            entries = [
+                {
+                    "name": record["name"],
+                    "path": record["path"],
+                    "previous": (
+                        _entry(operation / "previous" / str(index))
+                        if record["name"] in existing
+                        and (operation / "previous" / str(index)).exists()
+                        else _entry(Path(record["path"]))
+                        if record["name"] in existing
+                        else {"kind": "absent"}
+                    ),
+                }
+                for index, record in enumerate(manifest["declarations"])
+            ]
+            manifest["version"] = 2
+            manifest["entries"] = entries
+            _atomic(manifest_path, _json(manifest))
+        if len(entries) != len(manifest["declarations"]):
+            raise ArtifactError("Artifact restoration inventory is incomplete")
+        for index, (record, entry) in enumerate(
+            zip(manifest["declarations"], entries, strict=True)
+        ):
             path = self._destination(Artifact.from_record(record))
+            if entry["name"] != record["name"] or entry["path"] != str(path):
+                raise ArtifactError(
+                    "Artifact restoration inventory does not match preparation"
+                )
+            _assert_plain_parents(path)
             backup = operation / "previous" / str(index)
-            if backup.exists() and not path.exists():
-                _atomic(path, backup.read_bytes())
+            previous = entry["previous"]
+            if previous["kind"] == "absent":
+                # Conservative restore never removes an entry that appeared
+                # after preparation; there are no old bytes to put back.
+                continue
+            if previous["kind"] != "file":
+                raise ArtifactError(f"Invalid previous artifact inventory: {path}")
+            if backup.exists():
+                if not _same_entry(backup, previous):
+                    raise ArtifactError(f"Artifact backup was modified: {backup}")
+                if path.exists() or path.is_symlink():
+                    # A possibly live provider owns any entry now present at
+                    # the destination. Conservative restore never overwrites,
+                    # removes, or rejects that entry.
+                    continue
+                else:
+                    try:
+                        # Preparation verifies that backup and destination share
+                        # a filesystem. link() publishes the complete old entry
+                        # only while the destination is still absent, avoiding
+                        # the check-then-replace overwrite race in _atomic().
+                        os.link(backup, path, follow_symlinks=False)
+                    except FileExistsError as exc:
+                        raise ArtifactError(
+                            f"Artifact destination conflicts with restoration: {path}"
+                        ) from exc
+                _sync_dir(path.parent)
+                _sync_dir(backup.parent)
+            elif not _same_entry(path, previous):
+                # A partially completed preparation may not have moved this
+                # entry yet. Otherwise, losing both copies is an integrity error.
+                raise ArtifactError(
+                    f"Artifact restoration conflicts with its inventory: {path}"
+                )
+            else:
+                _sync_dir(path.parent)
+        manifest["restore_completed"] = True
+        _atomic(manifest_path, _json(manifest))
+
+    def rollback(self, operation_id: str) -> None:
+        """Quarantine one known-stopped attempt and restore all prior files.
+
+        The caller must establish that the provider can no longer write these
+        destinations. Unlike :meth:`restore`, this method deliberately removes
+        present attempt outputs from their declared paths.
+        """
+        operation = self._operation(operation_id)
+        prepare_path = operation / "prepare.json"
+        if not prepare_path.exists():
+            raise ArtifactError("Artifacts must be prepared before rollback")
+        if (operation / "capture.json").exists() or (
+            operation / "capture.pending.json"
+        ).exists():
+            raise ArtifactError("Cannot roll back an operation with a prepared capture")
+        prepared = json.loads(prepare_path.read_text())
+        if not prepared.get("prepared") or prepared.get("restored"):
+            raise ArtifactError("Artifact preparation cannot be rolled back")
+        entries = prepared.get("entries")
+        if entries is None:
+            entries = []
+            existing = set(prepared.get("existing", ()))
+            for index, record in enumerate(prepared["declarations"]):
+                path = Path(record["path"])
+                backup = operation / "previous" / str(index)
+                if record["name"] in existing and not backup.exists():
+                    raise ArtifactError("Artifact preparation lacks a rollback backup")
+                entries.append(
+                    {
+                        "name": record["name"],
+                        "path": str(path),
+                        "previous": (
+                            _entry(backup)
+                            if record["name"] in existing
+                            else {"kind": "absent"}
+                        ),
+                    }
+                )
+            prepared["version"] = 2
+            prepared["entries"] = entries
+            _atomic(prepare_path, _json(prepared))
+
+        rollback_path = operation / "rollback.json"
+        if rollback_path.exists():
+            rollback = json.loads(rollback_path.read_text())
+            if rollback["declarations"] != prepared["declarations"]:
+                raise ArtifactError("Artifact rollback declaration conflict")
+        else:
+            attempts = []
+            device = operation.stat().st_dev
+            for entry in entries:
+                path = Path(entry["path"])
+                _assert_plain_parents(path)
+                if not path.parent.exists() or path.parent.stat().st_dev != device:
+                    raise ArtifactError(
+                        f"Artifact destination crosses the transaction filesystem: {path}"
+                    )
+                attempts.append(
+                    {
+                        "name": entry["name"],
+                        "path": str(path),
+                        "attempted": _entry(path),
+                    }
+                )
+            rollback = {
+                "version": 1,
+                "declarations": prepared["declarations"],
+                "attempts": attempts,
+                "completed": False,
+            }
+            # Fence capture before moving any attempted output.
+            _atomic(rollback_path, _json(rollback))
+        _sync_dir(rollback_path.parent)
+
+        attempts = rollback["attempts"]
+        if len(attempts) != len(entries):
+            raise ArtifactError("Artifact rollback inventory is incomplete")
+        quarantine_root = operation / "quarantine"
+        _mkdir(quarantine_root)
+        for index, (entry, attempt) in enumerate(zip(entries, attempts, strict=True)):
+            path = Path(entry["path"])
+            if attempt["name"] != entry["name"] or attempt["path"] != str(path):
+                raise ArtifactError(
+                    "Artifact rollback inventory does not match preparation"
+                )
+            _assert_plain_parents(path)
+            previous = entry["previous"]
+            attempted = attempt["attempted"]
+            backup = operation / "previous" / str(index)
+            quarantine = quarantine_root / str(index)
+
+            if attempted["kind"] == "absent":
+                if quarantine.exists() or quarantine.is_symlink():
+                    raise ArtifactError(f"Unexpected artifact quarantine: {quarantine}")
+            elif quarantine.exists() or quarantine.is_symlink():
+                if not _same_entry(quarantine, attempted):
+                    raise ArtifactError(
+                        f"Artifact quarantine was modified: {quarantine}"
+                    )
+                _sync_dir(path.parent)
+                _sync_dir(quarantine.parent)
+            else:
+                if not _same_entry(path, attempted):
+                    raise ArtifactError(
+                        f"Artifact destination changed during rollback: {path}"
+                    )
+                os.replace(path, quarantine)
+                _sync_dir(path.parent)
+                _sync_dir(quarantine.parent)
+
+            if previous["kind"] == "file":
+                if backup.exists():
+                    if path.exists() or path.is_symlink():
+                        raise ArtifactError(
+                            f"Artifact destination conflicts with rollback: {path}"
+                        )
+                    if not _same_entry(backup, previous):
+                        raise ArtifactError(f"Artifact backup was modified: {backup}")
+                    os.replace(backup, path)
+                    _sync_dir(backup.parent)
+                    _sync_dir(path.parent)
+                elif not _same_entry(path, previous):
+                    raise ArtifactError(
+                        f"Restored artifact conflicts with its inventory: {path}"
+                    )
+                else:
+                    _sync_dir(backup.parent)
+                    _sync_dir(path.parent)
+            elif previous["kind"] == "absent":
+                if path.exists() or path.is_symlink():
+                    raise ArtifactError(f"New artifact remains after rollback: {path}")
+            else:
+                raise ArtifactError(f"Invalid previous artifact inventory: {path}")
+
+        rollback["completed"] = True
+        _atomic(rollback_path, _json(rollback))
 
     def _snapshot(
         self, artifact: Artifact, source: Path, data: bytes
@@ -392,6 +715,7 @@ class ArtifactStore:
         else:
             _atomic(path, data)
             path.chmod(0o444)
+        _sync_dir(path.parent)
         return ArtifactHandle(
             artifact.name,
             path,
@@ -400,6 +724,40 @@ class ArtifactStore:
             digest,
             _schema_record(artifact.schema),
         )
+
+    def _capture_source(self, source: Path, *, digest: str, length: int) -> bytes:
+        """Read a missing prepared blob only if its exact source is unchanged."""
+        try:
+            _assert_plain_parents(source)
+            before = source.lstat()
+            if not stat.S_ISREG(before.st_mode):
+                raise ArtifactCaptureRecoveryError(
+                    f"Prepared artifact source is no longer a file: {source}"
+                )
+            data = source.read_bytes()
+            after = source.lstat()
+        except ArtifactCaptureRecoveryError:
+            raise
+        except OSError as exc:
+            raise ArtifactCaptureRecoveryError(
+                f"Prepared artifact source is unavailable: {source}"
+            ) from exc
+        identity = lambda value: (
+            value.st_dev,
+            value.st_ino,
+            value.st_mode,
+            value.st_size,
+            value.st_mtime_ns,
+        )
+        if identity(before) != identity(after):
+            raise ArtifactCaptureRecoveryError(
+                f"Prepared artifact source changed while being recovered: {source}"
+            )
+        if len(data) != length or hashlib.sha256(data).hexdigest() != digest:
+            raise ArtifactCaptureRecoveryError(
+                f"Prepared artifact source no longer matches its capture intent: {source}"
+            )
+        return data
 
     def capture(self, writes: Sequence[Artifact], operation_id: str) -> ArtifactMap:
         writes = tuple(writes)
@@ -417,33 +775,141 @@ class ArtifactStore:
             raise ArtifactError("Artifact preparation does not match this capture")
         manifest_path = operation / "capture.json"
         if manifest_path.exists():
-            result = ArtifactMap.from_record(json.loads(manifest_path.read_text()))
-            for handle in result.values():
-                handle.read_bytes()
+            result = self.captured(operation_id)
+            assert result is not None
             return result
-        records, paths = self._declarations(writes)
-        if prepared["declarations"] != records:
-            raise ArtifactError("Artifact destination changed since preparation")
-        contents = []
-        for artifact in writes:
-            source = paths[artifact.name]
-            if not source.exists():
-                if artifact.required:
-                    raise ArtifactError(
-                        f"Required artifact was not written: {artifact.name} ({source})"
-                    )
-                continue
-            data = source.read_bytes()
-            _validate(data, artifact.kind, artifact.schema)
-            contents.append((artifact, source, data))
-        handles = ArtifactMap(
-            {
-                artifact.name: self._snapshot(artifact, source, data)
-                for artifact, source, data in contents
+        if (operation / "rollback.json").exists():
+            raise ArtifactError("Cannot capture a rolled-back operation")
+        intent_path = operation / "capture.pending.json"
+        fresh: dict[str, bytes] = {}
+        if intent_path.exists():
+            try:
+                intent = json.loads(intent_path.read_text())
+                if not isinstance(intent, dict):
+                    raise TypeError("capture intent must be an object")
+                if intent.get("version") != 1:
+                    raise TypeError("unsupported capture intent version")
+            except (OSError, ValueError, TypeError) as exc:
+                raise ArtifactCaptureRecoveryError(
+                    "Prepared artifact capture intent is unreadable"
+                ) from exc
+            if intent.get("declarations") != prepared["declarations"]:
+                raise ArtifactCaptureRecoveryError(
+                    "Prepared artifact capture does not match its declarations"
+                )
+        else:
+            records, paths = self._declarations(writes)
+            if prepared["declarations"] != records:
+                raise ArtifactError("Artifact destination changed since preparation")
+            contents = []
+            for artifact in writes:
+                source = paths[artifact.name]
+                if not source.exists():
+                    if artifact.required:
+                        raise ArtifactError(
+                            f"Required artifact was not written: {artifact.name} ({source})"
+                        )
+                    continue
+                data = source.read_bytes()
+                _validate(data, artifact.kind, artifact.schema)
+                digest = hashlib.sha256(data).hexdigest()
+                contents.append(
+                    {
+                        "name": artifact.name,
+                        "source_path": str(source),
+                        "digest": digest,
+                        "length": len(data),
+                    }
+                )
+                fresh[artifact.name] = data
+            intent = {
+                "version": 1,
+                "declarations": records,
+                "contents": contents,
             }
-        )
+            # The complete validated set is durable before publishing any blob.
+            _atomic(intent_path, _json(intent))
+
+        artifacts = {artifact.name: artifact for artifact in writes}
+        handles = {}
+        try:
+            contents = intent["contents"]
+            if not isinstance(contents, list):
+                raise TypeError("contents must be a list")
+            seen = set()
+            for item in contents:
+                name = item["name"]
+                source = Path(item["source_path"])
+                digest = item["digest"]
+                length = item["length"]
+                if (
+                    name in seen
+                    or name not in artifacts
+                    or not isinstance(digest, str)
+                    or len(digest) != 64
+                    or any(character not in "0123456789abcdef" for character in digest)
+                    or not isinstance(length, int)
+                    or isinstance(length, bool)
+                    or length < 0
+                ):
+                    raise TypeError("invalid capture content record")
+                declaration = next(
+                    record
+                    for record in prepared["declarations"]
+                    if record["name"] == name
+                )
+                if str(source) != declaration["path"]:
+                    raise TypeError("capture source does not match its declaration")
+                seen.add(name)
+                blob = self.root / "blobs" / digest[:2] / digest / source.name
+                if blob.exists():
+                    data = blob.read_bytes()
+                    if (
+                        len(data) != length
+                        or hashlib.sha256(data).hexdigest() != digest
+                    ):
+                        raise ArtifactCaptureRecoveryError(
+                            f"Prepared artifact blob was modified: {blob}"
+                        )
+                elif name in fresh:
+                    data = fresh[name]
+                else:
+                    data = self._capture_source(source, digest=digest, length=length)
+                # Recovery must enforce the same content contract as the fresh
+                # path even if the durable intent or blob was damaged later.
+                _validate(data, artifacts[name].kind, artifacts[name].schema)
+                handle = self._snapshot(artifacts[name], source, data)
+                if handle.digest != digest:
+                    raise ArtifactCaptureRecoveryError(
+                        f"Prepared artifact digest changed during capture: {source}"
+                    )
+                handles[name] = handle
+            required = {artifact.name for artifact in writes if artifact.required}
+            if not required <= seen:
+                raise TypeError("capture intent omits a required artifact")
+        except ArtifactCaptureRecoveryError:
+            raise
+        except (ArtifactError, KeyError, OSError, StopIteration, TypeError) as exc:
+            raise ArtifactCaptureRecoveryError(
+                "Prepared artifact capture cannot be recovered safely"
+            ) from exc
+        handles = ArtifactMap(handles)
         _atomic(manifest_path, _json(handles.to_record()))
         return handles
+
+    def captured(self, operation_id: str) -> ArtifactMap | None:
+        """Recover a durable capture without consulting mutable destinations."""
+        manifest_path = self._operation(operation_id) / "capture.json"
+        if not manifest_path.exists():
+            return None
+        result = ArtifactMap.from_record(json.loads(manifest_path.read_text()))
+        for handle in result.values():
+            handle.read_bytes()
+            _sync_dir(handle.path.parent)
+        # A prior call may have completed os.replace before directory fsync
+        # failed. Repeating the sync makes recovery safe before ledger commit.
+        _sync_dir(manifest_path.parent)
+        return result
 
     def published(self, operation_id: str) -> ArtifactHandle | None:
         """Recover a managed publication that preceded its ledger commit."""
@@ -503,6 +969,7 @@ class ArtifactStore:
 
 __all__ = [
     "Artifact",
+    "ArtifactCaptureRecoveryError",
     "ArtifactError",
     "ArtifactHandle",
     "ArtifactMap",

@@ -16,6 +16,7 @@ from typing import Any, Protocol, runtime_checkable
 
 from .policy import NetworkMode, PermissionMode, Policy, SandboxMode
 from .processes import ProcessContainment
+from .recovery import Completed, RecoveryOutcome, Running, Stopped, Unknown
 from .storage import sync_directory
 
 
@@ -103,7 +104,11 @@ class Provider(Protocol):
     name: str
 
     def run(self, request: ProviderRequest) -> ProviderResponse: ...
-    def recover(self, request: ProviderRequest) -> ProviderResponse | None: ...
+    # ProviderResponse | None is the supported legacy recovery contract;
+    # recover_outcome() translates it conservatively for callers.
+    def recover(
+        self, request: ProviderRequest
+    ) -> RecoveryOutcome | ProviderResponse | None: ...
 
 
 def _now() -> str:
@@ -169,12 +174,21 @@ def _read_receipt(path: Path) -> dict[str, Any]:
 
 
 def _response_record(response: ProviderResponse) -> dict[str, Any]:
-    return {
+    if not isinstance(response.text, str):
+        raise TypeError("response text must be a string")
+    if response.session_id is not None and not isinstance(response.session_id, str):
+        raise TypeError("response session_id must be a string or None")
+    if not isinstance(response.usage, dict) or not isinstance(response.metadata, dict):
+        raise TypeError("response usage and metadata must be dictionaries")
+    record = {
         "text": response.text,
         "session_id": response.session_id,
         "usage": response.usage,
         "metadata": response.metadata,
     }
+    if json.loads(json.dumps(record, allow_nan=False)) != record:
+        raise TypeError("response fields must round-trip unchanged through JSON")
+    return record
 
 
 def _record_response(value: Any, path: Path) -> ProviderResponse:
@@ -182,12 +196,20 @@ def _record_response(value: Any, path: Path) -> ProviderResponse:
         raise ProviderInterruptedError(
             f"completed provider receipt has no valid response: {path}", receipt=path
         )
-    return ProviderResponse(
+    response = ProviderResponse(
         text=value["text"],
         session_id=value.get("session_id"),
-        usage=dict(value.get("usage") or {}),
-        metadata=dict(value.get("metadata") or {}),
+        usage=value.get("usage", {}),
+        metadata=value.get("metadata", {}),
     )
+    try:
+        _response_record(response)
+    except (TypeError, ValueError) as exc:
+        raise ProviderInterruptedError(
+            f"completed provider receipt has an invalid response: {path}: {exc}",
+            receipt=path,
+        ) from exc
+    return response
 
 
 def _pid_alive(pid: Any) -> bool | None:
@@ -246,10 +268,27 @@ def _receipt_process_alive(receipt: Mapping[str, Any]) -> bool | None:
     return _pid_alive(receipt.get("pid"))
 
 
-def _existing_response_or_raise(path: Path) -> ProviderResponse | None:
+def _receipt_matches(
+    value: Mapping[str, Any], request: ProviderRequest, attempt: int
+) -> bool:
+    return (
+        value.get("operation_id") == request.operation_id
+        and type(value.get("attempt")) is int
+        and value.get("attempt") == attempt
+    )
+
+
+def _existing_response_or_raise(request: ProviderRequest) -> ProviderResponse | None:
+    path = receipt_path(request)
     if not path.exists():
         return None
     value = _read_receipt(path)
+    if not _receipt_matches(value, request, request.attempt):
+        raise ProviderInterruptedError(
+            f"provider receipt identity does not match {request.operation_id!r} "
+            f"attempt {request.attempt}; refusing to use it",
+            receipt=path,
+        )
     status = value.get("status")
     if status == "completed":
         return _record_response(value.get("response"), path)
@@ -328,11 +367,73 @@ class _CLIProvider:
             raise ValueError("provider command cannot be empty")
         self.env = {str(k): str(v) for k, v in (env or {}).items()}
 
-    def recover(self, request: ProviderRequest) -> ProviderResponse | None:
-        current = _existing_response_or_raise(receipt_path(request))
-        if current is not None:
-            return current
-        return self._reconcile_prior_attempts(request)
+    def recover(self, request: ProviderRequest) -> RecoveryOutcome:
+        """Reconcile native receipts, preferring any completed response.
+
+        All receipt identities are verified before their contents are trusted.
+        A completed response wins over other attempt states because retry
+        authorization must never supersede an already durable result.
+        """
+        outcomes: list[RecoveryOutcome] = []
+        completed: Completed | None = None
+        for attempt in range(request.attempt, 0, -1):
+            path = _receipt_path_for(request, attempt)
+            if not path.exists():
+                continue
+            try:
+                value = _read_receipt(path)
+            except ProviderInterruptedError as exc:
+                outcomes.append(Unknown(str(exc)))
+                continue
+            if not _receipt_matches(value, request, attempt):
+                outcomes.append(
+                    Unknown(
+                        f"provider receipt identity does not match "
+                        f"{request.operation_id!r} attempt {attempt}"
+                    )
+                )
+                continue
+            status = value.get("status")
+            if status == "completed":
+                try:
+                    candidate = Completed(_record_response(value.get("response"), path))
+                    if completed is None:
+                        completed = candidate
+                except ProviderInterruptedError as exc:
+                    outcomes.append(Unknown(str(exc)))
+                continue
+            if status == "failed":
+                outcomes.append(Stopped(str(value.get("error") or "attempt failed")))
+                continue
+            alive = _receipt_process_alive(value)
+            if alive is True:
+                outcomes.append(
+                    Running(f"provider attempt {request_label(value)} is still running")
+                )
+            elif alive is False:
+                outcomes.append(
+                    Stopped(f"provider attempt {request_label(value)} has stopped")
+                )
+            else:
+                outcomes.append(
+                    Unknown(
+                        f"provider attempt {request_label(value)} has no verifiable process id"
+                    )
+                )
+
+        # A response is authoritative only once every other recorded attempt is
+        # also known quiescent. Inconsistent history with a newer/live attempt
+        # must not publish or roll back outputs while that attempt can edit.
+        for outcome_type in (Running, Unknown):
+            for outcome in outcomes:
+                if isinstance(outcome, outcome_type):
+                    return outcome
+        if completed is not None:
+            return completed
+        for outcome in outcomes:
+            if isinstance(outcome, Stopped):
+                return outcome
+        return Unknown("no matching provider receipt")
 
     @staticmethod
     def _reconcile_prior_attempts(request: ProviderRequest) -> ProviderResponse | None:
@@ -347,6 +448,12 @@ class _CLIProvider:
             if not path.exists():
                 continue
             value = _read_receipt(path)
+            if not _receipt_matches(value, request, attempt):
+                raise ProviderInterruptedError(
+                    f"prior provider receipt identity does not match "
+                    f"{request.operation_id!r} attempt {attempt}; refusing replacement",
+                    receipt=path,
+                )
             status = value.get("status")
             if status == "completed":
                 return _record_response(value.get("response"), path)
@@ -367,7 +474,7 @@ class _CLIProvider:
 
     def run(self, request: ProviderRequest) -> ProviderResponse:
         path = receipt_path(request)
-        existing = _existing_response_or_raise(path)
+        existing = _existing_response_or_raise(request)
         if existing is not None:
             return existing
         prior = self._reconcile_prior_attempts(request)
@@ -1135,29 +1242,54 @@ class FakeProvider:
     def __init__(self, responses: Iterable[Any]) -> None:
         self._responses = iter(responses)
         self.calls: list[ProviderRequest] = []
+        self._recovery: dict[tuple[str, int], RecoveryOutcome] = {}
 
     def run(self, request: ProviderRequest) -> ProviderResponse:
         self.calls.append(request)
+        key = (request.operation_id, request.attempt)
+        callback_started = False
         try:
             item = next(self._responses)
+            if callable(item):
+                callback_started = True
+                item = item(request)
+            if isinstance(item, BaseException):
+                raise item
+            if isinstance(item, ProviderResponse):
+                response = item
+            elif isinstance(item, str):
+                response = ProviderResponse(item, request.session_id)
+            elif isinstance(item, Mapping):
+                response = ProviderResponse(
+                    json.dumps(item, ensure_ascii=False), request.session_id
+                )
+            else:
+                raise TypeError(f"unsupported fake response: {type(item).__name__}")
         except StopIteration as exc:
+            self._recovery[key] = Stopped("fake call ended without a response")
             raise ProviderError("FakeProvider has no response left") from exc
-        if callable(item):
-            item = item(request)
-        if isinstance(item, BaseException):
-            raise item
-        if isinstance(item, ProviderResponse):
-            return item
-        if isinstance(item, str):
-            return ProviderResponse(item, request.session_id)
-        if isinstance(item, Mapping):
-            return ProviderResponse(
-                json.dumps(item, ensure_ascii=False), request.session_id
-            )
-        raise TypeError(f"unsupported fake response: {type(item).__name__}")
+        except (KeyboardInterrupt, SystemExit):
+            # A control interruption does not prove where execution stopped or
+            # whether an external effect started by the callback is still live.
+            self._recovery[key] = Unknown("fake call was interrupted")
+            raise
+        except BaseException as exc:
+            if callback_started:
+                self._recovery[key] = Unknown(
+                    f"fake callback failed without proving its effects stopped: {exc}"
+                )
+            else:
+                self._recovery[key] = Stopped(f"fake call stopped: {exc}")
+            raise
+        outcome = Completed(response)
+        self._recovery[key] = outcome
+        return response
 
-    def recover(self, request: ProviderRequest) -> ProviderResponse | None:
-        return None
+    def recover(self, request: ProviderRequest) -> RecoveryOutcome:
+        return self._recovery.get(
+            (request.operation_id, request.attempt),
+            Unknown("fake provider has no record of this attempt"),
+        )
 
 
 def get_provider(name: str, config: Mapping[str, Any] | None = None) -> Provider:

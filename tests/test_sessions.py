@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import pytest
 from pydantic import BaseModel
 
-from botpipe import Artifact, Botpipe, Session, activity, workflow
+from botpipe import Artifact, Botpipe, BotpipeError, Session, activity, workflow
 from botpipe.providers import FakeProvider, ProviderInterruptedError, ProviderResponse
 
 
@@ -95,13 +96,14 @@ def test_explicit_retry_does_not_remove_files_from_live_provider(tmp_path):
             for r in client.inspect(interrupted.run_id)["operations"]
             if r["kind"] == "provider"
         )
-        client.resolve(interrupted.run_id, op["id"], retry=True)
-        recovered = client.resume(interrupted.run_id, workflow=report)
-        assert recovered.status == "interrupted"
+        before = client.journal.get(op["id"])["response"]
+        with pytest.raises(BotpipeError, match="still running"):
+            client.resolve(interrupted.run_id, op["id"], retry=True)
         assert (
             provider.calls[0].artifacts["report"].read_text() == "still being produced"
         )
         assert len(provider.calls) == 1
+        assert client.journal.get(op["id"])["response"] == before
 
 
 def test_repair_usage_is_charged_once_in_results_and_run_totals(tmp_path):
@@ -194,17 +196,18 @@ def test_repeated_retry_authorization_cannot_advance_past_live_attempt(tmp_path)
             for row in client.inspect(paused.run_id)["operations"]
             if row["kind"] == "provider"
         )
-        client.resolve(paused.run_id, operation["id"], retry=True)
-        client.resolve(paused.run_id, operation["id"], retry=True)
-        assert client.journal.get(operation["id"])["response"]["generation"] == 1
+        before = client.journal.get(operation["id"])["response"]
+        with pytest.raises(BotpipeError, match="still running"):
+            client.resolve(paused.run_id, operation["id"], retry=True)
+        with pytest.raises(BotpipeError, match="still running"):
+            client.resolve(paused.run_id, operation["id"], retry=True)
+        assert client.journal.get(operation["id"])["response"] == before
+        assert "retry_authorized" not in before
         assert client.resume(paused.run_id, workflow=report).status == "interrupted"
         assert client.provider.calls[0].artifacts["report"].read_text() == "live output"
 
 
 def test_observed_response_cannot_release_a_known_live_provider(tmp_path):
-    import pytest
-    from botpipe import BotpipeError
-
     class LiveProvider(FakeProvider):
         def recover(self, request):
             raise ProviderInterruptedError("still running", process_alive=True)

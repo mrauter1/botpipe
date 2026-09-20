@@ -14,9 +14,8 @@ import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
-from dataclasses import asdict
 from pathlib import Path
-from types import CodeType
+from types import CodeType, MemberDescriptorType
 from typing import get_type_hints
 
 from pydantic import TypeAdapter
@@ -34,9 +33,11 @@ from .errors import (
     WorkflowChanged,
 )
 from .journal import Journal, now, workspace_lock
+from .limits import RunLimits
 from .models import RunResult
 from .policy import Policy
 from .provenance import capture_workflow_provenance
+from .recovery import Completed, Running, Stopped, recover_outcome
 
 _CURRENT = contextvars.ContextVar("botpipe_run", default=None)
 _OPERATION = contextvars.ContextVar("botpipe_operation", default=None)
@@ -59,6 +60,26 @@ def _hash(value):
     ).hexdigest()
 
 
+def _persist_response(journal, operation_id, response, session_key=None):
+    """Confirm a checkpoint after an ambiguous acknowledgement failure."""
+    try:
+        journal.response(operation_id, response, session_key=session_key)
+    except Exception as exc:
+        try:
+            observed = journal.confirmed(operation_id)
+        except Exception:
+            observed = None
+        if (
+            not observed
+            or observed["status"] != "response"
+            or observed["response"] != response
+        ):
+            raise UncertainOperation(
+                "Operation checkpoint could not be confirmed; resume to reconcile it",
+                operation_id,
+            ) from exc
+
+
 def _exception_record(exc):
     codec.type_name(type(exc))
     record = {
@@ -69,24 +90,52 @@ def _exception_record(exc):
     try:
         record["args"] = codec.encode(exc.args)
         record["attributes"] = codec.encode(vars(exc))
-    except TypeError:
-        pass
+        record["slots"] = [
+            {
+                "owner": codec.type_name(owner),
+                "name": name,
+                "value": codec.encode(descriptor.__get__(exc, type(exc))),
+            }
+            for owner in type(exc).__mro__
+            if owner is not BaseException
+            for name, descriptor in vars(owner).items()
+            if isinstance(descriptor, MemberDescriptorType) and hasattr(exc, name)
+        ]
+        record["restorable"] = True
+    except (TypeError, AttributeError) as error:
+        record["restorable"] = False
+        record["state_error"] = str(error)
     return record
 
 
 def _restore_exception(record):
     try:
+        if not record.get("restorable", True):
+            raise TypeError(record.get("state_error", "unsupported exception state"))
         cls = codec.resolve_type(f"{record['module']}:{record['type']}")
         args = (
             codec.decode(record["args"]) if "args" in record else (record["message"],)
         )
-        try:
+        if cls.__module__ == "builtins":
             result = cls(*args)
-        except Exception:
-            result = BaseException.__new__(cls)
+        else:
+            native = next(
+                base
+                for base in cls.__mro__[1:]
+                if base.__module__ == "builtins" and issubclass(base, BaseException)
+            )
+            result = native.__new__(cls, *args)
             BaseException.__init__(result, *args)
         if "attributes" in record:
             vars(result).update(codec.decode(record["attributes"]))
+        for slot in record.get("slots", ()):
+            owner = codec.resolve_type(slot["owner"])
+            descriptor = vars(owner)[slot["name"]]
+            if not issubclass(cls, owner) or not isinstance(
+                descriptor, MemberDescriptorType
+            ):
+                raise TypeError("Recorded exception slot no longer matches its type")
+            descriptor.__set__(result, codec.decode(slot["value"]))
         return result
     except Exception:
         return ActivityFailed(f"{record['type']}: {record['message']}")
@@ -200,16 +249,21 @@ def _function_version(fn, seen=None):
 
 
 def _validate_args(fn, args, kwargs):
+    from .discovery import WorkflowInputError
+
     signature = inspect.signature(fn)
-    bound = signature.bind(*args, **kwargs)
+    try:
+        bound = signature.bind(*args, **kwargs)
+    except TypeError as exc:
+        raise WorkflowInputError(str(exc)) from exc
     bound.apply_defaults()
     try:
         hints = get_type_hints(fn)
-    except (NameError, TypeError):
-        hints = {}
+    except (NameError, TypeError) as exc:
+        raise WorkflowInputError(f"Cannot resolve workflow annotations: {exc}") from exc
     for name, value in list(bound.arguments.items()):
         annotation = hints.get(name, signature.parameters[name].annotation)
-        if annotation is inspect.Parameter.empty or isinstance(annotation, str):
+        if annotation is inspect.Parameter.empty:
             continue
         if signature.parameters[name].kind in (
             inspect.Parameter.VAR_POSITIONAL,
@@ -218,12 +272,14 @@ def _validate_args(fn, args, kwargs):
             continue
         if isinstance(annotation, type):
             codec.type_name(annotation)
-        bound.arguments[name] = TypeAdapter(annotation).validate_python(value)
+        try:
+            bound.arguments[name] = TypeAdapter(annotation).validate_python(value)
+        except (ValueError, TypeError) as exc:
+            raise WorkflowInputError(f"Invalid workflow input {name!r}: {exc}") from exc
     return bound.args, bound.kwargs
 
 
 def _invoke(fn, args, kwargs):
-    args, kwargs = _validate_args(fn, args, kwargs)
     value = fn(*args, **kwargs)
     if inspect.isawaitable(value):
         try:
@@ -371,6 +427,8 @@ def _resolve_annotations(function, local_types):
         function.__annotations__ = get_type_hints(function, localns=local_types)
     except (NameError, TypeError):
         pass  # Module forward references can resolve at invocation time.
+    for annotation in function.__annotations__.values():
+        codec.register_annotation(annotation)
 
 
 class RunContext:
@@ -386,6 +444,9 @@ class RunContext:
     ):
         self.client, self.journal, self.definition = client, client.journal, definition
         self.run_id, self.task_id = metadata["run_id"], metadata["task_id"]
+        self.limits = (
+            parent.limits if parent is not None else RunLimits.from_record(metadata)
+        )
         self.workspace = client.workspace
         self.task_folder = client.state_dir / "tasks" / self.task_id
         self.scope, self.ordinal = scope, 0
@@ -451,6 +512,9 @@ class RunContext:
         finally:
             self._execution_lock.release()
 
+    def save_response(self, operation_id, response, session_key=None):
+        _persist_response(self.journal, operation_id, response, session_key)
+
     def _operation(
         self,
         kind,
@@ -500,19 +564,41 @@ class RunContext:
                 name=name,
                 fingerprint=fingerprint,
                 inputs=encoded_inputs,
-                limit=self.client.max_operations,
+                limit=self.limits.max_operations,
             )
         token = _OPERATION.set(operation_id)
         try:
             result = (
                 recover() if record is not None and recover is not None else execute()
             )
-            self.journal.finish(operation_id, codec.encode(result))
+            encoded_result = codec.encode(result)
+            try:
+                self.journal.finish(operation_id, encoded_result)
+            except Exception as exc:
+                # A commit may have succeeded even when its acknowledgement was
+                # lost. Never turn a committed outcome into an execution failure.
+                try:
+                    committed = self.journal.confirmed(operation_id)
+                except Exception:
+                    committed = None
+                if committed and committed["status"] == "completed":
+                    if committed["result"] != encoded_result:
+                        raise ReplayMismatch(
+                            "Committed operation result differs from its pending result"
+                        ) from exc
+                else:
+                    raise UncertainOperation(
+                        "Operation result could not be confirmed committed; resume to reconcile it",
+                        operation_id,
+                    ) from exc
             return result
         except (Suspension, ReplayMismatch):
             raise
         except Exception as exc:
-            self.journal.fail(operation_id, _exception_record(exc))
+            recorded_error = _exception_record(exc)
+            self.journal.fail(operation_id, recorded_error)
+            if not recorded_error.get("restorable", True):
+                raise _restore_exception(recorded_error) from exc
             raise
         finally:
             _OPERATION.reset(token)
@@ -582,9 +668,16 @@ def ask(question, *, returns=str):
     def execute():
         record = ctx.journal.get(ctx.operation_id)
         if record["status"] == "response":
-            return TypeAdapter(returns).validate_python(
-                codec.decode(record["response"]["answer"])
+            response = record["response"]
+            if "validated_answer" in response:
+                return codec.decode(response["validated_answer"])
+            value = TypeAdapter(returns).validate_python(
+                codec.decode(response["answer"])
             )
+            ctx.save_response(
+                ctx.operation_id, {"validated_answer": codec.encode(value)}
+            )
+            return value
         ctx.journal.wait_input(
             ctx.operation_id, {"question": str(question), "schema": schema}
         )
@@ -623,6 +716,8 @@ def parallel(*calls, max_workers=None, settle="all"):
                 except BaseException as exc:
                     errors.append(exc)
                     values.append({"error": str(exc), "type": type(exc).__name__})
+            if ctx._replay_state["error"] is not None:
+                raise ctx._replay_state["error"]
             suspended = next((e for e in errors if not isinstance(e, Exception)), None)
             if suspended is not None:
                 raise suspended
@@ -668,16 +763,24 @@ class Botpipe:
             self.provider, "name", type(self.provider).__name__
         )
         self.policy = Policy.resolve(policy)
-        if (
-            not isinstance(max_operations, int)
-            or isinstance(max_operations, bool)
-            or max_operations < 1
-        ):
-            raise ValueError("max_operations must be a positive integer")
-        if timeout <= 0:
-            raise ValueError("timeout must be positive")
-        self.max_operations, self.timeout = max_operations, float(timeout)
+        self.limits = RunLimits(max_operations, timeout)
         self.journal = Journal(self.state_dir / "state.sqlite3")
+
+    @property
+    def max_operations(self):
+        return self.limits.max_operations
+
+    @max_operations.setter
+    def max_operations(self, value):
+        self.limits = RunLimits(value, self.limits.timeout)
+
+    @property
+    def timeout(self):
+        return self.limits.timeout
+
+    @timeout.setter
+    def timeout(self, value):
+        self.limits = RunLimits(self.limits.max_operations, value)
 
     def _definition(self, value):
         if isinstance(value, str):
@@ -686,7 +789,21 @@ class Botpipe:
             value = resolve_workflow(value, workspace=self.workspace)
         if not isinstance(value, Workflow):
             raise TypeError("Expected a @workflow function or workflow reference")
+        # Register reconstructed local/generic input types before resume decodes
+        # their snapshots. Registration resolves types but never validates values.
+        _resolve_annotations(value.fn, {})
         return value
+
+    def _check_run_configuration(self, data):
+        if (
+            data["provider"] != self.provider_name
+            or data.get("provider_config", {}) != self.provider_config
+        ):
+            raise ReplayMismatch(
+                "Provider configuration changed; resume with the recorded provider configuration"
+            )
+        if self.policy.to_dict() != data["policy"]:
+            raise ReplayMismatch("Run policy changed; resume with the recorded policy")
 
     @contextmanager
     def _ownership(self, run_id, *, workspace=None):
@@ -727,7 +844,12 @@ class Botpipe:
                     finally:
                         db.close()
                     unfinished = any(
-                        not json.loads(response or "{}").get("not_dispatched")
+                        (
+                            not json.loads(response or "{}").get("not_dispatched")
+                            or json.loads(response or "{}").get(
+                                "restoration_pending", False
+                            )
+                        )
                         and (
                             kind == "activity"
                             or "text" not in json.loads(response or "{}")
@@ -752,6 +874,7 @@ class Botpipe:
     def run(self, definition, *args, task_id=None, run_id=None, **kwargs):
         definition = self._definition(definition)
         args, kwargs = _validate_args(definition.fn, args, kwargs)
+        limits = self.limits
         task_id = task_id or uuid.uuid4().hex[:12]
         run_id = run_id or uuid.uuid4().hex
         for label, value in (("task_id", task_id), ("run_id", run_id)):
@@ -775,8 +898,8 @@ class Botpipe:
             "provider": self.provider_name,
             "provider_config": self.provider_config,
             "policy": self.policy.to_dict(),
-            "max_operations": self.max_operations,
-            "timeout": self.timeout,
+            "max_operations": limits.max_operations,
+            "timeout": limits.timeout,
             "created_at": now(),
             "error": None,
         }
@@ -821,32 +944,20 @@ class Botpipe:
                 raise WorkflowChanged(
                     "Workflow code or referenced contracts changed; resume with original code or start a new run"
                 )
-            if (
-                data["provider"] != self.provider_name
-                or data.get("provider_config", {}) != self.provider_config
-            ):
-                raise ReplayMismatch(
-                    "Provider configuration changed; resume with the recorded provider configuration"
-                )
-            if self.policy.to_dict() != data["policy"]:
-                raise ReplayMismatch(
-                    "Run policy changed; resume with the recorded policy"
-                )
+            self._check_run_configuration(data)
             changes = {}
+            limits = RunLimits(
+                data["max_operations"] if max_operations is None else max_operations,
+                data["timeout"] if timeout is None else timeout,
+            )
             if max_operations is not None:
-                if (
-                    isinstance(max_operations, bool)
-                    or not isinstance(max_operations, int)
-                    or max_operations < data["max_operations"]
-                ):
+                if limits.max_operations < data["max_operations"]:
                     raise ValueError(
                         "Resume operation budget must be at least the recorded budget"
                     )
-                changes["max_operations"] = max_operations
+                changes["max_operations"] = limits.max_operations
             if timeout is not None:
-                if isinstance(timeout, bool) or timeout <= 0:
-                    raise ValueError("timeout must be positive")
-                changes["timeout"] = float(timeout)
+                changes["timeout"] = limits.timeout
             if changes:
                 data.update(changes)
                 self.journal.update_run(run_id, **changes)
@@ -866,8 +977,6 @@ class Botpipe:
                 self.journal.response(
                     pending["operation_id"], {"answer": codec.encode(answer)}
                 )
-            self.max_operations = data["max_operations"]
-            self.timeout = data["timeout"]
             return self._execute(
                 definition,
                 data,
@@ -959,7 +1068,7 @@ class Botpipe:
             if row["status"] == "completed" and row["kind"] == "provider":
                 # Inspection needs artifact records, not executable imports of
                 # the workflow's possibly local or no-longer-installed model.
-                handles = codec.decode(row["result"]["value"]["artifacts"])
+                handles = codec.decode(codec.encoded_field(row["result"], "artifacts"))
                 for name, handle in handles.items():
                     artifacts[f"{row['scope']}/{row['ordinal']}/{name}"] = handle
             elif row["status"] == "completed" and row["kind"] in (
@@ -1016,7 +1125,9 @@ class Botpipe:
     def resolve(self, run_id, operation_id, *, retry=False, response=_UNSET):
         if bool(retry) == (response is not _UNSET):
             raise ValueError("Choose either retry=True or a response")
-        with workspace_lock(self.workspace / ".botpipe-workspace.lock"):
+        with self._ownership(run_id):
+            data = self.journal.run(run_id)
+            self._check_run_configuration(data)
             record = self.journal.get(operation_id)
             if record is None or record["run_id"] != run_id:
                 raise KeyError(operation_id)
@@ -1031,59 +1142,106 @@ class Botpipe:
                     "Budget exhausted before dispatch; no effects need reconciliation. "
                     "Start a new run to use different provider budget limits"
                 )
-            if response is not _UNSET:
+            old = dict(record.get("response") or {})
+            source = "operator"
+            if record["kind"] == "provider":
                 from .providers import (
-                    ProviderError,
-                    ProviderInterruptedError,
                     ProviderRequest,
                     ProviderResponse,
+                    _response_record,
                 )
 
-                if record["kind"] == "provider":
+                inputs = codec.decode(record["inputs"])
+                request_data = old.get("request") or {}
+                # A retry marker names the *next* generation; reconcile the
+                # attempt whose effects are still awaiting resolution.
+                generation = old.get("generation", 0)
+                previous = generation - 1 if old.get("retry_authorized") else generation
+                request = ProviderRequest(
+                    operation_id=operation_id,
+                    prompt=request_data.get("prompt", inputs["prompt"]),
+                    workspace=Path(inputs["workspace"]),
+                    session_id=request_data.get("session_id"),
+                    output_schema=inputs.get("schema"),
+                    policy=Policy.from_dict(inputs["policy"]),
+                    artifacts={
+                        name: Path(path)
+                        for name, path in request_data.get("artifacts", {}).items()
+                    },
+                    receipt_dir=Path(
+                        request_data.get(
+                            "receipt_dir", Path(data["folder"]) / "receipts"
+                        )
+                    ),
+                    timeout=RunLimits.from_record(data).timeout,
+                    attempt=previous + 1,
+                    reads=tuple(Path(path) for path in request_data.get("reads", ())),
+                )
+
+                def reconcile_provider():
+                    nonlocal response, retry, source, old
+                    if "text" in old:
+                        # This journaled response already passed the provider
+                        # boundary; it is as authoritative as a recovered receipt.
+                        outcome = Completed(
+                            ProviderResponse(
+                                **{
+                                    key: old[key]
+                                    for key in (
+                                        "text",
+                                        "session_id",
+                                        "usage",
+                                        "metadata",
+                                    )
+                                    if key in old
+                                }
+                            )
+                        )
+                    else:
+                        outcome = recover_outcome(self.provider, request)
+                    if isinstance(outcome, Completed):
+                        response = outcome.response
+                        retry = False
+                        source = "recovered"
+                        old.pop("retry_authorized", None)
+                        old["generation"] = previous
+                    elif not isinstance(outcome, Stopped):
+                        state = (
+                            "still running"
+                            if isinstance(outcome, Running)
+                            else "not confirmed stopped"
+                        )
+                        raise BotpipeError(
+                            f"The provider is {state}; reconciliation is blocked. {outcome.detail or ''}".strip()
+                        )
+
+                target = request.workspace.resolve()
+                if target != self.workspace:
+                    with self._ownership(run_id, workspace=target):
+                        reconcile_provider()
+                else:
+                    reconcile_provider()
+
+                if response is not _UNSET:
                     if isinstance(response, dict):
                         response = ProviderResponse(**response)
                     if not isinstance(response, ProviderResponse):
                         raise TypeError(
                             "Provider reconciliation needs ProviderResponse or its field mapping"
                         )
-                    inputs = codec.decode(record["inputs"])
-                    old = record.get("response") or {}
-                    request_data = old.get("request") or {}
-                    recover = getattr(self.provider, "recover", None)
-                    if recover and request_data.get("receipt_dir"):
-                        request = ProviderRequest(
-                            operation_id=operation_id,
-                            prompt="",
-                            workspace=Path(inputs["workspace"]),
-                            session_id=request_data.get("session_id"),
-                            output_schema=inputs.get("schema"),
-                            policy=Policy.from_dict(inputs["policy"]),
-                            artifacts={},
-                            receipt_dir=Path(request_data["receipt_dir"]),
-                            timeout=self.timeout,
-                            attempt=old.get("generation", 0) + 1,
-                        )
-                        try:
-                            recover(request)
-                        except ProviderInterruptedError as exc:
-                            if exc.process_alive is True:
-                                raise BotpipeError(
-                                    "The provider is still running; stop it before recording a resolution"
-                                ) from exc
-                        except ProviderError:
-                            pass
                     old.pop("retry_authorized", None)
-                    self.journal.response(
+                    old["generation"] = previous
+                    _persist_response(
+                        self.journal,
                         operation_id,
-                        {**old, **asdict(response)},
+                        {**old, **_response_record(response)},
                         session_key=inputs.get("session"),
                     )
-                else:
-                    self.journal.finish(operation_id, codec.encode(response))
-            else:
+            elif response is not _UNSET:
+                self.journal.finish(operation_id, codec.encode(response))
+            if retry:
                 # Explicit retry is represented by an authorization marker; the
                 # original intent/identity remains, and adapters keep old receipts.
-                old = record.get("response") or {}
                 self.journal.response(
                     operation_id,
                     {
@@ -1094,7 +1252,10 @@ class Botpipe:
                     },
                 )
             self.journal.event(
-                run_id, "operation_reconciled", {"retry": retry}, operation_id
+                run_id,
+                "operation_reconciled",
+                {"retry": retry, "source": source},
+                operation_id,
             )
 
     def close(self):

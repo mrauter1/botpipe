@@ -30,6 +30,32 @@ scope, input, prompt, schema, or source raises a mismatch instead of silently
 doing different work. Workflow versions label intentional releases; they do not
 bypass source validation.
 
+## Durable value codec
+
+The ledger stores a narrow JSON value language. It supports JSON scalars and
+containers plus explicit records for bytes, paths, dates, enums, sets, tuples,
+artifact handles, Pydantic models, and dataclass instances. Model and dataclass
+records use a versioned state format. Their fields are encoded recursively by
+canonical Python field name, so aliases do not change the durable identity and a
+nested model retains its concrete type. Pydantic records also retain which
+fields were explicitly set and any allowed extra fields.
+
+Replay restores model and dataclass state without calling constructors,
+validators, default factories, `model_post_init`, or `__post_init__`. External
+run arguments, provider responses, and human answers are validated once before
+their normalized state is recorded. Internal workflow and activity calls retain
+ordinary Python argument semantics. Validation may repeat after a crash before
+its state was recorded, so validation hooks must remain free of external effects.
+Codec traversal has depth and value-count limits and rejects cycles.
+
+The automatic state codec deliberately refuses values whose complete state is
+not represented by ordinary fields. This includes private fields, excluded
+fields, secrets, custom serializers, cached or unknown instance attributes, custom
+state hooks, and unrecognized storage slots. Put such data in an artifact or
+return a separate plain model designed as durable state. Legacy unversioned
+model and dataclass records are rejected with a migration error; Botpipe never
+passes them through current validation and silently changes their meaning.
+
 The automatic fingerprint follows the workflow and referenced Python helpers
 and contracts. It is not an immutable process or environment snapshot: provider
 installations, external modules, environment values, and configuration semantics
@@ -42,10 +68,44 @@ outcome is `interrupted`. Botpipe will not infer that the effect failed or rerun
 it. The operator must record the observed response or explicitly authorize a
 retry with `Botpipe.resolve()`.
 
+Provider recovery and manual reconciliation use the same explicit outcomes:
+`Completed(response)`, `Stopped`, `Running`, and `Unknown`. A completed matching
+receipt is authoritative over operator input. Only a confirmed stopped attempt
+without a completed response accepts a manual response or retry authorization.
+Running and unknown attempts remain blocked; a legacy recovery hook returning
+`None` establishes no knowledge of termination. A native launch interrupted
+before its process identity was recorded therefore remains uncertain.
+
 While a workspace has an unresolved uncertain effect, its durable workspace
 fence blocks a different run from starting there, even when clients choose
 different state directories. Resolve the recorded effect before continuing work
 in that workspace.
+
+## Declared output transactions
+
+Each provider attempt records exact output destinations and moves their previous
+contents into backups before dispatch. Providers write directly to those paths.
+Botpipe validates the typed response and the complete declared artifact set,
+preflights durable value encoding, and publishes immutable snapshots before
+committing the operation. A saved validated value and capture manifest allow
+recovery to finish that commit without revalidating or redispatching.
+
+When a completed attempt fails output validation, rollback quarantines its
+declared outputs and restores every previous declared file. The rollback journal
+supports interrupted renames and detects conflicting changes. It requires a
+stopped provider; it cannot undo arbitrary repository edits outside the declared
+outputs. Replaying a successful capture reads immutable snapshots and leaves the
+current mutable workspace untouched. Backup and quarantine renames require the
+declared destinations and transaction directory to share a filesystem.
+
+## Run limits
+
+The client owns defaults for new runs. Each run persists its own immutable
+`RunLimits`, inherited by its child contexts. Resume can increase that run's
+operation limit or change its per-call timeout without changing client defaults.
+All entry points reject boolean or fractional operation counts, nonfinite
+timeouts, and nonpositive limits. These limits are separate from durable provider
+budgets: resuming does not restart an existing provider-budget deadline.
 
 ## Operation boundary
 

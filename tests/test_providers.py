@@ -23,6 +23,7 @@ from botpipe.providers import (
     ProviderTimeoutError,
     receipt_path,
 )
+from botpipe.recovery import Completed
 
 
 def request(tmp_path: Path, **changes: object) -> ProviderRequest:
@@ -72,7 +73,8 @@ print(json.dumps({{"type":"turn.completed","usage":{{"input_tokens":3,"output_to
     assert response.text == "done"
     assert response.session_id == "thread-7"
     assert response.usage["input_tokens"] == 3
-    assert recovered == replayed == response
+    assert recovered == Completed(response)
+    assert replayed == response
     assert marker.read_text() == "x"
     receipt = json.loads(receipt_path(req).read_text())
     assert receipt["status"] == "completed"

@@ -30,7 +30,7 @@ classifiers = [
 ]
 dependencies = [
   "jinja2>=3.1,<4",
-  "pydantic>=2,<3",
+  "pydantic>=2.12,<3",
   "jsonschema>=4,<5",
   "PyYAML>=6,<7",
 ]

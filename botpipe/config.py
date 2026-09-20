@@ -10,6 +10,8 @@ from typing import Any, Mapping
 
 import tomllib
 
+from .limits import RunLimits
+
 CONFIG_FILENAMES = ("botpipe.toml", ".botpipe.toml", "botpipe.json")
 
 
@@ -116,26 +118,23 @@ def load_config(
             resolved_state_dir = root / resolved_state_dir
         resolved_state_dir = resolved_state_dir.resolve()
 
-    resolved_max = int(
-        max_operations
-        if max_operations is not None
-        else payload.get("max_operations", 1000)
-    )
-    resolved_timeout = float(
-        timeout if timeout is not None else payload.get("timeout", 3600)
-    )
-    if resolved_max <= 0:
-        raise ConfigError("max_operations must be greater than zero")
-    if resolved_timeout <= 0:
-        raise ConfigError("timeout must be greater than zero")
+    try:
+        limits = RunLimits(
+            max_operations
+            if max_operations is not None
+            else payload.get("max_operations", 1000),
+            timeout if timeout is not None else payload.get("timeout", 3600),
+        )
+    except ValueError as exc:
+        raise ConfigError(str(exc)) from exc
     return ClientConfig(
         workspace=root,
         provider=resolved_provider,
         state_dir=resolved_state_dir,
         policy=resolved_policy or None,
         provider_config=resolved_provider_config,
-        max_operations=resolved_max,
-        timeout=resolved_timeout,
+        max_operations=limits.max_operations,
+        timeout=limits.timeout,
         source=source,
     )
 

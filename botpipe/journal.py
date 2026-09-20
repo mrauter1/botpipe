@@ -59,7 +59,35 @@ class Journal:
                 self.db.execute("ROLLBACK")
                 raise
             else:
-                self.db.execute("COMMIT")
+                try:
+                    self.db.execute("COMMIT")
+                except BaseException:
+                    if self.db.in_transaction:
+                        self.db.execute("ROLLBACK")
+                    raise
+
+    def confirmed(self, operation_id):
+        """Read a checkpoint through an independent committed database view."""
+        with self.lock:
+            if self.db.in_transaction:
+                self.db.rollback()
+            connection = sqlite3.connect(
+                self.path.resolve().as_uri() + "?mode=ro", uri=True
+            )
+            connection.row_factory = sqlite3.Row
+            try:
+                row = connection.execute(
+                    "SELECT * FROM operations WHERE id=?", (operation_id,)
+                ).fetchone()
+                if row is None:
+                    return None
+                record = dict(row)
+                for field in ("inputs", "result", "error", "response"):
+                    if record[field] is not None:
+                        record[field] = json.loads(record[field])
+                return record
+            finally:
+                connection.close()
 
     def close(self):
         with self.lock:
