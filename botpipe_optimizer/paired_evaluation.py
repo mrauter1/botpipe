@@ -226,6 +226,7 @@ def _run_arm(*,name,root,tree,surface,spec,spec_id,frozen,request_root,output_ro
         nonlocal exceeded
         try: _inventory(output_root,spec.max_evaluation_output_bytes,spec.max_evaluation_output_files)
         except ValueError: exceeded=True
+        except OSError: return False
         return exceeded
     env=dict(os.environ); env.update(BOTPIPE_EVAL_REQUEST=str(request_path),BOTPIPE_EVAL_RESULT=str(result_path))
     argv=_argv(spec,frozen,root)
@@ -315,8 +316,9 @@ def _argv(spec,frozen,workspace):
     replacements={"{evaluator_path}":str(frozen["evaluator_path"]),"{case_input_path}":str(frozen["case_input_path"]),"{workspace_path}":str(workspace),spec.evaluator_path:str(frozen["evaluator_path"])}
     return [replacements.get(x,x) for x in spec.evaluator_argv]
 def _environment_id(spec,frozen):
-    exe=Path(spec.evaluator_argv[0]); record={"argv0":spec.evaluator_argv[0]}
-    if exe.is_absolute() and exe.is_file() and not exe.is_symlink(): record|={"path":str(exe.resolve()),"sha256":_sha256(exe)}
+    resolved_executable = shutil.which(spec.evaluator_argv[0])
+    exe=Path(resolved_executable) if resolved_executable is not None else Path(spec.evaluator_argv[0]); record={"argv0":spec.evaluator_argv[0]}
+    if exe.is_file() and not exe.is_symlink(): record|={"path":str(exe.resolve()),"sha256":_sha256(exe)}
     return _canonical_id({"declared":spec.environment_id,"evaluator_id":frozen["evaluator_id"],"cases_id":frozen["case_input_id"],"argv":spec.evaluator_argv,"settings":spec.effective_settings,"executable":record,"platform":platform.platform(),"python":list(sys.version_info[:3])})
 def _limitations(spec):
     result=[]

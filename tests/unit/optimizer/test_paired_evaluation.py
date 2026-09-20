@@ -12,6 +12,7 @@ from botpipe_optimizer.paired_evaluation import (
     compare_evaluation_aggregates,
     run_paired_evaluation,
 )
+from labs.workflows.workflow_and_eval_to_refined_workflow_package.params import Params as RefinementParams
 
 
 def _digest(path: Path) -> str:
@@ -138,3 +139,19 @@ def test_comparison_regression_tie_guardrail_and_stochastic_scope(tmp_path: Path
     assert inconclusive["state"] == "inconclusive"
     # This spec has two repetitions; single-repetition warnings are tested by the model contract itself.
     assert inconclusive["claim_scope"] == "development_cases"
+
+
+def test_refinement_accepts_exactly_one_legacy_or_optimizer_input_path() -> None:
+    common = {"selected_workflow": "demo", "task_title": "refine"}
+    legacy = RefinementParams.model_validate({**common, "evaluation_summary_path": "summary.json", "evaluation_findings_path": "findings.md"})
+    optimizer = RefinementParams.model_validate({**common, "optimization_receipt_path": "receipt.json", "candidate_id": "candidate_abc"})
+    assert legacy.optimization_receipt_path is None
+    assert optimizer.evaluation_summary_path is None
+    argv = RefinementParams.model_validate({**common, "evaluation_summary_path": "summary.json", "evaluation_findings_path": "findings.md", "target_test_argv": ["pytest", "-q"]})
+    assert argv.target_test_command is None
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        RefinementParams.model_validate({**common, "evaluation_summary_path": "summary.json", "evaluation_findings_path": "findings.md", "optimization_receipt_path": "receipt.json", "candidate_id": "candidate_abc"})
+    with pytest.raises(ValueError, match="requires optimization_receipt_path and candidate_id"):
+        RefinementParams.model_validate({**common, "candidate_id": "candidate_abc"})
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        RefinementParams.model_validate({**common, "evaluation_summary_path": "summary.json", "evaluation_findings_path": "findings.md", "target_test_command": "pytest -q", "target_test_argv": ["pytest", "-q"]})

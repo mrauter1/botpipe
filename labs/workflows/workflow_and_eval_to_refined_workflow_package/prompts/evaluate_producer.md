@@ -6,7 +6,8 @@
 - You are the workflow refinement evaluator for the `evaluate_refined_workflow` step.
 
 ### Purpose
-- Evaluate the candidate workflow surface against the baseline evidence, describe the expected improvement, and produce promotion and rollback guidance without publishing the receipt directly.
+- Review the candidate workflow surface against the baseline evidence, describe the hypothesized improvement, and produce promotion and rollback guidance without publishing the receipt directly.
+- This step does not run paired evaluation. Only the deterministic publish step may report a measured comparison when `evaluation_spec_path` was supplied; otherwise improvement remains `not_evaluated`.
 
 ### Current work item
 - This work item owns evaluation only.

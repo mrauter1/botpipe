@@ -39,7 +39,8 @@ def validate_surface_manifest(manifest:Mapping[str,Any],*,expected_root:Path,exp
     """Recompute all factual fields and reject submitted drift or forgery."""
     raw=Path(_require_text(manifest.get("root",manifest.get("surface_root")),"manifest root required"))
     if raw.is_symlink() or raw.resolve(strict=True)!=Path(expected_root).resolve(strict=True):raise ValueError("manifest root must match runtime expected root")
-    derived=derive_surface_manifest(raw,expected_root=expected_root,boundary=expected_boundary,surface_kind=expected_surface_kind)
+    identity_boundary = {key: value for key, value in expected_boundary.items() if key != "surface_kind"}
+    derived=derive_surface_manifest(raw,expected_root=expected_root,boundary=identity_boundary,surface_kind=expected_surface_kind)
     for field in ("schema","surface_kind","root","surface_root","boundary","mode_semantics","surface_id","relative_paths","file_count","size_bytes"):
         if manifest.get(field)!=derived[field]:raise ValueError(f"manifest {field} must match derived surface")
     submitted=manifest.get("files")
@@ -549,6 +550,10 @@ def validate_candidate_surface_overlay(
     overlay_failure_prefix: str,
     overlay_temp_prefix: str,
     expected_candidate_root: Path | None = None,
+    expected_baseline_root: Path | None = None,
+    expected_boundary: Mapping[str, Any] | None = None,
+    baseline_surface_kind: str | None = None,
+    candidate_surface_kind: str | None = None,
     baseline_manifest: Mapping[str, Any] | None = None,
     execution_snapshot: Any | None = None,
     staging_parent: Path | None = None,
@@ -559,6 +564,10 @@ def validate_candidate_surface_overlay(
     from .candidate_validation import validate_frozen_candidate
     from .execution_trees import capture_execution_tree, cleanup_owned_directory
     if expected_candidate_root is None:raise ValueError("expected_candidate_root is required")
+    if expected_baseline_root is None:raise ValueError("expected_baseline_root is required")
+    if expected_boundary is None:raise ValueError("expected_boundary is required")
+    if baseline_surface_kind is None or candidate_surface_kind is None:
+        raise ValueError("baseline_surface_kind and candidate_surface_kind are required")
     if baseline_manifest is None:raise ValueError("baseline_manifest is required")
     workflow_name_list = _require_string_list(
         workflow_names,
@@ -574,9 +583,9 @@ def validate_candidate_surface_overlay(
                 import botpipe
                 selected=Path(botpipe.__file__).resolve().parent
             snapshot=capture_execution_tree(repo_root,staging_parent,selected_package_root=selected,selected_package_import_path="botpipe" if selected else None)
-        result=validate_frozen_candidate(snapshot,baseline_surface_manifest=baseline_manifest,candidate_surface_manifest=candidate_manifest,expected_candidate_root=expected_candidate_root,workflow_refs=workflow_name_list,staging_parent=staging_parent,target_test_argv=target_test_argv,target_test_command=target_test_command,compile_timeout_seconds=compile_timeout_seconds,test_timeout_seconds=test_timeout_seconds)
+        result=validate_frozen_candidate(snapshot,baseline_surface_manifest=baseline_manifest,candidate_surface_manifest=candidate_manifest,expected_baseline_root=expected_baseline_root,expected_candidate_root=expected_candidate_root,expected_boundary=expected_boundary,baseline_surface_kind=baseline_surface_kind,candidate_surface_kind=candidate_surface_kind,workflow_refs=workflow_name_list,staging_parent=staging_parent,target_test_argv=target_test_argv,target_test_command=target_test_command,compile_timeout_seconds=compile_timeout_seconds,test_timeout_seconds=test_timeout_seconds)
         if not result.success:raise ValueError(f"{overlay_failure_prefix}: {'; '.join(result.errors)}")
-        return result.model_dump(mode="json")
+        return result.model_dump(mode="json", by_alias=True)
     finally:
         if execution_snapshot is None and snapshot is not None and snapshot.root.exists():cleanup_owned_directory(snapshot.root,owned_parent=snapshot.owned_parent,ownership_token=snapshot.ownership_token)
         if temporary is not None:temporary.cleanup()

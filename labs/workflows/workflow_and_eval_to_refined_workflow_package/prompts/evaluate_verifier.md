@@ -40,6 +40,7 @@
 ### Artifact checks
 - `refinement_verification_report` must name the overlay validation command and explain what verification evidence exists now.
 - `evaluation_delta_report` must tie the candidate changes back to the copied baseline evidence and the candidate or baseline manifests.
+- Treat every claimed effect as a hypothesis here. Paired measured values are owned by the deterministic publisher when an explicit evaluation specification is present; omission means `not_evaluated`.
 - `promotion_record` must explain how the candidate could be promoted later and which artifacts gate that decision.
 - `rollback_plan` must explain how to abandon or reverse the candidate publication safely.
 

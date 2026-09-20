@@ -7,11 +7,14 @@ from copy import deepcopy
 import json
 import os
 import re
+import signal
+import threading
 from pathlib import Path
 import subprocess
 from typing import Any, Mapping
 
 from ...core.errors import FailureContext, ProviderExecutionError
+from ...core.process_containment import ProcessContainment
 from ...core.provider_policy import (
     ProviderPolicyEmission,
     ProviderPolicyValidationConfig,
@@ -26,6 +29,9 @@ from ...core.stores.protocols import SessionBinding
 
 
 _SAFE_STEP_KEY_PATTERN = re.compile(r"[^A-Za-z0-9_.-]+")
+_MAX_PROVIDER_STREAM_BYTES = 1024 * 1024
+_PROCESS_CONTAINMENTS: dict[int, ProcessContainment] = {}
+_OWNED_PROCESS_GROUPS: dict[int, int] = {}
 
 
 def require_prompt_text(prompt: ResolvedPrompt, provider_name: str, step_name: str) -> str:
@@ -201,43 +207,109 @@ def _coerce_int(value: Any) -> int | None:
 
 
 async def communicate_text_subprocess(
-    process: asyncio.subprocess.Process,
-    *,
-    input_text: str | None = None,
+    process: asyncio.subprocess.Process, *, input_text: str | None = None,
 ) -> tuple[str, str]:
-    """Communicate with a subprocess and clean it up correctly on cancellation."""
-
+    """Stream bounded tails and clean up the owned tree on cancellation."""
+    stdout = getattr(process, "stdout", None); stderr = getattr(process, "stderr", None)
+    if not isinstance(stdout, asyncio.StreamReader) or not isinstance(stderr, asyncio.StreamReader):
+        try:
+            out, err = await process.communicate(None if input_text is None else input_text.encode())
+        except asyncio.CancelledError:
+            await terminate_text_subprocess(process); raise
+        finally:
+            if process.returncode is not None: close_provider_subprocess_containment(process)
+        return _bounded_text(out), _bounded_text(err)
+    async def read_tail(reader):
+        tail=bytearray(); truncated=False
+        while True:
+            chunk=await reader.read(65536)
+            if not chunk: break
+            tail.extend(chunk)
+            if len(tail)>_MAX_PROVIDER_STREAM_BYTES:
+                del tail[:len(tail)-_MAX_PROVIDER_STREAM_BYTES]; truncated=True
+        return bytes(tail),truncated
+    async def write():
+        stream=getattr(process,"stdin",None)
+        if stream is None: return
+        try:
+            if input_text is not None: stream.write(input_text.encode()); await stream.drain()
+        except (BrokenPipeError,ConnectionResetError,ProcessLookupError): pass
+        finally:
+            stream.close()
+    tasks=[asyncio.create_task(write()),asyncio.create_task(read_tail(stdout)),asyncio.create_task(read_tail(stderr))]
     try:
-        stdin_payload = None if input_text is None else input_text.encode("utf-8")
-        stdout_bytes, stderr_bytes = await process.communicate(stdin_payload)
+        _,(out,out_cut),(err,err_cut)=await asyncio.gather(*tasks); await process.wait()
     except asyncio.CancelledError:
-        await terminate_text_subprocess(process)
-        raise
-    return stdout_bytes.decode("utf-8"), stderr_bytes.decode("utf-8")
+        for task in tasks: task.cancel()
+        await terminate_text_subprocess(process); await asyncio.gather(*tasks,return_exceptions=True); raise
+    finally:
+        if process.returncode is not None: close_provider_subprocess_containment(process)
+    marker=b"[... provider stream truncated ...]\n"
+    return (marker+out if out_cut else out).decode(errors="replace"),(marker+err if err_cut else err).decode(errors="replace")
+
+def _bounded_text(value: bytes) -> str:
+    if len(value) <= _MAX_PROVIDER_STREAM_BYTES:
+        return value.decode("utf-8", errors="replace")
+    return "[... provider stream truncated ...]\n" + value[-_MAX_PROVIDER_STREAM_BYTES:].decode("utf-8", errors="replace")
+
+async def create_provider_subprocess_exec(*command: str, **kwargs: object) -> asyncio.subprocess.Process:
+    containment = ProcessContainment.create()
+    try:
+        process = await asyncio.create_subprocess_exec(*command, **kwargs, **containment.creation_kwargs)
+        handle: Any = process
+        if os.name == "nt":  # pragma: no cover
+            transport = getattr(process, "_transport", None)
+            getter = getattr(transport, "get_extra_info", None)
+            handle = getter("subprocess") if callable(getter) else None
+            if handle is None: raise RuntimeError("could not access Windows provider process handle")
+        containment.attach_and_start(handle)
+        pid = getattr(process, "pid", None)
+        if os.name == "posix" and isinstance(pid, int):
+            if os.getpgid(pid) != pid or pid == os.getpgrp():
+                process.kill()
+                raise RuntimeError("provider process containment did not establish an owned process group")
+    except BaseException:
+        containment.close(); raise
+    _PROCESS_CONTAINMENTS[id(process)] = containment
+    if os.name == "posix" and isinstance(getattr(process, "pid", None), int):
+        _OWNED_PROCESS_GROUPS[id(process)] = process.pid
+    return process
+
+def close_provider_subprocess_containment(process: asyncio.subprocess.Process) -> None:
+    containment = _PROCESS_CONTAINMENTS.pop(id(process), None)
+    _OWNED_PROCESS_GROUPS.pop(id(process), None)
+    if containment is not None: containment.close()
 
 
-async def terminate_text_subprocess(process: asyncio.subprocess.Process) -> None:
-    """Terminate, then kill, a subprocess that is still running."""
-
-    if process.returncode is not None:
-        return
-    try:
-        process.terminate()
-    except ProcessLookupError:
-        pass
-    try:
-        await asyncio.wait_for(process.wait(), timeout=1.0)
-        return
-    except asyncio.TimeoutError:
-        pass
-    if process.returncode is not None:
-        return
-    try:
-        process.kill()
-    except ProcessLookupError:
-        return
+async def terminate_text_subprocess(process: asyncio.subprocess.Process, *, termination_grace_seconds: float = 5.0) -> None:
+    """Terminate, force-kill, and reap only a registered owned process tree."""
+    containment=_PROCESS_CONTAINMENTS.get(id(process)); group=_OWNED_PROCESS_GROUPS.get(id(process))
+    if group is not None:
+        try: os.killpg(group,signal.SIGTERM)
+        except ProcessLookupError: pass
+        await asyncio.sleep(termination_grace_seconds)
+        try: os.killpg(group,signal.SIGKILL)
+        except ProcessLookupError: pass
+        if process.returncode is None:
+            try: await process.wait()
+            except ProcessLookupError: pass
+        close_provider_subprocess_containment(process); return
+    if containment is not None and os.name=="nt":  # pragma: no cover
+        try: process.terminate()
+        except ProcessLookupError: pass
+        try: await asyncio.wait_for(process.wait(),timeout=termination_grace_seconds)
+        except asyncio.TimeoutError:
+            if containment._windows_job is not None: containment._windows_job.terminate(1)
+            await process.wait()
+        close_provider_subprocess_containment(process); return
+    if process.returncode is not None: return
+    try: process.terminate()
+    except ProcessLookupError: return
+    try: await asyncio.wait_for(process.wait(),timeout=termination_grace_seconds); return
+    except asyncio.TimeoutError: pass
+    try: process.kill()
+    except ProcessLookupError: return
     await process.wait()
-
 
 def run_text_subprocess(
     command: list[str],
@@ -248,22 +320,37 @@ def run_text_subprocess(
 ) -> tuple[str, str, int]:
     """Run a subprocess synchronously for explicit compatibility-only paths."""
 
-    completed = subprocess.run(
-        command,
-        input=input_text,
-        text=True,
-        capture_output=True,
-        check=False,
-        env=None if env is None else dict(env),
-        cwd=str(cwd) if cwd is not None else None,
-    )
-    return completed.stdout, completed.stderr, completed.returncode
+    containment=ProcessContainment.create()
+    process=subprocess.Popen(command,stdin=subprocess.PIPE if input_text is not None else None,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,env=None if env is None else dict(env),cwd=str(cwd) if cwd is not None else None,**containment.creation_kwargs)
+    try:
+        containment.attach_and_start(process)
+        tails={"stdout":bytearray(),"stderr":bytearray()}; truncated={"stdout":False,"stderr":False}
+        def read_stream(name,stream):
+            while True:
+                chunk=stream.buffer.read(65536) if hasattr(stream,"buffer") else stream.read(65536)
+                if not chunk: break
+                if isinstance(chunk,str): chunk=chunk.encode()
+                tails[name].extend(chunk)
+                if len(tails[name])>_MAX_PROVIDER_STREAM_BYTES:
+                    del tails[name][:len(tails[name])-_MAX_PROVIDER_STREAM_BYTES]; truncated[name]=True
+        threads=[threading.Thread(target=read_stream,args=("stdout",process.stdout),daemon=True),threading.Thread(target=read_stream,args=("stderr",process.stderr),daemon=True)]
+        for thread in threads: thread.start()
+        if input_text is not None and process.stdin is not None: process.stdin.write(input_text); process.stdin.close()
+        process.wait()
+        for thread in threads: thread.join()
+        marker=b"[... provider stream truncated ...]\n"
+        stdout=(marker if truncated["stdout"] else b"")+bytes(tails["stdout"]); stderr=(marker if truncated["stderr"] else b"")+bytes(tails["stderr"])
+        return stdout.decode(errors="replace"),stderr.decode(errors="replace"),process.returncode
+    except BaseException:
+        containment.terminate(process,grace_seconds=5.0); raise
+    finally: containment.close()
 
 
 def merge_subprocess_env(overrides: Mapping[str, str] | None = None) -> dict[str, str]:
     """Merge subprocess environment overrides over the ambient environment."""
 
     env = dict(os.environ)
+    env.pop("CODEX_HOME", None)
     if overrides:
         env.update({str(key): str(value) for key, value in overrides.items()})
     return env

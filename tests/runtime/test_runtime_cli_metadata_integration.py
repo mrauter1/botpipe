@@ -9,6 +9,9 @@ import pytest
 
 import botpipe
 from botpipe.core.providers.fake import ScriptedLLMProvider
+from botpipe.core.compiler import compile_workflow
+from botpipe.core.surface_identity import derive_workflow_surface_manifest
+from botpipe.core.workflow_capabilities import inspect_resolved_workflow
 from botpipe.runtime import cli
 from botpipe.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
 from botpipe.runtime.loader import resolve_workflow_reference
@@ -164,6 +167,16 @@ def test_workspace_run_metadata_records_origin_fields(tmp_path: Path) -> None:
     assert workflow_meta["package_folder"] == ".botpipe/workflows/local_demo"
     assert run_meta["package_folder"] == ".botpipe/workflows/local_demo"
     assert package_dir.exists()
+
+    resolved = resolve_workflow_reference(tmp_path, "local_demo")
+    capability = inspect_resolved_workflow(tmp_path, resolved)
+    expected_surface = derive_workflow_surface_manifest(tmp_path, capability)
+    provenance = run_meta["provenance"]
+    assert provenance["start"]["workflow_surface_manifest_id"] == expected_surface["surface_id"]
+    assert provenance["end"]["workflow_surface_manifest_id"] == expected_surface["surface_id"]
+    assert provenance["start"]["topology_id"] == compile_workflow(resolved.workflow_cls).topology_hash
+    trace = [json.loads(line) for line in (run_dir / "trace.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert next(event for event in trace if event["event_type"] == "run_started")["workflow_surface_manifest_id"] == expected_surface["surface_id"]
 
 
 def test_explicit_manifest_run_metadata_normalizes_external_origin(tmp_path: Path) -> None:

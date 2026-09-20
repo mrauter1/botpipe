@@ -25,7 +25,7 @@ def _run(root: Path, run_id: str, records, *, surface=SURFACE, topology=TOPOLOGY
 
 
 def _capture(root, runs, **kw):
-    return capture_evidence_snapshot(root, WF, runs, root / "snapshot", current_surface_manifest_id=SURFACE, current_topology_id=TOPOLOGY, **kw)
+    return capture_evidence_snapshot(root, WF, runs, root / "snapshot", current_workflow_identity=WF, current_surface_manifest_id=SURFACE, current_topology_id=TOPOLOGY, **kw)
 
 
 @pytest.mark.parametrize("mutation,expected", [("tamper", "byte_count_mismatch"), ("digest", "digest_mismatch"), ("absolute", "invalid_path"), ("traversal", "invalid_path")])
@@ -75,6 +75,15 @@ def test_t09_attempt_usage_counts_repair_and_distinguishes_unknown_zero_partial(
     assert by_step["partial"].usage_availability == "partial"
 
 
+def test_t09_legacy_missing_attempt_phase_prevents_false_complete_usage(tmp_path):
+    record = _step(1, "review", "needs_rework", producer_attempted=True, verifier_attempted=True,
+                   provider_usage={"producer": {"total_tokens": 10}})
+    observation = _capture(tmp_path, [_run(tmp_path, "run1", [record])], explicit_run_refs=True).observations[0]
+    assert observation.known_total_tokens == 10
+    assert observation.usage_availability == "partial"
+    assert [(a.phase, a.availability) for a in observation.attempts] == [("producer", "known_total"), ("verifier", "unknown")]
+
+
 def test_t10_structural_groups_do_not_pool_unknown_or_changed_surfaces(tmp_path):
     current = _run(tmp_path, "run1", [_step(1, "review", "needs_rework")])
     old = _run(tmp_path, "run2", [_step(1, "review", "needs_rework")], surface="old")
@@ -83,6 +92,52 @@ def test_t10_structural_groups_do_not_pool_unknown_or_changed_surfaces(tmp_path)
     assert len(snap.groups) == 2 and snap.recommendation_basis == "current_verified"
     assert snap.shortlist[0].distinct_run_count == 1
     assert next(r for r in snap.runs if r.run_id == "run3").structural_group_id is None
+
+
+def test_t10_foreign_workflow_identity_with_same_surface_and_topology_is_not_current(tmp_path):
+    old = _run(tmp_path, "run1", [_step(1, "review", "needs_rework")])
+    payload = json.loads((old / "run.json").read_text())
+    payload["provenance"]["workflow_identity"] = "foreign-origin"
+    (old / "run.json").write_text(json.dumps(payload))
+    snap = _capture(tmp_path, [old])
+    assert snap.groups[0].current_match is False
+    assert snap.recommendation_basis == "no_comparable_evidence"
+    assert snap.shortlist == ()
+    assert snap.next_action == "collect_evidence"
+
+
+def test_t10_nested_start_end_provenance_detects_mixed_source(tmp_path):
+    run = _run(tmp_path, "run1", [_step(1, "review", "needs_rework")])
+    payload = json.loads((run / "run.json").read_text())
+    base = payload["provenance"]
+    payload["provenance"] = {"start": base, "end": {**base, "workflow_surface_manifest_id": "changed"}}
+    (run / "run.json").write_text(json.dumps(payload))
+    snap = _capture(tmp_path, [run], explicit_run_refs=True)
+    assert snap.runs[0].provenance_state == "mixed"
+    assert snap.runs[0].structural_group_id is None
+    assert snap.next_action == "collect_evidence"
+
+
+def test_t11_names_do_not_infer_provider_or_editable_surface(tmp_path):
+    records = [
+        _step(1, "model_sounding_python", "failed", step_kind="python", provider_attempted=False),
+        _step(2, "publish_model_step", "failed", step_kind="pair", provider_attempted=True),
+    ]
+    snap = _capture(tmp_path, [_run(tmp_path, "run1", records)], explicit_run_refs=True, top_k_steps=2)
+    assert [item.step_id for item in snap.shortlist] == ["model_sounding_python", "publish_model_step"]
+    by_step = {item.step_id: item for item in snap.step_metrics}
+    assert by_step["model_sounding_python"].complete_usage is True
+    assert by_step["model_sounding_python"].attempted_dispatch_count == 0
+    assert by_step["publish_model_step"].complete_usage is False
+
+
+def test_t08_unscoped_ambiguous_legacy_lineage_stays_unknown(tmp_path):
+    record = _step(1, "review", "needs_rework")
+    record.pop("scope"); record.pop("item_id")
+    run = _run(tmp_path, "run1", [record], graph=False)
+    observation = _capture(tmp_path, [run], explicit_run_refs=True).observations[0]
+    assert observation.lineage == "unknown"
+    assert observation.rework_cycle is False
 
 
 @pytest.mark.parametrize("objective,leader", [("reliability", "failure"), ("token_usage", "tokens"), ("latency", "latency")])

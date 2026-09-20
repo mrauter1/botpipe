@@ -17,13 +17,13 @@ from botpipe_optimizer import (
     derive_candidate_surface_manifest,
     materialize_baseline_surface,
     normalize_candidate_surface_boundary,
-    normalize_candidate_surface_overlay_result,
     validate_authoritative_surface_sources_unchanged,
     validate_baseline_surface_manifest,
     validate_candidate_surface_manifest,
     validate_candidate_surface_overlay,
     write_selected_workflow_decomposition_surface,
 )
+from botpipe_optimizer.candidate_surfaces import derive_surface_manifest
 from botpipe.stdlib import (
     normalize_optional_string,
     normalize_unique_strings,
@@ -203,7 +203,8 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
         sponsor_role: str | None = None
         desired_outcome: str | None = None
         constraints: list[str] = Field(default_factory=list)
-        target_test_command: str = "pytest -q"
+        target_test_command: str | None = "pytest -q"
+        target_test_argv: list[str] | None = None
         max_candidate_building_blocks: int = 3
         framing_status: str | None = None
         planning_status: str | None = None
@@ -372,6 +373,7 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
                 "desired_outcome": params.desired_outcome,
                 "constraints": list(params.constraints),
                 "target_test_command": params.target_test_command,
+                "target_test_argv": params.target_test_argv,
                 "max_candidate_building_blocks": params.max_candidate_building_blocks,
                 "framing_status": None,
                 "planning_status": None,
@@ -396,6 +398,7 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
                 "desired_outcome": next_state.desired_outcome,
                 "constraints": next_state.constraints,
                 "target_test_command": next_state.target_test_command,
+                "target_test_argv": next_state.target_test_argv,
                 "max_candidate_building_blocks": next_state.max_candidate_building_blocks,
             },
         )
@@ -563,17 +566,17 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
         if ctx.state.evaluation_next_action is None:
             raise ValueError("workflow state must define evaluation_next_action before publication")
 
-        overlay_validation = normalize_candidate_surface_overlay_result(
-            validate_candidate_surface_overlay(
-                repo_root=repo_root,
-                workflow_names=[selected_workflow_name, *candidate_building_block_names],
-                candidate_manifest=candidate_manifest,
-                target_test_command=ctx.state.target_test_command,
-                candidate_manifest_label="candidate_decomposition_manifest.json",
-                overlay_failure_prefix="overlay validation command failed for candidate decomposition surface",
-                overlay_temp_prefix="workflow_decomposition_overlay_",
-            ),
-            expect_single_compiled_workflow=False,
+        validation_result = validate_candidate_surface_overlay(
+            repo_root=repo_root,
+            workflow_names=[selected_workflow_name, *candidate_building_block_names],
+            candidate_manifest=candidate_manifest,
+            target_test_command=ctx.state.target_test_command,
+            target_test_argv=ctx.state.target_test_argv,
+            candidate_manifest_label="candidate_decomposition_manifest.json",
+            overlay_failure_prefix="overlay validation command failed for candidate decomposition surface",
+            overlay_temp_prefix="workflow_decomposition_overlay_",
+            expected_candidate_root=required_dirs["candidate_decomposition_surface"],
+            baseline_manifest=baseline_manifest,
         )
 
         write_publication_receipt(
@@ -587,6 +590,7 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
                 "selected_workflow_reference": ctx.state.selected_workflow_reference,
                 "selected_workflow_name": selected_workflow_name,
                 "target_test_command": ctx.state.target_test_command,
+                "target_test_argv": ctx.state.target_test_argv,
                 "max_candidate_building_blocks": ctx.state.max_candidate_building_blocks,
                 "candidate_file_count": candidate_file_count,
                 "changed_relative_paths": candidate_changed_paths,
@@ -615,7 +619,7 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
                 "promotion_record": str(required_paths["promotion_record"]),
                 "rollback_plan": str(required_paths["rollback_plan"]),
                 "next_action": ctx.state.evaluation_next_action,
-                "overlay_validation": overlay_validation,
+                "validation_result": validation_result,
                 "published": True,
             },
         )
@@ -681,8 +685,23 @@ def _write_baseline_parent_manifest(
         candidate_dir_name="candidate_decomposition_surface",
     )
 
+    identity_boundary = {
+        "workflow_name": selected_workflow_name,
+        "parent_package_name": boundary["parent_package_name"],
+        "parent_package_root_relative_path": boundary["parent_package_root_relative_path"],
+        "parent_doc_relative_path": boundary["parent_doc_relative_path"],
+        "parent_runtime_test_relative_path": boundary["parent_runtime_test_relative_path"],
+        "editable_boundary_version": 1,
+    }
+    canonical = derive_surface_manifest(
+        Path(surface_manifest["surface_root"]),
+        expected_root=Path(surface_manifest["surface_root"]),
+        boundary=identity_boundary,
+        surface_kind="baseline_parent",
+        authoritative_sources={entry["relative_path"]: Path(entry["source_path"]) for entry in boundary["baseline_source_entries"]},
+    )
     manifest = {
-        "surface_kind": "baseline_parent",
+        **canonical,
         "selected_workflow_name": selected_workflow_name,
         "parent_package_name": _require_text(
             boundary.get("parent_package_name"),
@@ -697,7 +716,6 @@ def _write_baseline_parent_manifest(
             boundary.get("parent_runtime_test_relative_path")
         ),
         "repo_root": str(repo_root),
-        **surface_manifest,
     }
     write_workflow_json(ctx, "baseline_parent_manifest.json", manifest)
     return manifest
@@ -811,7 +829,7 @@ def _write_candidate_decomposition_manifest(
         boundary=boundary,
         max_candidate_building_blocks=max_candidate_building_blocks,
     )
-    surface_manifest = derive_candidate_surface_manifest(
+    legacy_surface = derive_candidate_surface_manifest(
         workflow_folder=workflow_folder,
         baseline_manifest=baseline_manifest,
         candidate_dir_name="candidate_decomposition_surface",
@@ -819,14 +837,32 @@ def _write_candidate_decomposition_manifest(
         candidate_manifest_label="candidate_decomposition_manifest.json",
     )
 
+    identity_boundary = {
+        "workflow_name": selected_workflow_name,
+        "parent_package_name": boundary["parent_package_name"],
+        "parent_package_root_relative_path": boundary["parent_package_root_relative_path"],
+        "parent_doc_relative_path": boundary["parent_doc_relative_path"],
+        "parent_runtime_test_relative_path": boundary["parent_runtime_test_relative_path"],
+        "building_block_package_roots": declared_building_blocks["allowed_package_roots"],
+        "editable_boundary_version": 1,
+    }
+    canonical = derive_surface_manifest(
+        Path(legacy_surface["surface_root"]),
+        expected_root=Path(legacy_surface["surface_root"]),
+        boundary=identity_boundary,
+        surface_kind="candidate_decomposition",
+    )
     manifest = {
-        "surface_kind": "candidate_decomposition",
+        **canonical,
         "selected_workflow_name": selected_workflow_name,
         "parent_package_name": boundary["parent_package_name"],
         "parent_package_root_relative_path": boundary["parent_package_root_relative_path"],
         "parent_doc_relative_path": boundary["parent_doc_relative_path"],
         "parent_runtime_test_relative_path": boundary["parent_runtime_test_relative_path"],
-        **surface_manifest,
+        "repo_root": legacy_surface["repo_root"],
+        "baseline_relative_paths": legacy_surface["baseline_relative_paths"],
+        "changed_relative_paths": legacy_surface["changed_relative_paths"],
+        "added_relative_paths": legacy_surface["added_relative_paths"],
         "building_block_names": declared_building_blocks["building_block_names"],
         "building_block_package_roots": declared_building_blocks["allowed_package_roots"],
     }

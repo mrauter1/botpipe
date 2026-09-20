@@ -260,11 +260,12 @@ def capture_evidence_snapshot(
     top_k_steps: int = 1,
     max_evidence_bytes: int = DEFAULT_MAX_EVIDENCE_BYTES,
     explicit_run_refs: bool = False,
+    current_workflow_identity: str | None = None,
     current_surface_manifest_id: str | None = None,
     current_topology_id: str | None = None,
 ) -> EvidenceSnapshot:
     """Capture stable evidence once, group comparable runs, and rank observed burden."""
-    del root  # retained to bind the public API to the caller's repository
+    repo_root = root.resolve()
     if not selected_workflow.strip():
         raise ValueError("selected_workflow must be non-empty")
     if objective not in {"reliability", "token_usage", "latency"}:
@@ -282,7 +283,19 @@ def capture_evidence_snapshot(
 
     for source in run_dirs:
         run_dir = source.resolve()
+        try:
+            run_dir.relative_to(repo_root)
+        except ValueError:
+            if explicit_run_refs:
+                raise ValueError(f"explicit run directory is outside the capture root: {run_dir}")
+            excluded.append(ExcludedRun(run_ref=run_dir.name, reason="run_outside_capture_root"))
+            continue
         run_ref = _path_run_ref(run_dir)
+        if run_dir.parent.name != "runs" or run_dir.parent.parent.name != f"wf_{selected_workflow}":
+            if explicit_run_refs:
+                raise ValueError(f"explicit run directory has the wrong workflow identity: {run_dir}")
+            excluded.append(ExcludedRun(run_ref=run_ref, reason="wrong_selected_workflow"))
+            continue
         required = [run_dir / "run.json", run_dir / "trace.jsonl"]
         optional = [run_dir / "git_tracking.jsonl", run_dir / "static_step_graph.json", run_dir / "provenance.json"]
         missing = next((item.name for item in required if not item.is_file()), None)
@@ -295,7 +308,7 @@ def capture_evidence_snapshot(
             size = sum(mark[2] for mark in watermark.values())
         except OSError as exc:
             excluded.append(ExcludedRun(run_ref=run_ref, reason="unreadable_core_input"))
-            issues.append(EvidenceIssue(run_ref=run_ref, dimension="core", reason="unreadable", detail=str(exc)))
+            issues.append(EvidenceIssue(run_ref=run_ref, dimension="core", reason="unreadable", detail=_error_detail(exc)))
             continue
         if size > remaining:
             excluded.append(ExcludedRun(run_ref=run_ref, reason="input_limit_exceeded", bytes=size))
@@ -305,7 +318,7 @@ def capture_evidence_snapshot(
             run_json, trace = _read_json(required[0]), _read_jsonl(required[1])
         except (OSError, ValueError, json.JSONDecodeError) as exc:
             excluded.append(ExcludedRun(run_ref=run_ref, reason="invalid_core_input", bytes=size))
-            issues.append(EvidenceIssue(run_ref=run_ref, dimension="core", reason="invalid", detail=str(exc)))
+            issues.append(EvidenceIssue(run_ref=run_ref, dimension="core", reason="invalid", detail=_error_detail(exc)))
             continue
         schemas = {record.get("schema") for record in trace if record.get("schema") is not None}
         if run_json.get("schema") not in {None, "botpipe.run_metadata/v1"} or not schemas.issubset({"botpipe.runtime_trace/v1"}):
@@ -334,7 +347,7 @@ def capture_evidence_snapshot(
             try:
                 graph = _read_json(graph_path)
             except (OSError, ValueError, json.JSONDecodeError) as exc:
-                issues.append(EvidenceIssue(run_ref=run_ref, dimension="topology", reason="invalid", detail=str(exc)))
+                issues.append(EvidenceIssue(run_ref=run_ref, dimension="topology", reason="invalid", detail=_error_detail(exc)))
         else:
             issues.append(EvidenceIssue(run_ref=run_ref, dimension="topology", reason="missing"))
         git_path = run_dir / "git_tracking.jsonl"
@@ -344,7 +357,7 @@ def capture_evidence_snapshot(
             try:
                 _read_jsonl(git_path)
             except (OSError, ValueError, json.JSONDecodeError) as exc:
-                issues.append(EvidenceIssue(run_ref=run_ref, dimension="git", reason="invalid", detail=str(exc)))
+                issues.append(EvidenceIssue(run_ref=run_ref, dimension="git", reason="invalid", detail=_error_detail(exc)))
         provenance = _provenance(run_ref, run_json, trace, graph, selected_workflow)
         drafts = _observations(run_ref, trace, graph, routes, issues)
         captured.append(_Captured(run_dir=run_dir, run_json=run_json, trace=trace, watermark=watermark, core_bytes=size, provenance=provenance, drafts=drafts))
@@ -382,7 +395,13 @@ def capture_evidence_snapshot(
             issues.append(EvidenceIssue(run_ref=item.provenance["run_ref"], dimension="core", reason="concurrently_changed"))
             admitted_bytes -= item.core_bytes
     observations = _lineage([normalized[d.observation["observation_id"]] for item in stable for d in item.drafts])
-    groups, runs = _groups(stable, observations, current_surface_manifest_id, current_topology_id)
+    groups, runs = _groups(
+        stable,
+        observations,
+        current_workflow_identity,
+        current_surface_manifest_id,
+        current_topology_id,
+    )
     selected_group, basis, sets = _analysis_sets(groups, runs, observations, explicit_run_refs)
     metrics = _metrics(sets, runs)
     shortlist, measure_first = _rank(metrics, objective, top_k_steps)
@@ -495,7 +514,13 @@ def _lineage(observations: Sequence[Observation]) -> list[Observation]:
     return [item.model_copy(update=updates.get(item.observation_id, {})) for item in observations]
 
 
-def _groups(captured: Sequence[_Captured], observations: Sequence[Observation], current_surface: str | None, current_topology: str | None) -> tuple[list[EvidenceGroup], list[RunEvidence]]:
+def _groups(
+    captured: Sequence[_Captured],
+    observations: Sequence[Observation],
+    current_workflow: str | None,
+    current_surface: str | None,
+    current_topology: str | None,
+) -> tuple[list[EvidenceGroup], list[RunEvidence]]:
     obs_ids: dict[str, list[str]] = defaultdict(list)
     for item in observations:
         obs_ids[item.run_ref].append(item.observation_id)
@@ -510,7 +535,7 @@ def _groups(captured: Sequence[_Captured], observations: Sequence[Observation], 
         for member in members:
             by_run[member["run_ref"]] = group_id
         latest = max(((m["completed_at"] or "", m["run_ref"]) for m in members), default=("", ""))
-        groups.append(EvidenceGroup(group_id=group_id, workflow_identity=workflow, surface_manifest_id=surface, topology_id=topology, run_refs=tuple(sorted(m["run_ref"] for m in members)), current_match=surface == current_surface and topology == current_topology, latest_completion=latest[0] or None, latest_run_ref=latest[1] or None))
+        groups.append(EvidenceGroup(group_id=group_id, workflow_identity=workflow, surface_manifest_id=surface, topology_id=topology, run_refs=tuple(sorted(m["run_ref"] for m in members)), current_match=workflow == current_workflow and surface == current_surface and topology == current_topology, latest_completion=latest[0] or None, latest_run_ref=latest[1] or None))
     runs = [RunEvidence(**item.provenance, structural_group_id=by_run.get(item.provenance["run_ref"]), observation_ids=tuple(obs_ids[item.provenance["run_ref"]])) for item in captured]
     return groups, runs
 
@@ -593,6 +618,8 @@ def _provenance(run_ref: str, run_json: Mapping[str, Any], trace: Sequence[Mappi
     surface = val("workflow_surface_manifest_id", "surface_manifest_id")
     topology = val("topology_id", "normalized_topology_id") or ("topology-" + _hash(_normalized_topology(graph)) if graph else None)
     mixed = any(_first(start, names) and _first(end, names) and _first(start, names) != _first(end, names) for names in (("workflow_identity", "workflow_name"), ("workflow_surface_manifest_id", "surface_manifest_id"), ("topology_id", "normalized_topology_id")))
+    mixed = mixed or start.get("source_identity_matched") is False or end.get("source_identity_matched") is False
+    mixed = mixed or any(_text(source.get("provenance_status")) in {"mixed", "mixed_or_unavailable"} for source in (start, end, root))
     task_id, run_id = run_ref.split("/", 1)
     workflow_input = _map(run_json.get("workflow_input"))
     return {"run_ref": run_ref, "task_id": task_id, "run_id": run_id, "status": _text(run_json.get("status")), "terminal": _text(run_json.get("terminal")), "completed_at": _text(run_json.get("completed_at")) or _text(run_json.get("updated_at")), "workflow_identity": workflow_id, "surface_manifest_id": surface, "topology_id": topology, "parameter_digest": val("parameter_digest", "workflow_parameter_digest"), "configuration_digest": val("configuration_digest", "config_digest"), "provider_policy_identity": val("provider_policy_identity", "provider_policy_id"), "case_identity": val("case_identity", "case_id", "case_mix_digest") or _text(workflow_input.get("case_id")) or _text(run_json.get("evaluation_case_id")), "provenance_state": "mixed" if mixed else ("known" if surface and topology else "unknown")}
@@ -600,7 +627,9 @@ def _provenance(run_ref: str, run_json: Mapping[str, Any], trace: Sequence[Mappi
 
 def _attempts(events: Sequence[Mapping[str, Any]]) -> tuple[UsageAttempt, ...]:
     groups: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
-    for i, event in enumerate(events): groups[_text(event.get("dispatch_id")) or _text(event.get("provider_attempt_id")) or f"legacy-event:{i}"].append(event)
+    for i, event in enumerate(events):
+        fallback = f"legacy:{_text(event.get('phase')) or _text(event.get('turn_kind')) or 'unknown'}:{_positive(event.get('attempt')) or 1}"
+        groups[_text(event.get("dispatch_id")) or _text(event.get("provider_attempt_id")) or fallback].append(event)
     result = []
     for dispatch_id, life in sorted(groups.items()):
         final, first = next((e for e in reversed(life) if str(e.get("event_type", "")).endswith(("finished", "failed"))), life[-1]), life[0]
@@ -616,6 +645,10 @@ def _legacy_attempts(record: Mapping[str, Any]) -> tuple[UsageAttempt, ...]:
     for phase, value in phases or ([('legacy', usage)] if usage else []):
         availability, source, total, inp, out = _usage_values(value)
         result.append(UsageAttempt(dispatch_id=f"legacy:{record.get('sequence')}:{phase}", phase=str(phase), availability=availability, total_source=source, input_tokens=inp, output_tokens=out, total_tokens=total, cached_input_tokens=_nn(value.get("cached_input_tokens")), reasoning_tokens=_nn(value.get("reasoning_tokens"))))
+    present = {str(phase) for phase, _ in phases}
+    for phase, field in (("producer", "producer_attempted"), ("verifier", "verifier_attempted")):
+        if record.get(field) is True and phase not in present:
+            result.append(UsageAttempt(dispatch_id=f"legacy:{record.get('sequence')}:{phase}", phase=phase, availability="unknown", total_source="unavailable"))
     if not result and record.get("provider_attempted") is True:
         result.append(UsageAttempt(dispatch_id=f"legacy:{record.get('sequence')}:unknown", phase="legacy", availability="unknown", total_source="unavailable"))
     return tuple(result)
@@ -760,6 +793,10 @@ def _required_text(value, field):
 def _nn(value): return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
 def _positive(value): return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else None
 def _first(source, names): return next((_text(source.get(name)) for name in names if _text(source.get(name))), None)
+def _error_detail(exc):
+    if isinstance(exc, json.JSONDecodeError): return f"JSONDecodeError at line {exc.lineno}, column {exc.colno}"
+    if isinstance(exc, ValueError): return str(exc)
+    return type(exc).__name__
 
 
 __all__ = ["DEFAULT_MAX_EVIDENCE_BYTES", "EVIDENCE_SNAPSHOT_SCHEMA", "EvidenceBudget", "EvidenceGroup", "EvidenceIssue", "EvidenceSnapshot", "ExcludedRun", "Observation", "RawEvidenceReference", "ResourceBreakdown", "RunEvidence", "SelectionPolicy", "StepMetric", "StepRanking", "UsageAttempt", "capture_evidence_snapshot", "read_evidence_snapshot", "write_evidence_snapshot"]

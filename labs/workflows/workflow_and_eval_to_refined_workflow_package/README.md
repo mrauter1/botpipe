@@ -35,8 +35,14 @@ Params:
 
 - `selected_workflow` required
 - `task_title` required
-- `evaluation_summary_path` required; the JSON must include `selected_workflow_name` matching `selected_workflow`
-- `evaluation_findings_path` required
+- Exactly one primary input is required: either legacy `evaluation_summary_path` plus
+  `evaluation_findings_path`, or `optimization_receipt_path` plus one reviewed
+  `candidate_id`. The optimizer handoff rejects stale anchors, workflow mismatches,
+  unreviewed IDs, and `evaluation_case` candidates.
+- `evaluation_spec_path` optional; when present, publication freezes its evaluator,
+  cases, metrics, thresholds, settings, and budgets and runs exactly one evaluator
+  subprocess against each isolated baseline/candidate arm. Omission records
+  `not_evaluated` and does not run a hidden comparison.
 - `failure_modes_path` optional
 - `sponsor_role` optional
 - `desired_outcome` optional
