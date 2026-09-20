@@ -100,7 +100,8 @@ def test_complete_manifest_replaces_only_the_managed_existing_boundary(tmp_path)
     (package / "workflow.toml").write_text('name = "old"\n')
     (package / "undeclared.py").write_text("HIDDEN = True\n")
     unchanged = 'VALUE = "preserved"\n'
-    (package / "helper.py").write_text(unchanged)
+    # Compare identical bytes regardless of the platform text newline default.
+    (package / "helper.py").write_bytes(unchanged.encode("utf-8"))
 
     workspace, _, generated = _materialize(
         tmp_path,
