@@ -27,12 +27,17 @@ client = Botpipe(
   contexts; resuming never changes the client's defaults for another run.
   Operation limits require positive integers; timeouts require finite positive
   numbers. Booleans and silently truncated values are rejected.
-- `resolve(run_id, operation_id, *, retry=False, response=...)` explicitly
-  reconciles an interrupted operation. Choose exactly one resolution, then call
+- `resolve(run_id, operation_id, *, retry=False, response=..., artifact_digests=None)` explicitly
+  reconciles an interrupted operation. Choose a resolution, then call
   `resume`; an explicit `None` response records `None` as the activity result.
   Provider reconciliation first checks recovery: an authoritative completed
   response wins over supplied input, and running or unknown attempts remain
   blocked. A manual provider response or retry requires confirmed stopped effects.
+  When a completed response has no durable artifact inventory, provide a complete
+  `artifact_digests` mapping from declared name to SHA-256 digest (`None` means an
+  optional artifact is absent). It may accompany a manual response, but cannot
+  accompany `retry=True`. The current files are verified and recorded as operator
+  reconciliation, then verified again during capture.
 - `runs()` returns run metadata mappings.
 - `inspect(run_id)` returns run metadata, operations, events, and artifacts.
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from copy import deepcopy
 
 import pytest
@@ -250,6 +251,9 @@ def test_manual_response_cancels_pending_retry_without_preparing_new_outputs(tmp
             paused.run_id,
             operation["id"],
             response=ProviderResponse("recovered manually"),
+            artifact_digests={
+                "report": hashlib.sha256(destination.read_bytes()).hexdigest()
+            },
         )
         resolved = client.journal.get(operation["id"])["response"]
         assert resolved["generation"] == 0

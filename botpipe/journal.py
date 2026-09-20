@@ -198,38 +198,37 @@ class Journal:
             )
 
     def finish(self, operation_id, result):
-        with self.transaction() as db:
-            row = db.execute(
-                "SELECT run_id FROM operations WHERE id=?", (operation_id,)
-            ).fetchone()
-            db.execute(
-                "UPDATE operations SET status='completed',result=?,error=NULL,finished_at=? WHERE id=?",
-                (json.dumps(result), now(), operation_id),
-            )
-            self._event(db, row[0], operation_id, "operation_completed", {})
+        self._checkpoint(
+            operation_id,
+            expected=("started", "response"),
+            status="completed",
+            result=result,
+            error=None,
+            event="operation_completed",
+            event_data={},
+        )
 
     def fail(self, operation_id, error):
-        with self.transaction() as db:
-            row = db.execute(
-                "SELECT run_id FROM operations WHERE id=?", (operation_id,)
-            ).fetchone()
-            db.execute(
-                "UPDATE operations SET status='failed',error=?,finished_at=? WHERE id=?",
-                (json.dumps(error), now(), operation_id),
-            )
-            self._event(db, row[0], operation_id, "operation_failed", error)
+        # A response may be known stopped and still fail its output contract.
+        # Waiting and completed records are authoritative checkpoints and must
+        # never be replaced by a generic exception handler.
+        self._checkpoint(
+            operation_id,
+            expected=("started", "response"),
+            status="failed",
+            error=error,
+            event="operation_failed",
+            event_data=error,
+        )
 
     def response(self, operation_id, response, session_key=None):
-        with self.transaction() as db:
-            db.execute(
-                "UPDATE operations SET status='response',response=? WHERE id=?",
-                (json.dumps(response), operation_id),
-            )
-            if session_key and response.get("session_id"):
-                db.execute(
-                    "INSERT INTO sessions VALUES (?,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value",
-                    (session_key, json.dumps({"session_id": response["session_id"]})),
-                )
+        self._checkpoint(
+            operation_id,
+            expected=("started", "waiting", "response"),
+            status="response",
+            response=response,
+            session_key=session_key,
+        )
 
     def session(self, key):
         with self.lock:
@@ -239,11 +238,91 @@ class Journal:
         return json.loads(row[0]) if row else None
 
     def wait_input(self, operation_id, data):
+        self._checkpoint(
+            operation_id,
+            expected=("started", "waiting"),
+            status="waiting",
+            response=data,
+        )
+
+    _MISSING = object()
+
+    def _checkpoint(
+        self,
+        operation_id,
+        *,
+        expected,
+        status,
+        result=_MISSING,
+        error=_MISSING,
+        response=_MISSING,
+        session_key=None,
+        event=None,
+        event_data=None,
+    ):
+        """Commit one operation projection from an explicitly allowed state."""
         with self.transaction() as db:
-            db.execute(
-                "UPDATE operations SET status='waiting',response=? WHERE id=?",
-                (json.dumps(data), operation_id),
+            row = db.execute(
+                "SELECT * FROM operations WHERE id=?", (operation_id,)
+            ).fetchone()
+            if row is None:
+                raise KeyError(operation_id)
+            current = self._record(row)
+            projection = {"status": status}
+            for field, value in (
+                ("result", result),
+                ("error", error),
+                ("response", response),
+            ):
+                if value is not self._MISSING:
+                    projection[field] = value
+            if all(current.get(key) == value for key, value in projection.items()):
+                return
+            if current["status"] not in expected:
+                raise RuntimeError(
+                    f"Operation {operation_id} changed from expected state "
+                    f"{tuple(expected)!r} to {current['status']!r}"
+                )
+            assignments = ["status=?"]
+            values = [status]
+            for field, value in (
+                ("result", result),
+                ("error", error),
+                ("response", response),
+            ):
+                if value is not self._MISSING:
+                    assignments.append(f"{field}=?")
+                    values.append(json.dumps(value) if value is not None else None)
+            if status in {"completed", "failed"}:
+                assignments.append("finished_at=?")
+                values.append(now())
+            placeholders = ",".join("?" for _ in expected)
+            cursor = db.execute(
+                f"UPDATE operations SET {','.join(assignments)} "
+                f"WHERE id=? AND status IN ({placeholders})",
+                (*values, operation_id, *expected),
             )
+            if cursor.rowcount != 1:
+                raise RuntimeError(
+                    f"Operation {operation_id} did not match its expected checkpoint"
+                )
+            if (
+                session_key
+                and response is not self._MISSING
+                and response.get("session_id")
+            ):
+                db.execute(
+                    "INSERT INTO sessions VALUES (?,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value",
+                    (session_key, json.dumps({"session_id": response["session_id"]})),
+                )
+            if event is not None:
+                self._event(
+                    db,
+                    current["run_id"],
+                    operation_id,
+                    event,
+                    event_data or {},
+                )
 
     def event(self, run_id, event, data=None, operation_id=None):
         with self.transaction() as db:

@@ -44,6 +44,8 @@ def WorkflowToEvalSuite(params: Params, request: str = "") -> LabWorkflowResult:
                 "source"
             ]["path"],
             allowed_kinds=("evaluation_case",),
+            max_evidence_bytes=params.max_evidence_bytes,
+            max_snapshot_bytes=params.max_snapshot_bytes,
         )
         context["optimizer_handoff"] = optimizer_handoff
         context["evaluation_claim_scope"] = "development_cases"

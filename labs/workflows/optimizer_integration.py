@@ -53,6 +53,8 @@ def load_optimizer_candidate_handoff(
     allowed_kinds: Sequence[str],
     selected_workflow_reference: str | None = None,
     selected_workflow_source_path: str | None = None,
+    max_evidence_bytes: int = 50 * 1024 * 1024,
+    max_snapshot_bytes: int = 50 * 1024 * 1024,
 ) -> dict[str, Any]:
     """Validate one accepted optimizer receipt and return its immutable handoff."""
 
@@ -68,6 +70,8 @@ def load_optimizer_candidate_handoff(
         candidate_id=candidate_id,
         expected_selected_workflow=expected_selected_workflow,
         allowed_kinds=tuple(allowed_kinds),
+        max_evidence_bytes=max_evidence_bytes,
+        max_snapshot_bytes=max_snapshot_bytes,
     )
     current_surface = derive_workflow_surface_manifest(
         Path(workspace),

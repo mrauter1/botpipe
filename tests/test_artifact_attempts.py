@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+
 import pytest
 from pydantic import BaseModel, field_validator
 
@@ -284,13 +286,13 @@ def test_capture_oserror_stays_interrupted_and_recovers_without_provider(
     real_capture = ArtifactStore.capture
     failed = False
 
-    def fail_once(store, writes, operation_id):
+    def fail_once(store, writes, operation_id, **kwargs):
         nonlocal failed
         if not failed:
             failed = True
-            real_capture(store, writes, operation_id)
+            real_capture(store, writes, operation_id, **kwargs)
             raise OSError("simulated publication failure")
-        return real_capture(store, writes, operation_id)
+        return real_capture(store, writes, operation_id, **kwargs)
 
     monkeypatch.setattr(ArtifactStore, "capture", fail_once)
     provider = FakeProvider([write])
@@ -470,6 +472,18 @@ def test_checkpoint_io_failure_recovers_without_dispatch(
         if checkpoint == "finish":
             provider.calls[0].artifacts["result"].write_text("later mutable edit")
         resumed = client.resume(first.run_id, workflow=writer)
+        if not after_commit and checkpoint != "finish":
+            assert resumed.status == "interrupted", resumed.error
+            operation = _provider_operation(client, first.run_id)
+            digest = hashlib.sha256(
+                provider.calls[0].artifacts["result"].read_bytes()
+            ).hexdigest()
+            client.resolve(
+                first.run_id,
+                operation["id"],
+                artifact_digests={"result": digest},
+            )
+            resumed = client.resume(first.run_id, workflow=writer)
 
     assert resumed.ok, resumed.error
     assert resumed.value.artifacts.result.read_text() == "committed output"

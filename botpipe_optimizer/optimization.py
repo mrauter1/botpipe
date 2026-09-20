@@ -17,6 +17,7 @@ from statistics import mean
 from typing import Any, get_type_hints
 
 from botpipe.codec import decode as decode_durable
+from botpipe.dispatches import known_token_total, normalize_usage
 
 _FAILURES = frozenset({"failed", "interrupted", "budget_exceeded", "cancelled"})
 
@@ -342,7 +343,7 @@ def build_operation_metrics(
                 failure_count=sum(item.status in _FAILURES for item in observations),
                 retry_count=sum(max(0, item.attempts - 1) for item in observations),
                 mean_duration_ms=None if not durations else round(mean(durations), 3),
-                total_tokens=sum(_token_total(item.usage) for item in observations),
+                total_tokens=sum(_operation_token_total(item) for item in observations),
                 outcome_counts=dict(sorted(outcomes.items())),
                 evidence_operation_ids=tuple(
                     item.operation_id for item in observations
@@ -549,7 +550,7 @@ def _load_operation(
         outcome=_extract_outcome(value),
         attempts=attempts,
         duration_ms=_duration_ms(item),
-        usage=_number_mapping(item.get("usage") or result_usage),
+        usage=_normalized_usage(item.get("usage") or result_usage),
         inputs=inputs,
         result=value,
         error=None if item.get("error") is None else str(item.get("error")),
@@ -560,6 +561,7 @@ def _load_operation(
 
 def _load_dispatch(raw: Any) -> ProviderDispatchObservation:
     item = _mapping(raw)
+    provider = _profile_text(item, "provider")
     elapsed = item.get("elapsed_seconds")
     if (
         not isinstance(elapsed, (int, float))
@@ -574,9 +576,9 @@ def _load_dispatch(raw: Any) -> ProviderDispatchObservation:
         generation=_optional_integer(item.get("generation")),
         outcome=str(item.get("outcome") or "unknown").lower(),
         usage_availability=str(item.get("usage_availability") or "unknown").lower(),
-        usage=_number_mapping(item.get("usage") or item),
+        usage=_normalized_usage(item.get("usage") or item, provider=provider),
         elapsed_seconds=None if elapsed is None else float(elapsed),
-        provider=_profile_text(item, "provider"),
+        provider=provider,
         model=_profile_text(item, "model"),
         effort=_profile_text(item, "effort"),
         effort_present="effort" in item,
@@ -678,18 +680,24 @@ def _timestamp(value: Any) -> datetime | None:
         return None
 
 
-def _is_token_count(value: Any) -> bool:
-    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
-
-
 def _token_total(usage: Mapping[str, float]) -> int:
-    if "total_tokens" in usage:
-        value = usage["total_tokens"]
-        return value if _is_token_count(value) else 0
-    values = [value for key, value in usage.items() if key.endswith("tokens")]
-    return (
-        sum(values) if values and all(_is_token_count(value) for value in values) else 0
-    )
+    return known_token_total(usage) or 0
+
+
+def _operation_token_total(operation: OperationObservation) -> int:
+    if operation.dispatches:
+        totals = [
+            known_token_total(item.usage, provider=item.provider)
+            for item in operation.dispatches
+        ]
+        if all(total is not None for total in totals):
+            return sum(total for total in totals if total is not None)
+    return _token_total(operation.usage)
+
+
+def _normalized_usage(value: Any, *, provider: str | None = None) -> dict[str, float]:
+    values, _ = normalize_usage(_number_mapping(value), final=True, provider=provider)
+    return values
 
 
 def _number_mapping(value: Any) -> dict[str, float]:

@@ -59,6 +59,8 @@ def WorkflowAndEvalToRefinedWorkflowPackage(
                 "tokens",
                 "workflow",
             ),
+            max_evidence_bytes=params.max_evidence_bytes,
+            max_snapshot_bytes=params.max_snapshot_bytes,
         )
         context["optimizer_handoff"] = optimizer_handoff
     else:

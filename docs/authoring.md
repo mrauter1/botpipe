@@ -94,3 +94,11 @@ non-conflicting output paths.
 SDK or CLI with a typed answer. An uncertain unsafe activity pauses as
 `interrupted`; inspect it and call `resolve(..., retry=True)` or
 `resolve(..., response=value)` explicitly.
+
+If a provider completed before its artifact inventory was saved, inspect its
+declared files and approve their exact contents before resuming. For example,
+`client.resolve(run_id, operation_id, artifact_digests={"report": digest})`
+accepts the inspected SHA-256 digest for `report`. Include every declared name;
+use `None` only for an absent optional artifact. The CLI equivalent is
+`botpipe resolve RUN OP --artifact-digests '{"report":"<sha256>"}'`.
+This records operator provenance and does not bypass a running or unknown writer.

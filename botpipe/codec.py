@@ -8,11 +8,13 @@ import importlib
 import json
 import math
 import re
-from datetime import date, datetime
+import sys
+from datetime import date, datetime, timedelta, timezone
 from enum import Enum
+from inspect import get_annotations, getattr_static
 from pathlib import Path
-from types import MappingProxyType, MemberDescriptorType
-from typing import get_args, get_origin
+from types import MappingProxyType, MemberDescriptorType, SimpleNamespace
+from typing import ForwardRef, get_args, get_origin, get_type_hints
 
 from pydantic import BaseModel, Secret, SecretBytes, SecretStr, TypeAdapter
 
@@ -58,7 +60,60 @@ def resolve_type(name):
     return value
 
 
-def register_annotation(annotation, _seen=None):
+def _annotation_namespaces(cls, localns=None):
+    """Build the namespaces Python uses for postponed class annotations."""
+
+    module = sys.modules.get(cls.__module__)
+    globalns = dict(vars(module)) if module is not None else {}
+    namespace = dict(globalns)
+    owner = module
+    for part in cls.__qualname__.split(".")[:-1]:
+        if part == "<locals>" or owner is None:
+            break
+        owner = getattr(owner, part, None)
+        if isinstance(owner, type):
+            namespace.update(vars(owner))
+    for base in reversed(cls.__mro__):
+        namespace.update(vars(base))
+    namespace[cls.__name__] = cls
+    if localns is not None:
+        namespace.update(localns)
+    return globalns, namespace
+
+
+def _resolved_class_annotations(cls, localns=None):
+    resolved = {}
+    for owner in reversed(cls.__mro__):
+        annotations = get_annotations(owner, eval_str=False)
+        if not annotations:
+            continue
+        owner_localns = localns if owner is cls else None
+        globalns, namespace = _annotation_namespaces(owner, owner_localns)
+        declaration = SimpleNamespace(__annotations__=annotations)
+        try:
+            hints = get_type_hints(
+                declaration,
+                globalns=globalns,
+                localns=namespace,
+                include_extras=True,
+            )
+        except (NameError, TypeError):
+            # A module forward reference can be retried after its defining
+            # module has finished importing. Other bases remain independently
+            # resolvable from their own defining modules.
+            hints = annotations
+        resolved.update(hints)
+    return resolved
+
+
+def _pydantic_annotation(name, field, resolved):
+    annotation = field.annotation
+    if isinstance(annotation, (str, ForwardRef)):
+        return resolved.get(name, annotation)
+    return annotation
+
+
+def register_annotation(annotation, _seen=None, *, localns=None):
     """Register concrete types reachable from a resolved type annotation."""
 
     seen = set() if _seen is None else _seen
@@ -68,19 +123,35 @@ def register_annotation(annotation, _seen=None):
     seen.add(identity)
     origin = get_origin(annotation)
     if origin is not None:
-        register_annotation(origin, seen)
+        register_annotation(origin, seen, localns=localns)
         for argument in get_args(annotation):
-            register_annotation(argument, seen)
+            register_annotation(argument, seen, localns=localns)
         return
     if not isinstance(annotation, type) or annotation.__module__ == "typing":
         return
     type_name(annotation)
+    if annotation is BaseModel:
+        return
     if issubclass(annotation, BaseModel):
-        for field in annotation.model_fields.values():
-            register_annotation(field.annotation, seen)
+        globalns, namespace = _annotation_namespaces(annotation, localns)
+        if not annotation.__pydantic_complete__:
+            annotation.model_rebuild(
+                raise_errors=False, _types_namespace={**globalns, **namespace}
+            )
+        resolved = _resolved_class_annotations(annotation, localns)
+        for name, field in annotation.model_fields.items():
+            register_annotation(
+                _pydantic_annotation(name, field, resolved),
+                seen,
+                localns=namespace,
+            )
     elif dataclasses.is_dataclass(annotation):
+        _, namespace = _annotation_namespaces(annotation, localns)
+        resolved = _resolved_class_annotations(annotation, namespace)
         for field in dataclasses.fields(annotation):
-            register_annotation(field.type, seen)
+            register_annotation(
+                resolved.get(field.name, field.type), seen, localns=namespace
+            )
 
 
 class _Traversal:
@@ -177,6 +248,55 @@ def _contains_serializer(annotation) -> bool:
     )
 
 
+def _has_custom_core_serializer(schema, _seen=None):
+    """Find serializer hooks embedded directly in a Pydantic core schema."""
+
+    seen = set() if _seen is None else _seen
+    if isinstance(schema, dict):
+        identity = id(schema)
+        if identity in seen:
+            return False
+        seen.add(identity)
+        serializer = schema.get("serialization")
+        if isinstance(serializer, dict):
+            function = serializer.get("function")
+            module = getattr(function, "__module__", "")
+            # Pydantic installs a few serializers for standard Python types
+            # (notably pathlib.Path). They describe the standard type rather
+            # than application-controlled redaction or transformation.
+            if function is None or not module.startswith(
+                ("pydantic.", "pydantic_core.")
+            ):
+                return True
+        return any(_has_custom_core_serializer(item, seen) for item in schema.values())
+    if isinstance(schema, (list, tuple)):
+        return any(_has_custom_core_serializer(item, seen) for item in schema)
+    return False
+
+
+def _reject_custom_core_serializer(schema, path):
+    if _has_custom_core_serializer(schema):
+        raise TypeError(
+            f"{path}: Pydantic types with custom serializers installed through "
+            "core schemas are not durable"
+        )
+
+
+def _has_core_schema_provider(annotation, _seen=None):
+    seen = set() if _seen is None else _seen
+    identity = id(annotation)
+    if identity in seen:
+        return False
+    seen.add(identity)
+    try:
+        getattr_static(annotation, "__get_pydantic_core_schema__")
+    except AttributeError:
+        pass
+    else:
+        return True
+    return any(_has_core_schema_provider(item, seen) for item in get_args(annotation))
+
+
 def _pydantic_fields(cls: type[BaseModel], path: str):
     if cls.model_dump is not BaseModel.model_dump or (
         cls.model_dump_json is not BaseModel.model_dump_json
@@ -197,6 +317,7 @@ def _pydantic_fields(cls: type[BaseModel], path: str):
         raise TypeError(
             f"{path}: Pydantic models with custom JSON encoders are not durable"
         )
+    _reject_custom_core_serializer(cls.__pydantic_core_schema__, path)
     private = getattr(cls, "__private_attributes__", {})
     if private:
         raise TypeError(f"{path}: Pydantic private attributes are not durable")
@@ -229,8 +350,25 @@ def _pydantic_fields(cls: type[BaseModel], path: str):
     return cls.model_fields
 
 
-def _dataclass_fields(cls, path: str):
+def _dataclass_fields(cls, path: str, *, localns=None):
     fields = tuple(dataclasses.fields(cls))
+    resolved = _resolved_class_annotations(cls, localns)
+    schema_candidates = []
+    if _has_core_schema_provider(cls):
+        schema_candidates.append(cls)
+    else:
+        schema_candidates.extend(
+            annotation
+            for annotation in resolved.values()
+            if _has_core_schema_provider(annotation)
+        )
+    checked = set()
+    for annotation in schema_candidates:
+        identity = id(annotation)
+        if identity in checked:
+            continue
+        checked.add(identity)
+        _reject_custom_core_serializer(TypeAdapter(annotation).core_schema, path)
     names = {field.name for field in fields}
     if cls.__new__ is not object.__new__:
         raise TypeError(
@@ -241,7 +379,7 @@ def _dataclass_fields(cls, path: str):
             raise TypeError(
                 f"{_child(path, field.name)}: private dataclass fields are not durable"
             )
-        if _contains_secret(field.type):
+        if _contains_secret(resolved.get(field.name, field.type)):
             raise TypeError(
                 f"{_child(path, field.name)}: secret fields are not durable"
             )
@@ -280,6 +418,101 @@ def _dataclass_fields(cls, path: str):
         ):
             raise TypeError(f"{path}: dataclass {hook} hooks are not durable")
     return fields
+
+
+def _preflight(annotation, path, localns, *, require_adapter=False):
+    """Reject annotations whose values cannot be represented faithfully.
+
+    This check is intended for durable boundaries that know a declared type
+    before they have a value to encode. It also registers generated Pydantic
+    generic classes needed when a fresh process resumes recorded state.
+    """
+
+    seen = set()
+    concrete_types = []
+
+    def inspect(current, current_path, namespace=None):
+        identity = id(current)
+        if identity in seen:
+            return
+        seen.add(identity)
+        if _contains_secret(current):
+            raise TypeError(f"{current_path}: secret fields are not durable")
+        if _contains_serializer(current):
+            raise TypeError(
+                f"{current_path}: fields with custom serializers are not durable"
+            )
+        origin = get_origin(current)
+        if origin is not None:
+            register_annotation(current, localns=namespace)
+            for argument in get_args(current):
+                inspect(argument, current_path, namespace)
+            return
+        if not isinstance(current, type) or current.__module__ == "typing":
+            return
+        concrete_types.append(current)
+        type_name(current)
+        if current is BaseModel:
+            return
+        if issubclass(current, BaseModel):
+            globalns, model_namespace = _annotation_namespaces(current, namespace)
+            if not current.__pydantic_complete__:
+                current.model_rebuild(
+                    raise_errors=False,
+                    _types_namespace={**globalns, **model_namespace},
+                )
+            fields = _pydantic_fields(current, current_path)
+            resolved = _resolved_class_annotations(current, model_namespace)
+            for name, field in fields.items():
+                inspect(
+                    _pydantic_annotation(name, field, resolved),
+                    _child(current_path, name),
+                    model_namespace,
+                )
+        elif dataclasses.is_dataclass(current):
+            _, dataclass_namespace = _annotation_namespaces(current, namespace)
+            fields = _dataclass_fields(
+                current, current_path, localns=dataclass_namespace
+            )
+            resolved = _resolved_class_annotations(current, dataclass_namespace)
+            for field in fields:
+                inspect(
+                    resolved.get(field.name, field.type),
+                    _child(current_path, field.name),
+                    dataclass_namespace,
+                )
+
+    inspect(annotation, path, localns)
+    adapter = None
+    aggregate = isinstance(annotation, type) and (
+        dataclasses.is_dataclass(annotation) or issubclass(annotation, BaseModel)
+    )
+    if (
+        require_adapter
+        or get_origin(annotation) is not None
+        or (_has_core_schema_provider(annotation) and not aggregate)
+    ):
+        adapter = TypeAdapter(annotation)
+        _reject_custom_core_serializer(adapter.core_schema, path)
+    return adapter, tuple(concrete_types)
+
+
+def preflight(annotation, path="$", *, localns=None):
+    """Reject annotations whose values cannot be represented faithfully.
+
+    This check is intended for durable boundaries that know a declared type
+    before they have a value to encode. It also registers generated Pydantic
+    generic classes needed when a fresh process resumes recorded state.
+    """
+
+    _preflight(annotation, path, localns)
+    return annotation
+
+
+def preflight_types(annotation, path="$", *, localns=None):
+    """Preflight an annotation and return its reachable concrete types."""
+
+    return _preflight(annotation, path, localns)[1]
 
 
 def encode(value):
@@ -326,8 +559,34 @@ def _encode(value, path, depth, traversal):
             return value
         if isinstance(value, Path) and type(value).__module__ == "pathlib":
             return {"$botpipe": "path", "value": str(value)}
-        if type(value) in (datetime, date):
-            return {"$botpipe": type(value).__name__, "value": value.isoformat()}
+        if type(value) is datetime:
+            tz = value.tzinfo
+            if tz is not None and type(tz) is not timezone:
+                raise TypeError(
+                    f"{path}: only datetime.timezone fixed offsets are durable"
+                )
+            timezone_state = None
+            if tz is not None:
+                offset = tz.utcoffset(value)
+                name = tz.tzname(value)
+                if type(offset) is not timedelta or type(name) is not str:
+                    raise TypeError(f"{path}: invalid fixed-offset datetime timezone")
+                timezone_state = {
+                    "offset_microseconds": (
+                        offset.days * 86_400_000_000
+                        + offset.seconds * 1_000_000
+                        + offset.microseconds
+                    ),
+                    "name": name,
+                }
+            return {
+                "$botpipe": "datetime",
+                "value": value.replace(tzinfo=None).isoformat(),
+                "fold": value.fold,
+                "timezone": timezone_state,
+            }
+        if type(value) is date:
+            return {"$botpipe": "date", "value": value.isoformat()}
         if type(value) is bytes:
             return {
                 "$botpipe": "bytes",
@@ -609,14 +868,53 @@ def _decode(value, path, depth, traversal):
             if type(body) is not str:
                 raise TypeError(f"{path}.value: path state must be a string")
             return Path(body)
-        if kind in {"datetime", "date"}:
+        if kind == "date":
             body = _record(value, path, {"$botpipe", "value"})["value"]
             if type(body) is not str:
-                raise TypeError(f"{path}.value: {kind} state must be a string")
+                raise TypeError(f"{path}.value: date state must be a string")
             try:
-                return (datetime if kind == "datetime" else date).fromisoformat(body)
+                return date.fromisoformat(body)
             except ValueError as exc:
-                raise TypeError(f"{path}.value: invalid {kind} state") from exc
+                raise TypeError(f"{path}.value: invalid date state") from exc
+        if kind == "datetime":
+            record = _record(value, path, {"$botpipe", "value", "fold", "timezone"})
+            body = record["value"]
+            if type(body) is not str:
+                raise TypeError(f"{path}.value: datetime state must be a string")
+            fold = record["fold"]
+            if type(fold) is not int or fold not in (0, 1):
+                raise TypeError(f"{path}.fold: datetime fold must be 0 or 1")
+            try:
+                result = datetime.fromisoformat(body)
+            except ValueError as exc:
+                raise TypeError(f"{path}.value: invalid datetime state") from exc
+            if result.tzinfo is not None:
+                raise TypeError(
+                    f"{path}.value: datetime wall time must not contain an offset"
+                )
+            timezone_state = record["timezone"]
+            tz = None
+            if timezone_state is not None:
+                timezone_record = _record(
+                    timezone_state,
+                    f"{path}.timezone",
+                    {"offset_microseconds", "name"},
+                )
+                offset = timezone_record["offset_microseconds"]
+                name = timezone_record["name"]
+                if type(offset) is not int:
+                    raise TypeError(
+                        f"{path}.timezone.offset_microseconds: expected an integer"
+                    )
+                if type(name) is not str:
+                    raise TypeError(f"{path}.timezone.name: expected a string")
+                try:
+                    tz = timezone(timedelta(microseconds=offset), name)
+                except (OverflowError, ValueError) as exc:
+                    raise TypeError(
+                        f"{path}.timezone: invalid fixed-offset timezone"
+                    ) from exc
+            return result.replace(tzinfo=tz, fold=fold)
         if kind in {"model", "dataclass"}:
             record = _state_record(value, path, kind)
             cls = resolve_type(record["type"])
@@ -702,5 +1000,5 @@ def dumps(value):
 def schema_for(annotation):
     if annotation in (None, type(None)):
         return {"type": "null"}
-    register_annotation(annotation)
-    return TypeAdapter(annotation).json_schema()
+    adapter = _preflight(annotation, "$", None, require_adapter=True)[0]
+    return adapter.json_schema()

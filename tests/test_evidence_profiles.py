@@ -2,7 +2,15 @@ from __future__ import annotations
 
 import pytest
 
-from botpipe_optimizer import capture_evidence_snapshot, capture_source_manifest
+from botpipe.dispatches import normalize_usage
+from botpipe_optimizer import (
+    capture_evidence_snapshot,
+    capture_source_manifest,
+    load_run_observation,
+    OperationObservation,
+    optimize_observations,
+    RunObservation,
+)
 
 
 def _manifest():
@@ -366,3 +374,163 @@ def test_unknown_profiles_are_distinct_when_dispatch_ids_repeat_across_runs():
     assert len(profiles) == 2
     assert {item.known_total_tokens for item in profiles} == {3, 4}
     assert all(item.profile_comparable is False for item in profiles)
+
+
+def test_cached_and_reasoning_subsets_do_not_inflate_public_optimizer_total():
+    operation = _operation("cached", name="cached step")
+    operation["usage"] = {
+        "input_tokens": 10,
+        "output_tokens": 5,
+        "cached_input_tokens": 8,
+        "reasoning_tokens": 4,
+    }
+    observation = load_run_observation(_run(operation))
+
+    report = optimize_observations("example", [observation])
+
+    assert report.metrics[0].total_tokens == 15
+
+
+def test_direct_observation_objects_normalize_legacy_token_aliases_consistently():
+    operation = OperationObservation(
+        "direct-operation",
+        "direct-run",
+        "root",
+        1,
+        "provider",
+        "direct provider",
+        "completed",
+        "accepted",
+        1,
+        1.0,
+        {
+            "prompt_tokens": 10,
+            "completion_tokens": 5,
+            "cached_input_tokens": 8,
+        },
+        {},
+        {},
+        None,
+    )
+    run = RunObservation(
+        "direct-run",
+        "direct-run",
+        None,
+        "example",
+        None,
+        None,
+        None,
+        None,
+        "unknown",
+        "completed",
+        (operation,),
+    )
+
+    report = optimize_observations("example", [run])
+    snapshot = capture_evidence_snapshot(
+        "example", [run], source_manifest=_manifest(), objective="token_usage"
+    )
+
+    assert report.metrics[0].total_tokens == 15
+    assert snapshot.observations[0].known_total_tokens == 15
+    assert snapshot.observations[0].usage_availability == "known_total"
+
+
+def test_native_usage_normalization_keeps_cached_and_reasoning_as_subsets():
+    usage, availability = normalize_usage(
+        {
+            "input_tokens": 10,
+            "output_tokens": 5,
+            "cached_input_tokens": 8,
+            "reasoning_tokens": 4,
+        },
+        final=True,
+        provider="codex",
+    )
+
+    assert usage["total_tokens"] == 15
+    assert availability == "known_total"
+
+
+@pytest.mark.parametrize(
+    ("provider", "usage", "expected_total", "expected_availability"),
+    [
+        (
+            "fake",
+            {
+                "total_tokens": 9,
+                "input_tokens": 10,
+                "output_tokens": 5,
+                "cached_input_tokens": 8,
+            },
+            9,
+            "known_total",
+        ),
+        (
+            "claude",
+            {
+                "input_tokens": 3,
+                "output_tokens": 2,
+                "cache_creation_input_tokens": 4,
+                "cache_read_input_tokens": 5,
+            },
+            14,
+            "known_total",
+        ),
+        (
+            None,
+            {
+                "input_tokens": 3,
+                "output_tokens": 2,
+                "cache_read_input_tokens": 5,
+            },
+            None,
+            "partial",
+        ),
+    ],
+)
+def test_evidence_token_totals_use_provider_semantics(
+    provider, usage, expected_total, expected_availability
+):
+    dispatch = _dispatch("provider-usage", tokens=1, provider=provider)
+    dispatch["usage"] = usage
+    snapshot = _snapshot(
+        _run(
+            _operation("provider-usage", name="provider usage", dispatches=(dispatch,))
+        )
+    )
+    evidence = snapshot.observations[0].dispatches[0]
+
+    assert evidence.known_total_tokens == expected_total
+    assert evidence.usage_availability == expected_availability
+
+
+def test_public_optimizer_uses_provider_aware_dispatch_total():
+    dispatch = _dispatch("claude-cache", tokens=1, provider="claude")
+    usage = {
+        "input_tokens": 3,
+        "output_tokens": 2,
+        "cache_creation_input_tokens": 4,
+        "cache_read_input_tokens": 5,
+    }
+    dispatch["usage"] = usage
+    operation = _operation("claude-cache", name="claude cache", dispatches=(dispatch,))
+    operation["usage"] = usage
+
+    report = optimize_observations("example", [load_run_observation(_run(operation))])
+
+    assert report.metrics[0].total_tokens == 14
+
+
+def test_snapshot_expansion_has_a_separate_bound_from_admitted_input():
+    source = _manifest()
+    run = _run(_operation("small", name="small"))
+
+    with pytest.raises(ValueError, match="max_snapshot_bytes"):
+        capture_evidence_snapshot(
+            "example",
+            [run],
+            source_manifest=source,
+            max_evidence_bytes=10_000,
+            max_snapshot_bytes=100,
+        )

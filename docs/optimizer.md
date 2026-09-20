@@ -60,7 +60,13 @@ authorized retry can consume additional dispatches.
 | `provider_turn_timeout_seconds` | 600 | Maximum time for one dispatch |
 | `max_analysis_seconds` | 1800 | Non-extending recommendation deadline |
 | `max_evidence_bytes` | 50 MiB | Admitted source and run-inspection records |
+| `max_snapshot_bytes` | 50 MiB | Serialized evidence snapshot, shared by capture, publication, and loading |
 | `max_output_bytes` | 10 MiB | Accepted candidate, review, and supporting records |
+
+The snapshot limit is independent of input admission: profiles and diagnostics
+can expand accepted input during serialization. Producers check it before model
+calls, publication checks it before selecting a receipt, and consumers use the
+same bound. Pass the same override to producers and consumers when raising it.
 
 The workflow enforces provider limits with
 `provider_budget(*, max_turns, max_seconds, turn_timeout_seconds)`. Its journaled

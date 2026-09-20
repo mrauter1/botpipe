@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -50,7 +51,13 @@ def _canonical_baseline():
     }
 
 
-def _records(title: str = "Improve the failure path", baseline_manifest=None):
+def _records(
+    title: str = "Improve the failure path",
+    baseline_manifest=None,
+    *,
+    max_evidence_bytes: int = 50 * 1024 * 1024,
+    max_snapshot_bytes: int = 50 * 1024 * 1024,
+):
     def example():
         return None
 
@@ -92,6 +99,8 @@ def _records(title: str = "Improve the failure path", baseline_manifest=None):
         [run],
         source_manifest=source,
         baseline_surface_manifest_id=baseline_id,
+        max_evidence_bytes=max_evidence_bytes,
+        max_snapshot_bytes=max_snapshot_bytes,
     )
     candidate_set = finalize_candidate_set_payload(
         {
@@ -202,6 +211,81 @@ def test_oversized_republication_does_not_mutate_accepted_generation(tmp_path):
 
     assert canonical.read_bytes() == receipt_bytes
     assert _artifact_bytes(receipt_a) == generation_bytes
+
+
+def test_admitted_input_and_expanded_snapshot_use_same_publish_load_policy(tmp_path):
+    input_limit = 1_000
+    snapshot_limit = 10_000
+    snapshot, candidate_set, review, baseline = _records(
+        "separate evidence bounds",
+        max_evidence_bytes=input_limit,
+        max_snapshot_bytes=snapshot_limit,
+    )
+    assert snapshot.budget.max_bytes == input_limit
+    baseline_size = len(
+        (json.dumps(baseline, indent=2, sort_keys=True) + "\n").encode()
+    )
+    assert baseline_size < input_limit
+
+    receipt = publish_recommendation(
+        output_dir=tmp_path,
+        evidence_snapshot=snapshot,
+        candidate_set=candidate_set,
+        review=review,
+        baseline_manifest=baseline,
+        max_output_bytes=100_000,
+        max_evidence_bytes=input_limit,
+        max_snapshot_bytes=snapshot_limit,
+    )
+    assert Path(receipt.evidence_snapshot_path).stat().st_size > input_limit
+
+    selection = load_optimization_candidate(
+        optimization_receipt_path=tmp_path / "optimization_publication_receipt.json",
+        candidate_id=candidate_set.candidates[0].candidate_id,
+        expected_selected_workflow="example",
+        allowed_kinds=("workflow",),
+        max_output_bytes=100_000,
+        max_evidence_bytes=input_limit,
+        max_snapshot_bytes=snapshot_limit,
+    )
+    assert selection.candidate == candidate_set.candidates[0]
+
+
+def test_snapshot_bound_is_rechecked_before_receipt_switch(tmp_path, monkeypatch):
+    from botpipe_optimizer import recommendations
+
+    snapshot, candidate_set, review, baseline = _records("recheck snapshot")
+    snapshot_size = len(
+        (
+            json.dumps(
+                snapshot.model_dump(mode="json", by_alias=True),
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n"
+        ).encode()
+    )
+    install = recommendations._install_publication_generation
+
+    def install_then_expand(path, contents):
+        install(path, contents)
+        evidence = path / "workflow_optimization_evidence.json"
+        evidence.write_bytes(evidence.read_bytes() + b" ")
+
+    monkeypatch.setattr(
+        recommendations, "_install_publication_generation", install_then_expand
+    )
+    with pytest.raises(ValueError, match="bounded regular file"):
+        publish_recommendation(
+            output_dir=tmp_path,
+            evidence_snapshot=snapshot,
+            candidate_set=candidate_set,
+            review=review,
+            baseline_manifest=baseline,
+            max_output_bytes=100_000,
+            max_snapshot_bytes=snapshot_size,
+        )
+    assert not (tmp_path / "optimization_publication_receipt.json").exists()
 
 
 def test_publisher_never_emits_receipt_larger_than_its_reader_limit(tmp_path):

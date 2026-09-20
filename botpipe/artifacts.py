@@ -765,8 +765,74 @@ class ArtifactStore:
             )
         return data
 
-    def capture(self, writes: Sequence[Artifact], operation_id: str) -> ArtifactMap:
+    @staticmethod
+    def _approved_digests(writes, expected):
+        if expected is None:
+            return None
+        if type(expected) is not dict or set(expected) != {a.name for a in writes}:
+            raise ArtifactError(
+                "Artifact reconciliation must name every declared output"
+            )
+        for artifact in writes:
+            digest = expected[artifact.name]
+            if digest is None:
+                if artifact.required:
+                    raise ArtifactError(
+                        f"Required artifact cannot be absent: {artifact.name}"
+                    )
+            elif (
+                type(digest) is not str
+                or len(digest) != 64
+                or any(c not in "0123456789abcdef" for c in digest)
+            ):
+                raise ArtifactError(
+                    f"Artifact reconciliation needs a SHA-256 digest: {artifact.name}"
+                )
+        return dict(expected)
+
+    def check_capture_digests(self, writes, expected):
+        """Check an operator's complete selection without publishing or mutating it."""
+        approved = self._approved_digests(writes, expected)
+        if approved is None:
+            raise ArtifactError("Artifact reconciliation requires explicit digests")
+        _, paths = self._declarations(writes)
+        for artifact in writes:
+            source = paths[artifact.name]
+            digest = approved[artifact.name]
+            if digest is None:
+                if source.exists() or source.is_symlink():
+                    raise ArtifactError(
+                        f"Artifact was approved as absent but exists: {artifact.name}"
+                    )
+            else:
+                try:
+                    data = self._capture_source(
+                        source, digest=digest, length=source.stat().st_size
+                    )
+                except OSError as exc:
+                    raise ArtifactError(
+                        f"Artifact does not match its approved digest: {artifact.name}"
+                    ) from exc
+                _validate(data, artifact.kind, artifact.schema)
+        return approved
+
+    def has_capture_evidence(self, operation_id: str) -> bool:
+        operation = self._operation(operation_id)
+        return any(
+            (operation / name).exists()
+            for name in ("capture.json", "capture.pending.json")
+        )
+
+    def capture(
+        self,
+        writes: Sequence[Artifact],
+        operation_id: str,
+        *,
+        recover: bool = False,
+        expected_digests: Mapping[str, str | None] | None = None,
+    ) -> ArtifactMap:
         writes = tuple(writes)
+        approved = self._approved_digests(writes, expected_digests)
         requested = [artifact.to_record() for artifact in writes]
         operation = self._operation(operation_id)
         prepare_path = operation / "prepare.json"
@@ -804,21 +870,55 @@ class ArtifactStore:
                     "Prepared artifact capture does not match its declarations"
                 )
         else:
-            records, paths = self._declarations(writes)
-            if prepared["declarations"] != records:
-                raise ArtifactError("Artifact destination changed since preparation")
+            if recover and writes and approved is None:
+                raise ArtifactCaptureRecoveryError(
+                    "Completed provider response has no durable artifact inventory; "
+                    "reconcile all declared artifact digests before resuming"
+                )
+            try:
+                records, paths = self._declarations(writes)
+                if prepared["declarations"] != records:
+                    raise ArtifactError(
+                        "Artifact destination changed since preparation"
+                    )
+            except ArtifactError as exc:
+                if approved is not None:
+                    raise ArtifactCaptureRecoveryError(
+                        "Artifact destination changed after operator approval"
+                    ) from exc
+                raise
             contents = []
             for artifact in writes:
                 source = paths[artifact.name]
                 if not source.exists():
+                    if approved is not None and approved[artifact.name] is not None:
+                        raise ArtifactCaptureRecoveryError(
+                            f"Approved artifact is missing: {artifact.name}"
+                        )
                     if artifact.required:
                         raise ArtifactError(
                             f"Required artifact was not written: {artifact.name} ({source})"
                         )
                     continue
-                data = source.read_bytes()
-                _validate(data, artifact.kind, artifact.schema)
+                if approved is not None and approved[artifact.name] is None:
+                    raise ArtifactCaptureRecoveryError(
+                        f"Artifact approved as absent now exists: {artifact.name}"
+                    )
+                if approved is not None:
+                    try:
+                        data = self._capture_source(
+                            source,
+                            digest=approved[artifact.name],
+                            length=source.stat().st_size,
+                        )
+                    except OSError as exc:
+                        raise ArtifactCaptureRecoveryError(
+                            f"Artifact changed after operator approval: {artifact.name}"
+                        ) from exc
+                else:
+                    data = source.read_bytes()
                 digest = hashlib.sha256(data).hexdigest()
+                _validate(data, artifact.kind, artifact.schema)
                 contents.append(
                     {
                         "name": artifact.name,
@@ -830,11 +930,27 @@ class ArtifactStore:
                 fresh[artifact.name] = data
             intent = {
                 "version": 1,
+                "source": "operator" if approved is not None else "provider",
                 "declarations": records,
                 "contents": contents,
             }
             # The complete validated set is durable before publishing any blob.
             _atomic(intent_path, _json(intent))
+
+        if approved is not None:
+            observed = {artifact.name: None for artifact in writes}
+            try:
+                observed.update(
+                    {item["name"]: item["digest"] for item in intent["contents"]}
+                )
+            except (KeyError, TypeError) as exc:
+                raise ArtifactCaptureRecoveryError(
+                    "Invalid reconciled capture inventory"
+                ) from exc
+            if observed != approved or intent.get("source") != "operator":
+                raise ArtifactCaptureRecoveryError(
+                    "Capture inventory differs from operator reconciliation"
+                )
 
         artifacts = {artifact.name: artifact for artifact in writes}
         handles = {}

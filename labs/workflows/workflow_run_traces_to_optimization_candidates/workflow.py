@@ -29,6 +29,8 @@ def _publish_recommendation(
     review: CandidateReview | None,
     baseline_manifest: dict,
     max_output_bytes: int,
+    max_evidence_bytes: int,
+    max_snapshot_bytes: int,
     supporting_content: bytes | None,
 ) -> PublicationReceipt:
     from botpipe_optimizer.recommendations import publish_recommendation
@@ -40,6 +42,8 @@ def _publish_recommendation(
         review=review,
         baseline_manifest=baseline_manifest,
         max_output_bytes=max_output_bytes,
+        max_evidence_bytes=max_evidence_bytes,
+        max_snapshot_bytes=max_snapshot_bytes,
         supporting_content=supporting_content,
     )
 
@@ -150,6 +154,7 @@ def WorkflowRunTracesToOptimizationCandidates(
             "top_k_steps": params.top_k_steps,
             "route_tags": params.route_tags,
             "max_evidence_bytes": params.max_evidence_bytes,
+            "max_snapshot_bytes": params.max_snapshot_bytes,
         },
         lambda: capture_evidence_snapshot(
             manifest.workflow_name,
@@ -158,6 +163,7 @@ def WorkflowRunTracesToOptimizationCandidates(
             objective=params.objective,
             top_k_steps=params.top_k_steps,
             max_evidence_bytes=params.max_evidence_bytes,
+            max_snapshot_bytes=params.max_snapshot_bytes,
             explicit_run_refs=bool(params.run_refs),
             route_tags=tuple(params.route_tags),
             current_workflow_identity=provenance.get("workflow_identity"),
@@ -262,6 +268,8 @@ def WorkflowRunTracesToOptimizationCandidates(
         review,
         baseline_manifest,
         params.max_output_bytes,
+        params.max_evidence_bytes,
+        params.max_snapshot_bytes,
         supporting_content,
     )
     return OptimizationWorkflowResult(

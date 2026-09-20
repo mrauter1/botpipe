@@ -60,24 +60,29 @@ def _hash(value):
     ).hexdigest()
 
 
-def _persist_response(journal, operation_id, response, session_key=None):
-    """Confirm a checkpoint after an ambiguous acknowledgement failure."""
+def _commit_or_confirm(journal, operation_id, write, projection, message):
+    """Accept an acknowledgement failure only for the exact committed write."""
     try:
-        journal.response(operation_id, response, session_key=session_key)
+        write()
     except Exception as exc:
         try:
             observed = journal.confirmed(operation_id)
         except Exception:
             observed = None
-        if (
-            not observed
-            or observed["status"] != "response"
-            or observed["response"] != response
+        if not observed or any(
+            observed.get(field) != value for field, value in projection.items()
         ):
-            raise UncertainOperation(
-                "Operation checkpoint could not be confirmed; resume to reconcile it",
-                operation_id,
-            ) from exc
+            raise UncertainOperation(message, operation_id) from exc
+
+
+def _persist_response(journal, operation_id, response, session_key=None):
+    _commit_or_confirm(
+        journal,
+        operation_id,
+        lambda: journal.response(operation_id, response, session_key=session_key),
+        {"status": "response", "response": response},
+        "Operation checkpoint could not be confirmed; resume to reconcile it",
+    )
 
 
 def _exception_record(exc):
@@ -88,19 +93,33 @@ def _exception_record(exc):
         "message": str(exc),
     }
     try:
-        record["args"] = codec.encode(exc.args)
-        record["attributes"] = codec.encode(vars(exc))
-        record["slots"] = [
-            {
-                "owner": codec.type_name(owner),
-                "name": name,
-                "value": codec.encode(descriptor.__get__(exc, type(exc))),
-            }
-            for owner in type(exc).__mro__
-            if owner is not BaseException
-            for name, descriptor in vars(owner).items()
-            if isinstance(descriptor, MemberDescriptorType) and hasattr(exc, name)
-        ]
+        record["args"] = codec.encode(BaseException.args.__get__(exc, type(exc)))
+        if isinstance(exc, OSError):
+            reduced = OSError.__reduce__(exc)
+            if not isinstance(reduced, tuple) or len(reduced) < 2:
+                raise TypeError("OSError did not expose native reconstruction state")
+            record["native_family"] = "OSError"
+            record["native_args"] = codec.encode(reduced[1])
+        record["attributes"] = codec.encode(object.__getattribute__(exc, "__dict__"))
+        slots = []
+        for owner in type(exc).__mro__:
+            if owner is BaseException:
+                continue
+            for name, descriptor in vars(owner).items():
+                if not isinstance(descriptor, MemberDescriptorType):
+                    continue
+                try:
+                    value = descriptor.__get__(exc, type(exc))
+                except AttributeError:
+                    continue
+                slots.append(
+                    {
+                        "owner": codec.type_name(owner),
+                        "name": name,
+                        "value": codec.encode(value),
+                    }
+                )
+        record["slots"] = slots
         record["restorable"] = True
     except (TypeError, AttributeError) as error:
         record["restorable"] = False
@@ -108,37 +127,69 @@ def _exception_record(exc):
     return record
 
 
+def _allocate_exception(cls, args, record):
+    """Allocate exceptions through native bases without application hooks."""
+    if issubclass(cls, OSError):
+        # OSError has native state beyond BaseException.args. Passing application
+        # subclasses through cls(...) would run their __new__/__init__ hooks.
+        if record.get("native_family") != "OSError":
+            raise TypeError("OSError record lacks native reconstruction state")
+        native_args = codec.decode(record["native_args"])
+        result = OSError.__new__(cls, *native_args)
+        OSError.__init__(result, *native_args)
+        return result
+    if cls.__module__ == "builtins":
+        return cls(*args)
+    native = next(
+        base
+        for base in cls.__mro__[1:]
+        if base.__module__ == "builtins" and issubclass(base, BaseException)
+    )
+    result = native.__new__(cls, *args)
+    BaseException.__init__(result, *args)
+    return result
+
+
+def _restore_exception_state(record):
+    if not record.get("restorable", True):
+        raise TypeError(record.get("state_error", "unsupported exception state"))
+    cls = codec.resolve_type(f"{record['module']}:{record['type']}")
+    args = codec.decode(record["args"]) if "args" in record else (record["message"],)
+    if not isinstance(cls, type) or not issubclass(cls, BaseException):
+        raise TypeError("Recorded exception type is not an exception")
+    result = _allocate_exception(cls, args, record)
+    if "attributes" in record:
+        object.__getattribute__(result, "__dict__").update(
+            codec.decode(record["attributes"])
+        )
+    for slot in record.get("slots", ()):
+        owner = codec.resolve_type(slot["owner"])
+        if issubclass(cls, OSError) and owner is OSError:
+            continue
+        descriptor = vars(owner)[slot["name"]]
+        if not issubclass(cls, owner) or not isinstance(
+            descriptor, MemberDescriptorType
+        ):
+            raise TypeError("Recorded exception slot no longer matches its type")
+        descriptor.__set__(result, codec.decode(slot["value"]))
+    return result
+
+
 def _restore_exception(record):
     try:
-        if not record.get("restorable", True):
-            raise TypeError(record.get("state_error", "unsupported exception state"))
-        cls = codec.resolve_type(f"{record['module']}:{record['type']}")
-        args = (
-            codec.decode(record["args"]) if "args" in record else (record["message"],)
-        )
-        if cls.__module__ == "builtins":
-            result = cls(*args)
-        else:
-            native = next(
-                base
-                for base in cls.__mro__[1:]
-                if base.__module__ == "builtins" and issubclass(base, BaseException)
-            )
-            result = native.__new__(cls, *args)
-            BaseException.__init__(result, *args)
-        if "attributes" in record:
-            vars(result).update(codec.decode(record["attributes"]))
-        for slot in record.get("slots", ()):
-            owner = codec.resolve_type(slot["owner"])
-            descriptor = vars(owner)[slot["name"]]
-            if not issubclass(cls, owner) or not isinstance(
-                descriptor, MemberDescriptorType
-            ):
-                raise TypeError("Recorded exception slot no longer matches its type")
-            descriptor.__set__(result, codec.decode(slot["value"]))
-        return result
+        return _restore_exception_state(record)
     except Exception:
         return ActivityFailed(f"{record['type']}: {record['message']}")
+
+
+def _finalize_exception_record(record):
+    """Make initial and replay behavior agree when restoration is unsupported."""
+    try:
+        _restore_exception_state(record)
+    except Exception:
+        record["restorable"] = False
+        record["state_error"] = "exception state cannot be restored safely"
+    return record
 
 
 def _function_version(fn, seen=None):
@@ -272,6 +323,7 @@ def _validate_args(fn, args, kwargs):
             continue
         if isinstance(annotation, type):
             codec.type_name(annotation)
+        codec.preflight(annotation, path=f"$.{name}")
         try:
             bound.arguments[name] = TypeAdapter(annotation).validate_python(value)
         except (ValueError, TypeError) as exc:
@@ -320,9 +372,13 @@ class Workflow:
         functools.update_wrapper(self, fn)
         self.fn, self.name, self.version = fn, name or fn.__name__, str(version)
         self.policy = Policy.resolve(policy)
-        from .provenance import capture_definition_sources
+        from .provenance import (
+            capture_definition_sources,
+            capture_orchestration_sources,
+        )
 
         self._source_identity_at_definition = capture_definition_sources(self)
+        self._orchestration_sources_at_definition = capture_orchestration_sources(self)
 
     def __call__(self, *args, **kwargs):
         ctx = current_run()
@@ -338,6 +394,7 @@ class Workflow:
                 "version": self.version,
                 "policy": self.policy.to_dict(),
                 "source": _function_version(self.fn),
+                "source_modules": self._orchestration_sources_at_definition,
             }
         )
 
@@ -572,31 +629,25 @@ class RunContext:
                 recover() if record is not None and recover is not None else execute()
             )
             encoded_result = codec.encode(result)
-            try:
-                self.journal.finish(operation_id, encoded_result)
-            except Exception as exc:
-                # A commit may have succeeded even when its acknowledgement was
-                # lost. Never turn a committed outcome into an execution failure.
-                try:
-                    committed = self.journal.confirmed(operation_id)
-                except Exception:
-                    committed = None
-                if committed and committed["status"] == "completed":
-                    if committed["result"] != encoded_result:
-                        raise ReplayMismatch(
-                            "Committed operation result differs from its pending result"
-                        ) from exc
-                else:
-                    raise UncertainOperation(
-                        "Operation result could not be confirmed committed; resume to reconcile it",
-                        operation_id,
-                    ) from exc
+            _commit_or_confirm(
+                self.journal,
+                operation_id,
+                lambda: self.journal.finish(operation_id, encoded_result),
+                {"status": "completed", "result": encoded_result},
+                "Operation result could not be confirmed committed; resume to reconcile it",
+            )
             return result
         except (Suspension, ReplayMismatch):
             raise
         except Exception as exc:
-            recorded_error = _exception_record(exc)
-            self.journal.fail(operation_id, recorded_error)
+            recorded_error = _finalize_exception_record(_exception_record(exc))
+            _commit_or_confirm(
+                self.journal,
+                operation_id,
+                lambda: self.journal.fail(operation_id, recorded_error),
+                {"status": "failed", "error": recorded_error},
+                "Operation failure could not be confirmed committed; resume to reconcile it",
+            )
             if not recorded_error.get("restorable", True):
                 raise _restore_exception(recorded_error) from exc
             raise
@@ -663,6 +714,7 @@ class RunContext:
 
 def ask(question, *, returns=str):
     ctx = current_run()
+    codec.preflight(returns, path="$.answer")
     schema = codec.schema_for(returns)
 
     def execute():
@@ -678,8 +730,13 @@ def ask(question, *, returns=str):
                 ctx.operation_id, {"validated_answer": codec.encode(value)}
             )
             return value
-        ctx.journal.wait_input(
-            ctx.operation_id, {"question": str(question), "schema": schema}
+        waiting = {"question": str(question), "schema": schema}
+        _commit_or_confirm(
+            ctx.journal,
+            ctx.operation_id,
+            lambda: ctx.journal.wait_input(ctx.operation_id, waiting),
+            {"status": "waiting", "response": waiting},
+            "Input checkpoint could not be confirmed committed; resume to reconcile it",
         )
         raise InputRequired(str(question), ctx.operation_id)
 
@@ -1124,9 +1181,19 @@ class Botpipe:
             "usage": usage,
         }
 
-    def resolve(self, run_id, operation_id, *, retry=False, response=_UNSET):
-        if bool(retry) == (response is not _UNSET):
-            raise ValueError("Choose either retry=True or a response")
+    def resolve(
+        self,
+        run_id,
+        operation_id,
+        *,
+        retry=False,
+        response=_UNSET,
+        artifact_digests=None,
+    ):
+        if retry and (response is not _UNSET or artifact_digests is not None):
+            raise ValueError("Choose retry=True or a response/artifact reconciliation")
+        if not retry and response is _UNSET and artifact_digests is None:
+            raise ValueError("Choose retry=True, a response, or artifact_digests")
         with self._ownership(run_id):
             data = self.journal.run(run_id)
             self._check_run_configuration(data)
@@ -1139,6 +1206,8 @@ class Botpipe:
                 raise ValueError(
                     "Only provider turns and activities require effect reconciliation"
                 )
+            if artifact_digests is not None and record["kind"] != "provider":
+                raise ValueError("Only provider outputs accept artifact reconciliation")
             if (record.get("response") or {}).get("not_dispatched"):
                 raise ValueError(
                     "Budget exhausted before dispatch; no effects need reconciliation. "
@@ -1212,6 +1281,45 @@ class Botpipe:
                         raise BotpipeError(
                             f"The provider is {state}; reconciliation is blocked. {outcome.detail or ''}".strip()
                         )
+                    if artifact_digests is not None:
+                        from .artifacts import Artifact, ArtifactStore
+
+                        if response is _UNSET:
+                            raise ValueError(
+                                "Artifact reconciliation also needs the completed or manually supplied response"
+                            )
+                        declarations = tuple(
+                            Artifact.from_record(a) for a in inputs.get("writes", ())
+                        )
+                        if not declarations:
+                            raise ValueError(
+                                "This provider operation has no declared artifacts"
+                            )
+                        store = ArtifactStore(
+                            request.receipt_dir.parent,
+                            workspace=request.workspace,
+                            forbidden_paths=(
+                                self.journal.path,
+                                self.workspace / ".botpipe-workspace.lock",
+                                request.workspace / ".botpipe-workspace.lock",
+                            ),
+                        )
+                        artifact_operation = f"{operation_id}:generation:{previous}"
+                        if store.has_capture_evidence(artifact_operation):
+                            if (old.get("artifact_resolution") or {}).get(
+                                "digests"
+                            ) != artifact_digests:
+                                raise ValueError(
+                                    "Artifact capture already has durable evidence; resume it instead"
+                                )
+                        else:
+                            approved = store.check_capture_digests(
+                                declarations, artifact_digests
+                            )
+                            old["artifact_resolution"] = {
+                                "source": "operator",
+                                "digests": approved,
+                            }
 
                 target = request.workspace.resolve()
                 if target != self.workspace:
@@ -1236,7 +1344,14 @@ class Botpipe:
                         session_key=inputs.get("session"),
                     )
             elif response is not _UNSET:
-                self.journal.finish(operation_id, codec.encode(response))
+                result = codec.encode(response)
+                _commit_or_confirm(
+                    self.journal,
+                    operation_id,
+                    lambda: self.journal.finish(operation_id, result),
+                    {"status": "completed", "result": result},
+                    "Resolved activity checkpoint could not be confirmed; inspect it before retrying",
+                )
             if retry:
                 # Explicit retry is represented by an authorization marker; the
                 # original intent/identity remains, and adapters keep old receipts.
@@ -1253,7 +1368,15 @@ class Botpipe:
             self.journal.event(
                 run_id,
                 "operation_reconciled",
-                {"retry": retry, "source": source},
+                {
+                    "retry": retry,
+                    "source": source,
+                    **(
+                        {"artifacts": old["artifact_resolution"]}
+                        if artifact_digests is not None
+                        else {}
+                    ),
+                },
                 operation_id,
             )
 

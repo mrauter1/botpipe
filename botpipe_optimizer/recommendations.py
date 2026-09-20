@@ -16,7 +16,12 @@ from typing import Any
 from botpipe.storage import sync_directory
 from botpipe.surface_identity import SURFACE_MANIFEST_SCHEMA, canonical_surface_id
 
-from .evidence import EvidenceSnapshot, baseline_surface_id
+from .evidence import (
+    DEFAULT_MAX_SNAPSHOT_BYTES,
+    EvidenceSnapshot,
+    baseline_surface_id,
+    evidence_snapshot_bytes,
+)
 from .records import (
     Candidate,
     CandidateKind,
@@ -212,6 +217,8 @@ def publish_recommendation(
     review: CandidateReview | None,
     baseline_manifest: Mapping[str, Any],
     max_output_bytes: int,
+    max_evidence_bytes: int = 50 * 1024 * 1024,
+    max_snapshot_bytes: int = DEFAULT_MAX_SNAPSHOT_BYTES,
     supporting_content: bytes | None = None,
 ) -> PublicationReceipt:
     """Publish one immutable generation, then atomically select its receipt.
@@ -250,10 +257,12 @@ def publish_recommendation(
         != candidate_set.baseline_surface_manifest_id
     ):
         raise ValueError("baseline manifest identity does not match CandidateSet")
-    evidence_content = _json_bytes(
-        evidence_snapshot.model_dump(mode="json", by_alias=True)
+    evidence_content = evidence_snapshot_bytes(
+        evidence_snapshot, max_snapshot_bytes=max_snapshot_bytes
     )
     baseline_content = _json_bytes(dict(baseline_manifest))
+    if max_evidence_bytes <= 0 or len(baseline_content) > max_evidence_bytes:
+        raise ValueError("baseline surface manifest exceeds max_evidence_bytes")
     candidate_content = _json_bytes(
         candidate_set.model_dump(mode="json", by_alias=True)
     )
@@ -354,6 +363,29 @@ def publish_recommendation(
     }
     _install_publication_generation(generation_path, generation_files)
 
+    # Re-read the immutable generation under the same category-specific limits
+    # immediately before selecting it as the canonical publication.
+    _verified_receipt_artifacts(
+        receipt,
+        root,
+        max_output_bytes=max_output_bytes,
+        max_snapshot_bytes=max_snapshot_bytes,
+        max_evidence_bytes=max_evidence_bytes,
+    )
+    installed_evidence_content = _read_bounded(
+        evidence_path, max_snapshot_bytes, "evidence snapshot"
+    )
+    installed_evidence = EvidenceSnapshot.model_validate_json(
+        installed_evidence_content, strict=True
+    )
+    if (
+        evidence_snapshot_bytes(
+            installed_evidence, max_snapshot_bytes=max_snapshot_bytes
+        )
+        != installed_evidence_content
+    ):
+        raise ValueError("published evidence snapshot is not canonical")
+
     # This replace is the commit point.  Failures before it leave the previous
     # canonical receipt and all files it references byte-for-byte untouched.
     _atomic_bytes(root / "optimization_publication_receipt.json", receipt_content)
@@ -433,6 +465,7 @@ def load_optimization_candidate(
     allowed_kinds: Iterable[CandidateKind],
     max_output_bytes: int = 10 * 1024 * 1024,
     max_evidence_bytes: int = 50 * 1024 * 1024,
+    max_snapshot_bytes: int = DEFAULT_MAX_SNAPSHOT_BYTES,
 ) -> OptimizationCandidateSelection:
     """Load an accepted candidate only when every published identity still agrees."""
     receipt_path = Path(optimization_receipt_path).resolve(strict=True)
@@ -459,7 +492,9 @@ def load_optimization_candidate(
     artifacts = _verified_receipt_artifacts(
         receipt,
         receipt_dir,
-        max_output_bytes + max_evidence_bytes,
+        max_output_bytes=max_output_bytes,
+        max_snapshot_bytes=max_snapshot_bytes,
+        max_evidence_bytes=max_evidence_bytes,
     )
     candidate_set_path = _receipt_artifact_path(
         receipt_dir, receipt.candidate_set_path, "CandidateSet"
@@ -504,10 +539,15 @@ def load_optimization_candidate(
         receipt.selected_workflow,
     ):
         raise ValueError("receipt and CandidateSet anchors do not match")
-    evidence = EvidenceSnapshot.model_validate_json(
-        _read_bounded(evidence_path, max_evidence_bytes, "evidence snapshot"),
-        strict=True,
+    evidence_content = _read_bounded(
+        evidence_path, max_snapshot_bytes, "evidence snapshot"
     )
+    evidence = EvidenceSnapshot.model_validate_json(evidence_content, strict=True)
+    if (
+        evidence_snapshot_bytes(evidence, max_snapshot_bytes=max_snapshot_bytes)
+        != evidence_content
+    ):
+        raise ValueError("published evidence snapshot is not canonical")
     if (
         evidence.snapshot_id != receipt.evidence_snapshot_id
         or evidence.selected_workflow != receipt.selected_workflow
@@ -640,18 +680,36 @@ def _receipt_artifact_path(receipt_dir: Path, raw_path: str | None, label: str) 
 def _verified_receipt_artifacts(
     receipt: PublicationReceipt,
     receipt_dir: Path,
-    byte_limit: int,
+    *,
+    max_output_bytes: int,
+    max_snapshot_bytes: int,
+    max_evidence_bytes: int,
 ) -> set[Path]:
     paths: set[Path] = set()
-    total = 0
+    output_total = 0
+    evidence_path = _receipt_artifact_path(
+        receipt_dir, receipt.evidence_snapshot_path, "evidence snapshot"
+    )
+    baseline_path = _receipt_artifact_path(
+        receipt_dir, receipt.baseline_surface_manifest_path, "baseline surface manifest"
+    )
     for artifact in receipt.supporting_artifacts:
         path = _receipt_artifact_path(receipt_dir, artifact.path, "supporting artifact")
         if path in paths:
             raise ValueError("receipt contains duplicate supporting artifact paths")
-        content = _read_bounded(path, byte_limit, "supporting artifact")
-        total += len(content)
-        if total > byte_limit:
-            raise ValueError("receipt supporting artifacts exceed byte limit")
+        if path == evidence_path:
+            limit = max_snapshot_bytes
+        elif path == baseline_path:
+            limit = max_evidence_bytes
+        else:
+            limit = max_output_bytes
+        content = _read_bounded(path, limit, "supporting artifact")
+        if path not in {evidence_path, baseline_path}:
+            output_total += len(content)
+            if output_total > max_output_bytes:
+                raise ValueError(
+                    "receipt recommendation artifacts exceed max_output_bytes"
+                )
         if (
             len(content) != artifact.bytes
             or hashlib.sha256(content).hexdigest() != artifact.sha256

@@ -5,7 +5,8 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
-from collections.abc import Mapping
+import tomllib
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -34,7 +35,8 @@ def prepare_generated_workflow_candidate(
         if source.exists():
             if relative.startswith(".botpipe/"):
                 raise ValueError(
-                    f"generated workflow target already exists; choose a new package_name: {relative}"
+                    "generated workflow target already exists; choose a new "
+                    f"package_name: {relative}"
                 )
             requested.append(relative)
     if not requested:
@@ -155,8 +157,6 @@ def _materialize_generated_workflow_manifest_activity(
         if not isinstance(content, str):
             raise TypeError(f"generated file content must be text: {relative}")
         data = content.encode("utf-8")
-        if relative.endswith(".py"):
-            compile(content, relative, "exec")
         total += len(data)
         if total > max_bytes:
             raise ValueError(f"workflow package exceeds max_bytes={max_bytes}")
@@ -189,6 +189,34 @@ def _materialize_generated_workflow_manifest_activity(
         if missing:
             raise ValueError("package authoring shape requires: " + ", ".join(missing))
 
+    entry_path = (
+        single_path if authoring_shape == "single" else f"{package_prefix}/flow.py"
+    )
+    reference_errors: list[str] = []
+    if ":" not in workflow_reference:
+        reference_errors.append(
+            "workflow_reference must name a callable in the generated entry file"
+        )
+        function_name = "workflow_callable"
+    else:
+        declared_location, function_name = workflow_reference.rsplit(":", 1)
+        function_name = function_name.strip()
+        try:
+            declared_location = _generated_relative_path(declared_location.strip())
+        except (TypeError, ValueError) as exc:
+            reference_errors.append(str(exc))
+            declared_location = ""
+        if declared_location != entry_path:
+            reference_errors.append(
+                f"workflow_reference must target the generated entry file {entry_path}"
+            )
+        if not function_name.isidentifier():
+            reference_errors.append(
+                "workflow_reference must name a valid Python callable"
+            )
+            function_name = "workflow_callable"
+    derived_reference = f"{entry_path}:{function_name}"
+
     root = Path(candidate_workspace.root).resolve()
     marker = root / ".botpipe-candidate.json"
     if not marker.is_file():
@@ -202,6 +230,21 @@ def _materialize_generated_workflow_manifest_activity(
     if candidate_root.exists():
         shutil.rmtree(candidate_root)
     shutil.copytree(baseline_root, candidate_root)
+
+    # The content manifest is the desired final inventory for its managed
+    # boundary.  Clear only that boundary so undeclared files from an existing
+    # package cannot remain as hidden dependencies.  The rest of the repository
+    # is left byte-for-byte as prepared from the baseline.
+    managed_package = candidate_root / package_prefix
+    if authoring_shape != "single" and managed_package.exists():
+        if managed_package.is_symlink() or not managed_package.is_dir():
+            raise ValueError("generated package boundary is not an ordinary directory")
+        shutil.rmtree(managed_package)
+    managed_test = candidate_root / test_path
+    if managed_test.exists():
+        if managed_test.is_symlink() or not managed_test.is_file():
+            raise ValueError("generated test boundary is not an ordinary file")
+        managed_test.unlink()
 
     materialized = []
     for relative, data, role in records:
@@ -228,7 +271,9 @@ def _materialize_generated_workflow_manifest_activity(
         "schema": "botpipe.generated-workflow-candidate/v1",
         "package_name": package_name,
         "authoring_shape": authoring_shape,
-        "workflow_reference": workflow_reference.strip(),
+        "workflow_reference": derived_reference,
+        "declared_workflow_reference": workflow_reference.strip(),
+        "reference_errors": reference_errors,
         "root": str(candidate_root),
         "manifest_artifact": manifest_handle.to_record(),
         "files": materialized,
@@ -300,8 +345,41 @@ def _revalidate_generated_workflow_materialization(
             raise ValueError(f"generated candidate file changed: {record['path']}")
     validate_authoritative_sources_unchanged(candidate_workspace)
     actual = candidate_manifest(candidate_workspace)
-    if set(actual.changed_paths) != {record["path"] for record in files}:
-        raise ValueError("generated candidate contains unrecorded file changes")
+    package_name = value.get("package_name")
+    authoring_shape = value.get("authoring_shape")
+    if not isinstance(package_name, str) or not isinstance(authoring_shape, str):
+        raise TypeError("generated candidate package identity is missing")
+    package_prefix = _generated_package_path(package_name, authoring_shape)
+    test_path = f"tests/runtime/test_{package_name}.py"
+    declared_paths = {record["path"] for record in files}
+    if authoring_shape != "single" and (root / package_prefix).is_dir():
+        actual_package_paths = {
+            path.relative_to(root).as_posix()
+            for path in (root / package_prefix).rglob("*")
+            if path.is_file() and not path.is_symlink()
+        }
+    elif authoring_shape == "single" and (root / package_prefix).is_file():
+        actual_package_paths = {package_prefix}
+    else:
+        actual_package_paths = set()
+    declared_package_paths = {
+        path
+        for path in declared_paths
+        if path == package_prefix or Path(path).is_relative_to(package_prefix)
+    }
+    if actual_package_paths != declared_package_paths:
+        raise ValueError("generated package inventory differs from its manifest")
+    if (root / test_path).is_file() != (test_path in declared_paths):
+        raise ValueError("generated test inventory differs from its manifest")
+    unexpected_changes = [
+        path
+        for path in actual.changed_paths
+        if path != test_path
+        and path != package_prefix
+        and not Path(path).is_relative_to(package_prefix)
+    ]
+    if unexpected_changes:
+        raise ValueError("generated candidate contains changes outside its boundary")
     return value
 
 
@@ -354,6 +432,7 @@ def _validate_generated_workflow_candidate_activity(
     staging_parent: str,
     target_test_command: str | None,
     timeout: float = 300,
+    manifest_diagnostics: Sequence[str] = (),
 ) -> dict[str, Any]:
     """Compile/import one materialized candidate with the existing isolated validator."""
     from botpipe_optimizer.candidates import (
@@ -371,28 +450,78 @@ def _validate_generated_workflow_candidate_activity(
         compile_timeout_seconds=min(timeout, 60),
         test_timeout_seconds=timeout,
     )
-    if not result.success:
-        raise ValueError(
-            f"generated workflow validation failed: {'; '.join(result.errors)}"
+    if any(check.cancelled for check in result.checks):
+        raise RuntimeError("generated workflow validation was cancelled")
+
+    diagnostics = [*manifest_diagnostics, *result.errors]
+
+    package_entry = Path(workflow_reference.rsplit(":", 1)[0]).as_posix()
+    candidate_root = Path(candidate_workspace.candidate_root)
+    allowed_entries = {
+        path.relative_to(candidate_root).as_posix()
+        for pattern in (
+            ".botpipe/workflows/*.py",
+            ".botpipe/workflows/*/flow.py",
+            "labs/workflows/*/flow.py",
         )
+        for path in candidate_root.glob(pattern)
+        if path.is_file() and not path.is_symlink()
+    }
+    if package_entry not in allowed_entries:
+        diagnostics.append(
+            "workflow_reference must select the generated authoring-shape entry"
+        )
+    parts = Path(package_entry).parts
+    if parts[:2] == ("labs", "workflows") and len(parts) >= 4:
+        manifest_path = (
+            Path(candidate_workspace.candidate_root)
+            / Path(*parts[:3])
+            / "workflow.toml"
+        )
+        try:
+            tomllib.loads(manifest_path.read_text(encoding="utf-8"))
+            from botpipe.discovery import discover_workflows
+
+            expected_source = (
+                Path(candidate_workspace.candidate_root) / package_entry
+            ).resolve()
+            expected_function = workflow_reference.rsplit(":", 1)[1]
+            entries = [
+                entry
+                for entry in discover_workflows(candidate_workspace.candidate_root)
+                if entry.source_path.resolve() == expected_source
+                and entry.manifest_path is not None
+                and entry.manifest_path.resolve() == manifest_path.resolve()
+            ]
+            if (
+                len(entries) != 1
+                or entries[0].function != expected_function
+                or entries[0].name != parts[2]
+            ):
+                diagnostics.append(
+                    "catalog metadata must name the package and select its flow.py callable"
+                )
+        except (OSError, tomllib.TOMLDecodeError, ValueError, LookupError) as exc:
+            diagnostics.append(f"catalog: {exc}")
     manifest = candidate_manifest(candidate_workspace)
     surface = candidate_surface_manifest(candidate_workspace, frozen_candidate)
-    changed_files = {
-        item["relative_path"]: item
-        for item in surface["files"]
-        if item["relative_path"] in manifest.changed_paths
-    }
+    candidate_files = {item["relative_path"]: item for item in surface["files"]}
     for compiled in result.compiled_workflows:
         matches = [
             relative
-            for relative, item in changed_files.items()
+            for relative, item in candidate_files.items()
             if compiled["source_sha256"] == item["surface_sha256"]
             and Path(compiled["source_path"]).as_posix().endswith(f"/{relative}")
+            and relative == package_entry
         ]
         if len(matches) != 1:
-            raise ValueError(
+            diagnostics.append(
                 "workflow_reference must resolve to one generated candidate source"
             )
+    if diagnostics != list(result.errors):
+        result = result.model_copy(
+            update={"success": False, "errors": tuple(diagnostics)}
+        )
     return {
         "validation": result.model_dump(mode="json"),
         "candidate_manifest": {
@@ -430,8 +559,10 @@ def _revalidate_generated_workflow_validation(
     value = dict(result)
     validation = value.get("validation")
     recorded = value.get("candidate_manifest")
-    if not isinstance(validation, Mapping) or validation.get("success") is not True:
-        raise ValueError("generated workflow validation is not successful")
+    if not isinstance(validation, Mapping) or not isinstance(
+        validation.get("success"), bool
+    ):
+        raise TypeError("generated workflow validation result is malformed")
     if not isinstance(recorded, Mapping):
         raise TypeError("generated workflow candidate manifest is missing")
     root = Path(candidate_workspace.candidate_root).resolve()
@@ -477,6 +608,7 @@ def validate_generated_workflow_candidate(
     staging_parent: str,
     target_test_command: str | None,
     timeout: float = 300,
+    manifest_diagnostics: Sequence[str] = (),
 ) -> dict[str, Any]:
     """Validate once and recheck source identity after every activity replay."""
     result = _validate_generated_workflow_candidate_activity(
@@ -486,6 +618,7 @@ def validate_generated_workflow_candidate(
         staging_parent,
         target_test_command,
         timeout,
+        manifest_diagnostics,
     )
     return _revalidate_generated_workflow_validation(
         result,

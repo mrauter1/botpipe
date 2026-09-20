@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+
 import pytest
 from pydantic import BaseModel
 
@@ -63,6 +65,17 @@ def test_explicit_retry_recovers_completed_receipt_before_preparing_new_artifact
             if r["kind"] == "provider"
         )
         client.resolve(interrupted.run_id, op["id"], retry=True)
+        recovered = client.resume(interrupted.run_id, workflow=report)
+        assert recovered.status == "interrupted", recovered.error
+        client.resolve(
+            interrupted.run_id,
+            op["id"],
+            artifact_digests={
+                "report": hashlib.sha256(
+                    provider.calls[0].artifacts["report"].read_bytes()
+                ).hexdigest()
+            },
+        )
         recovered = client.resume(interrupted.run_id, workflow=report)
         assert recovered.ok, recovered.error
         assert (

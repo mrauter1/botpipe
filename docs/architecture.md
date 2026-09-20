@@ -48,6 +48,11 @@ ordinary Python argument semantics. Validation may repeat after a crash before
 its state was recorded, so validation hooks must remain free of external effects.
 Codec traversal has depth and value-count limits and rejects cycles.
 
+Datetime records retain wall time, `fold`, and fixed-offset timezone names.
+Supported timezones are naive values and exact `datetime.timezone` instances;
+`ZoneInfo` and custom `tzinfo` implementations are rejected because their
+behavior depends on state outside this record format.
+
 Define durable contracts at module scope so a new process can import their
 concrete types. Types reachable through workflow annotations are registered
 automatically, including generic arguments and nested fields. A local
@@ -56,15 +61,18 @@ fresh process; move that contract to module scope.
 
 The automatic state codec deliberately refuses values whose complete state is
 not represented by ordinary fields. This includes private fields, excluded
-fields, secrets, custom serializers, cached or unknown instance attributes, custom
-state hooks, and unrecognized storage slots. Put such data in an artifact or
+fields, secrets, custom serializers (including compiled core-schema serializers),
+cached or unknown instance attributes, custom state hooks, and unrecognized
+storage slots. Put such data in an artifact or
 return a separate plain model designed as durable state. Legacy unversioned
 model and dataclass records are rejected with a migration error; Botpipe never
 passes them through current validation and silently changes their meaning.
 
-The automatic fingerprint follows the workflow and referenced Python helpers
-and contracts. It is not an immutable process or environment snapshot: provider
-installations, external modules, environment values, and configuration semantics
+The automatic fingerprint pins the whole orchestration module and bounded,
+owned Python helper and contract modules, including class behavior. Mutable
+application files are outside this fingerprint. It is not an immutable process
+or environment snapshot: provider installations, external modules, environment
+values, and configuration semantics
 can change outside that source bundle. Authors should bump
 `@workflow(version=...)` when those dependencies change meaningfully and start a
 new run when the original environment cannot be reproduced.
@@ -104,6 +112,13 @@ recovery to finish that commit without revalidating or redispatching.
 The capture intent records every output's content digest before any snapshot is
 published. Recovery verifies existing snapshots and requires unsnapshotted files
 to still match that intent; edited files cannot silently become provider output.
+If the process stopped before recording an inventory, resume remains interrupted.
+An operator can approve the current files with `resolve(..., artifact_digests=...)`:
+the mapping must name every declared artifact with its SHA-256 digest, or `None`
+for an absent optional artifact. Reconciliation requires completed or confirmed
+stopped effects and records operator provenance. Capture rechecks those digests;
+later edits remain blocked. A provider text receipt alone cannot authenticate
+the files that happened to remain in its workspace.
 
 When a completed attempt fails output validation, rollback quarantines its
 declared outputs and restores every previous declared file. The rollback journal

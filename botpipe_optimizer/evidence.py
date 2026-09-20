@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import json
-import math
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
 from hashlib import sha256
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from botpipe.dispatches import known_token_total, normalize_usage
 
 from .optimization import RunObservation, SourceManifest, load_run_observation
 
@@ -21,6 +22,8 @@ type SelectionBasis = Literal[
     "sum_of_reported_token_counts",
     "sum_of_provider_dispatch_seconds",
 ]
+
+DEFAULT_MAX_SNAPSHOT_BYTES = 50 * 1024 * 1024
 
 
 class EvidenceRecord(BaseModel):
@@ -226,6 +229,7 @@ def capture_evidence_snapshot(
     objective: Objective = "reliability",
     top_k_steps: int = 1,
     max_evidence_bytes: int = 50 * 1024 * 1024,
+    max_snapshot_bytes: int = DEFAULT_MAX_SNAPSHOT_BYTES,
     explicit_run_refs: bool = False,
     route_tags: tuple[str, ...] = (),
     current_workflow_identity: str | None = None,
@@ -234,8 +238,10 @@ def capture_evidence_snapshot(
     baseline_surface_manifest_id: str | None = None,
 ) -> EvidenceSnapshot:
     """Normalize, bound, group, and rank journal observations without estimating missing data."""
-    if top_k_steps <= 0 or max_evidence_bytes <= 0:
-        raise ValueError("top_k_steps and max_evidence_bytes must be positive")
+    if top_k_steps <= 0 or max_evidence_bytes <= 0 or max_snapshot_bytes <= 0:
+        raise ValueError(
+            "top_k_steps, max_evidence_bytes, and max_snapshot_bytes must be positive"
+        )
     if objective not in {"reliability", "token_usage", "latency"}:
         raise ValueError("unsupported optimizer objective")
     supplied = tuple(inspections)
@@ -479,7 +485,9 @@ def capture_evidence_snapshot(
     }
     provisional = EvidenceSnapshot.model_construct(**payload)
     payload["snapshot_id"] = _content_id("evidence", provisional, {"snapshot_id"})
-    return EvidenceSnapshot.model_validate(payload)
+    snapshot = EvidenceSnapshot.model_validate(payload)
+    evidence_snapshot_bytes(snapshot, max_snapshot_bytes=max_snapshot_bytes)
+    return snapshot
 
 
 def _metrics(observations: list[Observation]) -> tuple[StepMetric, ...]:
@@ -685,7 +693,7 @@ def _dispatch_evidence(
         else ["unknown", observation_id, dispatch_ordinal, dispatch.dispatch_id]
     )
     profile_id = "profile_" + sha256(_canonical(profile_key)).hexdigest()
-    token_total = _known_token_total(dispatch.usage)
+    token_total = known_token_total(dispatch.usage, provider=dispatch.provider)
     availability = dispatch.usage_availability
     if availability not in {"known_total", "partial", "unknown", "not_attempted"}:
         availability = "unknown"
@@ -717,7 +725,10 @@ def _usage(
         return "not_attempted", None, 0
     if dispatches:
         if all(item.usage_availability == "known_total" for item in dispatches):
-            totals = [_known_token_total(item.usage) for item in dispatches]
+            totals = [
+                known_token_total(item.usage, provider=item.provider)
+                for item in dispatches
+            ]
             if all(item is not None for item in totals):
                 return (
                     "known_total",
@@ -734,40 +745,25 @@ def _usage(
 
 
 def _legacy_usage(usage: Mapping[str, float]) -> tuple[Availability, int | None]:
-    finite = {
-        key: value
-        for key, value in usage.items()
-        if isinstance(value, (int, float))
-        and not isinstance(value, bool)
-        and math.isfinite(value)
-        and value >= 0
-    }
-    if "total_tokens" in usage:
-        value = usage["total_tokens"]
-        if _is_token_count(value):
-            return "known_total", value
-        return ("partial", None) if "total_tokens" in finite else ("unknown", None)
-    if "input_tokens" in usage or "output_tokens" in usage:
-        if (
-            "input_tokens" in usage
-            and "output_tokens" in usage
-            and _is_token_count(usage["input_tokens"])
-            and _is_token_count(usage["output_tokens"])
-        ):
-            return "known_total", usage["input_tokens"] + usage["output_tokens"]
-        return ("partial", None) if finite else ("unknown", None)
-    if finite:
-        return "partial", None
-    return "unknown", None
+    values, availability = normalize_usage(usage, final=True)
+    return availability, known_token_total(values)
 
 
-def _is_token_count(value: Any) -> bool:
-    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
-
-
-def _known_token_total(usage: Mapping[str, float]) -> int | None:
-    state, total = _legacy_usage(usage)
-    return total if state == "known_total" else None
+def evidence_snapshot_bytes(
+    snapshot: EvidenceSnapshot, *, max_snapshot_bytes: int
+) -> bytes:
+    """Serialize and bound the exact evidence representation used for publication."""
+    if max_snapshot_bytes <= 0:
+        raise ValueError("max_snapshot_bytes must be positive")
+    content = (
+        json.dumps(
+            snapshot.model_dump(mode="json", by_alias=True), indent=2, sort_keys=True
+        )
+        + "\n"
+    ).encode()
+    if len(content) > max_snapshot_bytes:
+        raise ValueError("evidence snapshot exceeds max_snapshot_bytes")
+    return content
 
 
 def _elapsed(operation: Any) -> tuple[bool, float | None]:
@@ -818,6 +814,8 @@ __all__ = [
     "StepMetric",
     "StepProfileMetric",
     "StepRanking",
+    "DEFAULT_MAX_SNAPSHOT_BYTES",
     "baseline_surface_id",
     "capture_evidence_snapshot",
+    "evidence_snapshot_bytes",
 ]

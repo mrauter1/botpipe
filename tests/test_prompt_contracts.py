@@ -641,6 +641,48 @@ def test_workflow_builder_rejects_manifest_that_only_claims_a_file(tmp_path):
     assert "generated file content must be text" in (result.error or "")
 
 
+def test_workflow_builder_repairs_recorded_candidate_validation_failure(tmp_path):
+    from tests.test_labs import _successful_provider
+
+    (tmp_path / "README.md").write_text("# Candidate source repository\n")
+    build_attempts = 0
+    saw_runtime_feedback = False
+
+    def answer(request):
+        nonlocal build_attempts, saw_runtime_feedback
+        payload = _input(request)
+        is_build_producer = "workflow_package_manifest" in request.artifacts
+        if is_build_producer:
+            build_attempts += 1
+            saw_runtime_feedback = saw_runtime_feedback or bool(
+                payload.get("runtime_validation_feedback")
+            )
+        result = _successful_provider(request)
+        if is_build_producer and build_attempts == 1:
+            path = request.artifacts["workflow_package_manifest"]
+            manifest = json.loads(path.read_text())
+            manifest["files"][0]["content"] = "def broken(:\n"
+            path.write_text(json.dumps(manifest))
+        return result
+
+    with Botpipe(tmp_path, provider=FakeProvider([answer] * 10)) as client:
+        result = client.run(
+            WorkflowIdeaToWorkflowPackage,
+            WorkflowBuilderParams(
+                package_name="repair_fixture",
+                workflow_kind="end_to_end",
+            ),
+            request="Repair a rejected generated candidate.",
+            run_id="repaired-generated-candidate",
+        )
+        replay = client.resume(result.run_id)
+
+    assert result.ok, result.error
+    assert replay.ok, replay.error
+    assert build_attempts == 2
+    assert saw_runtime_feedback is True
+
+
 @pytest.mark.parametrize(
     ("authoring_shape", "expected_paths"),
     [

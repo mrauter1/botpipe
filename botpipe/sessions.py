@@ -233,6 +233,7 @@ class Session:
 
                 def execute(recover=False):
                     operation_id = ctx.operation_id
+                    fresh_response = False
                     row = ctx.journal.get(operation_id)
                     saved = row.get("response") or {}
                     generation = saved.get("generation", 0)
@@ -477,6 +478,7 @@ class Session:
                                     )
                                 else:
                                     response = ctx.client.provider.run(request)
+                                fresh_response = True
                         except BudgetExceeded as exc:
                             if not dispatched:
                                 saved = {
@@ -556,7 +558,14 @@ class Session:
                             )
                             saved = {**saved, "validated_value": value_record}
                             ctx.save_response(operation_id, saved, session_key=self.key)
-                        artifacts = store.capture(writes, artifact_operation)
+                        artifacts = store.capture(
+                            writes,
+                            artifact_operation,
+                            recover=not fresh_response,
+                            expected_digests=(
+                                saved.get("artifact_resolution") or {}
+                            ).get("digests"),
+                        )
                     except (ValueError, TypeError) as exc:
                         retryable = isinstance(exc, ValueError)
                         saved = {

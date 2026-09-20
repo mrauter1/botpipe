@@ -21,6 +21,8 @@ class Params(SelectedWorkflowTaskFramingParameters):
     target_test_command: str | None = None
     target_test_argv: list[str] | None = None
     validation_timeout: float = Field(default=600.0, gt=0)
+    max_evidence_bytes: int = Field(default=50 * 1024 * 1024, gt=0)
+    max_snapshot_bytes: int = Field(default=50 * 1024 * 1024, gt=0)
 
     @field_validator(
         "evaluation_summary_path",

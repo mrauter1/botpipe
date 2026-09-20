@@ -16,23 +16,84 @@ _TOKEN_FIELDS = (
     "total_tokens",
     "cached_input_tokens",
     "reasoning_tokens",
+    "cache_creation_input_tokens",
+    "cache_read_input_tokens",
 )
 
+_TOKEN_ALIASES = {
+    "input_tokens": ("input_tokens", "prompt_tokens"),
+    "output_tokens": ("output_tokens", "completion_tokens"),
+}
 
-def normalize_usage(usage, *, final):
+
+def _token_count(value):
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def _aliased_token_count(usage, *fields):
+    for field in fields:
+        value = usage.get(field)
+        if _token_count(value):
+            return value
+    return None
+
+
+def known_token_total(usage, *, provider=None):
+    """Return a reported total only when the field semantics determine one."""
+    usage = usage or {}
+    total = usage.get("total_tokens")
+    if _token_count(total):
+        return total
+    input_tokens = _aliased_token_count(usage, "input_tokens", "prompt_tokens")
+    output_tokens = _aliased_token_count(usage, "output_tokens", "completion_tokens")
+    if input_tokens is None or output_tokens is None:
+        return None
+    additive = ("cache_creation_input_tokens", "cache_read_input_tokens")
+    present = [field for field in additive if field in usage]
+    provider_name = str(provider or "").lower()
+    if present and provider_name not in {"anthropic", "claude"}:
+        return None
+    cache_tokens = 0
+    for field in present:
+        value = usage[field]
+        if not _token_count(value):
+            return None
+        cache_tokens += value
+    # cached_input_tokens is an input subset and reasoning_tokens is an output
+    # subset. Claude's cache creation/read fields are separate input categories.
+    return input_tokens + output_tokens + cache_tokens
+
+
+def normalize_usage(usage, *, final, provider=None):
+    raw = usage or {}
     values = {
         key: value
         for key in _TOKEN_FIELDS
-        if isinstance((value := (usage or {}).get(key)), (int, float))
+        if isinstance((value := raw.get(key)), (int, float))
         and not isinstance(value, bool)
         and math.isfinite(value)
         and value >= 0
     }
-    complete = (
-        "total_tokens" in values or {"input_tokens", "output_tokens"} <= values.keys()
-    )
+    for target, aliases in _TOKEN_ALIASES.items():
+        for source in aliases:
+            value = raw.get(source)
+            if (
+                isinstance(value, (int, float))
+                and not isinstance(value, bool)
+                and math.isfinite(value)
+                and value >= 0
+            ):
+                values[target] = value
+                break
+    total = known_token_total(values, provider=provider)
+    if total is not None:
+        values["total_tokens"] = total
     availability = (
-        "known_total" if final and complete else "partial" if values else "unknown"
+        "known_total"
+        if final and total is not None
+        else "partial"
+        if values
+        else "unknown"
     )
     return values, availability
 
@@ -45,6 +106,7 @@ class Dispatch:
         from .runtime import _CURRENT
 
         self.ctx = _CURRENT.get()
+        self.provider_name = str(getattr(provider, "name", type(provider).__name__))
         self.operation_id = request.operation_id
         self.id = uuid.uuid4().hex
         self._started_monotonic = None
@@ -53,7 +115,7 @@ class Dispatch:
         self._finished = False
         effective = request.policy.effective()
         details = {
-            "provider": str(getattr(provider, "name", type(provider).__name__)),
+            "provider": self.provider_name,
             "model": effective.model,
             "effort": None if effective.effort is None else effective.effort.value,
             "policy_fingerprint": hashlib.sha256(
@@ -93,7 +155,9 @@ class Dispatch:
             return
         self.stopped()
         self._finished = True
-        values, availability = normalize_usage(usage, final=outcome == "completed")
+        values, availability = normalize_usage(
+            usage, final=outcome == "completed", provider=self.provider_name
+        )
         self._event(
             "provider_dispatch_finished",
             {

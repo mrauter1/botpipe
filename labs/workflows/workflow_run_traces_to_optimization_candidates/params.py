@@ -35,6 +35,7 @@ class Params(SelectedWorkflowTaskFramingParameters):
     provider_turn_timeout_seconds: int = Field(default=600, gt=0)
     max_analysis_seconds: int = Field(default=1800, gt=0)
     max_evidence_bytes: int = Field(default=50 * 1024 * 1024, gt=0)
+    max_snapshot_bytes: int = Field(default=50 * 1024 * 1024, gt=0)
     max_output_bytes: int = Field(default=10 * 1024 * 1024, gt=0)
     focus: str | None = None
 

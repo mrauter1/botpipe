@@ -5,8 +5,8 @@ from __future__ import annotations
 import inspect
 from hashlib import sha256
 from pathlib import Path
-from types import CodeType
-from typing import Any
+from types import CodeType, ModuleType
+from typing import Any, get_type_hints
 
 from .surface_identity import (
     canonical_workflow_identity,
@@ -45,6 +45,197 @@ def capture_definition_sources(definition: Any) -> dict[str, Any] | None:
             "module_code": _active_module_code(path),
         }
     except (OSError, TypeError, ValueError):
+        return None
+
+
+def _referenced_names(code: CodeType) -> set[str]:
+    names = set(code.co_names)
+    for value in code.co_consts:
+        if isinstance(value, CodeType):
+            names.update(_referenced_names(value))
+    return names
+
+
+def _code_binding(code: CodeType) -> dict[str, Any]:
+    def constant(value):
+        if isinstance(value, CodeType):
+            return _code_binding(value)
+        if value is None or type(value) in (str, int, float, bool, bytes):
+            return repr(value)
+        return f"<{type(value).__module__}:{type(value).__qualname__}>"
+
+    return {
+        "code": code.co_code.hex(),
+        "names": list(code.co_names),
+        "constants": [constant(value) for value in code.co_consts],
+    }
+
+
+def _value_binding(value: Any) -> Any:
+    """Describe only directly owned callable code; never traverse object graphs."""
+    target = (
+        value
+        if isinstance(value, ModuleType)
+        else inspect.unwrap(getattr(value, "fn", value))
+    )
+    if inspect.isfunction(target):
+        return _code_binding(target.__code__)
+    if isinstance(target, ModuleType):
+        members = {}
+        for name, member in vars(target).items():
+            if not (inspect.isfunction(member) or isinstance(member, type)):
+                continue
+            candidate = inspect.unwrap(member)
+            if candidate.__module__ != target.__name__:
+                continue
+            binding = _value_binding(candidate)
+            if binding is not None:
+                members[name] = binding
+        return members
+    if not isinstance(target, type):
+        return None
+    methods = {}
+    for name, member in vars(target).items():
+        candidates = ()
+        if inspect.isfunction(member):
+            candidates = (member,)
+        elif isinstance(member, (staticmethod, classmethod)):
+            candidates = (member.__func__,)
+        elif isinstance(member, property):
+            candidates = tuple(
+                fn for fn in (member.fget, member.fset, member.fdel) if fn is not None
+            )
+        for index, function in enumerate(candidates):
+            methods[f"{name}:{index}"] = _code_binding(function.__code__)
+    return methods
+
+
+def capture_orchestration_sources(definition: Any) -> dict[str, Any] | None:
+    """Capture complete, bounded modules that define owned orchestration values."""
+    try:
+        target = inspect.unwrap(getattr(definition, "fn", definition))
+        raw = inspect.getsourcefile(target)
+        if raw is None:
+            return None
+        source = Path(raw).resolve(strict=True)
+        package = (
+            (source.parent / "__init__.py").is_file()
+            or (source.parent / "workflow.toml").is_file()
+            or source.name in {"workflow.py", "flow.py"}
+        )
+        boundary = source.parent if package else source
+        values = []
+        seen_values = set()
+
+        def enqueue(label: str, value: Any) -> None:
+            if (
+                isinstance(value, ModuleType)
+                or inspect.isfunction(value)
+                or isinstance(value, type)
+            ):
+                candidate = inspect.unwrap(value)
+            elif (
+                type(value).__module__ == "botpipe.runtime"
+                and type(value).__name__ == "Workflow"
+            ):
+                candidate = inspect.unwrap(value.fn)
+            else:
+                return
+            if not (
+                inspect.isfunction(candidate)
+                or isinstance(candidate, type)
+                or isinstance(candidate, ModuleType)
+            ):
+                return
+            try:
+                raw_path = inspect.getsourcefile(candidate)
+                if raw_path is None:
+                    return
+                path = Path(raw_path).resolve(strict=True)
+            except (OSError, TypeError, ValueError):
+                return
+            owned = (
+                path == boundary
+                if boundary.is_file()
+                else path.is_relative_to(boundary)
+            )
+            if not owned or path.suffix != ".py" or path.is_symlink():
+                return
+            identity = id(candidate)
+            if identity in seen_values:
+                return
+            seen_values.add(identity)
+            values.append((label, candidate, path))
+
+        def enqueue_contracts(annotation: Any, label: str) -> None:
+            from .codec import preflight_types
+
+            try:
+                contracts = preflight_types(annotation, path=f"$.source.{label}")
+            except (AttributeError, NameError, TypeError, ValueError):
+                return
+            for index, contract in enumerate(contracts):
+                enqueue(f"{label}[{index}]", contract)
+
+        enqueue("<workflow>", target)
+        index = 0
+        while index < len(values):
+            label, value, _ = values[index]
+            index += 1
+            if inspect.isfunction(value):
+                namespace = value.__globals__
+                for name in sorted(_referenced_names(value.__code__)):
+                    enqueue(f"{label}.{name}", namespace.get(name))
+                try:
+                    annotations = get_type_hints(value)
+                except (NameError, TypeError, ValueError):
+                    annotations = value.__annotations__
+                for name, annotation in annotations.items():
+                    enqueue_contracts(annotation, f"{label}.annotation:{name}")
+            elif isinstance(value, ModuleType):
+                for name, member in vars(value).items():
+                    if (
+                        inspect.isfunction(member)
+                        or isinstance(member, type)
+                        or isinstance(member, ModuleType)
+                    ):
+                        enqueue(f"{label}.{name}", member)
+            else:
+                enqueue_contracts(value, f"{label}.contract")
+                for name, member in vars(value).items():
+                    methods = ()
+                    if inspect.isfunction(member):
+                        methods = (member,)
+                    elif isinstance(member, (staticmethod, classmethod)):
+                        methods = (member.__func__,)
+                    elif isinstance(member, property):
+                        methods = tuple(
+                            method
+                            for method in (member.fget, member.fset, member.fdel)
+                            if method is not None
+                        )
+                    for method_index, method in enumerate(methods):
+                        enqueue(f"{label}.{name}:{method_index}", method)
+        files = {}
+        bindings = {}
+        for name, value, path in values:
+            relative = (
+                path.name
+                if boundary.is_file()
+                else path.relative_to(boundary).as_posix()
+            )
+            files[relative] = sha256(path.read_bytes()).hexdigest()
+            binding = _value_binding(value)
+            if binding is not None:
+                bindings[name] = binding
+        if not files:
+            return None
+        return {
+            "schema": "botpipe.orchestration-sources.v1",
+            "files": dict(sorted(files.items())),
+            "bindings": dict(sorted(bindings.items())),
+        }
+    except (AttributeError, OSError, TypeError, ValueError):
         return None
 
 
@@ -110,4 +301,8 @@ def capture_workflow_provenance(
         }
 
 
-__all__ = ["capture_definition_sources", "capture_workflow_provenance"]
+__all__ = [
+    "capture_definition_sources",
+    "capture_orchestration_sources",
+    "capture_workflow_provenance",
+]

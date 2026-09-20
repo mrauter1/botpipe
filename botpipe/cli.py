@@ -90,7 +90,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     resolve.add_argument("run_id")
     resolve.add_argument("operation_id")
-    resolution = resolve.add_mutually_exclusive_group(required=True)
+    resolution = resolve.add_mutually_exclusive_group()
     resolution.add_argument(
         "--retry",
         action="store_true",
@@ -99,6 +99,10 @@ def build_parser() -> argparse.ArgumentParser:
     resolution.add_argument(
         "--response",
         help="Record its externally observed JSON response (or plain text).",
+    )
+    resolve.add_argument(
+        "--artifact-digests",
+        help="Explicit output reconciliation: JSON mapping of every artifact name to SHA-256, or null for an absent optional output.",
     )
     resolve.add_argument(
         "--workflow", help="Required for a non-importable local workflow."
@@ -266,13 +270,15 @@ def _answer(args: argparse.Namespace) -> int:
 
 def _resolve(args: argparse.Namespace) -> int:
     client = _client(args)
-    if args.retry:
-        client.resolve(args.run_id, args.operation_id, retry=True)
-    else:
+    options = {"retry": args.retry}
+    if args.response is not None:
         # Passing the keyword is significant: JSON null is a valid activity result.
-        client.resolve(
-            args.run_id, args.operation_id, response=_json_or_text(args.response)
+        options["response"] = _json_or_text(args.response)
+    if args.artifact_digests is not None:
+        options["artifact_digests"] = _json_object(
+            args.artifact_digests, "--artifact-digests"
         )
+    client.resolve(args.run_id, args.operation_id, **options)
     if args.no_resume:
         _emit(
             {"run_id": args.run_id, "operation_id": args.operation_id, "resolved": True}

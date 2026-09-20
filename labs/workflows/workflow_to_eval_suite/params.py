@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from botpipe_optimizer import SelectedWorkflowTaskFramingWithEvidenceParameters
 
@@ -10,6 +10,8 @@ from botpipe_optimizer import SelectedWorkflowTaskFramingWithEvidenceParameters
 class Params(SelectedWorkflowTaskFramingWithEvidenceParameters):
     optimization_receipt_path: str | None = None
     candidate_id: str | None = None
+    max_evidence_bytes: int = Field(default=50 * 1024 * 1024, gt=0)
+    max_snapshot_bytes: int = Field(default=50 * 1024 * 1024, gt=0)
 
     @field_validator("optimization_receipt_path", "candidate_id", mode="before")
     @classmethod
