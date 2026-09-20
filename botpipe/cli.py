@@ -260,6 +260,10 @@ def _resume(args: argparse.Namespace) -> int:
         kwargs["timeout"] = args.timeout
     result = client.resume(args.run_id, **kwargs)
     _emit(result)
+    if "answer" in kwargs and _value(result, "status") == "awaiting_input":
+        pending = _value(result, "pending_input") or {}
+        if pending.get("diagnostic") is not None:
+            return EXIT_USAGE
     return _result_exit_code(result)
 
 

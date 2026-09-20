@@ -104,6 +104,63 @@ def test_interrupted_initial_capture_requires_explicit_file_identity(
         assert intent["source"] == "operator"
 
 
+def test_reconciled_invalid_artifact_is_validated_during_capture_and_repaired(
+    tmp_path, monkeypatch
+):
+    destination = tmp_path / "result.json"
+
+    def invalid(request):
+        request.artifacts["result"].write_text("not json")
+        return "invalid response"
+
+    def repair(request):
+        assert not request.artifacts["result"].exists()
+        request.artifacts["result"].write_text('{"fixed": true}')
+        return "repair response"
+
+    @workflow
+    def job():
+        return Session().run(
+            "write",
+            writes=[Artifact.json(destination, required=True)],
+            retries=1,
+        )
+
+    capture = ArtifactStore.capture
+    provider = FakeProvider([invalid, repair])
+    with Botpipe(tmp_path, provider=provider) as client:
+        monkeypatch.setattr(
+            ArtifactStore,
+            "capture",
+            lambda *args, **kwargs: (_ for _ in ()).throw(
+                KeyboardInterrupt("before capture intent")
+            ),
+        )
+        first = client.run(job, run_id="invalid-before-capture")
+        assert first.status == "interrupted"
+        assert not list(tmp_path.rglob("capture.json"))
+        assert not list(tmp_path.rglob("capture.pending.json"))
+
+        monkeypatch.setattr(ArtifactStore, "capture", capture)
+        operation = _provider_row(client, first.run_id)
+        client.resolve(
+            first.run_id,
+            operation["id"],
+            artifact_digests={"result": _digest(destination)},
+        )
+        assert destination.read_text() == "not json"
+        assert client.journal.get(operation["id"])["status"] == "response"
+        assert not list(tmp_path.rglob("capture.json"))
+
+        resumed = client.resume(first.run_id, workflow=job)
+
+    assert resumed.ok, resumed.error
+    assert resumed.value.value == "repair response"
+    assert resumed.value.artifacts.result.read_text() == '{"fixed": true}'
+    assert destination.read_text() == '{"fixed": true}'
+    assert len(provider.calls) == 2
+
+
 def test_adopted_files_must_still_match_when_resume_runs(tmp_path, monkeypatch):
     destination = tmp_path / "result.txt"
 

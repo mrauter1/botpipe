@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import base64
+import contextvars
 import dataclasses
 import importlib
 import json
 import math
 import re
 import sys
+from contextlib import contextmanager
 from datetime import date, datetime, timedelta, timezone
 from enum import Enum
 from inspect import get_annotations, getattr_static
@@ -23,6 +25,74 @@ _STATE_VERSION = 1
 _MAX_DEPTH = 100
 _MAX_VALUES = 100_000
 _TYPE_NAME = re.compile(r"^[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*:[^:\x00\r\n]{1,1000}$")
+_SOURCE_BOUNDARY = contextvars.ContextVar("botpipe_source_boundary", default=None)
+_SOURCE_CAPTURE = contextvars.ContextVar("botpipe_source_capture", default=None)
+_DECODE_SOURCES = contextvars.ContextVar("botpipe_decode_sources", default=None)
+
+
+@contextmanager
+def source_identity(boundary):
+    """Record and verify owned source for durable values in this boundary."""
+
+    raw = boundary if isinstance(boundary, (tuple, list, set)) else (boundary,)
+    boundaries = tuple(
+        dict.fromkeys(str(Path(item).resolve(strict=True)) for item in raw)
+    )
+    token = _SOURCE_BOUNDARY.set(boundaries)
+    try:
+        yield
+    finally:
+        _SOURCE_BOUNDARY.reset(token)
+
+
+@contextmanager
+def without_source_identity():
+    """Keep non-durable structural hashes independent of runtime context."""
+
+    token = _SOURCE_BOUNDARY.set(None)
+    try:
+        yield
+    finally:
+        _SOURCE_BOUNDARY.reset(token)
+
+
+def _type_source(cls):
+    boundaries = _SOURCE_BOUNDARY.get()
+    if boundaries is None:
+        return None
+    from .provenance import capture_type_source
+
+    return capture_type_source(cls, boundaries)
+
+
+def _verify_type_record(cls, record, path):
+    if _SOURCE_BOUNDARY.get() is None:
+        return
+    sources = _DECODE_SOURCES.get()
+    source = sources.get(record.get("type")) if sources is not None else None
+    if source is None:
+        raise TypeError(
+            f"{path}: historical durable type {record.get('type')!r} has no "
+            "source identity and cannot be safely resumed"
+        )
+    from .provenance import verify_type_source
+
+    verify_type_source(cls, source)
+
+
+def _with_type_source(record, cls):
+    capture = _SOURCE_CAPTURE.get()
+    if capture is not None:
+        name = type_name(cls)
+        if name in capture:
+            return record
+        source = _type_source(cls)
+        if source is None:
+            return record
+        previous = capture.setdefault(name, source)
+        if previous != source:
+            raise TypeError(f"Conflicting source identity for durable type {name}")
+    return record
 
 
 def type_name(cls):
@@ -515,10 +585,41 @@ def preflight_types(annotation, path="$", *, localns=None):
     return _preflight(annotation, path, localns)[1]
 
 
-def encode(value):
+def encode(value, *, record_owners=False):
     """Encode a supported value as JSON-compatible, versioned durable state."""
 
-    return _encode(value, "$", 0, _Traversal())
+    if _SOURCE_BOUNDARY.get() is None or _SOURCE_CAPTURE.get() is not None:
+        return _encode(value, "$", 0, _Traversal())
+    sources = {}
+    token = _SOURCE_CAPTURE.set(sources)
+    try:
+        encoded = _encode(value, "$.value", 0, _Traversal())
+    finally:
+        _SOURCE_CAPTURE.reset(token)
+    owners = list(_SOURCE_BOUNDARY.get() or ()) if record_owners else []
+    if not sources and not owners:
+        return encoded
+    capsule = {
+        "$botpipe": "capsule",
+        "version": 1,
+        "sources": dict(sorted(sources.items())),
+        "value": encoded,
+    }
+    if owners:
+        capsule["owners"] = owners
+    return capsule
+
+
+def semantic_encoding(value):
+    """Remove non-semantic operation ownership metadata from an encoding."""
+
+    if type(value) is not dict or value.get("$botpipe") != "capsule":
+        return value
+    if "owners" not in value:
+        return value
+    capsule = dict(value)
+    capsule.pop("owners")
+    return capsule["value"] if not capsule.get("sources") else capsule
 
 
 def _encode(value, path, depth, traversal):
@@ -546,11 +647,16 @@ def _encode(value, path, depth, traversal):
                 },
             }
         if isinstance(value, Enum):
-            return {
-                "$botpipe": "enum",
-                "type": type_name(type(value)),
-                "value": _encode(value.value, f"{path}.value", depth + 1, traversal),
-            }
+            return _with_type_source(
+                {
+                    "$botpipe": "enum",
+                    "type": type_name(type(value)),
+                    "value": _encode(
+                        value.value, f"{path}.value", depth + 1, traversal
+                    ),
+                },
+                type(value),
+            )
         if value is None or type(value) in (str, int, bool):
             return value
         if type(value) is float:
@@ -637,16 +743,21 @@ def _encode(value, path, depth, traversal):
             allowed_set = set(fields) | set(extra or ())
             if not fields_set <= allowed_set:
                 raise TypeError(f"{path}: Pydantic fields_set names unknown fields")
-            return {
-                "$botpipe": "model",
-                "version": _STATE_VERSION,
-                "type": type_name(cls),
-                "fields": encoded_fields,
-                "fields_set": sorted(fields_set),
-                "extra": encoded_extra,
-            }
+            return _with_type_source(
+                {
+                    "$botpipe": "model",
+                    "version": _STATE_VERSION,
+                    "type": type_name(cls),
+                    "fields": encoded_fields,
+                    "fields_set": sorted(fields_set),
+                    "extra": encoded_extra,
+                },
+                cls,
+            )
         if isinstance(value, type):
-            return {"$botpipe": "type", "type": type_name(value)}
+            return _with_type_source(
+                {"$botpipe": "type", "type": type_name(value)}, value
+            )
         if dataclasses.is_dataclass(value) and not isinstance(value, type):
             cls = type(value)
             fields = _dataclass_fields(cls, path)
@@ -661,20 +772,23 @@ def _encode(value, path, depth, traversal):
                     raise TypeError(
                         f"{path}: dataclass has cached or unknown state {sorted(unknown)!r}"
                     )
-            return {
-                "$botpipe": "dataclass",
-                "version": _STATE_VERSION,
-                "type": type_name(cls),
-                "fields": {
-                    field.name: _encode(
-                        object.__getattribute__(value, field.name),
-                        _child(path, field.name),
-                        depth + 1,
-                        traversal,
-                    )
-                    for field in fields
+            return _with_type_source(
+                {
+                    "$botpipe": "dataclass",
+                    "version": _STATE_VERSION,
+                    "type": type_name(cls),
+                    "fields": {
+                        field.name: _encode(
+                            object.__getattribute__(value, field.name),
+                            _child(path, field.name),
+                            depth + 1,
+                            traversal,
+                        )
+                        for field in fields
+                    },
                 },
-            }
+                cls,
+            )
         if type(value) is tuple:
             return {
                 "$botpipe": "tuple",
@@ -749,7 +863,7 @@ def _state_record(value, path, kind):
     required = {"$botpipe", "version", "type", "fields"}
     if kind == "model":
         required |= {"fields_set", "extra"}
-    record = _record(value, path, required)
+    record = _record(value, path, required, optional={"source"})
     version = record["version"]
     if type(version) is not int or version != _STATE_VERSION:
         raise TypeError(f"{path}: unsupported {kind} state version {version!r}")
@@ -767,6 +881,18 @@ def encoded_field(record, name):
 
     if type(record) is not dict:
         raise TypeError("$: durable state record must be an object")
+    if record.get("$botpipe") == "capsule":
+        capsule = _record(
+            record,
+            "$",
+            {"$botpipe", "version", "sources", "value"},
+            optional={"owners"},
+        )
+        if capsule["version"] != 1:
+            raise TypeError(
+                f"$: unsupported source capsule version {capsule['version']!r}"
+            )
+        record = capsule["value"]
     kind = record.get("$botpipe")
     if kind not in {"model", "dataclass"}:
         raise TypeError(
@@ -781,9 +907,124 @@ def encoded_field(record, name):
         raise KeyError(f"durable {kind} state has no field {name!r}") from None
 
 
+def verify_sources(value, path="$"):
+    """Verify typed envelopes inside an encoded value without hydrating values."""
+
+    sources = {}
+    body = value
+    if type(value) is dict and value.get("$botpipe") == "capsule":
+        record = _record(
+            value,
+            path,
+            {"$botpipe", "version", "sources", "value"},
+            optional={"owners"},
+        )
+        if record["version"] != 1:
+            raise TypeError(
+                f"{path}: unsupported source capsule version {record['version']!r}"
+            )
+        sources = _string_mapping(record["sources"], f"{path}.sources")
+        for name, identity in sources.items():
+            cls = resolve_type(name)
+            from .provenance import verify_type_source
+
+            verify_type_source(cls, identity)
+        body = record["value"]
+
+    token = _DECODE_SOURCES.set(sources)
+    traversal = _Traversal()
+    try:
+
+        def visit(item, item_path, depth):
+            identity = traversal.visit(
+                item, item_path, depth, compound=type(item) in (list, dict)
+            )
+            try:
+                if type(item) is list:
+                    for index, child in enumerate(item):
+                        visit(child, f"{item_path}[{index}]", depth + 1)
+                elif type(item) is dict:
+                    kind = item.get("$botpipe")
+                    if kind in {"model", "dataclass", "enum", "type"}:
+                        cls = resolve_type(item.get("type"))
+                        _verify_type_record(cls, item, item_path)
+                    if kind in {"dict", "mappingproxy", "artifacts"}:
+                        body = item.get("value")
+                        if type(body) is dict:
+                            for key, child in body.items():
+                                visit(child, _child(item_path, key), depth + 1)
+                    elif kind in {"tuple", "set", "frozenset"}:
+                        body = item.get("value")
+                        if type(body) is list:
+                            for index, child in enumerate(body):
+                                visit(child, f"{item_path}[{index}]", depth + 1)
+                    elif kind in {"model", "dataclass"}:
+                        fields = item.get("fields")
+                        if type(fields) is dict:
+                            for key, child in fields.items():
+                                visit(child, _child(item_path, key), depth + 1)
+                        extra = item.get("extra")
+                        if type(extra) is dict:
+                            for key, child in extra.items():
+                                visit(child, _child(item_path, key), depth + 1)
+                    elif kind == "enum" and "value" in item:
+                        visit(item["value"], f"{item_path}.value", depth + 1)
+            finally:
+                traversal.leave(identity)
+
+        visit(body, f"{path}.value" if body is not value else path, 0)
+    finally:
+        _DECODE_SOURCES.reset(token)
+
+
+def recorded_source_boundaries(value):
+    """Return owned boundaries named by one already-verified source capsule."""
+
+    if type(value) is not dict or value.get("$botpipe") != "capsule":
+        return ()
+    record = _record(
+        value,
+        "$",
+        {"$botpipe", "version", "sources", "value"},
+        optional={"owners"},
+    )
+    sources = _string_mapping(record["sources"], "$.sources")
+    from .provenance import type_source_boundary
+
+    owners = record.get("owners", [])
+    if type(owners) is not list or not all(type(item) is str for item in owners):
+        raise TypeError("$.owners: source owners must be path strings")
+    result = [Path(item).resolve(strict=True) for item in owners]
+    for name, identity in sources.items():
+        if type(identity) is dict and identity.get("kind") == "python":
+            result.extend(type_source_boundary(resolve_type(name), identity))
+    return tuple(dict.fromkeys(result))
+
+
 def decode(value):
     """Decode a durable value without rerunning application initialization hooks."""
 
+    if type(value) is dict and value.get("$botpipe") == "capsule":
+        record = _record(
+            value,
+            "$",
+            {"$botpipe", "version", "sources", "value"},
+            optional={"owners"},
+        )
+        if record["version"] != 1:
+            raise TypeError(
+                f"$: unsupported source capsule version {record['version']!r}"
+            )
+        if _SOURCE_BOUNDARY.get() is not None:
+            verify_sources(value)
+        sources = _string_mapping(record["sources"], "$.sources")
+        token = _DECODE_SOURCES.set(sources)
+        try:
+            return _decode(record["value"], "$.value", 0, _Traversal())
+        finally:
+            _DECODE_SOURCES.reset(token)
+    if _SOURCE_BOUNDARY.get() is not None:
+        verify_sources(value)
     return _decode(value, "$", 0, _Traversal())
 
 
@@ -918,6 +1159,7 @@ def _decode(value, path, depth, traversal):
         if kind in {"model", "dataclass"}:
             record = _state_record(value, path, kind)
             cls = resolve_type(record["type"])
+            _verify_type_record(cls, record, path)
             if kind == "model":
                 if not issubclass(cls, BaseModel):
                     raise TypeError(
@@ -979,8 +1221,9 @@ def _decode(value, path, depth, traversal):
             required = {"$botpipe", "type"}
             if kind == "enum":
                 required.add("value")
-            record = _record(value, path, required)
+            record = _record(value, path, required, optional={"source"})
             cls = resolve_type(record["type"])
+            _verify_type_record(cls, record, path)
             if kind == "type":
                 return cls
             if not issubclass(cls, Enum):

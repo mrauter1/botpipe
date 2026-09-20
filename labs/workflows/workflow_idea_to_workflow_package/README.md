@@ -34,6 +34,12 @@ Parameters are validated by the package-local Pydantic `Params` model before any
 | `build_package` | `workflow_package_manifest.json`, `implementation_notes.md` |
 | `evaluate_package` | `workflow_evaluation.md`, `workflow_package_summary.json`, `workflow_next_action.md` |
 
+The build manifest identifies its generated callable with an explicit repo-relative
+`file.py:function` reference. The file must be the selected shape's entry file:
+the single workflow file for `single`, or `flow.py` for `flow_specs` and `package`.
+Catalog lookup belongs to later discovery, after the generated package is
+materialized and validated, and cannot replace this entry reference.
+
 Producer and verifier prompts remain phase-specific. `accepted` advances, while `needs_rework` repeats the phase with structured feedback and its previous artifact snapshots. `needs_replan` returns control to the phase's declared target through a workflow-owned Python loop. `question` and `blocked` suspend with `ask()` and retry the phase with the operator's `input_answer`; `failed` rejects the phase. No route table executes these outcomes.
 
 ## Inspection and replay

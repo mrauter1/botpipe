@@ -33,7 +33,7 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 ## Evidence
 
 - Verify the declared phase artifacts—`workflow_package_manifest`, `implementation_notes`—against the phase requirements and require their claims to be internally consistent.
-- Verify that the manifest includes `package_name`, `authoring_shape`, a resolvable `workflow_reference`, and the complete desired final package inventory with complete intended content for every file, so runtime materialization does not depend on provider memory, baseline leftovers, or unspecified generation.
+- Verify that the manifest includes `package_name`, `authoring_shape`, an explicit repo-relative `file.py:function` `workflow_reference`, and the complete desired final package inventory with complete intended content for every file, so runtime materialization does not depend on provider memory, baseline leftovers, or unspecified generation.
 - Verify that paths match the selected shape: `.botpipe/workflows/<package_name>.py` for `single`, `.botpipe/workflows/<package_name>/` with `flow.py` for `flow_specs`, or `labs/workflows/<package_name>/` with `flow.py`, `specs.py`, and `workflow.toml` for `package`, plus at most the corresponding `tests/runtime/test_<package_name>.py`.
 - Require `workflow_reference` to name the selected shape's generated entry file, never a test or an unrelated repository file. For package shape, require `workflow.toml` metadata to select the same callable from `flow.py`.
 - When `runtime_validation_feedback` is present, accept only a revised complete manifest that addresses its isolated syntax, import, catalog metadata, discovery, and test diagnostics.

@@ -806,14 +806,13 @@ class ArtifactStore:
                     )
             else:
                 try:
-                    data = self._capture_source(
+                    self._capture_source(
                         source, digest=digest, length=source.stat().st_size
                     )
                 except OSError as exc:
                     raise ArtifactError(
                         f"Artifact does not match its approved digest: {artifact.name}"
                     ) from exc
-                _validate(data, artifact.kind, artifact.schema)
         return approved
 
     def has_capture_evidence(self, operation_id: str) -> bool:

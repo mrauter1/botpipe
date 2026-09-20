@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import inspect
+import os
+from functools import partial
 from hashlib import sha256
 from pathlib import Path
 from types import CodeType, ModuleType
@@ -110,8 +112,9 @@ def _value_binding(value: Any) -> Any:
     return methods
 
 
-def capture_orchestration_sources(definition: Any) -> dict[str, Any] | None:
-    """Capture complete, bounded modules that define owned orchestration values."""
+def source_boundary(definition: Any) -> Path | None:
+    """Return the bounded ownership root without making it source identity."""
+
     try:
         target = inspect.unwrap(getattr(definition, "fn", definition))
         raw = inspect.getsourcefile(target)
@@ -123,7 +126,39 @@ def capture_orchestration_sources(definition: Any) -> dict[str, Any] | None:
             or (source.parent / "workflow.toml").is_file()
             or source.name in {"workflow.py", "flow.py"}
         )
-        boundary = source.parent if package else source
+        return source.parent if package else source
+    except (OSError, TypeError, ValueError):
+        return None
+
+
+def capture_orchestration_sources(
+    definition: Any, *, boundary: str | Path | None = None
+) -> dict[str, Any] | None:
+    """Capture complete, bounded modules that define owned orchestration values."""
+    try:
+        target = inspect.unwrap(getattr(definition, "fn", definition))
+        raw = inspect.getsourcefile(target)
+        if raw is None:
+            return None
+        union_boundary = isinstance(boundary, (tuple, list))
+        if boundary is None:
+            boundary_path = source_boundary(target)
+            if boundary_path is None:
+                return None
+            boundary_paths = (boundary_path,)
+        else:
+            raw_boundaries = boundary if union_boundary else (boundary,)
+            boundary_paths = tuple(
+                Path(item).resolve(strict=True) for item in raw_boundaries
+            )
+            if not boundary_paths:
+                return None
+            boundary_path = boundary_paths[0]
+        anchor = Path(
+            os.path.commonpath(
+                [str(item if item.is_dir() else item.parent) for item in boundary_paths]
+            )
+        )
         values = []
         seen_values = set()
 
@@ -139,12 +174,20 @@ def capture_orchestration_sources(definition: Any) -> dict[str, Any] | None:
                 and type(value).__name__ == "Workflow"
             ):
                 candidate = inspect.unwrap(value.fn)
+            elif inspect.ismethod(value):
+                candidate = inspect.unwrap(value.__func__)
+            elif isinstance(value, partial):
+                candidate = inspect.unwrap(value.func)
+            elif callable(value):
+                # Callable objects carry behavior on their implementation class.
+                # Never inspect instance attributes: they may be mutable application
+                # state rather than orchestration source.
+                candidate = type(value)
             else:
                 return
             if not (
                 inspect.isfunction(candidate)
-                or isinstance(candidate, type)
-                or isinstance(candidate, ModuleType)
+                or isinstance(candidate, (type, ModuleType))
             ):
                 return
             try:
@@ -154,10 +197,9 @@ def capture_orchestration_sources(definition: Any) -> dict[str, Any] | None:
                 path = Path(raw_path).resolve(strict=True)
             except (OSError, TypeError, ValueError):
                 return
-            owned = (
-                path == boundary
-                if boundary.is_file()
-                else path.is_relative_to(boundary)
+            owned = any(
+                path == item if item.is_file() else path.is_relative_to(item)
+                for item in boundary_paths
             )
             if not owned or path.suffix != ".py" or path.is_symlink():
                 return
@@ -196,12 +238,15 @@ def capture_orchestration_sources(definition: Any) -> dict[str, Any] | None:
                 for name, member in vars(value).items():
                     if (
                         inspect.isfunction(member)
-                        or isinstance(member, type)
-                        or isinstance(member, ModuleType)
+                        or isinstance(member, (type, ModuleType))
+                        or callable(member)
                     ):
                         enqueue(f"{label}.{name}", member)
             else:
                 enqueue_contracts(value, f"{label}.contract")
+                for mro_index, base in enumerate(value.__mro__[1:]):
+                    if base is not object:
+                        enqueue(f"{label}.mro:{mro_index}", base)
                 for name, member in vars(value).items():
                     methods = ()
                     if inspect.isfunction(member):
@@ -220,9 +265,13 @@ def capture_orchestration_sources(definition: Any) -> dict[str, Any] | None:
         bindings = {}
         for name, value, path in values:
             relative = (
-                path.name
-                if boundary.is_file()
-                else path.relative_to(boundary).as_posix()
+                path.relative_to(anchor).as_posix()
+                if union_boundary
+                else (
+                    path.name
+                    if boundary_path.is_file()
+                    else path.relative_to(boundary_path).as_posix()
+                )
             )
             files[relative] = sha256(path.read_bytes()).hexdigest()
             binding = _value_binding(value)
@@ -237,6 +286,126 @@ def capture_orchestration_sources(definition: Any) -> dict[str, Any] | None:
         }
     except (AttributeError, OSError, TypeError, ValueError):
         return None
+
+
+def capture_type_source(
+    cls: type, boundaries: tuple[str | Path, ...]
+) -> dict[str, Any]:
+    """Capture bounded source evidence for one concrete durable type."""
+
+    if not isinstance(cls, type):
+        raise TypeError("durable source identity requires a type")
+    name = f"{cls.__module__}:{cls.__qualname__}"
+    boundary_paths = tuple(Path(item).resolve(strict=True) for item in boundaries)
+    try:
+        raw = inspect.getsourcefile(cls)
+        path = Path(raw).resolve(strict=True) if raw is not None else None
+    except (OSError, TypeError, ValueError):
+        path = None
+    owned = path is not None and any(
+        path == item if item.is_file() else path.is_relative_to(item)
+        for item in boundary_paths
+    )
+    if not owned:
+        return {
+            "schema": "botpipe.type-source.v1",
+            "type": name,
+            "kind": "external",
+        }
+    roots = [item if item.is_dir() else item.parent for item in boundary_paths]
+    anchor = Path(os.path.commonpath([str(item) for item in roots]))
+    sources = capture_orchestration_sources(cls, boundary=boundary_paths)
+    if sources is None:
+        raise TypeError(f"Cannot capture source identity for durable type {name}")
+    ownership = {
+        "type_path": path.relative_to(anchor).as_posix(),
+        "boundaries": [
+            {
+                "kind": "directory" if item.is_dir() else "file",
+                "path": (
+                    item.relative_to(anchor).as_posix() if item != anchor else "."
+                ),
+            }
+            for item in boundary_paths
+        ],
+    }
+    return {
+        "schema": "botpipe.type-source.v1",
+        "type": name,
+        "kind": "python",
+        "ownership": ownership,
+        "sources": sources,
+    }
+
+
+def verify_type_source(cls: type, identity: Any) -> None:
+    """Reject source, path, or loaded-binding drift before value hydration."""
+
+    if type(identity) is not dict or identity.get("schema") != "botpipe.type-source.v1":
+        raise TypeError("durable type has invalid source identity")
+    name = f"{cls.__module__}:{cls.__qualname__}"
+    if identity.get("type") != name:
+        raise TypeError(f"durable type source identity does not match {name}")
+    kind = identity.get("kind")
+    if kind == "external":
+        if set(identity) != {
+            "schema",
+            "type",
+            "kind",
+        }:
+            raise TypeError(f"durable type source identity is invalid for {name}")
+        return
+    if kind != "python" or set(identity) != {
+        "schema",
+        "type",
+        "kind",
+        "ownership",
+        "sources",
+    }:
+        raise TypeError(f"durable type source identity is invalid for {name}")
+    boundaries = type_source_boundary(cls, identity)
+    current = capture_type_source(cls, boundaries)
+    if current != identity:
+        raise TypeError(
+            f"Source for durable type {name} changed; resume with original code or start a new run"
+        )
+
+
+def type_source_boundary(cls: type, identity: Any) -> tuple[Path, ...]:
+    """Resolve relocation-safe owned boundaries from recorded type ownership."""
+
+    name = f"{cls.__module__}:{cls.__qualname__}"
+    ownership = identity.get("ownership") if type(identity) is dict else None
+    if (
+        type(ownership) is not dict
+        or set(ownership) != {"type_path", "boundaries"}
+        or type(ownership["type_path"]) is not str
+        or type(ownership["boundaries"]) is not list
+    ):
+        raise TypeError(f"durable type source identity is invalid for {name}")
+    try:
+        raw = inspect.getsourcefile(cls)
+        path = Path(raw).resolve(strict=True) if raw is not None else None
+    except (OSError, TypeError, ValueError):
+        path = None
+    parts = Path(ownership["type_path"]).parts
+    if path is None or not parts or tuple(path.parts[-len(parts) :]) != parts:
+        raise TypeError(f"durable type source path changed for {name}")
+    anchor = path.parents[len(parts) - 1]
+    boundaries = []
+    for locator in ownership["boundaries"]:
+        if (
+            type(locator) is not dict
+            or set(locator) != {"kind", "path"}
+            or locator["kind"] not in {"file", "directory"}
+            or type(locator["path"]) is not str
+        ):
+            raise TypeError(f"durable type source identity is invalid for {name}")
+        candidate = (anchor / locator["path"]).resolve(strict=True)
+        if (locator["kind"] == "file") != candidate.is_file():
+            raise TypeError(f"durable type source path changed for {name}")
+        boundaries.append(candidate)
+    return tuple(boundaries)
 
 
 def _verify_loaded_source(definition: Any) -> None:
@@ -304,5 +473,9 @@ def capture_workflow_provenance(
 __all__ = [
     "capture_definition_sources",
     "capture_orchestration_sources",
+    "capture_type_source",
     "capture_workflow_provenance",
+    "source_boundary",
+    "type_source_boundary",
+    "verify_type_source",
 ]

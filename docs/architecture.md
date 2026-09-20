@@ -48,6 +48,20 @@ ordinary Python argument semantics. Validation may repeat after a crash before
 its state was recorded, so validation hooks must remain free of external effects.
 Codec traversal has depth and value-count limits and rejects cycles.
 
+Within a run, checkpoints containing concrete model, dataclass, enum, or type
+objects carry a versioned, deduplicated source capsule. The capsule and value
+commit in the same SQLite transaction. Operation inputs also record the active
+ownership boundaries, so manual resolution can capture a concrete result even
+when its activity has no return annotation. These boundary locators are excluded
+from operation fingerprints. Nested workflows inherit their caller's ownership
+and add their own boundary. Before a
+resume writes an answer, changes limits, or decodes state, Botpipe verifies the
+capsules already recorded by the run. Owned type evidence covers source bytes,
+loaded method code, properties, referenced helpers, and owned base classes.
+Types outside the workflow ownership boundary are recorded as external by
+qualified name; their installations and mutable configuration remain part of
+the environment authors must preserve.
+
 Datetime records retain wall time, `fold`, and fixed-offset timezone names.
 Supported timezones are naive values and exact `datetime.timezone` instances;
 `ZoneInfo` and custom `tzinfo` implementations are rejected because their
@@ -67,6 +81,8 @@ storage slots. Put such data in an artifact or
 return a separate plain model designed as durable state. Legacy unversioned
 model and dataclass records are rejected with a migration error; Botpipe never
 passes them through current validation and silently changes their meaning.
+Historical typed checkpoints without a source capsule are likewise refused on
+resume because current source cannot be used to bless unverifiable old state.
 
 The automatic fingerprint pins the whole orchestration module and bounded,
 owned Python helper and contract modules, including class behavior. Mutable

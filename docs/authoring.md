@@ -91,7 +91,10 @@ non-conflicting output paths.
 ## Human input and interruption
 
 `ask(question, returns=Type)` pauses with `awaiting_input`. Resume through the
-SDK or CLI with a typed answer. An uncertain unsafe activity pauses as
+SDK or CLI with a typed answer. The answer is validated against `Type` before it
+is recorded. A rejected answer leaves the same request pending and includes a
+`diagnostic` in `pending_input`, so it can be corrected with another resume.
+An uncertain unsafe activity pauses as
 `interrupted`; inspect it and call `resolve(..., retry=True)` or
 `resolve(..., response=value)` explicitly.
 

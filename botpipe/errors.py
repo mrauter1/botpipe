@@ -26,9 +26,10 @@ class Suspension(BaseException):
 
 
 class InputRequired(Suspension):
-    def __init__(self, question, operation_id=None):
+    def __init__(self, question, operation_id=None, diagnostic=None):
         self.question = question
         self.operation_id = operation_id
+        self.diagnostic = diagnostic
         super().__init__(question)
 
 

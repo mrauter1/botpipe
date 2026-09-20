@@ -7,7 +7,7 @@ import os
 import shutil
 import stat
 import tempfile
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
@@ -127,8 +127,8 @@ def capture_execution_tree(
             exclusions=_exclusion_payload(excluded),
             layers={"project": True, "selected_package_import_path": prefix},
         )
-        if [x["path"] for x in manifest["files"]] != [x["path"] for x in records]:
-            raise ValueError("frozen tree inventory differs from source inventory")
+        if manifest["files"] != _file_identities(records):
+            raise ValueError("frozen tree identity differs from source inventory")
         return FrozenExecutionTree(
             root,
             str(manifest["execution_tree_id"]),
@@ -150,16 +150,9 @@ def derive_execution_tree_manifest(
 ) -> dict[str, Any]:
     resolved = Path(root).resolve(strict=True)
     records = _enumerate(resolved, prefix=None, excluded=(), layer="frozen")
-    files = [
-        {
-            "path": r["path"],
-            "sha256": r["sha256"],
-            "size_bytes": r["size_bytes"],
-            "executable": r["executable"],
-        }
-        for r in records
-        if r["path"] != OWNERSHIP_MARKER
-    ]
+    files = _file_identities(
+        record for record in records if record["path"] != OWNERSHIP_MARKER
+    )
     boundary = {
         "kind": "execution_tree",
         "exclusions": sorted(exclusions),
@@ -434,6 +427,20 @@ def _merge(*groups: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
                 )
             merged[path] = record
     return [merged[x] for x in sorted(merged)]
+
+
+def _file_identities(
+    records: Iterable[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    return [
+        {
+            "path": record["path"],
+            "sha256": record["sha256"],
+            "size_bytes": record["size_bytes"],
+            "executable": record["executable"],
+        }
+        for record in records
+    ]
 
 
 def _copy(source: Path, target: Path) -> None:

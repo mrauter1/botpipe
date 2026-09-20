@@ -64,6 +64,9 @@ retries an uncertain provider effect. `workspace` selects an explicit isolated
 workspace for an editing branch.
 
 `ask(question, *, returns=str)` requests typed operator input.
+Submitted answers are validated and durably encoded by the matching `ask`
+operation. Invalid or non-durable answers keep the run in `awaiting_input` with
+a JSON-safe `pending_input.diagnostic`; a later resume can submit a correction.
 `parallel(*callables, max_workers=None, settle="all")` returns ordered results
 from independent durable scopes.
 

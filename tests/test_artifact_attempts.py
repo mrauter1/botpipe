@@ -86,10 +86,10 @@ def test_codec_preflight_failure_rolls_back_without_repeating_provider(
 
     real_encode = sessions.codec.encode
 
-    def reject_value(value):
+    def reject_value(value, **options):
         if value == "unsupported checkpoint":
             raise TypeError("value cannot be stored")
-        return real_encode(value)
+        return real_encode(value, **options)
 
     monkeypatch.setattr(sessions.codec, "encode", reject_value)
     provider = FakeProvider([write])

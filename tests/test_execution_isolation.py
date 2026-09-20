@@ -257,6 +257,40 @@ def test_t16_execution_tree_rejects_fifo_before_copy(tmp_path: Path) -> None:
     assert list(staging.iterdir()) == []
 
 
+def test_execution_tree_rejects_aba_source_change_during_copy(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from botpipe_optimizer import execution_trees
+
+    source = tmp_path / "source"
+    staging = tmp_path / "staging"
+    source.mkdir()
+    staging.mkdir()
+    helper = source / "helper.py"
+    helper.write_text("VALUE = 1\n", encoding="utf-8")
+    (source / "workflow.py").write_text("from helper import VALUE\n", encoding="utf-8")
+
+    copy2 = execution_trees.shutil.copy2
+
+    def copy_changed_bytes(source_path, destination, *args, **kwargs):
+        source_path = Path(source_path)
+        if source_path == helper:
+            original = source_path.read_bytes()
+            source_path.write_text("VALUE = 999\n", encoding="utf-8")
+            try:
+                return copy2(source_path, destination, *args, **kwargs)
+            finally:
+                source_path.write_bytes(original)
+        return copy2(source_path, destination, *args, **kwargs)
+
+    monkeypatch.setattr(execution_trees.shutil, "copy2", copy_changed_bytes)
+    with pytest.raises(ValueError, match="frozen tree identity"):
+        capture_execution_tree(source, staging)
+
+    assert helper.read_text(encoding="utf-8") == "VALUE = 1\n"
+    assert list(staging.iterdir()) == []
+
+
 @pytest.mark.parametrize("leader_exits", [False, True])
 def test_t16_bounded_process_reaps_children_on_timeout_and_normal_leader_exit(
     tmp_path: Path,

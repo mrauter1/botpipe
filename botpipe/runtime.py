@@ -18,7 +18,7 @@ from pathlib import Path
 from types import CodeType, MemberDescriptorType
 from typing import get_type_hints
 
-from pydantic import TypeAdapter
+from pydantic import TypeAdapter, ValidationError
 
 from . import codec
 from .errors import (
@@ -36,7 +36,7 @@ from .journal import Journal, now, workspace_lock
 from .limits import RunLimits
 from .models import RunResult
 from .policy import Policy
-from .provenance import capture_workflow_provenance
+from .provenance import capture_workflow_provenance, source_boundary
 from .recovery import Completed, Running, Stopped, recover_outcome
 
 _CURRENT = contextvars.ContextVar("botpipe_run", default=None)
@@ -83,6 +83,43 @@ def _persist_response(journal, operation_id, response, session_key=None):
         {"status": "response", "response": response},
         "Operation checkpoint could not be confirmed; resume to reconcile it",
     )
+
+
+def _operation_encoded_values(record):
+    for field in ("inputs", "result"):
+        if record.get(field) is not None:
+            yield record[field]
+    error = record.get("error") or {}
+    for field in ("args", "native_args", "attributes"):
+        if error.get(field) is not None:
+            yield error[field]
+    for slot in error.get("slots", ()):
+        if type(slot) is dict and slot.get("value") is not None:
+            yield slot["value"]
+    response = record.get("response") or {}
+    for field in ("answer", "validated_answer", "validated_value"):
+        if response.get(field) is not None:
+            yield response[field]
+
+
+def _recorded_boundaries(data, operations, root_boundary):
+    values = [data.get(field) for field in ("args", "kwargs", "value")]
+    for record in operations:
+        values.extend(_operation_encoded_values(record))
+    boundaries = [root_boundary] if root_boundary is not None else []
+    for value in values:
+        if value is not None:
+            boundaries.extend(codec.recorded_source_boundaries(value))
+    return tuple(dict.fromkeys(boundaries)), values
+
+
+def _preflight_recorded_sources(data, operations, root_boundary):
+    boundaries, values = _recorded_boundaries(data, operations, root_boundary)
+    with codec.source_identity(boundaries):
+        for value in values:
+            if value is not None:
+                codec.verify_sources(value)
+    return boundaries
 
 
 def _exception_record(exc):
@@ -194,6 +231,11 @@ def _finalize_exception_record(record):
 
 def _function_version(fn, seen=None):
     """Pin callable code and referenced Python helpers/constants, not edited work data."""
+    with codec.without_source_identity():
+        return _function_version_unscoped(fn, seen)
+
+
+def _function_version_unscoped(fn, seen=None):
     fn = inspect.unwrap(getattr(fn, "fn", fn))
     seen = set() if seen is None else seen
     key = f"{fn.__module__}:{fn.__qualname__}"
@@ -379,6 +421,7 @@ class Workflow:
 
         self._source_identity_at_definition = capture_definition_sources(self)
         self._orchestration_sources_at_definition = capture_orchestration_sources(self)
+        self._source_boundary = source_boundary(self)
 
     def __call__(self, *args, **kwargs):
         ctx = current_run()
@@ -498,6 +541,7 @@ class RunContext:
         scope="root",
         parent=None,
         parallel_branch=False,
+        input_candidate=None,
     ):
         self.client, self.journal, self.definition = client, client.journal, definition
         self.run_id, self.task_id = metadata["run_id"], metadata["task_id"]
@@ -526,9 +570,26 @@ class RunContext:
         self._session_locks = parent._session_locks if parent else {}
         self._workspace_locks = parent._workspace_locks if parent else {}
         self._guard = parent._guard if parent else threading.RLock()
+        self._input_state = (
+            parent._input_state if parent else {"candidate": input_candidate}
+        )
         self._execution_lock = threading.RLock()
         self._replay_state = parent._replay_state if parent else {"error": None}
         self.provider_budgets = parent.provider_budgets if parent else ()
+        inherited = parent.source_boundaries if parent is not None else ()
+        own_boundary = definition._source_boundary
+        self.source_boundaries = tuple(
+            dict.fromkeys((*inherited, *((own_boundary,) if own_boundary else ())))
+        )
+
+    def take_input_candidate(self, operation_id):
+        """Consume a submitted answer only from the input operation it targets."""
+        with self._guard:
+            candidate = self._input_state["candidate"]
+            if candidate is None or candidate["operation_id"] != operation_id:
+                return _UNSET
+            self._input_state["candidate"] = None
+            return candidate["raw"]
 
     @property
     def operation_id(self):
@@ -544,6 +605,7 @@ class RunContext:
         orchestrator=False,
         recover=None,
         name=None,
+        source_boundaries=None,
     ):
         if self._replay_state["error"] is not None:
             raise self._replay_state["error"]
@@ -552,15 +614,17 @@ class RunContext:
                 "Concurrent operations require parallel() with independent branch scopes"
             )
         try:
-            return self._operation(
-                kind,
-                inputs,
-                execute,
-                retry_safe=retry_safe,
-                orchestrator=orchestrator,
-                recover=recover,
-                name=name,
-            )
+            boundaries = source_boundaries or self.source_boundaries
+            with codec.source_identity(boundaries):
+                return self._operation(
+                    kind,
+                    inputs,
+                    execute,
+                    retry_safe=retry_safe,
+                    orchestrator=orchestrator,
+                    recover=recover,
+                    name=name,
+                )
         except ReplayMismatch as exc:
             # A caught application exception cannot make divergent history
             # valid or authorize additional effects in another scope.
@@ -588,8 +652,11 @@ class RunContext:
         ordinal = self.ordinal
         self.ordinal += 1
         operation_id = f"{self.run_id}:{self.scope}:{ordinal}"
-        encoded_inputs = codec.encode(inputs)
-        fingerprint = _hash({"kind": kind, "name": name, "inputs": encoded_inputs})
+        encoded_inputs = codec.encode(inputs, record_owners=True)
+        encoded_fingerprint_inputs = codec.semantic_encoding(encoded_inputs)
+        fingerprint = _hash(
+            {"kind": kind, "name": name, "inputs": encoded_fingerprint_inputs}
+        )
         record = self.journal.get(operation_id)
         if record is not None:
             if record["fingerprint"] != fingerprint or record["kind"] != kind:
@@ -640,6 +707,16 @@ class RunContext:
         except (Suspension, ReplayMismatch):
             raise
         except Exception as exc:
+            # A submitted input is still tentative while its operation is
+            # waiting. Unexpected validator/runtime bugs must propagate to the
+            # run boundary without turning that request into a durable failure.
+            current = self.journal.get(operation_id)
+            if (
+                kind == "input"
+                and current is not None
+                and current["status"] == "waiting"
+            ):
+                raise
             recorded_error = _finalize_exception_record(_exception_record(exc))
             _commit_or_confirm(
                 self.journal,
@@ -686,8 +763,25 @@ class RunContext:
                 definition, args, kwargs, f"{self.scope}/child-{self.ordinal - 1}"
             )
 
+        boundaries = tuple(
+            dict.fromkeys(
+                (
+                    *self.source_boundaries,
+                    *(
+                        (definition._source_boundary,)
+                        if definition._source_boundary
+                        else ()
+                    ),
+                )
+            )
+        )
         return self.operation(
-            "child", inputs, execute, orchestrator=True, name=definition.name
+            "child",
+            inputs,
+            execute,
+            orchestrator=True,
+            name=definition.name,
+            source_boundaries=boundaries,
         )
 
     def scope_call(self, scope, fn):
@@ -723,12 +817,35 @@ def ask(question, *, returns=str):
             response = record["response"]
             if "validated_answer" in response:
                 return codec.decode(response["validated_answer"])
-            value = TypeAdapter(returns).validate_python(
-                codec.decode(response["answer"])
+            raise ReplayMismatch(
+                "Recorded input uses the legacy unvalidated answer format; "
+                "start a new run and submit the answer again"
             )
-            ctx.save_response(
-                ctx.operation_id, {"validated_answer": codec.encode(value)}
-            )
+        candidate = ctx.take_input_candidate(ctx.operation_id)
+        if record["status"] == "waiting" and candidate is not _UNSET:
+            try:
+                value = TypeAdapter(returns).validate_python(candidate)
+            except ValidationError as exc:
+                raise InputRequired(
+                    str(question),
+                    ctx.operation_id,
+                    {
+                        "type": "validation_error",
+                        "message": "Answer does not match the requested type",
+                        "details": json.loads(
+                            exc.json(include_input=False, include_url=False)
+                        ),
+                    },
+                ) from None
+            try:
+                encoded = codec.encode(value)
+            except TypeError as exc:
+                raise InputRequired(
+                    str(question),
+                    ctx.operation_id,
+                    {"type": "encoding_error", "message": str(exc)},
+                ) from None
+            ctx.save_response(ctx.operation_id, {"validated_answer": encoded})
             return value
         waiting = {"question": str(question), "schema": schema}
         _commit_or_confirm(
@@ -931,6 +1048,9 @@ class Botpipe:
     def run(self, definition, *args, task_id=None, run_id=None, **kwargs):
         definition = self._definition(definition)
         args, kwargs = _validate_args(definition.fn, args, kwargs)
+        boundaries = (
+            (definition._source_boundary,) if definition._source_boundary else ()
+        )
         limits = self.limits
         task_id = task_id or uuid.uuid4().hex[:12]
         run_id = run_id or uuid.uuid4().hex
@@ -940,6 +1060,9 @@ class Botpipe:
             ):
                 raise ValueError(f"{label} must be a safe identifier")
         folder = self.state_dir / "tasks" / task_id / "runs" / run_id
+        with codec.source_identity(boundaries):
+            encoded_args = codec.encode(args)
+            encoded_kwargs = codec.encode(kwargs)
         data = {
             "run_id": run_id,
             "task_id": task_id,
@@ -948,8 +1071,8 @@ class Botpipe:
             "function": definition.fn.__qualname__,
             "source_file": inspect.getsourcefile(definition.fn),
             "version": definition.fingerprint,
-            "args": codec.encode(args),
-            "kwargs": codec.encode(kwargs),
+            "args": encoded_args,
+            "kwargs": encoded_kwargs,
             "status": "created",
             "folder": str(folder),
             "provider": self.provider_name,
@@ -1002,6 +1125,10 @@ class Botpipe:
                     "Workflow code or referenced contracts changed; resume with original code or start a new run"
                 )
             self._check_run_configuration(data)
+            operations = self.journal.operations(run_id)
+            source_boundaries = _preflight_recorded_sources(
+                data, operations, definition._source_boundary
+            )
             changes = {}
             limits = RunLimits(
                 data["max_operations"] if max_operations is None else max_operations,
@@ -1019,68 +1146,89 @@ class Botpipe:
                 data.update(changes)
                 self.journal.update_run(run_id, **changes)
                 self.journal.event(run_id, "run_limits_updated", changes)
+            input_candidate = None
             if answer is not _UNSET:
                 pending = data.get("pending_input")
                 if not pending:
                     raise ValueError("Run is not waiting for an answer")
-                import jsonschema
-
-                json_value = (
-                    answer.model_dump(mode="json")
-                    if hasattr(answer, "model_dump")
-                    else answer
-                )
-                jsonschema.validate(json_value, pending["schema"])
-                _persist_response(
-                    self.journal,
-                    pending["operation_id"],
-                    {"answer": codec.encode(answer)},
-                )
+                operation_id = pending.get("operation_id")
+                record = self.journal.get(operation_id)
+                recorded_request = None if record is None else record.get("response")
+                expected_request = {
+                    key: pending[key]
+                    for key in ("question", "schema")
+                    if key in pending
+                }
+                if (
+                    record is None
+                    or record["run_id"] != run_id
+                    or record["kind"] != "input"
+                    or record["status"] != "waiting"
+                    or recorded_request != expected_request
+                ):
+                    raise ValueError("Run is no longer waiting for that answer")
+                input_candidate = {"operation_id": operation_id, "raw": answer}
+            with codec.source_identity(source_boundaries):
+                decoded_args = codec.decode(data["args"])
+                decoded_kwargs = codec.decode(data["kwargs"])
             return self._execute(
                 definition,
                 data,
-                codec.decode(data["args"]),
-                codec.decode(data["kwargs"]),
+                decoded_args,
+                decoded_kwargs,
+                input_candidate=input_candidate,
             )
 
     async def aresume(self, run_id, **kwargs):
         return await _async_call(self.resume, run_id, **kwargs)
 
-    def _execute(self, definition, data, args, kwargs):
-        ctx = RunContext(self, data, definition)
+    def _execute(self, definition, data, args, kwargs, *, input_candidate=None):
+        ctx = RunContext(self, data, definition, input_candidate=input_candidate)
         token = _CURRENT.set(ctx)
         status = "completed"
         value = None
         error = None
-        pending = None
-        self.journal.update_run(
-            ctx.run_id, status="running", pending_input=None, error=None
-        )
+        pending = data.get("pending_input")
+        self.journal.update_run(ctx.run_id, status="running", error=None)
         try:
-            value = _invoke(definition.fn, args, kwargs)
-            ctx.assert_consumed()
-            encoded = codec.encode(value)
+            with codec.source_identity(ctx.source_boundaries):
+                value = _invoke(definition.fn, args, kwargs)
+                ctx.assert_consumed()
+                encoded = codec.encode(value)
+            pending = None
         except InputRequired as exc:
             status = "awaiting_input"
             error = None
             record = self.journal.get(exc.operation_id)
             pending = {"operation_id": exc.operation_id, **record["response"]}
+            if exc.diagnostic is not None:
+                pending["diagnostic"] = exc.diagnostic
             encoded = None
         except BudgetExceeded as exc:
             status = "budget_exceeded"
             error = str(exc)
+            pending = None
             encoded = None
         except UncertainOperation as exc:
             status = "interrupted"
             error = str(exc)
+            if pending is not None:
+                waiting = self.journal.get(pending.get("operation_id"))
+                if waiting is None or waiting["status"] != "waiting":
+                    pending = None
             encoded = None
         except KeyboardInterrupt:
             status = "interrupted"
             error = "Execution interrupted"
+            if pending is not None:
+                waiting = self.journal.get(pending.get("operation_id"))
+                if waiting is None or waiting["status"] != "waiting":
+                    pending = None
             encoded = None
         except Exception as exc:
             status = "failed"
             error = f"{type(exc).__name__}: {exc}"
+            pending = None
             encoded = None
         finally:
             _CURRENT.reset(token)
@@ -1197,6 +1345,16 @@ class Botpipe:
         with self._ownership(run_id):
             data = self.journal.run(run_id)
             self._check_run_configuration(data)
+            operations = self.journal.operations(run_id)
+            definition_boundary = None
+            try:
+                reference = f"{data['module']}:{data['function']}"
+                definition_boundary = self._definition(reference)._source_boundary
+            except (ImportError, AttributeError, LookupError, ValueError, BotpipeError):
+                pass
+            source_boundaries = _preflight_recorded_sources(
+                data, operations, definition_boundary
+            )
             record = self.journal.get(operation_id)
             if record is None or record["run_id"] != run_id:
                 raise KeyError(operation_id)
@@ -1218,7 +1376,8 @@ class Botpipe:
             if record["kind"] == "provider":
                 from .providers import ProviderRequest, ProviderResponse
 
-                inputs = codec.decode(record["inputs"])
+                with codec.source_identity(source_boundaries):
+                    inputs = codec.decode(record["inputs"])
                 request_data = old.get("request") or {}
                 # A retry marker names the *next* generation; reconcile the
                 # attempt whose effects are still awaiting resolution.
@@ -1344,7 +1503,8 @@ class Botpipe:
                         session_key=inputs.get("session"),
                     )
             elif response is not _UNSET:
-                result = codec.encode(response)
+                with codec.source_identity(source_boundaries):
+                    result = codec.encode(response)
                 _commit_or_confirm(
                     self.journal,
                     operation_id,
