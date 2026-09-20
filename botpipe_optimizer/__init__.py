@@ -10,6 +10,7 @@ from ._selected_workflow import (
 )
 from .adaptation import write_selected_workflow_capability_snapshot, write_validated_workflow_parameters
 from .candidate_surfaces import (
+    derive_surface_manifest,
     derive_candidate_surface_manifest,
     materialize_baseline_surface,
     normalize_candidate_surface_boundary,
@@ -18,7 +19,21 @@ from .candidate_surfaces import (
     validate_baseline_surface_manifest,
     validate_candidate_surface_manifest,
     validate_candidate_surface_overlay,
+    validate_surface_manifest,
+    verify_surface_anchor,
 )
+from .candidate_validation import CheckResult, ValidationResult as CandidateValidationResult, validate_frozen_candidate
+from .execution_trees import (
+    ExecutionArm,
+    FrozenExecutionTree,
+    assert_execution_arm_unchanged,
+    capture_execution_tree,
+    cleanup_owned_directory,
+    materialize_execution_arm,
+    snapshot_execution_arm,
+    verify_frozen_execution_tree,
+)
+from .processes import ProcessResult, run_bounded_process
 from .company import write_company_operation_snapshot
 from .decomposition import write_selected_workflow_decomposition_surface
 from .diagnostics import write_selected_workflow_run_history_snapshot
@@ -94,6 +109,7 @@ __all__ = [
     "capture_selected_workflow",
     "collect_optimization_publication_surface",
     "compute_static_step_centrality",
+    "derive_surface_manifest",
     "derive_candidate_surface_manifest",
     "extract_failure_scenario_seeds",
     "finalize_optional_optimization_artifact",
@@ -112,6 +128,21 @@ __all__ = [
     "validate_baseline_surface_manifest",
     "validate_candidate_surface_manifest",
     "validate_candidate_surface_overlay",
+    "validate_surface_manifest",
+    "verify_surface_anchor",
+    "CandidateValidationResult",
+    "CheckResult",
+    "ExecutionArm",
+    "FrozenExecutionTree",
+    "ProcessResult",
+    "assert_execution_arm_unchanged",
+    "capture_execution_tree",
+    "cleanup_owned_directory",
+    "materialize_execution_arm",
+    "run_bounded_process",
+    "snapshot_execution_arm",
+    "validate_frozen_candidate",
+    "verify_frozen_execution_tree",
     "validate_observability_bundle",
     "validate_optimization_scorecard_publication",
     "validate_optimization_selected_workflow_field",

@@ -352,7 +352,7 @@ def test_normalize_trace_corpus_keeps_question_route_distinct_from_awaiting_inpu
     assert observation["downstream_outcome"] == "awaiting_input_terminal_after_local_pass"
 
 
-def test_filtered_published_observations_still_allow_upstream_ranking_from_internal_trace_context(tmp_path: Path) -> None:
+def test_route_filter_metrics_use_the_declared_focused_subset(tmp_path: Path) -> None:
     run_dir = _write_upstream_pass_downstream_fail_run(
         tmp_path,
         "task-1",
@@ -370,8 +370,8 @@ def test_filtered_published_observations_still_allow_upstream_ranking_from_inter
 
     assert [entry["step_name"] for entry in corpus["step_observations"]] == ["package"]
     assert {entry["step_name"] for entry in corpus["all_step_observations"]} == {"assessment", "package"}
-    assert {entry["step_name"] for entry in metrics["steps"]} == {"assessment", "package"}
-    assert priority["ranked_steps"][0]["step_name"] == "assessment"
+    assert {entry["step_name"] for entry in metrics["steps"]} == {"package"}
+    assert priority["ranked_steps"][0]["step_name"] == "package"
 
 
 def test_build_step_trace_metrics_counts_routes_and_tokens() -> None:
@@ -423,12 +423,14 @@ def test_build_step_trace_metrics_counts_routes_and_tokens() -> None:
     assert assessment["observed_count"] == 2
     assert assessment["route_counts"]["needs_rework"] == 1
     assert assessment["estimated_token_total"] == 500
-    assert assessment["token_share"] == pytest.approx(0.8333, abs=1e-4)
-    assert assessment["downstream_failure_after_pass_count"] == 1
-    assert assessment["artifact_centrality"] >= package["artifact_centrality"]
+    assert assessment["known_token_total"] == 500
+    assert assessment["usage_complete"] is True
+    assert "token_share" not in assessment
+    assert "downstream_failure_after_pass_count" not in assessment
+    assert "artifact_centrality" not in assessment
 
 
-def test_rank_targets_prefers_high_leverage_upstream_step_over_downstream_symptom() -> None:
+def test_rank_targets_uses_observed_reliability_counts_without_causal_scores() -> None:
     step_metrics = {
         "selected_workflow": "release_candidate_to_go_no_go",
         "steps": [
@@ -442,6 +444,9 @@ def test_rank_targets_prefers_high_leverage_upstream_step_over_downstream_sympto
                 "failed_count": 0,
                 "needs_rework_count": 3,
                 "needs_replan_count": 0,
+                "direct_failure_run_count": 2,
+                "rework_run_count": 2,
+                "distinct_run_count": 3,
                 "estimated_token_total": 2200,
                 "token_share": 0.55,
                 "downstream_failure_after_pass_count": 2,
@@ -458,6 +463,9 @@ def test_rank_targets_prefers_high_leverage_upstream_step_over_downstream_sympto
                 "failed_count": 3,
                 "needs_rework_count": 0,
                 "needs_replan_count": 0,
+                "direct_failure_run_count": 1,
+                "rework_run_count": 0,
+                "distinct_run_count": 3,
                 "estimated_token_total": 350,
                 "token_share": 0.08,
                 "downstream_failure_after_pass_count": 0,
@@ -471,7 +479,9 @@ def test_rank_targets_prefers_high_leverage_upstream_step_over_downstream_sympto
 
     assert payload["ranked_steps"][0]["step_name"] == "assessment"
     assert payload["not_selected"][0]["step_name"] == "package"
-    assert "downstream symptom" in payload["not_selected"][0]["reason"]
+    assert payload["ranking_method"] == "deterministic_observed_burden"
+    assert "priority_score" not in payload["ranked_steps"][0]
+    assert "confidence" not in payload["ranked_steps"][0]
 
 
 def test_extract_failure_scenario_seeds_limits_to_max_scenarios() -> None:
@@ -519,8 +529,8 @@ def test_extract_failure_scenario_seeds_limits_to_max_scenarios() -> None:
 
     assert payload["schema"] == "botpipe.workflow_optimization.failure_scenario_seeds/v1"
     assert len(payload["seeds"]) == 2
-    assert any(
-        "repeated_same_step_needs_rework_loop" in seed["seed_reasons"]
+    assert not any(
+        any("loop" in reason or "cycle" in reason for reason in seed["seed_reasons"])
         for seed in payload["seeds"]
     )
     assert all(isinstance(seed["suggested_failure_kind"], str) and seed["suggested_failure_kind"] for seed in payload["seeds"])

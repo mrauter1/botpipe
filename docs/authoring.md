@@ -1055,13 +1055,13 @@ from botpipe_optimizer import (
 
 Candidate-surface helper boundary:
 
-- the helpers own only the mechanical baseline/candidate publication operations: repo-relative boundary normalization, baseline surface materialization, candidate-manifest diff derivation, baseline/candidate manifest validation, authoritative-source drift rejection, isolated overlay validation, and overlay-result normalization
+- the helpers own the mechanical baseline/candidate publication operations: strict repo-relative boundary normalization, canonical content manifests, baseline materialization, candidate diff derivation, authoritative-source drift rejection, and result normalization
 - they reuse the shared selected-workflow surface artifacts and repo-relative path hardening instead of ad hoc workflow-local copy, digest, and traversal checks
-- manifest validators cover shared mechanics such as `repo_root` and `surface_kind` alignment, boundary-field comparison, `relative_paths` versus `files` consistency, copied-surface digest checks, and caller-supplied added-path allow-lists
+- manifest validators bind the expected root, boundary, normalized paths, file digests, sizes, and executable modes; callers cannot substitute a second manifest or root after validation
 - callers still own workflow-specific boundary policy, optional boundary-field wiring, domain-specific error wording, and any post-validation receipt semantics
 - they write only workflow-local surface folders and manifest metadata under `ctx.workflow_folder`
-- overlay validation still runs against an isolated repo copy with the same runnable-root fallback used by the workflow-local publication path
-- overlay-result normalization only validates the mechanical compile/test receipt shape, including whether the caller expects one compiled workflow or many
+- concrete validation uses frozen project/package execution trees and an isolated import bootstrap; it does not fall back to the authoritative checkout or an ambient editable install
+- validation rehashes the candidate around every execution phase and derives the compile/test receipt from actual results
 - they do not own refinement-specific evaluation alignment, decomposition-specific evidence capture, building-block extraction policy, or publication receipt shaping
 - they do not mutate, auto-promote, auto-decompose, auto-refine, or auto-run the selected workflow
 - they do not add CLI flags, new `workflow.toml` fields, runtime-owned publication automation, or hidden downstream routing
@@ -1131,33 +1131,15 @@ Evaluation helper boundary:
 - it does not widen the runtime-injected control contract beyond readable inputs, required inputs, writable artifacts, `available_routes`, step-local route metadata, `required_writes`, and an explicit `expected_output_schema` when present
 - workflows still own evaluation policy, category coverage requirements, prompt semantics, publication gating, and any downstream execution behavior in workflow code and prompt templates
 
-## Optional Optimization Helpers
+## Optimizer And Evaluation Handoffs
 
-`botpipe_optimizer.optimization` provides deterministic authoring-only helpers for workflows that need to ingest runtime observability and publish candidate-only optimization evidence.
+The optimizer uses versioned typed records rather than parallel helper-specific fact models. Deterministic capture owns observations, usage availability, grouping, metrics, baseline identity, and limits. A model may propose candidate content and a verifier may review it, but neither owns file hashes, counters, execution status, or measured comparison values.
 
-```python
-from botpipe_optimizer import (
-    build_step_trace_metrics,
-    list_selected_workflow_runs,
-    normalize_trace_corpus,
-    rank_optimization_targets,
-    validate_selected_workflow_source_unchanged,
-    write_optimization_refinement_evidence,
-    write_selected_workflow_source_manifest,
-)
-```
+`run_refs` use `<task_id>/<run_id>` identity and remain distinct from `run_statuses`. `route_tags` focus observations without changing the captured population. The bundled optimizer writes canonical evidence, candidates, report, refinement handoff, and a final receipt under its workflow folder. It does not mutate or run the selected workflow.
 
-Optimization helper boundary:
+Downstream callers select exactly one accepted candidate. Prompt, rubric, token, and workflow candidates go to `workflow_and_eval_to_refined_workflow_package`; evaluation-case candidates go to `workflow_to_eval_suite` and receive a new suite identity. Optional paired evaluation belongs to refinement and requires an explicit frozen evaluation spec. It is never enabled by an optimization depth flag and never promotes automatically.
 
-- the helpers write only workflow-local artifacts under `ctx.workflow_folder`
-- they reuse shared selected-workflow resolution and read-only run discovery seams instead of adding runtime-owned optimization behavior
-- `run_refs` use `<task_id>/<run_id>` identity and remain distinct from run-level status filters
-- `run_statuses` filter run-level terminal state, while `route_tags` filter step-level evidence inside eligible runs
-- they capture deterministic evidence such as trace normalization, route counts, token counts, static centrality, source manifests, and refinement-evidence envelopes
-- they support the bundled `workflow_run_traces_to_optimization_candidates` workflow without mutating the selected workflow or widening `workflow.toml`
-- they do not auto-run target workflows, auto-refine, auto-materialize prompts, auto-promote changes, or execute ablations
-- verifier/rubric optimization remains one merged acceptance-function pass owned by workflow code and prompt templates, not by stdlib helper policy
-- workflow code and prompt templates still own optimization policy, candidate ranking explanations, adversarial-case handling, and publication receipts
+See [Optimizer](optimizer.md) for parameters, outputs, handoff rules, the evaluator request/result protocol, limits, and migration guidance.
 
 ## Optional Workflow Capability Snapshot Helpers
 
