@@ -152,3 +152,9 @@ For `evaluator_kind = "botpipe"`, set `max_provider_turns_per_arm`. The evaluato
 - `workflow_refinement_evidence.json` remains the downstream handoff name, now as a deterministic v2 projection tied to the evidence, candidate set, and baseline IDs.
 
 The complete normative requirements and acceptance cases are in [Optimizer v2 requirements](requirements/optimizer-v2.md).
+
+## Provider and process limits
+
+Optimizer runs activate a persistent provider budget. Each initial call, retry, and repair reserves a turn before dispatch; resuming a run preserves the consumed turns and original deadline. Built-in Codex and Claude transports support cancellation and bounded process-tree cleanup. Custom providers must explicitly declare `supports_cancellation = True` and honor task cancellation before they can run with this guarantee. Providers without that contract fail before dispatch.
+
+Concrete validation accepts `target_test_argv` as an argument list, without a shell. The default is `["pytest", "-q"]`. Explicit legacy `target_test_command` strings use POSIX parsing and require conversion to an argument list on Windows. Compilation defaults to 60 seconds and each test invocation to 600 seconds; positive explicit overrides are supported. Diagnostic output is bounded and retained when a check fails.
