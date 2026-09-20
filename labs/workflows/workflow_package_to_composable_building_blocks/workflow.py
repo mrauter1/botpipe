@@ -203,8 +203,8 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
         sponsor_role: str | None = None
         desired_outcome: str | None = None
         constraints: list[str] = Field(default_factory=list)
-        target_test_command: str | None = "pytest -q"
-        target_test_argv: list[str] | None = None
+        target_test_command: str | None = None
+        target_test_argv: list[str] | None = Field(default_factory=lambda: ["pytest", "-q"])
         max_candidate_building_blocks: int = 3
         framing_status: str | None = None
         planning_status: str | None = None
@@ -539,6 +539,7 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
             boundary=boundary,
             baseline_manifest=baseline_manifest,
             declared_building_blocks=declared_building_blocks,
+            expected_surface_root=required_dirs["candidate_decomposition_surface"],
         )
 
         candidate_file_count = _require_positive_int(
@@ -576,7 +577,20 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
             overlay_failure_prefix="overlay validation command failed for candidate decomposition surface",
             overlay_temp_prefix="workflow_decomposition_overlay_",
             expected_candidate_root=required_dirs["candidate_decomposition_surface"],
+            expected_baseline_root=required_dirs["baseline_parent_workflow_surface"],
+            expected_boundary=_require_mapping(baseline_manifest.get("boundary"), "baseline_parent_manifest.json boundary required"),
+            baseline_surface_kind="baseline_parent",
+            candidate_surface_kind="candidate_decomposition",
             baseline_manifest=baseline_manifest,
+            allowed_added_path_prefixes=tuple(declared_building_blocks["allowed_package_roots"]),
+            allowed_added_exact_paths=tuple(
+                path for path in (
+                    boundary.get("parent_doc_relative_path"),
+                    boundary.get("parent_runtime_test_relative_path"),
+                    *declared_building_blocks["allowed_doc_paths"],
+                    *declared_building_blocks["allowed_runtime_test_paths"],
+                ) if isinstance(path, str) and path
+            ),
         )
 
         write_publication_receipt(
@@ -843,7 +857,6 @@ def _write_candidate_decomposition_manifest(
         "parent_package_root_relative_path": boundary["parent_package_root_relative_path"],
         "parent_doc_relative_path": boundary["parent_doc_relative_path"],
         "parent_runtime_test_relative_path": boundary["parent_runtime_test_relative_path"],
-        "building_block_package_roots": declared_building_blocks["allowed_package_roots"],
         "editable_boundary_version": 1,
     }
     canonical = derive_surface_manifest(
@@ -1055,6 +1068,7 @@ def _validate_candidate_decomposition_manifest(
     boundary: Mapping[str, Any],
     baseline_manifest: Mapping[str, Any],
     declared_building_blocks: Mapping[str, Any],
+    expected_surface_root: Path,
 ) -> None:
     building_block_names = _require_string_list(
         candidate_manifest.get("building_block_names"),
@@ -1088,6 +1102,7 @@ def _validate_candidate_decomposition_manifest(
         manifest_label="candidate_decomposition_manifest.json",
         expected_surface_kind="candidate_decomposition",
         expected_boundary=boundary,
+        expected_surface_root=expected_surface_root,
         boundary_field_map={
             "parent_package_name": "parent_package_name",
             "parent_package_root_relative_path": "parent_package_root_relative_path",

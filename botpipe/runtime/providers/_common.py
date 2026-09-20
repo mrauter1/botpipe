@@ -214,7 +214,7 @@ async def communicate_text_subprocess(
     if not isinstance(stdout, asyncio.StreamReader) or not isinstance(stderr, asyncio.StreamReader):
         try:
             out, err = await process.communicate(None if input_text is None else input_text.encode())
-        except asyncio.CancelledError:
+        except BaseException:
             await terminate_text_subprocess(process); raise
         finally:
             if process.returncode is not None: close_provider_subprocess_containment(process)
@@ -238,8 +238,10 @@ async def communicate_text_subprocess(
             stream.close()
     tasks=[asyncio.create_task(write()),asyncio.create_task(read_tail(stdout)),asyncio.create_task(read_tail(stderr))]
     try:
-        _,(out,out_cut),(err,err_cut)=await asyncio.gather(*tasks); await process.wait()
-    except asyncio.CancelledError:
+        await _wait_for_process_leader(process, tasks)
+        await _cleanup_provider_subprocess_descendants(process)
+        _,(out,out_cut),(err,err_cut)=await asyncio.gather(*tasks)
+    except BaseException:
         for task in tasks: task.cancel()
         await terminate_text_subprocess(process); await asyncio.gather(*tasks,return_exceptions=True); raise
     finally:
@@ -254,6 +256,7 @@ def _bounded_text(value: bytes) -> str:
 
 async def create_provider_subprocess_exec(*command: str, **kwargs: object) -> asyncio.subprocess.Process:
     containment = ProcessContainment.create()
+    process: asyncio.subprocess.Process | None = None
     try:
         process = await asyncio.create_subprocess_exec(*command, **kwargs, **containment.creation_kwargs)
         handle: Any = process
@@ -263,12 +266,10 @@ async def create_provider_subprocess_exec(*command: str, **kwargs: object) -> as
             handle = getter("subprocess") if callable(getter) else None
             if handle is None: raise RuntimeError("could not access Windows provider process handle")
         containment.attach_and_start(handle)
-        pid = getattr(process, "pid", None)
-        if os.name == "posix" and isinstance(pid, int):
-            if os.getpgid(pid) != pid or pid == os.getpgrp():
-                process.kill()
-                raise RuntimeError("provider process containment did not establish an owned process group")
     except BaseException:
+        if process is not None and process.returncode is None:
+            process.kill()
+            await process.wait()
         containment.close(); raise
     _PROCESS_CONTAINMENTS[id(process)] = containment
     if os.name == "posix" and isinstance(getattr(process, "pid", None), int):
@@ -285,31 +286,91 @@ async def terminate_text_subprocess(process: asyncio.subprocess.Process, *, term
     """Terminate, force-kill, and reap only a registered owned process tree."""
     containment=_PROCESS_CONTAINMENTS.get(id(process)); group=_OWNED_PROCESS_GROUPS.get(id(process))
     if group is not None:
-        try: os.killpg(group,signal.SIGTERM)
-        except ProcessLookupError: pass
-        await asyncio.sleep(termination_grace_seconds)
-        try: os.killpg(group,signal.SIGKILL)
-        except ProcessLookupError: pass
-        if process.returncode is None:
-            try: await process.wait()
-            except ProcessLookupError: pass
-        close_provider_subprocess_containment(process); return
+        try:
+            group = _verified_owned_process_group(process, group)
+            try:
+                os.killpg(group, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+            else:
+                deadline = asyncio.get_running_loop().time() + termination_grace_seconds
+                while asyncio.get_running_loop().time() < deadline:
+                    try:
+                        os.killpg(group, 0)
+                    except ProcessLookupError:
+                        break
+                    await asyncio.sleep(0.02)
+                else:
+                    try:
+                        os.killpg(group, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+            if process.returncode is None:
+                try: await process.wait()
+                except ProcessLookupError: pass
+        finally:
+            close_provider_subprocess_containment(process)
+        return
     if containment is not None and os.name=="nt":  # pragma: no cover
-        try: process.terminate()
-        except ProcessLookupError: pass
-        try: await asyncio.wait_for(process.wait(),timeout=termination_grace_seconds)
-        except asyncio.TimeoutError:
-            if containment._windows_job is not None: containment._windows_job.terminate(1)
-            await process.wait()
-        close_provider_subprocess_containment(process); return
+        try:
+            if containment._windows_job is None:
+                raise RuntimeError("registered Windows provider process has no Job Object")
+            containment._windows_job.terminate(1)
+            if process.returncode is None:
+                await asyncio.wait_for(process.wait(), timeout=termination_grace_seconds)
+        finally:
+            close_provider_subprocess_containment(process)
+        return
     if process.returncode is not None: return
     try: process.terminate()
-    except ProcessLookupError: return
+    except ProcessLookupError:
+        try: await process.wait()
+        except ProcessLookupError: pass
+        return
     try: await asyncio.wait_for(process.wait(),timeout=termination_grace_seconds); return
     except asyncio.TimeoutError: pass
     try: process.kill()
     except ProcessLookupError: return
     await process.wait()
+
+
+def _verified_owned_process_group(process: asyncio.subprocess.Process, group: int) -> int:
+    pid = getattr(process, "pid", None)
+    if not isinstance(pid, int) or group != pid or group == os.getpgrp():
+        raise RuntimeError("refusing to signal an unverified provider process group")
+    try:
+        live_group = os.getpgid(pid)
+    except ProcessLookupError:
+        live_group = None
+    if live_group is not None and live_group != group:
+        raise RuntimeError("registered provider PID now belongs to another process group")
+    return group
+
+
+async def _cleanup_provider_subprocess_descendants(process: asyncio.subprocess.Process) -> None:
+    if id(process) in _PROCESS_CONTAINMENTS:
+        await terminate_text_subprocess(process)
+
+
+async def _wait_for_process_leader(
+    process: asyncio.subprocess.Process,
+    stream_tasks: list[asyncio.Task[Any]],
+) -> None:
+    waiter = asyncio.create_task(process.wait())
+    pending = set(stream_tasks)
+    try:
+        while not waiter.done():
+            done, _ = await asyncio.wait({waiter, *pending}, return_when=asyncio.FIRST_COMPLETED)
+            for task in done:
+                if task is waiter:
+                    continue
+                pending.discard(task)
+                task.result()
+        await waiter
+    except BaseException:
+        waiter.cancel()
+        await asyncio.gather(waiter, return_exceptions=True)
+        raise
 
 def run_text_subprocess(
     command: list[str],
@@ -321,9 +382,11 @@ def run_text_subprocess(
     """Run a subprocess synchronously for explicit compatibility-only paths."""
 
     containment=ProcessContainment.create()
+    attached = False
     process=subprocess.Popen(command,stdin=subprocess.PIPE if input_text is not None else None,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,env=None if env is None else dict(env),cwd=str(cwd) if cwd is not None else None,**containment.creation_kwargs)
     try:
         containment.attach_and_start(process)
+        attached = True
         tails={"stdout":bytearray(),"stderr":bytearray()}; truncated={"stdout":False,"stderr":False}
         def read_stream(name,stream):
             while True:
@@ -337,12 +400,21 @@ def run_text_subprocess(
         for thread in threads: thread.start()
         if input_text is not None and process.stdin is not None: process.stdin.write(input_text); process.stdin.close()
         process.wait()
-        for thread in threads: thread.join()
+        containment.terminate(process,grace_seconds=5.0)
+        for thread in threads:
+            thread.join(timeout=5.0)
+            if thread.is_alive():
+                raise RuntimeError("provider stream reader did not stop after process-tree cleanup")
         marker=b"[... provider stream truncated ...]\n"
         stdout=(marker if truncated["stdout"] else b"")+bytes(tails["stdout"]); stderr=(marker if truncated["stderr"] else b"")+bytes(tails["stderr"])
         return stdout.decode(errors="replace"),stderr.decode(errors="replace"),process.returncode
     except BaseException:
-        containment.terminate(process,grace_seconds=5.0); raise
+        if attached:
+            containment.terminate(process,grace_seconds=5.0)
+        elif process.poll() is None:
+            process.kill()
+            process.wait()
+        raise
     finally: containment.close()
 
 

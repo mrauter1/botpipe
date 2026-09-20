@@ -5,8 +5,10 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 from functools import partial
+from hashlib import sha256
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
@@ -30,7 +32,7 @@ from botpipe_optimizer.execution_trees import (
     snapshot_execution_arm,
     verify_frozen_execution_tree,
 )
-from botpipe_optimizer.paired_evaluation import PAIRED_EVALUATION_SCHEMA, run_paired_evaluation
+from botpipe_optimizer.paired_evaluation import PAIRED_EVALUATION_SCHEMA, finalize_paired_evaluation_record, load_evaluation_spec, run_paired_evaluation, validate_paired_evaluation_record
 from botpipe_optimizer.candidate_surfaces import derive_surface_manifest
 from botpipe.stdlib import (
     normalize_optional_string,
@@ -211,8 +213,8 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
         sponsor_role: str | None = None
         desired_outcome: str | None = None
         constraints: list[str] = Field(default_factory=list)
-        target_test_command: str | None = "pytest -q"
-        target_test_argv: list[str] | None = None
+        target_test_command: str | None = None
+        target_test_argv: list[str] | None = Field(default_factory=lambda: ["pytest", "-q"])
         framing_status: str | None = None
         planning_status: str | None = None
         build_status: str | None = None
@@ -606,7 +608,13 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             baseline_manifest_label="baseline_workflow_manifest.json",
             drift_error_prefix="authoritative selected workflow file changed during refinement publication",
         )
-        _validate_candidate_manifest(candidate_manifest, repo_root, expected_boundary, baseline_manifest)
+        _validate_candidate_manifest(
+            candidate_manifest,
+            repo_root,
+            expected_boundary,
+            baseline_manifest,
+            expected_surface_root=required_dirs["candidate_workflow_surface"],
+        )
 
         candidate_file_count = _require_positive_int(
             candidate_manifest.get("file_count"),
@@ -892,6 +900,8 @@ def _validate_candidate_manifest(
     repo_root: Path,
     expected_boundary: Mapping[str, Any],
     baseline_manifest: Mapping[str, Any],
+    *,
+    expected_surface_root: Path,
 ) -> None:
     try:
         validate_candidate_surface_manifest(
@@ -900,6 +910,7 @@ def _validate_candidate_manifest(
             manifest_label="candidate_workflow_manifest.json",
             expected_surface_kind="candidate",
             expected_boundary=expected_boundary,
+            expected_surface_root=expected_surface_root,
             boundary_field_map={
                 "package_name": "package_name",
                 "package_root_relative_path": "package_root_relative_path",
@@ -994,9 +1005,15 @@ def _validate_and_evaluate_candidate(
             snapshot,
             baseline_surface_manifest=baseline_manifest,
             candidate_surface_manifest=candidate_manifest,
+            expected_baseline_root=Path(_require_text(baseline_manifest.get("root", baseline_manifest.get("surface_root")), "baseline manifest root required")),
             expected_candidate_root=candidate_root,
+            expected_boundary=_require_mapping(baseline_manifest.get("boundary"), "baseline manifest boundary required"),
+            baseline_surface_kind="baseline",
+            candidate_surface_kind="candidate",
             workflow_refs=(selected_workflow_name,),
             staging_parent=staging,
+            allowed_added_path_prefixes=(_require_text(baseline_manifest.get("package_root_relative_path"), "baseline package root required"),),
+            allowed_added_exact_paths=tuple(path for path in (baseline_manifest.get("doc_relative_path"), baseline_manifest.get("runtime_test_relative_path")) if isinstance(path, str) and path),
             target_test_command=ctx.state.target_test_command,
             target_test_argv=ctx.state.target_test_argv,
         )
@@ -1047,14 +1064,82 @@ def _run_optional_paired_evaluation(
             ownership_token=raw_baseline.ownership_token,
         )
         candidate_arm = materialize_execution_arm(snapshot, staging, candidate_manifest=candidate_manifest)
+        spec, spec_id = load_evaluation_spec(spec_path)
+        attempt_id = _paired_evaluation_attempt_id(
+            invocation_id=ctx.run_id,
+            spec_id=spec_id,
+            baseline_surface_id=baseline_arm.surface_id,
+            candidate_surface_id=_require_text(candidate_arm.surface_id, "candidate arm surface_id required"),
+            baseline_execution_tree_id=baseline_arm.execution_tree_id,
+            candidate_execution_tree_id=candidate_arm.execution_tree_id,
+        )
+        suffix = attempt_id.removeprefix("sha256:")
+        attempt_path = ctx.workflow_folder / f"paired_evaluation_attempt-{suffix}.json"
+        cache_path = ctx.workflow_folder / f"paired_evaluation_cache-{suffix}.json"
+        if cache_path.is_file():
+            cached = validate_paired_evaluation_record(
+                _read_json(cache_path),
+                evaluation_spec_path=spec_path,
+                baseline_surface_id=baseline_arm.surface_id,
+                candidate_surface_id=_require_text(candidate_arm.surface_id, "candidate arm surface_id required"),
+                baseline_execution_tree_id=baseline_arm.execution_tree_id,
+                candidate_execution_tree_id=candidate_arm.execution_tree_id,
+                allowed_output_parent=ctx.workflow_folder,
+                expected_invocation_id=ctx.run_id,
+            )
+            if cached.get("evaluation_attempt_id") != attempt_id:
+                raise ValueError("paired evaluation attempt identity is stale")
+            return cached
+        if attempt_path.is_file():
+            attempt = _read_json(attempt_path)
+            if attempt.get("attempt_id") != attempt_id or attempt.get("invocation_id") != ctx.run_id:
+                raise ValueError("paired evaluation attempt marker is stale")
+            return finalize_paired_evaluation_record({
+                "schema": PAIRED_EVALUATION_SCHEMA,
+                "evaluation": "inconclusive",
+                "execution_state": "failed",
+                "stop_reason": "interrupted_paired_evaluation_restart_required",
+                "invocation_id": ctx.run_id,
+                "evaluation_attempt_id": attempt_id,
+                "spec_id": spec_id,
+                "execution_output_root": str(Path(_require_text(attempt.get("execution_output_root"), "paired evaluation attempt output root required")).resolve()),
+                "frozen_inputs": {},
+                "plan": {"case_ids": spec.case_ids, "repetitions": spec.repetitions, "effective_settings": spec.effective_settings, "stochastic": spec.stochastic, "max_elapsed_seconds": spec.max_elapsed_seconds, "per_arm_timeout_seconds": spec.per_arm_timeout_seconds, "max_provider_turns_per_arm": spec.max_provider_turns_per_arm},
+                "arms": {
+                    "baseline": {"arm": "baseline", "execution_state": "failed", "surface_id": baseline_arm.surface_id, "execution_tree_id": baseline_arm.execution_tree_id, "reason": "prior evaluator attempt interrupted", "diagnostics": {}},
+                    "candidate": {"arm": "candidate", "execution_state": "failed", "surface_id": candidate_arm.surface_id, "execution_tree_id": candidate_arm.execution_tree_id, "reason": "prior evaluator attempt interrupted", "diagnostics": {}},
+                },
+                "comparison": {"state": "inconclusive", "primary_metric": spec.primary_metric, "deltas": {}, "regressed_metrics": [], "claim_scope": spec.claim_scope, "limitations": ["a prior paired attempt was interrupted; evaluator arms were not relaunched"]},
+                "automatic_promotion": False,
+            })
+        output_root = ctx.workflow_folder / f"paired_evaluation_execution-{suffix}"
+        _write_json_atomic(attempt_path, {
+            "schema": "botpipe.optimizer.paired_evaluation_attempt/v1",
+            "attempt_id": attempt_id,
+            "invocation_id": ctx.run_id,
+            "spec_id": spec_id,
+            "baseline_surface_id": baseline_arm.surface_id,
+            "candidate_surface_id": candidate_arm.surface_id,
+            "baseline_execution_tree_id": baseline_arm.execution_tree_id,
+            "candidate_execution_tree_id": candidate_arm.execution_tree_id,
+            "execution_output_root": str(output_root.resolve()),
+            "state": "started",
+        })
         result = run_paired_evaluation(
             evaluation_spec_path=spec_path,
             baseline_arm=baseline_arm,
             candidate_arm=candidate_arm,
-            output_root=ctx.workflow_folder / "paired_evaluation_execution",
+            output_root=output_root,
             snapshot_arm=snapshot_execution_arm,
             assert_arm_unchanged=assert_execution_arm_unchanged,
         )
+        result = finalize_paired_evaluation_record({
+            **result,
+            "invocation_id": ctx.run_id,
+            "evaluation_attempt_id": attempt_id,
+        })
+        _write_json_atomic(cache_path, result)
+        _write_json_atomic(attempt_path, {**_read_json(attempt_path), "state": "complete", "paired_evaluation_id": result["paired_evaluation_id"]})
         verify_frozen_execution_tree(snapshot)
         return result
     finally:
@@ -1071,6 +1156,34 @@ def _reload_optimization_selection(ctx, repo_root: Path, selected_workflow_name:
         expected_selected_workflow=selected_workflow_name,
         allowed_kinds=("producer_prompt", "verifier_rubric", "tokens", "workflow"),
     )
+
+
+def _paired_evaluation_attempt_id(
+    *,
+    invocation_id: str,
+    spec_id: str,
+    baseline_surface_id: str,
+    candidate_surface_id: str,
+    baseline_execution_tree_id: str,
+    candidate_execution_tree_id: str,
+) -> str:
+    payload = {
+        "invocation_id": invocation_id,
+        "spec_id": spec_id,
+        "baseline_surface_id": baseline_surface_id,
+        "candidate_surface_id": candidate_surface_id,
+        "baseline_execution_tree_id": baseline_execution_tree_id,
+        "candidate_execution_tree_id": candidate_execution_tree_id,
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return f"sha256:{sha256(encoded).hexdigest()}"
+
+
+def _write_json_atomic(path: Path, payload: Mapping[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
+    temporary.write_text(json.dumps(payload, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    temporary.replace(path)
 
 
 def _write_refinement_evidence_inputs(

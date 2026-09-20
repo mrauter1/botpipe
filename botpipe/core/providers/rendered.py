@@ -24,7 +24,7 @@ from .models import (
     ProviderTurnContext,
     VerifierRequest,
 )
-from .budget import ProviderDispatchReservation, current_provider_dispatch_budget
+from .budget import ProviderDispatchReservation, current_provider_dispatch_budget, provider_dispatch_reservation_active
 from .parsing import parse_outcome_json
 from .protocols import ProviderTransport, validate_provider_transport
 from .rendering import render_provider_turn
@@ -74,6 +74,8 @@ class RenderedLLMProvider:
         return await self._dispatch_turn(turn)
 
     async def _dispatch_turn(self, turn: RenderedProviderTurn) -> ProviderTurnResult:
+        if provider_dispatch_reservation_active():
+            return await self._transport.run_turn(turn)
         budget = current_provider_dispatch_budget()
         if budget is not None and getattr(self._transport, "supports_cancellation", False) is not True:
             raise WorkflowExecutionError("configured provider dispatch guarantees require a cancellable transport")

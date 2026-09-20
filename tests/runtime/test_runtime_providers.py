@@ -5,6 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 import subprocess
+import sys
 
 import pytest
 
@@ -34,6 +35,7 @@ from botpipe.runtime.config import (
 from botpipe.runtime.providers._common import (
     build_session_binding,
     communicate_text_subprocess,
+    create_provider_subprocess_exec,
     ensure_session_provider_match,
     format_subprocess_streams,
     require_prompt_text,
@@ -252,8 +254,12 @@ class _AsyncBytesReaderStub:
     def __init__(self, payload: bytes) -> None:
         self._payload = payload
 
-    async def read(self) -> bytes:
-        return self._payload
+    async def read(self, n: int = -1) -> bytes:
+        if n is None or n < 0:
+            payload, self._payload = self._payload, b""
+            return payload
+        payload, self._payload = self._payload[:n], self._payload[n:]
+        return payload
 
 
 class _StreamingAsyncProcessStub:
@@ -809,7 +815,7 @@ def test_codex_transport_sends_rendered_prompt_text_to_cli_stdin(
             seen_inputs=seen_inputs,
         )
 
-    monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr(codex_runtime_provider, "create_provider_subprocess_exec", fake_create_subprocess_exec)
     transport = CodexTransport(
         commands=CodexCLICommand(
             start_command=("codex", "exec", "--json"),
@@ -862,7 +868,7 @@ def test_codex_transport_supports_async_subprocess_execution(
             seen_inputs=seen_inputs,
         )
 
-    monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr(codex_runtime_provider, "create_provider_subprocess_exec", fake_create_subprocess_exec)
     transport = CodexTransport(
         commands=CodexCLICommand(
             start_command=("codex", "exec", "--json"),
@@ -933,7 +939,7 @@ def test_codex_transport_prefers_native_no_prompt_resume_for_interrupted_attempt
             seen_inputs=seen_inputs,
         )
 
-    monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr(codex_runtime_provider, "create_provider_subprocess_exec", fake_create_subprocess_exec)
     transport = CodexTransport(
         commands=CodexCLICommand(
             start_command=("codex", "exec", "--json"),
@@ -977,7 +983,7 @@ def test_codex_transport_streams_session_known_events(
             seen_inputs=seen_inputs,
         )
 
-    monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr(codex_runtime_provider, "create_provider_subprocess_exec", fake_create_subprocess_exec)
     transport = CodexTransport(
         commands=CodexCLICommand(
             start_command=("codex", "exec", "--json"),
@@ -1028,7 +1034,7 @@ def test_codex_transport_accepts_large_jsonl_line_without_stream_limit_failure(
             ],
         )
 
-    monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr(codex_runtime_provider, "create_provider_subprocess_exec", fake_create_subprocess_exec)
     transport = CodexTransport(
         commands=CodexCLICommand(
             start_command=("codex", "exec", "--json"),
@@ -1079,7 +1085,7 @@ def test_codex_transport_does_not_wrap_runtime_event_sink_failures_as_transport_
         if event_type == "provider_session_known":
             raise RuntimeError("event sink failed")
 
-    monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr(codex_runtime_provider, "create_provider_subprocess_exec", fake_create_subprocess_exec)
     transport = CodexTransport(
         commands=CodexCLICommand(
             start_command=("codex", "exec", "--json"),
@@ -1102,8 +1108,7 @@ def test_codex_transport_does_not_wrap_runtime_event_sink_failures_as_transport_
         )
 
     assert process is not None
-    assert process.terminate_calls == 1
-    assert process.kill_calls == 0
+    assert process.returncode == 0
     assert process.wait_calls == 1
     assert seen_inputs == [b"prompt"]
 
@@ -1163,7 +1168,7 @@ def test_codex_transport_native_resume_missing_rollout_falls_back_to_fresh_start
         calls.append(tuple(command))
         return responses.pop(0)
 
-    monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr(codex_runtime_provider, "create_provider_subprocess_exec", fake_create_subprocess_exec)
     transport = CodexTransport(
         commands=CodexCLICommand(
             start_command=("codex", "exec", "--json"),
@@ -1256,7 +1261,7 @@ def test_codex_transport_run_turn_does_not_fall_back_to_subprocess_run(
     def fail_subprocess_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
         raise AssertionError("provider turn execution must not use subprocess.run")
 
-    monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr(codex_runtime_provider, "create_provider_subprocess_exec", fake_create_subprocess_exec)
     monkeypatch.setattr(codex_runtime_provider.subprocess, "run", fail_subprocess_run)
     transport = CodexTransport(
         commands=CodexCLICommand(
@@ -1327,7 +1332,7 @@ def test_codex_transport_does_not_parse_workflow_outcome_json(monkeypatch: pytes
             stdout='{"type":"item.completed","item":{"type":"agent_message","text":"{\\"tag\\":\\"done\\"}"}}',
         )
 
-    monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr(codex_runtime_provider, "create_provider_subprocess_exec", fake_create_subprocess_exec)
 
     result = asyncio.run(
         transport.run_turn(_rendered_turn(step_name="verify", turn_kind="verifier", expected_response="outcome_json"))
@@ -1358,7 +1363,7 @@ def test_rendered_llm_provider_returns_producer_response_with_codex_transport(
             ),
         )
 
-    monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr(codex_runtime_provider, "create_provider_subprocess_exec", fake_create_subprocess_exec)
     provider = RenderedLLMProvider(transport)
 
     response = asyncio.run(provider.run_producer(_producer_request(session=_placeholder_session())))
@@ -1394,7 +1399,7 @@ def test_rendered_llm_provider_parses_codex_verifier_outcome_in_core(
             seen_inputs=seen_inputs,
         )
 
-    monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr(codex_runtime_provider, "create_provider_subprocess_exec", fake_create_subprocess_exec)
     provider = RenderedLLMProvider(
         CodexTransport(
             commands=CodexCLICommand(
@@ -1434,7 +1439,7 @@ def test_codex_transport_rejects_unusable_jsonl(monkeypatch: pytest.MonkeyPatch)
     async def fake_create_subprocess_exec(*command: str, **_: object) -> _AsyncProcessStub:
         return _AsyncProcessStub(stdout="not-json\n")
 
-    monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr(codex_runtime_provider, "create_provider_subprocess_exec", fake_create_subprocess_exec)
 
     with pytest.raises(ProviderExecutionError, match="unusable JSONL output") as exc_info:
         asyncio.run(transport.run_turn(_rendered_turn(session=_placeholder_session())))
@@ -1460,7 +1465,7 @@ def test_codex_transport_rejects_missing_resumable_session_id(monkeypatch: pytes
             stdout='{"type":"item.completed","item":{"type":"agent_message","text":"producer text"}}'
         )
 
-    monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr(codex_runtime_provider, "create_provider_subprocess_exec", fake_create_subprocess_exec)
 
     with pytest.raises(ProviderExecutionError, match="did not return a resumable session_id") as exc_info:
         asyncio.run(transport.run_turn(_rendered_turn(step_name="produce", session=_placeholder_session())))
@@ -1484,7 +1489,7 @@ def test_codex_transport_raises_on_non_zero_exit(monkeypatch: pytest.MonkeyPatch
     async def fake_create_subprocess_exec(*command: str, **_: object) -> _AsyncProcessStub:
         return _AsyncProcessStub(stdout="oops", stderr="bad", returncode=7)
 
-    monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr(codex_runtime_provider, "create_provider_subprocess_exec", fake_create_subprocess_exec)
 
     with pytest.raises(ProviderExecutionError, match=r"exit code 7") as exc_info:
         asyncio.run(transport.run_turn(_rendered_turn(session=_placeholder_session())))
@@ -1517,7 +1522,7 @@ def test_codex_transport_wraps_stdout_read_failures_as_retryable_transport_error
         )
         return process
 
-    monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr(codex_runtime_provider, "create_provider_subprocess_exec", fake_create_subprocess_exec)
 
     with pytest.raises(ProviderExecutionError, match="failed while communicating with the CLI") as exc_info:
         asyncio.run(
@@ -1530,10 +1535,52 @@ def test_codex_transport_wraps_stdout_read_failures_as_retryable_transport_error
     assert failure_context.details["provider_failure_stage"] == "transport"
     assert exception_retry_kind(exc_info.value) == "provider_transport_failure"
     assert process is not None
-    assert process.terminate_calls == 1
-    assert process.kill_calls == 0
+    assert process.returncode == 0
     assert process.wait_calls == 1
     assert seen_inputs == [b"prompt"]
+
+
+def test_owned_async_provider_process_terminates_descendant_tree(tmp_path: Path) -> None:
+    marker = tmp_path / "descendant-terminated"
+    child_code = """
+import pathlib, signal, sys, time
+marker = pathlib.Path(sys.argv[1])
+def stop(*_):
+    marker.write_text('terminated', encoding='utf-8')
+    raise SystemExit(0)
+signal.signal(signal.SIGTERM, stop)
+marker.with_suffix('.ready').write_text('ready', encoding='utf-8')
+time.sleep(60)
+"""
+    parent_code = """
+import pathlib, subprocess, sys, time
+marker = pathlib.Path(sys.argv[1])
+child = subprocess.Popen([sys.executable, '-c', sys.argv[2], str(marker)])
+deadline = time.monotonic() + 5
+while not marker.with_suffix('.ready').exists():
+    if time.monotonic() >= deadline:
+        raise RuntimeError('child did not become ready')
+    time.sleep(.01)
+print(child.pid, flush=True)
+time.sleep(60)
+"""
+
+    async def run() -> None:
+        process = await create_provider_subprocess_exec(
+            sys.executable,
+            "-c",
+            parent_code,
+            str(marker),
+            child_code,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        assert process.stdout is not None
+        await asyncio.wait_for(process.stdout.readline(), timeout=5)
+        await terminate_text_subprocess(process, termination_grace_seconds=1)
+
+    asyncio.run(run())
+    assert marker.read_text(encoding="utf-8") == "terminated"
 
 
 def test_codex_transport_reports_subprocess_failure_when_stdin_pipe_closes(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1551,7 +1598,7 @@ def test_codex_transport_reports_subprocess_failure_when_stdin_pipe_closes(monke
         process.stdin = _BrokenPipeAsyncBytesWriterStub()
         return process
 
-    monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr(codex_runtime_provider, "create_provider_subprocess_exec", fake_create_subprocess_exec)
 
     with pytest.raises(ProviderExecutionError, match=r"exit code 7"):
         asyncio.run(transport.run_turn(_rendered_turn(session=_placeholder_session())))
@@ -1587,7 +1634,7 @@ def test_codex_transport_recovers_from_missing_rollout_resume(
         calls.append(tuple(command))
         return responses.pop(0)
 
-    monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr(codex_runtime_provider, "create_provider_subprocess_exec", fake_create_subprocess_exec)
     transport = CodexTransport(
         commands=CodexCLICommand(
             start_command=("codex", "exec", "--json"),
@@ -1650,7 +1697,7 @@ def test_codex_transport_emits_run_scoped_policy_artifacts_and_metadata(
             ),
         )
 
-    monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr(codex_runtime_provider, "create_provider_subprocess_exec", fake_create_subprocess_exec)
     transport = CodexTransport(
         commands=CodexCLICommand(
             start_command=("codex", "exec", "--json"),
@@ -1730,7 +1777,7 @@ def test_codex_transport_capability_report_keeps_narrowed_read_roots_unenforced(
             ),
         )
 
-    monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr(codex_runtime_provider, "create_provider_subprocess_exec", fake_create_subprocess_exec)
     transport = CodexTransport(
         commands=CodexCLICommand(
             start_command=("codex", "exec", "--json"),
@@ -1869,7 +1916,7 @@ def test_claude_transport_emits_run_scoped_policy_artifacts_and_metadata(
             stdout='{"result":"producer text","session_id":"claude-session-policy","stop_reason":"end_turn"}',
         )
 
-    monkeypatch.setattr(claude_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr(claude_runtime_provider, "create_provider_subprocess_exec", fake_create_subprocess_exec)
     transport = ClaudeTransport(config=_config(provider_name="claude").provider.claude)
     policy = ProviderPolicy(
         permissions=PermissionPolicy(mode="full_auto_sandboxed"),
@@ -1941,7 +1988,7 @@ def test_claude_transport_marks_capability_loss_when_native_filesystem_support_i
             stdout='{"result":"producer text","session_id":"claude-session-policy","stop_reason":"end_turn"}',
         )
 
-    monkeypatch.setattr(claude_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr(claude_runtime_provider, "create_provider_subprocess_exec", fake_create_subprocess_exec)
     transport = ClaudeTransport(
         config=_config(provider_name="claude").provider.claude,
         validation=ProviderPolicyValidationConfig(lossy_mapping="warn"),
@@ -1993,7 +2040,7 @@ def test_claude_transport_preserves_legacy_bypass_for_policy_backed_turns(
             stdout='{"result":"producer text","session_id":"claude-session-bypass","stop_reason":"end_turn"}',
         )
 
-    monkeypatch.setattr(claude_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr(claude_runtime_provider, "create_provider_subprocess_exec", fake_create_subprocess_exec)
     transport = ClaudeTransport(config=_config(provider_name="claude", claude_permission_strategy="bypass").provider.claude)
     policy = ProviderPolicy(
         permissions=PermissionPolicy(
@@ -2054,7 +2101,7 @@ def test_claude_transport_does_not_reapply_legacy_bypass_when_explicit_policy_is
             stdout='{"result":"producer text","session_id":"claude-session-safe","stop_reason":"end_turn"}',
         )
 
-    monkeypatch.setattr(claude_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr(claude_runtime_provider, "create_provider_subprocess_exec", fake_create_subprocess_exec)
     transport = ClaudeTransport(config=_config(provider_name="claude", claude_permission_strategy="bypass").provider.claude)
     policy = ProviderPolicy(
         permissions=PermissionPolicy(mode="ask"),
@@ -2173,7 +2220,7 @@ def test_claude_transport_sends_rendered_prompt_text_to_cli_flag(monkeypatch: py
             stdout='{"result":"producer text","session_id":"claude-session-1","stop_reason":"end_turn"}',
         )
 
-    monkeypatch.setattr(claude_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr(claude_runtime_provider, "create_provider_subprocess_exec", fake_create_subprocess_exec)
     transport = ClaudeTransport(config=_config(provider_name="claude").provider.claude)
 
     result = asyncio.run(
@@ -2197,7 +2244,7 @@ def test_claude_transport_supports_async_subprocess_execution(monkeypatch: pytes
             stdout='{"result":"producer text","session_id":"claude-session-async","stop_reason":"end_turn"}'
         )
 
-    monkeypatch.setattr(claude_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr(claude_runtime_provider, "create_provider_subprocess_exec", fake_create_subprocess_exec)
     transport = ClaudeTransport(config=_config(provider_name="claude").provider.claude)
 
     result = asyncio.run(
@@ -2219,7 +2266,7 @@ def test_claude_transport_run_turn_does_not_fall_back_to_subprocess_run(monkeypa
     def fail_subprocess_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
         raise AssertionError("provider turn execution must not use subprocess.run")
 
-    monkeypatch.setattr(claude_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr(claude_runtime_provider, "create_provider_subprocess_exec", fake_create_subprocess_exec)
     monkeypatch.setattr(claude_runtime_provider.subprocess, "run", fail_subprocess_run)
     transport = ClaudeTransport(config=_config(provider_name="claude").provider.claude)
 
@@ -2234,7 +2281,7 @@ def test_claude_transport_does_not_parse_workflow_outcome_json(monkeypatch: pyte
     async def fake_create_subprocess_exec(*command: str, **_: object) -> _AsyncProcessStub:
         return _AsyncProcessStub(stdout='{"result":"{\\"tag\\":\\"done\\"}"}')
 
-    monkeypatch.setattr(claude_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr(claude_runtime_provider, "create_provider_subprocess_exec", fake_create_subprocess_exec)
     transport = ClaudeTransport(config=_config(provider_name="claude").provider.claude)
 
     result = asyncio.run(
@@ -2256,7 +2303,7 @@ def test_rendered_llm_provider_parses_claude_llm_outcome_in_core(
             stdout='{"result":"{\\"tag\\":\\"done\\",\\"reason\\":\\"completed\\"}","usage":{"prompt_tokens":8,"completion_tokens":3,"total_tokens":11},"stop_reason":"done"}',
         )
 
-    monkeypatch.setattr(claude_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr(claude_runtime_provider, "create_provider_subprocess_exec", fake_create_subprocess_exec)
     provider = RenderedLLMProvider(
         ClaudeTransport(config=_config(provider_name="claude", claude_permission_strategy="allow_core_tools").provider.claude)
     )
@@ -2296,7 +2343,7 @@ def test_claude_transport_rejects_malformed_json(monkeypatch: pytest.MonkeyPatch
     async def fake_create_subprocess_exec(*command: str, **_: object) -> _AsyncProcessStub:
         return _AsyncProcessStub(stdout="{bad-json}")
 
-    monkeypatch.setattr(claude_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr(claude_runtime_provider, "create_provider_subprocess_exec", fake_create_subprocess_exec)
     transport = ClaudeTransport(config=_config(provider_name="claude").provider.claude)
 
     with pytest.raises(ProviderExecutionError, match="malformed JSON output") as exc_info:
@@ -2312,7 +2359,7 @@ def test_claude_transport_rejects_missing_resumable_session_id(monkeypatch: pyte
     async def fake_create_subprocess_exec(*command: str, **_: object) -> _AsyncProcessStub:
         return _AsyncProcessStub(stdout='{"result":"producer text","stop_reason":"end_turn"}')
 
-    monkeypatch.setattr(claude_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr(claude_runtime_provider, "create_provider_subprocess_exec", fake_create_subprocess_exec)
     transport = ClaudeTransport(config=_config(provider_name="claude").provider.claude)
 
     with pytest.raises(ProviderExecutionError, match="did not return a resumable session_id") as exc_info:
@@ -2329,7 +2376,7 @@ def test_claude_transport_raises_on_non_zero_exit(monkeypatch: pytest.MonkeyPatc
     async def fake_create_subprocess_exec(*command: str, **_: object) -> _AsyncProcessStub:
         return _AsyncProcessStub(stdout="oops", stderr="bad", returncode=3)
 
-    monkeypatch.setattr(claude_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr(claude_runtime_provider, "create_provider_subprocess_exec", fake_create_subprocess_exec)
     transport = ClaudeTransport(config=_config(provider_name="claude").provider.claude)
 
     with pytest.raises(ProviderExecutionError, match=r"exit code 3") as exc_info:

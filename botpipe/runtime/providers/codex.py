@@ -23,9 +23,10 @@ from ...core.providers.rendered import RenderedLLMProvider
 from ...core.providers.turns import ProviderTurnResult, RenderedProviderTurn
 from ..config import ConfigError, ResolvedRuntimeConfig
 from ._common import (
+    _cleanup_provider_subprocess_descendants,
+    _wait_for_process_leader,
     build_policy_step_key,
     build_session_binding,
-    close_provider_subprocess_containment,
     communicate_text_subprocess,
     create_provider_subprocess_exec,
     emit_turn_policy,
@@ -745,6 +746,8 @@ async def _communicate_codex_process(
                     handle_stdout_line(bytes(pending_line))
                 return
             pending_line.extend(chunk)
+            if len(pending_line) > _CODEX_MAX_STREAM_BYTES:
+                del pending_line[: len(pending_line) - _CODEX_MAX_STREAM_BYTES]
             while True:
                 newline_index = pending_line.find(b"\n")
                 if newline_index < 0:
@@ -757,11 +760,18 @@ async def _communicate_codex_process(
         if process.stderr is None:
             return
         try:
-            raw = await process.stderr.read()
+            while True:
+                raw = await process.stderr.read(_CODEX_STDOUT_CHUNK_SIZE)
+                if not raw:
+                    break
+                stderr_parts.append(raw)
+                total = sum(len(part) for part in stderr_parts)
+                while total > _CODEX_MAX_STREAM_BYTES and len(stderr_parts) > 1:
+                    total -= len(stderr_parts.pop(0))
+                if total > _CODEX_MAX_STREAM_BYTES:
+                    stderr_parts[0] = stderr_parts[0][-_CODEX_MAX_STREAM_BYTES:]
         except Exception as exc:
             raise _CodexCommunicationError(f"reading stderr failed: {type(exc).__name__}: {exc}") from exc
-        if raw:
-            stderr_parts.append(raw[-_CODEX_MAX_STREAM_BYTES:])
 
     tasks = [
         asyncio.create_task(write_stdin()),
@@ -770,12 +780,9 @@ async def _communicate_codex_process(
     ]
 
     try:
+        await _wait_for_process_leader(process, tasks)
+        await _cleanup_provider_subprocess_descendants(process)
         await asyncio.gather(*tasks)
-        try:
-            await process.wait()
-            close_provider_subprocess_containment(process)
-        except Exception as exc:
-            raise _CodexCommunicationError(f"waiting for process failed: {type(exc).__name__}: {exc}") from exc
     except asyncio.CancelledError:
         for task in tasks:
             task.cancel()
