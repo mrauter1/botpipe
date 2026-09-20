@@ -397,6 +397,7 @@ def validate_baseline_surface_manifest(
     manifest_label: str,
     expected_surface_kind: str,
     expected_boundary: Mapping[str, Any],
+    expected_surface_root: Path,
     boundary_field_map: Mapping[str, str] | None = None,
     optional_boundary_fields: Sequence[str] = (),
     expected_relative_paths: Sequence[str] | None = None,
@@ -447,6 +448,14 @@ def validate_baseline_surface_manifest(
             f"{manifest_label} must define non-empty surface_root",
         )
     )
+    if surface_root.resolve(strict=True) != Path(expected_surface_root).resolve(
+        strict=True
+    ):
+        raise ValueError(
+            f"{manifest_label} surface_root must match the runtime expected root"
+        )
+    if baseline_manifest.get("file_count") != len(relative_paths):
+        raise ValueError(f"{manifest_label} file_count must match relative_paths")
     for relative_path, entry in file_entries.items():
         source_path = Path(
             _require_text(
@@ -474,6 +483,10 @@ def validate_baseline_surface_manifest(
         )
         if _sha256_file(surface_path) != expected_digest:
             raise ValueError(f"{manifest_label} surface_sha256 must match the copied baseline surface")
+        if entry.get("size_bytes") != surface_path.stat().st_size:
+            raise ValueError(
+                f"{manifest_label} size_bytes must match the copied baseline surface"
+            )
 
     return {
         "surface_root": surface_root,

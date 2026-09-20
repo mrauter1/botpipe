@@ -195,6 +195,7 @@ def test_candidate_surface_helpers_validate_baseline_manifest_checks_boundary_an
         manifest_label="baseline_workflow_manifest.json",
         expected_surface_kind="baseline",
         expected_boundary=expected_boundary,
+        expected_surface_root=Path(baseline_manifest["surface_root"]),
         boundary_field_map={
             "package_name": "package_name",
             "package_root_relative_path": "package_root_relative_path",
@@ -220,6 +221,7 @@ def test_candidate_surface_helpers_validate_baseline_manifest_checks_boundary_an
             manifest_label="baseline_workflow_manifest.json",
             expected_surface_kind="baseline",
             expected_boundary=mismatched_boundary,
+            expected_surface_root=Path(baseline_manifest["surface_root"]),
             boundary_field_map={
                 "package_name": "package_name",
                 "package_root_relative_path": "package_root_relative_path",
@@ -245,6 +247,7 @@ def test_candidate_surface_helpers_validate_baseline_manifest_checks_boundary_an
             manifest_label="baseline_workflow_manifest.json",
             expected_surface_kind="baseline",
             expected_boundary=expected_boundary,
+            expected_surface_root=Path(baseline_manifest["surface_root"]),
             boundary_field_map={
                 "package_name": "package_name",
                 "package_root_relative_path": "package_root_relative_path",
@@ -547,6 +550,7 @@ def test_candidate_surface_helpers_allow_canonical_relative_paths_with_repo_loca
             "package_name": "release_candidate_to_go_no_go",
             "package_root_relative_path": "botpipe/workflows/release_candidate_to_go_no_go",
         },
+        expected_surface_root=Path(baseline_manifest["surface_root"]),
         boundary_field_map={
             "package_name": "package_name",
             "package_root_relative_path": "package_root_relative_path",
