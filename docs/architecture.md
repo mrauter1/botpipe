@@ -19,6 +19,12 @@ provider sessions, human-input events, usage, and immutable artifact references.
 Files become durable before the ledger refers to them. A workspace lock protects
 one active run from another process.
 
+Atomic publication flushes file contents before replacement. On POSIX it also
+flushes directory entries and propagates flush failures. Windows retains the
+file flush and atomic replacement, but Python cannot fsync directory handles
+there; the same directory-entry persistence after sudden power loss is not
+guaranteed.
+
 On replay, a completed operation returns its recorded result. A changed kind,
 scope, input, prompt, schema, or source raises a mismatch instead of silently
 doing different work. Workflow versions label intentional releases; they do not

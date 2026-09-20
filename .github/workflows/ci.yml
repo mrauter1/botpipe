@@ -45,6 +45,9 @@ jobs:
       - name: Check native containment and portable optimizer contracts
         run: >-
           python -m pytest -q
+          tests/test_artifacts.py
+          tests/test_artifact_integration.py
+          tests/test_storage.py
           tests/test_budgets.py
           tests/test_dispatches.py
           tests/test_processes.py

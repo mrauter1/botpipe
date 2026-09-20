@@ -16,6 +16,7 @@ from typing import Any, Protocol, runtime_checkable
 
 from .policy import NetworkMode, PermissionMode, Policy, SandboxMode
 from .processes import ProcessContainment
+from .storage import sync_directory
 
 
 class ProviderError(RuntimeError):
@@ -136,14 +137,7 @@ def _atomic_bytes(path: Path, value: bytes) -> None:
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(temporary, path)
-        try:
-            directory_fd = os.open(path.parent, os.O_RDONLY)
-            try:
-                os.fsync(directory_fd)
-            finally:
-                os.close(directory_fd)
-        except OSError:
-            pass
+        sync_directory(path.parent)
     finally:
         try:
             os.unlink(temporary)

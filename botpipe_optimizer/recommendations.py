@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from botpipe.storage import sync_directory
+
 from .evidence import EvidenceSnapshot, baseline_surface_id
 from .records import (
     Candidate,
@@ -581,6 +583,7 @@ def _atomic_bytes(path: Path, content: bytes) -> None:
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(temporary, path)
+        sync_directory(path.parent)
     finally:
         Path(temporary).unlink(missing_ok=True)
 

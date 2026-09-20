@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from botpipe import activity
+from botpipe.storage import sync_directory
 
 
 def _resolve_file(workspace: str | Path, value: str, label: str) -> Path:
@@ -268,6 +269,7 @@ def _atomic_json(path: Path, value: Mapping[str, Any]) -> None:
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(temporary, path)
+        sync_directory(path.parent)
     except BaseException:
         Path(temporary).unlink(missing_ok=True)
         raise

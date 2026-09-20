@@ -14,6 +14,8 @@ from typing import Any
 
 from pydantic import BaseModel, TypeAdapter
 
+from .storage import sync_directory as _sync_dir
+
 
 class ArtifactError(ValueError):
     """An artifact destination, content, or durable snapshot is invalid."""
@@ -27,14 +29,6 @@ def _json(value: Any) -> bytes:
         separators=(",", ":"),
         allow_nan=False,
     ).encode()
-
-
-def _sync_dir(path: Path) -> None:
-    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
-    try:
-        os.fsync(fd)
-    finally:
-        os.close(fd)
 
 
 def _mkdir(path: Path) -> None:
