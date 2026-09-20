@@ -422,6 +422,70 @@ def test_parallel_publications_commit_one_complete_generation(tmp_path):
         assert _artifact_bytes(receipt)
 
 
+@pytest.mark.parametrize("winerror", [5, 32, 33])
+def test_receipt_switch_retries_windows_contention_without_touching_previous(
+    tmp_path, monkeypatch, winerror
+):
+    import botpipe_optimizer.recommendations as recommendations
+
+    previous, _ = _publish(tmp_path, "previous")
+    canonical = tmp_path / "optimization_publication_receipt.json"
+    previous_bytes = canonical.read_bytes()
+    previous_artifacts = _artifact_bytes(previous)
+    replace = recommendations.os.replace
+    attempts, delays = [], []
+
+    def contend(source, destination):
+        attempts.append(destination)
+        if len(attempts) <= 2:
+            assert canonical.read_bytes() == previous_bytes
+            failure = PermissionError("Windows handle contention")
+            failure.winerror = winerror
+            raise failure
+        return replace(source, destination)
+
+    monkeypatch.setattr(recommendations.os, "replace", contend)
+    monkeypatch.setattr(recommendations.time, "sleep", delays.append)
+    current, _ = _publish(tmp_path, "current")
+
+    assert len(attempts) == 3
+    assert delays == [0.01, 0.02]
+    assert read_publication_receipt(canonical, max_output_bytes=100_000) == current
+    assert _artifact_bytes(previous) == previous_artifacts
+
+
+@pytest.mark.parametrize(
+    "winerror,expected_attempts", [(5, 8), (32, 8), (33, 8), (None, 1)]
+)
+def test_failed_receipt_switch_preserves_bundle_and_cleans_staging(
+    tmp_path, monkeypatch, winerror, expected_attempts
+):
+    import botpipe_optimizer.recommendations as recommendations
+
+    previous, _ = _publish(tmp_path, "previous")
+    canonical = tmp_path / "optimization_publication_receipt.json"
+    previous_bytes = canonical.read_bytes()
+    previous_artifacts = _artifact_bytes(previous)
+    attempts = []
+
+    def denied(source, destination):
+        attempts.append(destination)
+        failure = PermissionError("replacement denied")
+        if winerror is not None:
+            failure.winerror = winerror
+        raise failure
+
+    monkeypatch.setattr(recommendations.os, "replace", denied)
+    monkeypatch.setattr(recommendations.time, "sleep", lambda _: None)
+    with pytest.raises(PermissionError, match="replacement denied"):
+        _publish(tmp_path, "current")
+
+    assert len(attempts) == expected_attempts
+    assert canonical.read_bytes() == previous_bytes
+    assert _artifact_bytes(previous) == previous_artifacts
+    assert not list(tmp_path.glob(".optimization_publication_receipt.json.*"))
+
+
 def test_publication_rejects_symlinked_generation_root_before_writes(tmp_path):
     outside = tmp_path / "outside"
     outside.mkdir()

@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import tempfile
+import time
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -744,7 +745,17 @@ def _atomic_bytes(path: Path, content: bytes) -> None:
             stream.write(content)
             stream.flush()
             os.fsync(stream.fileno())
-        os.replace(temporary, path)
+        for attempt in range(8):
+            try:
+                os.replace(temporary, path)
+                break
+            except PermissionError as exc:
+                # Windows may briefly deny replacement while another atomic
+                # writer or reader closes its handle. Retry only that bounded
+                # contention window; keep the previous receipt and staged file.
+                if getattr(exc, "winerror", None) not in (5, 32, 33) or attempt == 7:
+                    raise
+                time.sleep(0.01 * 2**attempt)
         sync_directory(path.parent)
     finally:
         Path(temporary).unlink(missing_ok=True)
