@@ -79,13 +79,7 @@ class Journal:
                 row = connection.execute(
                     "SELECT * FROM operations WHERE id=?", (operation_id,)
                 ).fetchone()
-                if row is None:
-                    return None
-                record = dict(row)
-                for field in ("inputs", "result", "error", "response"):
-                    if record[field] is not None:
-                        record[field] = json.loads(record[field])
-                return record
+                return self._record(row)
             finally:
                 connection.close()
 

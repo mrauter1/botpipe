@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from botpipe import Session, workflow
+from botpipe import Session, current_run, workflow
 from labs.workflows._shared import (
     LabWorkflowResult,
     ReplanRequired,
@@ -18,6 +18,12 @@ from .contracts import (
     WorkflowDesignPayload,
     WorkflowEvaluationPayload,
 )
+from .materialization import (
+    freeze_generated_workflow_candidate,
+    materialize_generated_workflow_manifest,
+    prepare_generated_workflow_candidate,
+    validate_generated_workflow_candidate,
+)
 from .params import Params
 
 
@@ -30,6 +36,17 @@ def WorkflowIdeaToWorkflowPackage(
     _verifier = Session(key="verifier")
     context = {"request": request, "parameters": params.model_dump(mode="json")}
     context["workflow_catalog"] = observe_catalog()
+    run = current_run()
+    candidate = prepare_generated_workflow_candidate(
+        str(run.workspace),
+        str(run.folder / "generated-workflow-candidate"),
+        params.package_name,
+        params.authoring_shape,
+    )
+    frozen_candidate = freeze_generated_workflow_candidate(
+        candidate,
+        str(run.folder / "generated-workflow-execution" / "frozen"),
+    )
     completed = []
     prior_handles = ()
     frame_candidate_checkpoint = len(completed)
@@ -110,6 +127,33 @@ def WorkflowIdeaToWorkflowPackage(
                     )
                     completed.append(phase_3)
                     prior_handles = prior_handles + phase_3.handles
+                    manifest_handle = next(
+                        handle
+                        for handle in phase_3.handles
+                        if str(handle.name) == "workflow_package_manifest"
+                    )
+                    generated_candidate = materialize_generated_workflow_manifest(
+                        candidate,
+                        manifest_handle,
+                        params.package_name,
+                        params.authoring_shape,
+                    )
+                    generated_validation = validate_generated_workflow_candidate(
+                        candidate,
+                        frozen_candidate,
+                        generated_candidate["workflow_reference"],
+                        str(run.folder / "generated-workflow-execution" / "validation"),
+                        (
+                            params.target_test_command
+                            if "target_test_command" in params.model_fields_set
+                            else None
+                        ),
+                    )
+                    context["generated_candidate"] = generated_candidate
+                    context["candidate_manifest"] = generated_validation[
+                        "candidate_manifest"
+                    ]
+                    context["candidate_evaluation"] = generated_validation["validation"]
                     phase_4 = run_phase(
                         phase="evaluate_package",
                         returns=WorkflowEvaluationPayload,

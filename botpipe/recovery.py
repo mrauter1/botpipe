@@ -59,7 +59,6 @@ def recover_outcome(provider: Any, request: ProviderRequest) -> RecoveryOutcome:
         ProviderError,
         ProviderInterruptedError,
         ProviderResponse,
-        _response_record,
     )
 
     recover = getattr(provider, "recover", None)
@@ -87,8 +86,8 @@ def recover_outcome(provider: Any, request: ProviderRequest) -> RecoveryOutcome:
                 "provider returned Completed with an invalid response object"
             )
         try:
-            _response_record(value.response)
-        except (TypeError, ValueError) as exc:
+            value.response.to_record()
+        except (TypeError, ValueError, RecursionError) as exc:
             return Unknown(f"provider returned an invalid completed response: {exc}")
         return value
     if isinstance(value, (Stopped, Running, Unknown)):

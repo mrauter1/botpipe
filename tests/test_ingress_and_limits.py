@@ -17,6 +17,21 @@ from botpipe.limits import RunLimits
 from botpipe.providers import FakeProvider
 
 
+def _subprocess_env():
+    return {
+        **os.environ,
+        "PYTHONPATH": os.pathsep.join(
+            filter(
+                None,
+                (
+                    str(Path(__file__).resolve().parents[1]),
+                    os.environ.get("PYTHONPATH"),
+                ),
+            )
+        ),
+    }
+
+
 def test_model_input_is_bound_once_and_internal_calls_do_not_revalidate(tmp_path):
     calls = []
 
@@ -106,7 +121,7 @@ def test_cli_does_not_bind_model_input_twice(tmp_path):
         "def echo(value: Input):\n"
         "    return value.number\n"
     )
-    env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1])}
+    env = _subprocess_env()
     run = subprocess.run(
         [
             sys.executable,
@@ -171,7 +186,7 @@ def test_fresh_process_resume_registers_input_types_and_preserves_state(
         )
     source = tmp_path / "flow.py"
     source.write_text(prefix + body)
-    env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1])}
+    env = _subprocess_env()
 
     def cli(*arguments):
         result = subprocess.run(
@@ -343,7 +358,7 @@ def test_invalid_cli_input_is_a_usage_error(tmp_path):
     source.write_text(
         "from botpipe import workflow\n@workflow\ndef echo(value: int): return value\n"
     )
-    env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1])}
+    env = _subprocess_env()
     result = subprocess.run(
         [
             sys.executable,

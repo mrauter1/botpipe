@@ -576,9 +576,9 @@ def _load_dispatch(raw: Any) -> ProviderDispatchObservation:
         usage_availability=str(item.get("usage_availability") or "unknown").lower(),
         usage=_number_mapping(item.get("usage") or item),
         elapsed_seconds=None if elapsed is None else float(elapsed),
-        provider=_optional_text(item.get("provider")),
-        model=_optional_text(item.get("model")),
-        effort=_optional_text(item.get("effort")),
+        provider=_profile_text(item, "provider"),
+        model=_profile_text(item, "model"),
+        effort=_profile_text(item, "effort"),
         effort_present="effort" in item,
         policy_fingerprint=_optional_text(item.get("policy_fingerprint")),
     )
@@ -595,6 +595,17 @@ def _optional_integer(value: Any) -> int | None:
 
 def _optional_text(value: Any) -> str | None:
     return value if isinstance(value, str) and value else None
+
+
+def _profile_text(item: Mapping[str, Any], field: str) -> str | None:
+    value = item.get(field)
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(
+            f"provider dispatch {field} must be a non-empty string or null"
+        )
+    return value
 
 
 def _source_call_identity(call: ast.Call) -> tuple[str | None, str]:
@@ -667,18 +678,24 @@ def _timestamp(value: Any) -> datetime | None:
         return None
 
 
+def _is_token_count(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
 def _token_total(usage: Mapping[str, float]) -> int:
     if "total_tokens" in usage:
-        return max(0, int(usage["total_tokens"]))
-    return max(
-        0, int(sum(value for key, value in usage.items() if key.endswith("tokens")))
+        value = usage["total_tokens"]
+        return value if _is_token_count(value) else 0
+    values = [value for key, value in usage.items() if key.endswith("tokens")]
+    return (
+        sum(values) if values and all(_is_token_count(value) for value in values) else 0
     )
 
 
 def _number_mapping(value: Any) -> dict[str, float]:
     return (
         {
-            str(key): float(number)
+            str(key): number
             for key, number in value.items()
             if isinstance(number, (int, float)) and not isinstance(number, bool)
         }

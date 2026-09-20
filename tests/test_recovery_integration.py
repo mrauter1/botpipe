@@ -284,7 +284,7 @@ def test_invalid_completed_response_stays_uncommitted(tmp_path, resolution):
         if resolution == "authorized_retry":
             client.resolve(paused.run_id, operation["id"], retry=True)
         if resolution == "manual":
-            with pytest.raises(TypeError, match="usage and metadata"):
+            with pytest.raises(TypeError, match="usage must be a plain JSON object"):
                 client.resolve(
                     paused.run_id,
                     operation["id"],

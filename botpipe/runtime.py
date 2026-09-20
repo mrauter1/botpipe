@@ -550,7 +550,7 @@ class RunContext:
                     operation_id,
                 )
             if authorized and recover is None:
-                self.journal.response(
+                self.save_response(
                     operation_id,
                     {"generation": record["response"].get("generation", 1)},
                 )
@@ -974,8 +974,10 @@ class Botpipe:
                     else answer
                 )
                 jsonschema.validate(json_value, pending["schema"])
-                self.journal.response(
-                    pending["operation_id"], {"answer": codec.encode(answer)}
+                _persist_response(
+                    self.journal,
+                    pending["operation_id"],
+                    {"answer": codec.encode(answer)},
                 )
             return self._execute(
                 definition,
@@ -1145,11 +1147,7 @@ class Botpipe:
             old = dict(record.get("response") or {})
             source = "operator"
             if record["kind"] == "provider":
-                from .providers import (
-                    ProviderRequest,
-                    ProviderResponse,
-                    _response_record,
-                )
+                from .providers import ProviderRequest, ProviderResponse
 
                 inputs = codec.decode(record["inputs"])
                 request_data = old.get("request") or {}
@@ -1234,7 +1232,7 @@ class Botpipe:
                     _persist_response(
                         self.journal,
                         operation_id,
-                        {**old, **_response_record(response)},
+                        {**old, **response.to_record()},
                         session_key=inputs.get("session"),
                     )
             elif response is not _UNSET:
@@ -1242,7 +1240,8 @@ class Botpipe:
             if retry:
                 # Explicit retry is represented by an authorization marker; the
                 # original intent/identity remains, and adapters keep old receipts.
-                self.journal.response(
+                _persist_response(
+                    self.journal,
                     operation_id,
                     {
                         "retry_authorized": True,

@@ -293,6 +293,54 @@ def test_effort_known_unset_and_absent_do_not_share_a_profile():
     assert {item.profile_comparable for item in profiles} == {True, False}
 
 
+@pytest.mark.parametrize("field", ["provider", "model", "effort"])
+@pytest.mark.parametrize("value", [123, "", "   "])
+def test_malformed_dispatch_profile_fields_are_rejected(field, value):
+    dispatch = _dispatch("malformed", tokens=5)
+    dispatch[field] = value
+    operation = _operation(
+        "malformed-profile",
+        name="malformed profile",
+        dispatches=(dispatch,),
+    )
+
+    with pytest.raises(ValueError, match=rf"provider dispatch {field}"):
+        _snapshot(_run(operation))
+
+
+@pytest.mark.parametrize(
+    "usage",
+    [
+        {"total_tokens": 1.9},
+        {"total_tokens": 1.0},
+        {"input_tokens": 1.5, "output_tokens": 2},
+        {"input_tokens": 1, "output_tokens": 2.5},
+    ],
+)
+def test_fractional_token_counts_are_partial_measure_first(usage):
+    dispatch = _dispatch("fractional", tokens=1)
+    dispatch["usage"] = usage
+    operation = _operation(
+        "fractional-usage",
+        name="fractional usage",
+        dispatches=(dispatch,),
+    )
+
+    snapshot = _snapshot(_run(operation))
+    observation = snapshot.observations[0]
+    dispatch_evidence = observation.dispatches[0]
+    metric = snapshot.step_metrics[0]
+
+    assert dispatch_evidence.usage == usage
+    assert dispatch_evidence.usage_availability == "partial"
+    assert dispatch_evidence.known_total_tokens is None
+    assert observation.usage_availability == "partial"
+    assert observation.known_total_tokens is None
+    assert metric.complete_usage is False
+    assert metric.metric_id in snapshot.measure_first
+    assert snapshot.shortlist == ()
+
+
 def test_unknown_profiles_are_distinct_when_dispatch_ids_repeat_across_runs():
     first = _operation(
         "first-operation",

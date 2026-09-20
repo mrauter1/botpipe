@@ -610,6 +610,28 @@ def test_publication_strictly_reparses_model_copy_updates(tmp_path):
     assert not list(tmp_path.iterdir())
 
 
+def test_publication_strictly_reparses_review_model_copy_updates(tmp_path):
+    snapshot, candidate_set, review, baseline = _records()
+    forged_review = review.model_copy(update={"accepted": "yes"})
+    with pytest.warns(UserWarning, match="serializer warnings"):
+        forged_id = forged_review.expected_review_id()
+    forged_review = forged_review.model_copy(update={"review_id": forged_id})
+
+    with (
+        pytest.warns(UserWarning, match="serializer warnings"),
+        pytest.raises(ValueError, match="accepted"),
+    ):
+        publish_recommendation(
+            output_dir=tmp_path,
+            evidence_snapshot=snapshot,
+            candidate_set=candidate_set,
+            review=forged_review,
+            baseline_manifest=baseline,
+            max_output_bytes=100_000,
+        )
+    assert not list(tmp_path.iterdir())
+
+
 def test_loader_rejects_fully_hashed_bundle_with_unknown_citation(
     tmp_path, monkeypatch
 ):

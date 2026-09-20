@@ -492,6 +492,12 @@ class ArtifactStore:
             operation / "capture.pending.json"
         ).exists():
             raise ArtifactError("Cannot restore an operation with a prepared capture")
+        if manifest.get("restore_completed"):
+            # The first restore may have hard-linked backup and destination.
+            # Once completion is durable, later destination edits must not be
+            # mistaken for backup corruption during a replay.
+            _sync_dir(manifest_path.parent)
+            return
         # Fence capture before exposing any old bytes, including after a crash.
         manifest["restored"] = True
         _atomic(manifest_path, _json(manifest))

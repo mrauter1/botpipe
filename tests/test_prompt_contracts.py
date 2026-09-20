@@ -9,6 +9,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+import pytest
+
 from botpipe import ArtifactHandle, Botpipe
 from botpipe.providers import FakeProvider
 from labs.workflows._shared import LabWorkflowResult
@@ -23,6 +25,12 @@ from labs.workflows.security_finding_to_verified_remediation import (
 )
 from labs.workflows.security_finding_to_verified_remediation import (
     SecurityFindingToVerifiedRemediation,
+)
+from labs.workflows.workflow_idea_to_workflow_package import (
+    Params as WorkflowBuilderParams,
+)
+from labs.workflows.workflow_idea_to_workflow_package import (
+    WorkflowIdeaToWorkflowPackage,
 )
 
 ROOT = Path(__file__).parents[1]
@@ -278,7 +286,8 @@ def test_merged_artifact_prompts_retain_the_original_delivery_obligations():
     required_fragments = {
         "workflow_idea_to_workflow_package/prompts/build_producer.md": (
             "complete intended text content",
-            "complete, materializable package representation",
+            "runtime will materialize into a run-owned isolated candidate",
+            "`.botpipe/workflows/<package_name>/` with required `flow.py`",
         ),
         "workflow_and_eval_to_refined_workflow_package/prompts/implement_producer.md": (
             "records every candidate file",
@@ -548,3 +557,128 @@ def test_security_artifacts_carry_assessment_remediation_and_closure_evidence(
         "security_next_action",
     }
     assert set(result.value.artifact_names) == set(result.value.artifacts)
+
+
+def test_workflow_builder_materializes_validates_and_rechecks_real_candidate(tmp_path):
+    from tests.test_labs import _successful_provider
+
+    (tmp_path / "README.md").write_text("# Candidate source repository\n")
+    evaluation_inputs = []
+
+    def answer(request):
+        payload = _input(request)
+        if payload["phase"] == "evaluate_package" and request.artifacts:
+            evaluation_inputs.append(payload)
+        return _successful_provider(request)
+
+    with Botpipe(tmp_path, provider=FakeProvider([answer] * 8)) as client:
+        result = client.run(
+            WorkflowIdeaToWorkflowPackage,
+            WorkflowBuilderParams(
+                package_name="generated_fixture",
+                workflow_kind="end_to_end",
+            ),
+            request="Build a small durable echo workflow.",
+            run_id="generated-real-candidate",
+        )
+        assert result.ok, result.error
+        assert len(evaluation_inputs) == 1
+        observed = evaluation_inputs[0]
+        candidate = observed["generated_candidate"]
+        verified = observed["candidate_manifest"]
+        validation = observed["candidate_evaluation"]
+        candidate_root = Path(candidate["root"])
+        generated = candidate_root / ".botpipe/workflows/generated_fixture/flow.py"
+        assert generated.is_file()
+        assert validation["success"] is True
+        assert [check["kind"] for check in validation["checks"]] == ["compile_probe"]
+        assert verified["root"] == str(candidate_root)
+        assert verified["changed_paths"] == [
+            ".botpipe/workflows/generated_fixture/flow.py"
+        ]
+        assert verified["files"] == [
+            {
+                "path": ".botpipe/workflows/generated_fixture/flow.py",
+                "sha256": hashlib.sha256(generated.read_bytes()).hexdigest(),
+                "size_bytes": generated.stat().st_size,
+            }
+        ]
+        authored = result.value.artifacts["workflow_package_manifest"].read_json()
+        assert authored["files"][0]["content"] == generated.read_text()
+        clean_replay = client.resume(result.run_id)
+        assert clean_replay.ok, clean_replay.error
+        generated.write_text("# changed after validation\n")
+        changed_replay = client.resume(result.run_id)
+
+    assert changed_replay.status == "failed"
+    assert "generated candidate file changed" in (changed_replay.error or "")
+
+
+def test_workflow_builder_rejects_manifest_that_only_claims_a_file(tmp_path):
+    from tests.test_labs import _successful_provider
+
+    (tmp_path / "README.md").write_text("# Candidate source repository\n")
+
+    def answer(request):
+        result = _successful_provider(request)
+        payload = _input(request)
+        if payload["phase"] == "build_package" and request.artifacts:
+            path = request.artifacts["workflow_package_manifest"]
+            manifest = json.loads(path.read_text())
+            manifest["files"][0].pop("content")
+            path.write_text(json.dumps(manifest))
+        return result
+
+    result = Botpipe(tmp_path, provider=FakeProvider([answer] * 6)).run(
+        WorkflowIdeaToWorkflowPackage,
+        WorkflowBuilderParams(
+            package_name="phantom_fixture",
+            workflow_kind="end_to_end",
+        ),
+        request="Build a workflow whose source must really exist.",
+    )
+    assert result.status == "failed"
+    assert "generated file content must be text" in (result.error or "")
+
+
+@pytest.mark.parametrize(
+    ("authoring_shape", "expected_paths"),
+    [
+        ("single", {".botpipe/workflows/shaped_fixture.py"}),
+        (
+            "package",
+            {
+                "labs/workflows/shaped_fixture/flow.py",
+                "labs/workflows/shaped_fixture/specs.py",
+                "labs/workflows/shaped_fixture/workflow.toml",
+            },
+        ),
+    ],
+)
+def test_workflow_builder_preserves_authoring_shape_boundaries(
+    tmp_path, authoring_shape, expected_paths
+):
+    from tests.test_labs import _successful_provider
+
+    workspace = tmp_path / authoring_shape
+    workspace.mkdir()
+    (workspace / "README.md").write_text("# Candidate source repository\n")
+    observed = []
+
+    def answer(request):
+        payload = _input(request)
+        if payload["phase"] == "evaluate_package" and request.artifacts:
+            observed.append(payload["candidate_manifest"])
+        return _successful_provider(request)
+
+    result = Botpipe(workspace, provider=FakeProvider([answer] * 8)).run(
+        WorkflowIdeaToWorkflowPackage,
+        WorkflowBuilderParams(
+            package_name="shaped_fixture",
+            workflow_kind="end_to_end",
+            authoring_shape=authoring_shape,
+        ),
+        request=f"Build the {authoring_shape} workflow shape.",
+    )
+    assert result.ok, result.error
+    assert set(observed[0]["changed_paths"]) == expected_paths

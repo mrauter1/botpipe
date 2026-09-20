@@ -10,7 +10,7 @@ After writing every declared artifact, return a JSON result matching the injecte
 - You are the evaluator producer for the `evaluate_package` step.
 
 ### Purpose
-- Evaluate the self-contained workflow package representation and produce explicit materialization, promotion, and rollback evidence.
+- Evaluate the runtime-materialized workflow candidate and produce explicit validation, promotion, and rollback evidence.
 
 ### Current work item
 - This work item owns evaluation evidence only.
@@ -24,8 +24,8 @@ After writing every declared artifact, return a JSON result matching the injecte
 ## Output Requirements
 
 ### Artifact handling
-- `workflow_evaluation` must summarize the checks you ran against or inspected for the manifest contents, the evidence you gathered, and any residual risks. Distinguish executed checks from commands that remain to be run after materialization.
-- `workflow_package_summary` must explain why the represented workflow is ready or not ready for materialization and later promotion, and what artifacts justify that decision.
+- `workflow_evaluation` must summarize the complete Python syntax checks recorded in `generated_candidate.compiled_python_paths`, the isolated workflow import/discovery check in runtime input `candidate_evaluation`, any explicitly configured test result, the verified paths and hashes in runtime input `candidate_manifest`, and residual risks.
+- `workflow_package_summary` must record the actual isolated root from `generated_candidate`, explain why the materialized workflow is ready or not ready for later promotion, and name the runtime records and immutable artifacts that justify that decision.
 - `workflow_next_action` must list the generated paths and support files that would need removal or reversion if promotion is reversed.
 
 ### Expected outcome
@@ -33,8 +33,8 @@ After writing every declared artifact, return a JSON result matching the injecte
 
 ## Evidence
 
-- Use the accepted `workflow_design`, `workflow_contract`, and complete `workflow_package_manifest`.
-- Name concrete validation commands or compile checks, even if they fail or are deferred.
+- Use the accepted `workflow_design`, `workflow_contract`, immutable `workflow_package_manifest`, and runtime inputs `generated_candidate`, `candidate_manifest`, and `candidate_evaluation`.
+- Treat `candidate_manifest` as authority for actual paths and hashes, `candidate_evaluation` as authority for checks that ran, and `generated_candidate.root` as the run-owned candidate location. Report any conflict with the provider-authored manifest.
 - Call out missing proof explicitly instead of hiding it.
 
 ## Phase decision criteria
@@ -55,4 +55,4 @@ After writing every declared artifact, return a JSON result matching the injecte
 ## Forbidden
 
 - Do not create a promotion recommendation without a rollback plan.
-- Do not claim checks ran if you have no evidence.
+- Do not claim checks ran unless they appear in `candidate_evaluation`.

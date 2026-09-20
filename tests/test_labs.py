@@ -29,7 +29,70 @@ def _successful_provider(request):
                 stream.write("\n# staged candidate change\n")
     for name, path in request.artifacts.items():
         path.parent.mkdir(parents=True, exist_ok=True)
-        if name in fixture_artifacts:
+        if name == "workflow_package_manifest":
+            package_name = phase_input["parameters"]["package_name"]
+            authoring_shape = phase_input["parameters"].get(
+                "authoring_shape", "flow_specs"
+            )
+            if authoring_shape == "single":
+                source_path = f".botpipe/workflows/{package_name}.py"
+            elif authoring_shape == "flow_specs":
+                source_path = f".botpipe/workflows/{package_name}/flow.py"
+            else:
+                source_path = f"labs/workflows/{package_name}/flow.py"
+            function_name = "GeneratedWorkflow"
+            content = (
+                "from botpipe import workflow\n\n"
+                f'@workflow(name="{package_name}")\n'
+                f'def {function_name}(request: str = "") -> str:\n'
+                '    return request or "ok"\n'
+            )
+            files = [
+                {
+                    "path": source_path,
+                    "role": "workflow",
+                    "purpose": "Generated durable workflow callable.",
+                    "required": True,
+                    "implements": "accepted workflow design",
+                    "content": content,
+                }
+            ]
+            if authoring_shape == "package":
+                package_root = f"labs/workflows/{package_name}"
+                files.extend(
+                    [
+                        {
+                            "path": f"{package_root}/specs.py",
+                            "role": "contracts",
+                            "purpose": "Generated workflow contracts.",
+                            "required": True,
+                            "implements": "accepted workflow contract",
+                            "content": '"""Generated workflow contracts."""\n',
+                        },
+                        {
+                            "path": f"{package_root}/workflow.toml",
+                            "role": "manifest",
+                            "purpose": "Generated discovery manifest.",
+                            "required": True,
+                            "implements": "accepted discovery design",
+                            "content": (
+                                f'name = "{package_name}"\n'
+                                f'function = "{function_name}"\n'
+                            ),
+                        },
+                    ]
+                )
+            path.write_text(
+                json.dumps(
+                    {
+                        "package_name": package_name,
+                        "authoring_shape": authoring_shape,
+                        "workflow_reference": f"{source_path}:{function_name}",
+                        "files": files,
+                    }
+                )
+            )
+        elif name in fixture_artifacts:
             path.write_text(json.dumps(fixture_artifacts[name]))
         elif name == "eval_case_manifest":
             value = {
@@ -419,6 +482,7 @@ def test_all_labs_workflows_complete_staged_fake_provider_runs(tmp_path):
         params = module.Params(**invocation_parameters[entry.name])
         workspace = tmp_path / entry.name
         workspace.mkdir()
+        (workspace / "README.md").write_text("# Test workspace\n", encoding="utf-8")
         if entry.name == "workflow_and_eval_to_refined_workflow_package":
             (workspace / "evaluation-summary.json").write_text(
                 json.dumps({"selected_workflow_name": "release_candidate_to_go_no_go"}),

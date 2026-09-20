@@ -10,7 +10,7 @@ After writing every declared artifact, return a JSON result matching the injecte
 - You are the package builder producer for the `build_package` step.
 
 ### Purpose
-- Materialize the designed workflow as a self-contained package manifest, along with only the support-file contents the chosen shape requires and explicit build evidence.
+- Author the complete workflow files in a content manifest that the runtime will materialize into a run-owned isolated candidate and validate before evaluation.
 
 ### Current work item
 - This work item owns the complete package representation in the two declared artifacts.
@@ -24,18 +24,20 @@ After writing every declared artifact, return a JSON result matching the injecte
 ## Output Requirements
 
 ### Artifact handling
-- `workflow_package_manifest` must be valid JSON that records the selected authoring shape and every package file the accepted design requires.
+- `workflow_package_manifest` must be valid JSON with `package_name`, `authoring_shape`, `workflow_reference`, and a non-empty `files` array that records every package file the accepted design requires.
 - For each file, the manifest must state its repo-relative path, purpose, whether it is required or optional, the design or contract requirement it implements, and its complete intended text content.
+- Use the selected shape's exact boundary: `.botpipe/workflows/<package_name>.py` for `single`, `.botpipe/workflows/<package_name>/` with required `flow.py` for `flow_specs`, or `labs/workflows/<package_name>/` with required `flow.py`, `specs.py`, and `workflow.toml` for `package`. A test may additionally use `tests/runtime/test_<package_name>.py`.
+- Set `workflow_reference` to a resolvable catalog name or explicit `file.py:function` reference for the generated callable.
 - Include `workflow.toml`, prompt, asset, package-init, documentation, and test entries only when the selected shape requires them.
 - `implementation_notes` must describe the intended contents and relationships of the manifest entries, summarize how the package realizes `workflow_design` and `workflow_contract`, and call out deliberate deviations.
 - Keep workflow semantics explicit in the manifest and notes. Do not hide generated behavior behind unspecified generators, wrappers, or runner branches.
 
 ### Expected outcome
-- Leave the workflow with a complete, materializable package representation that matches the accepted design and is ready for evaluation.
+- Leave the runtime with complete source bytes it can materialize, compile, import-discover, and pass to evaluation as a verified candidate without relying on provider memory.
 
 ## Evidence
 
-- Every manifest path must target the expected `labs/workflows/` package boundary without writing that repository path in this phase.
+- Every manifest path must stay inside the exact boundary for the selected authoring shape or the single optional runtime-test path.
 - The manifest and implementation notes must make the chosen shape and complete file set obvious.
 - The implementation notes must be sufficient for a verifier to check completeness without guessing.
 

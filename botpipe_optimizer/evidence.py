@@ -742,13 +742,27 @@ def _legacy_usage(usage: Mapping[str, float]) -> tuple[Availability, int | None]
         and math.isfinite(value)
         and value >= 0
     }
-    if "total_tokens" in finite:
-        return "known_total", int(finite["total_tokens"])
-    if "input_tokens" in finite and "output_tokens" in finite:
-        return "known_total", int(finite["input_tokens"] + finite["output_tokens"])
+    if "total_tokens" in usage:
+        value = usage["total_tokens"]
+        if _is_token_count(value):
+            return "known_total", value
+        return ("partial", None) if "total_tokens" in finite else ("unknown", None)
+    if "input_tokens" in usage or "output_tokens" in usage:
+        if (
+            "input_tokens" in usage
+            and "output_tokens" in usage
+            and _is_token_count(usage["input_tokens"])
+            and _is_token_count(usage["output_tokens"])
+        ):
+            return "known_total", usage["input_tokens"] + usage["output_tokens"]
+        return ("partial", None) if finite else ("unknown", None)
     if finite:
         return "partial", None
     return "unknown", None
+
+
+def _is_token_count(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
 
 
 def _known_token_total(usage: Mapping[str, float]) -> int | None:

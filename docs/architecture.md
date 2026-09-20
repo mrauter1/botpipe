@@ -48,6 +48,12 @@ ordinary Python argument semantics. Validation may repeat after a crash before
 its state was recorded, so validation hooks must remain free of external effects.
 Codec traversal has depth and value-count limits and rejects cycles.
 
+Define durable contracts at module scope so a new process can import their
+concrete types. Types reachable through workflow annotations are registered
+automatically, including generic arguments and nested fields. A local
+polymorphic subtype that appears only at runtime cannot be reconstructed in a
+fresh process; move that contract to module scope.
+
 The automatic state codec deliberately refuses values whose complete state is
 not represented by ordinary fields. This includes private fields, excluded
 fields, secrets, custom serializers, cached or unknown instance attributes, custom
@@ -76,6 +82,12 @@ Running and unknown attempts remain blocked; a legacy recovery hook returning
 `None` establishes no knowledge of termination. A native launch interrupted
 before its process identity was recorded therefore remains uncertain.
 
+Adapters return `ProviderResponse` with string text, an optional string session
+ID, and plain JSON objects for usage and metadata. Botpipe validates this
+protocol before recording the response. Malformed responses and unexpected
+exceptions after dispatch remain uncertain; they cannot silently coerce durable
+values or establish that external effects stopped.
+
 While a workspace has an unresolved uncertain effect, its durable workspace
 fence blocks a different run from starting there, even when clients choose
 different state directories. Resolve the recorded effect before continuing work
@@ -89,6 +101,9 @@ Botpipe validates the typed response and the complete declared artifact set,
 preflights durable value encoding, and publishes immutable snapshots before
 committing the operation. A saved validated value and capture manifest allow
 recovery to finish that commit without revalidating or redispatching.
+The capture intent records every output's content digest before any snapshot is
+published. Recovery verifies existing snapshots and requires unsnapshotted files
+to still match that intent; edited files cannot silently become provider output.
 
 When a completed attempt fails output validation, rollback quarantines its
 declared outputs and restores every previous declared file. The rollback journal

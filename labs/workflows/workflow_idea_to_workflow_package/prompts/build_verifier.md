@@ -33,7 +33,8 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 ## Evidence
 
 - Verify the declared phase artifacts—`workflow_package_manifest`, `implementation_notes`—against the phase requirements and require their claims to be internally consistent.
-- Verify that every manifest file entry includes complete intended content, so later materialization does not depend on provider memory or unspecified generation.
+- Verify that the manifest includes `package_name`, `authoring_shape`, a resolvable `workflow_reference`, and complete intended content for every file, so runtime materialization does not depend on provider memory or unspecified generation.
+- Verify that paths match the selected shape: `.botpipe/workflows/<package_name>.py` for `single`, `.botpipe/workflows/<package_name>/` with `flow.py` for `flow_specs`, or `labs/workflows/<package_name>/` with `flow.py`, `specs.py`, and `workflow.toml` for `package`, plus at most the corresponding `tests/runtime/test_<package_name>.py`.
 
 ## Phase decision criteria
 
@@ -41,7 +42,7 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 - Treat question, blocked, and failure guidance as semantic validation criteria.
 
 ### Outcome selection rules
-- Choose `package_built` only if `workflow_package_manifest` completely enumerates a package that matches the declared shape, includes every file's intended content, and `implementation_notes` accounts for the output set.
+- Choose `package_built` only if `workflow_package_manifest` completely enumerates a package that matches the declared shape, includes every file's intended content and resolvable workflow reference, and `implementation_notes` accounts for the output set. Runtime materialization and isolated validation still gate entry to evaluation.
 - Choose `needs_rework` when the same design can be satisfied with local file or evidence fixes.
 - Choose `needs_replan` when the design contract itself is no longer implementable or coherent.
 - Use `question` only for genuine missing prerequisites or irrecoverable contradictions.

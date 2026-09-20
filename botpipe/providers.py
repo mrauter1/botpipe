@@ -98,6 +98,36 @@ class ProviderResponse:
     usage: dict[str, Any] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
 
+    def to_record(self) -> dict[str, Any]:
+        """Validate the provider protocol without silently coercing durable facts."""
+        if type(self.text) is not str:
+            raise TypeError("ProviderResponse.text must be a string")
+        if self.session_id is not None and type(self.session_id) is not str:
+            raise TypeError("ProviderResponse.session_id must be a string or None")
+
+        def plain_json(value):
+            if type(value) in (str, int, float, bool, type(None)):
+                return True
+            if type(value) is list:
+                return all(plain_json(item) for item in value)
+            if type(value) is dict:
+                return all(
+                    type(key) is str and plain_json(item) for key, item in value.items()
+                )
+            return False
+
+        for name, value in (("usage", self.usage), ("metadata", self.metadata)):
+            if type(value) is not dict or not plain_json(value):
+                raise TypeError(f"ProviderResponse.{name} must be a plain JSON object")
+        record = {
+            "text": self.text,
+            "session_id": self.session_id,
+            "usage": self.usage,
+            "metadata": self.metadata,
+        }
+        json.dumps(record, allow_nan=False)
+        return record
+
 
 @runtime_checkable
 class Provider(Protocol):
@@ -174,21 +204,7 @@ def _read_receipt(path: Path) -> dict[str, Any]:
 
 
 def _response_record(response: ProviderResponse) -> dict[str, Any]:
-    if not isinstance(response.text, str):
-        raise TypeError("response text must be a string")
-    if response.session_id is not None and not isinstance(response.session_id, str):
-        raise TypeError("response session_id must be a string or None")
-    if not isinstance(response.usage, dict) or not isinstance(response.metadata, dict):
-        raise TypeError("response usage and metadata must be dictionaries")
-    record = {
-        "text": response.text,
-        "session_id": response.session_id,
-        "usage": response.usage,
-        "metadata": response.metadata,
-    }
-    if json.loads(json.dumps(record, allow_nan=False)) != record:
-        raise TypeError("response fields must round-trip unchanged through JSON")
-    return record
+    return response.to_record()
 
 
 def _record_response(value: Any, path: Path) -> ProviderResponse:
@@ -203,8 +219,8 @@ def _record_response(value: Any, path: Path) -> ProviderResponse:
         metadata=value.get("metadata", {}),
     )
     try:
-        _response_record(response)
-    except (TypeError, ValueError) as exc:
+        response.to_record()
+    except (TypeError, ValueError, RecursionError) as exc:
         raise ProviderInterruptedError(
             f"completed provider receipt has an invalid response: {path}: {exc}",
             receipt=path,

@@ -27,12 +27,10 @@ from .models import Result
 from .policy import Policy, SandboxMode
 from .prompts import Prompt
 from .providers import (
-    ProviderError,
     ProviderPolicyError,
     ProviderRequest,
     ProviderResponse,
     ProviderTimeoutError,
-    _response_record,
 )
 from .runtime import _async_call, current_run
 from .recovery import Completed, Stopped, recover_outcome
@@ -261,6 +259,9 @@ class Session:
                                 f"Artifact restoration is incomplete; resume after resolving the conflict: {exc}",
                                 operation_id,
                             ) from exc
+                        if saved.get("restoration_pending"):
+                            saved["restoration_pending"] = False
+                            ctx.save_response(operation_id, saved)
 
                     if saved.get("not_dispatched"):
                         restore()
@@ -384,7 +385,7 @@ class Session:
                         if isinstance(outcome, Completed):
                             generation = prepared_generation
                             saved = {
-                                **_response_record(outcome.response),
+                                **outcome.response.to_record(),
                                 "request": request_data,
                                 "generation": generation,
                             }
@@ -452,6 +453,11 @@ class Session:
                                     dispatch.started()
                                     try:
                                         response = ctx.client.provider.run(request)
+                                        if not isinstance(response, ProviderResponse):
+                                            raise TypeError(
+                                                "Provider returned an invalid response object"
+                                            )
+                                        response.to_record()
                                     except BaseException as exc:
                                         dispatch.finish(
                                             "timed_out"
@@ -473,30 +479,36 @@ class Session:
                                     response = ctx.client.provider.run(request)
                         except BudgetExceeded as exc:
                             if not dispatched:
-                                ctx.save_response(
-                                    operation_id,
-                                    {
-                                        "request": request_data,
-                                        "generation": generation,
-                                        "not_dispatched": True,
-                                        "budget_error": str(exc),
-                                    },
-                                )
-                                restore()
-                            raise
-                        except ProviderPolicyError as exc:
-                            ctx.save_response(
-                                operation_id,
-                                {
+                                saved = {
                                     "request": request_data,
                                     "generation": generation,
                                     "not_dispatched": True,
-                                    "policy_error": str(exc),
-                                },
-                            )
+                                    "restoration_pending": True,
+                                    "budget_error": str(exc),
+                                }
+                                ctx.save_response(operation_id, saved)
+                                restore()
+                            else:
+                                raise UncertainOperation(
+                                    str(exc), operation_id
+                                ) from exc
+                            raise
+                        except ProviderPolicyError as exc:
+                            if dispatched:
+                                raise UncertainOperation(
+                                    str(exc), operation_id
+                                ) from exc
+                            saved = {
+                                "request": request_data,
+                                "generation": generation,
+                                "not_dispatched": True,
+                                "restoration_pending": True,
+                                "policy_error": str(exc),
+                            }
+                            ctx.save_response(operation_id, saved)
                             restore()
                             raise
-                        except ProviderError as exc:
+                        except Exception as exc:
                             raise UncertainOperation(str(exc), operation_id) from exc
                         if not isinstance(response, ProviderResponse):
                             raise UncertainOperation(
@@ -504,22 +516,12 @@ class Session:
                                 operation_id,
                             )
                         try:
-                            response_record = _response_record(response)
-                        except (ValueError, TypeError) as exc:
-                            message = f"Provider response cannot be stored: {exc}"
-                            ctx.save_response(
+                            response_record = response.to_record()
+                        except (ValueError, TypeError, RecursionError) as exc:
+                            raise UncertainOperation(
+                                f"Provider returned an invalid response: {exc}",
                                 operation_id,
-                                {
-                                    "request": request_data,
-                                    "generation": generation,
-                                    "output_error": {
-                                        "message": message,
-                                        "retryable": False,
-                                    },
-                                },
-                            )
-                            rollback()
-                            raise TypeError(message) from exc
+                            ) from exc
                         saved = {
                             **response_record,
                             "request": request_data,

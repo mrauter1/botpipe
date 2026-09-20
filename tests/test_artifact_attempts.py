@@ -318,7 +318,7 @@ def test_capture_oserror_stays_interrupted_and_recovers_without_provider(
         {"metadata": {"tuple": (1, 2)}},
     ],
 )
-def test_invalid_response_envelope_restores_original_outputs(tmp_path, fields):
+def test_invalid_response_envelope_preserves_uncertain_outputs(tmp_path, fields):
     destination = tmp_path / "result.txt"
     destination.write_text("original")
 
@@ -337,9 +337,9 @@ def test_invalid_response_envelope_restores_original_outputs(tmp_path, fields):
         result = client.run(writer)
         replay = client.resume(result.run_id, workflow=writer)
 
-    assert result.status == replay.status == "failed"
-    assert "Provider response cannot be stored" in result.error
-    assert destination.read_text() == "original"
+    assert result.status == replay.status == "interrupted"
+    assert "ProviderResponse" in result.error
+    assert destination.read_text() == "attempted output"
     assert len(provider.calls) == 1
 
 
@@ -407,7 +407,13 @@ def test_rejected_dispatch_resumes_interrupted_restoration(tmp_path, monkeypatch
             raise OSError("lost restore acknowledgement")
 
     monkeypatch.setattr(artifacts.os, "link", fail_after_first_restore)
-    provider = FakeProvider([ProviderPolicyError("unsupported policy")])
+
+    class BeforeDispatchPolicyProvider(FakeProvider):
+        # Native adapters reserve dispatch themselves and reject unsupported
+        # policy before launching a process.
+        _reserves_dispatch = True
+
+    provider = BeforeDispatchPolicyProvider([ProviderPolicyError("unsupported policy")])
     with Botpipe(tmp_path, provider=provider) as client:
         interrupted = client.run(writer)
         assert interrupted.status == "interrupted", interrupted.error

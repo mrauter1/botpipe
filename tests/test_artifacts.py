@@ -191,6 +191,21 @@ def test_restore_never_overwrites_new_provider_output(tmp_path):
     assert (tmp_path / "result.txt").read_text() == "new"
 
 
+def test_completed_restore_replay_preserves_later_destination_edits(tmp_path):
+    store = ArtifactStore(tmp_path)
+    writes = [Artifact.text("result.txt")]
+    destination = tmp_path / "result.txt"
+    destination.write_text("old")
+    store.prepare(writes, "turn")
+
+    store.restore("turn")
+    assert destination.read_text() == "old"
+    destination.write_text("edited after restore")
+
+    store.restore("turn")
+    assert destination.read_text() == "edited after restore"
+
+
 def test_snapshot_tampering_is_detected(tmp_path):
     handle = ArtifactStore(tmp_path).publish(Artifact.text("x.txt"), "original", "x")
     handle.path.chmod(0o644)

@@ -43,7 +43,9 @@ the original limits.
 workflows under `.botpipe/workflows/`. A workspace workflow with the same name
 shadows the other catalog entries.
 
-`resolve` is intentionally explicit. `--retry` authorizes a new attempt after
-an uncertain effect. `--response` records what the operator observed externally.
+`resolve` is intentionally explicit. `--retry` authorizes a new attempt only
+after recovery confirms the previous attempt stopped. `--response` records what
+the operator observed externally under the same condition. A completed provider
+receipt takes precedence; running or unknown attempts remain blocked.
 For example, `--response null` records an explicit `None` activity result.
 Unless `--no-resume` is passed, the command resumes the run after resolution.
