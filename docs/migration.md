@@ -93,3 +93,22 @@ Early durable-function snapshots that stored unversioned Pydantic/dataclass
 JSON are also incompatible with the validated-state codec. Their omitted state
 cannot be reconstructed reliably. Finish those runs using their original code
 or start new runs; the decoder refuses silent revalidation as a migration.
+
+Provider checkpoint storage still uses the existing operation response records.
+Valid historical states remain readable; unknown or contradictory combinations
+are rejected instead of guessing whether a provider can be dispatched again.
+This does not override a workflow or operation source mismatch.
+
+Parallel records now include each branch's complete workflow identity. Earlier
+parallel records with only a function hash cannot be safely upgraded during
+replay. Recorded application exceptions likewise require concrete type and slot
+owner source evidence; source-free built-in exceptions retain their explicit
+legacy decoding path.
+
+New operation ownership locators are relative to the supplied workflow's source
+boundary. Unchanged code can move while preserving that relative layout. Legacy
+absolute owner records remain usable at their original locations, but do not
+gain relocation support retroactively. Missing owners, changed boundary kinds,
+and symlink redirects within relative owner locators are rejected rather than
+silently selecting different code. The root anchor uses the supplied workflow's
+canonical source location and its separately verified executable identity.

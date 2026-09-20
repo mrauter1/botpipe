@@ -7,14 +7,25 @@ import os
 import sqlite3
 import threading
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from .errors import RunBusy
 
 
 def now():
     return datetime.now(timezone.utc).isoformat()
+
+
+@dataclass(frozen=True)
+class JournalSnapshot:
+    """One committed view of a run and all of its recorded evidence."""
+
+    run: dict[str, Any]
+    operations: tuple[dict[str, Any], ...]
+    events: tuple[dict[str, Any], ...]
 
 
 class Journal:
@@ -123,6 +134,126 @@ class Journal:
                     "SELECT metadata FROM runs ORDER BY rowid DESC"
                 )
             ]
+
+    @classmethod
+    def read_only_snapshot(cls, path, run_id):
+        """Read a foreign journal without creating or migrating anything."""
+
+        path = Path(path)
+        connection = sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True)
+        connection.row_factory = sqlite3.Row
+        try:
+            connection.execute("PRAGMA query_only=ON")
+            version = connection.execute("PRAGMA user_version").fetchone()[0]
+            if version != 1:
+                raise ValueError(f"Unsupported Botpipe journal version {version}")
+            return cls._snapshot(connection, run_id)
+        finally:
+            connection.close()
+
+    def snapshot(self, run_id):
+        """Return run, operation, and event facts from one database snapshot."""
+
+        with self.lock:
+            # Inspection is a view of committed authority, including when the
+            # writer connection currently has an uncommitted transaction.
+            return self.read_only_snapshot(self.path, run_id)
+
+    @classmethod
+    def _snapshot(cls, db, run_id):
+        db.execute("BEGIN")
+        try:
+            run_row = db.execute(
+                "SELECT metadata FROM runs WHERE id=?", (run_id,)
+            ).fetchone()
+            if run_row is None:
+                raise KeyError(f"Unknown run {run_id}")
+            operation_rows = list(
+                db.execute(
+                    "SELECT * FROM operations WHERE run_id=? ORDER BY started_at,id",
+                    (run_id,),
+                )
+            )
+            event_rows = list(
+                db.execute(
+                    "SELECT * FROM events WHERE run_id=? ORDER BY seq", (run_id,)
+                )
+            )
+            run = json.loads(run_row[0])
+            if type(run) is not dict or run.get("run_id") != run_id:
+                raise ValueError("Run metadata does not match its journal identity")
+            snapshot = JournalSnapshot(
+                run=run,
+                operations=tuple(cls._record(row) for row in operation_rows),
+                events=tuple(
+                    {**dict(row), "data": json.loads(row["data"])} for row in event_rows
+                ),
+            )
+        except BaseException:
+            if db.in_transaction:
+                db.execute("ROLLBACK")
+            raise
+        else:
+            db.execute("COMMIT")
+            return snapshot
+
+    @classmethod
+    def foreign_has_unresolved_effects(cls, path, run_id):
+        """Conservatively decide whether a foreign run may still own effects."""
+
+        try:
+            snapshot = cls.read_only_snapshot(path, run_id)
+            return cls._has_unresolved_effects(snapshot.operations)
+        except (OSError, sqlite3.Error, KeyError, TypeError, ValueError, UnicodeError):
+            return True
+
+    @staticmethod
+    def _has_unresolved_effects(operations):
+        for record in operations:
+            kind = record.get("kind")
+            if kind not in {"activity", "provider"}:
+                continue
+            status = record.get("status")
+            if status in {"completed", "failed"}:
+                continue
+            if status not in {"started", "response"}:
+                return True
+            if kind == "activity":
+                # Activities have no typed non-dispatch checkpoint. Until their
+                # operation reaches a terminal state, their effects are unknown.
+                return True
+            from .provider_checkpoints import (
+                ProviderCheckpoint,
+                ProviderCheckpointError,
+            )
+
+            try:
+                has_writes = Journal._provider_has_writes(record.get("inputs"))
+                checkpoint = ProviderCheckpoint.from_record(record.get("response"))
+                if checkpoint.has_unresolved_effects(has_writes=has_writes):
+                    return True
+            except (ProviderCheckpointError, TypeError, ValueError, KeyError):
+                return True
+        return False
+
+    @staticmethod
+    def _provider_has_writes(inputs):
+        from .codec import encoded_body
+
+        inputs = encoded_body(inputs)
+        if (
+            type(inputs) is not dict
+            or inputs.get("$botpipe") != "dict"
+            or set(inputs) != {"$botpipe", "value"}
+            or type(inputs.get("value")) is not dict
+        ):
+            raise TypeError("Provider inputs are not an encoded mapping")
+        if "writes" not in inputs["value"]:
+            raise ValueError("Provider inputs omit their writes declaration")
+        writes = inputs["value"]["writes"]
+        if type(writes) is not list:
+            raise TypeError("Provider writes are not an encoded list")
+        return bool(writes)
 
     @staticmethod
     def _record(row):

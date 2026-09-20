@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import inspect
 import os
-from functools import partial
 from hashlib import sha256
 from pathlib import Path
 from types import CodeType, ModuleType
 from typing import Any, get_type_hints
 
+from ._callables import describe_callable
 from .surface_identity import (
     canonical_workflow_identity,
     derive_workflow_surface_manifest,
@@ -36,7 +36,10 @@ def _active_module_code(source: Path) -> CodeType | None:
 def capture_definition_sources(definition: Any) -> dict[str, Any] | None:
     """Remember source bytes at definition time without importing or walking packages."""
     try:
-        target = inspect.unwrap(getattr(definition, "fn", definition))
+        targets = describe_callable(definition).source_targets
+        if not targets:
+            return None
+        target = targets[0]
         source = inspect.getsourcefile(target)
         if source is None:
             return None
@@ -116,7 +119,10 @@ def source_boundary(definition: Any) -> Path | None:
     """Return the bounded ownership root without making it source identity."""
 
     try:
-        target = inspect.unwrap(getattr(definition, "fn", definition))
+        targets = describe_callable(definition).source_targets
+        if not targets:
+            return None
+        target = targets[0]
         raw = inspect.getsourcefile(target)
         if raw is None:
             return None
@@ -136,7 +142,10 @@ def capture_orchestration_sources(
 ) -> dict[str, Any] | None:
     """Capture complete, bounded modules that define owned orchestration values."""
     try:
-        target = inspect.unwrap(getattr(definition, "fn", definition))
+        descriptor = describe_callable(definition)
+        if not descriptor.source_targets:
+            return None
+        target = descriptor.source_targets[0]
         raw = inspect.getsourcefile(target)
         if raw is None:
             return None
@@ -163,51 +172,44 @@ def capture_orchestration_sources(
         seen_values = set()
 
         def enqueue(label: str, value: Any) -> None:
-            if (
-                isinstance(value, ModuleType)
-                or inspect.isfunction(value)
-                or isinstance(value, type)
-            ):
-                candidate = inspect.unwrap(value)
-            elif (
-                type(value).__module__ == "botpipe.runtime"
-                and type(value).__name__ == "Workflow"
-            ):
-                candidate = inspect.unwrap(value.fn)
-            elif inspect.ismethod(value):
-                candidate = inspect.unwrap(value.__func__)
-            elif isinstance(value, partial):
-                candidate = inspect.unwrap(value.func)
+            if isinstance(value, ModuleType) or isinstance(value, type):
+                candidates = (value,)
             elif callable(value):
-                # Callable objects carry behavior on their implementation class.
-                # Never inspect instance attributes: they may be mutable application
-                # state rather than orchestration source.
-                candidate = type(value)
+                try:
+                    candidates = describe_callable(value).source_targets
+                except TypeError:
+                    return
             else:
                 return
-            if not (
-                inspect.isfunction(candidate)
-                or isinstance(candidate, (type, ModuleType))
-            ):
-                return
-            try:
-                raw_path = inspect.getsourcefile(candidate)
-                if raw_path is None:
-                    return
-                path = Path(raw_path).resolve(strict=True)
-            except (OSError, TypeError, ValueError):
-                return
-            owned = any(
-                path == item if item.is_file() else path.is_relative_to(item)
-                for item in boundary_paths
-            )
-            if not owned or path.suffix != ".py" or path.is_symlink():
-                return
-            identity = id(candidate)
-            if identity in seen_values:
-                return
-            seen_values.add(identity)
-            values.append((label, candidate, path))
+            for target_index, candidate in enumerate(candidates):
+                if not (
+                    inspect.isfunction(candidate)
+                    or isinstance(candidate, (type, ModuleType))
+                ):
+                    continue
+                try:
+                    raw_path = inspect.getsourcefile(candidate)
+                    if raw_path is None:
+                        continue
+                    path = Path(raw_path).resolve(strict=True)
+                except (OSError, TypeError, ValueError):
+                    continue
+                owned = any(
+                    path == item if item.is_file() else path.is_relative_to(item)
+                    for item in boundary_paths
+                )
+                if not owned or path.suffix != ".py" or path.is_symlink():
+                    continue
+                identity = id(candidate)
+                if identity in seen_values:
+                    continue
+                seen_values.add(identity)
+                target_label = (
+                    label
+                    if len(candidates) == 1
+                    else f"{label}.callable:{target_index}"
+                )
+                values.append((target_label, candidate, path))
 
         def enqueue_contracts(annotation: Any, label: str) -> None:
             from .codec import preflight_types
@@ -219,7 +221,13 @@ def capture_orchestration_sources(
             for index, contract in enumerate(contracts):
                 enqueue(f"{label}[{index}]", contract)
 
-        enqueue("<workflow>", target)
+        for target_index, callable_target in enumerate(descriptor.source_targets):
+            label = (
+                "<workflow>"
+                if len(descriptor.source_targets) == 1
+                else f"<workflow>.callable:{target_index}"
+            )
+            enqueue(label, callable_target)
         index = 0
         while index < len(values):
             label, value, _ = values[index]

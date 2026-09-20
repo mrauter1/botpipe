@@ -21,6 +21,7 @@ from typing import get_type_hints
 from pydantic import TypeAdapter, ValidationError
 
 from . import codec
+from ._callables import describe_callable
 from .errors import (
     ActivityFailed,
     BotpipeError,
@@ -37,7 +38,15 @@ from .limits import RunLimits
 from .models import RunResult
 from .policy import Policy
 from .provenance import capture_workflow_provenance, source_boundary
-from .recovery import Completed, Running, Stopped, recover_outcome
+from .provider_checkpoints import (
+    NotDispatchedCheckpoint,
+    ProviderCheckpoint,
+    ProviderLifecycle,
+    RecoveryAction,
+    RespondedCheckpoint,
+    RetryAuthorizedCheckpoint,
+)
+from .recovery import Completed, recover_outcome
 
 _CURRENT = contextvars.ContextVar("botpipe_run", default=None)
 _OPERATION = contextvars.ContextVar("botpipe_operation", default=None)
@@ -90,12 +99,14 @@ def _operation_encoded_values(record):
         if record.get(field) is not None:
             yield record[field]
     error = record.get("error") or {}
-    for field in ("args", "native_args", "attributes"):
+    for field in ("exception_type", "args", "native_args", "attributes"):
         if error.get(field) is not None:
             yield error[field]
     for slot in error.get("slots", ()):
-        if type(slot) is dict and slot.get("value") is not None:
-            yield slot["value"]
+        if type(slot) is dict:
+            for field in ("owner_type", "value"):
+                if slot.get(field) is not None:
+                    yield slot[field]
     response = record.get("response") or {}
     for field in ("answer", "validated_answer", "validated_value"):
         if response.get(field) is not None:
@@ -109,17 +120,37 @@ def _recorded_boundaries(data, operations, root_boundary):
     boundaries = [root_boundary] if root_boundary is not None else []
     for value in values:
         if value is not None:
-            boundaries.extend(codec.recorded_source_boundaries(value))
+            boundaries.extend(
+                codec.recorded_source_boundaries(value, root_boundary=root_boundary)
+            )
     return tuple(dict.fromkeys(boundaries)), values
 
 
 def _preflight_recorded_sources(data, operations, root_boundary):
-    boundaries, values = _recorded_boundaries(data, operations, root_boundary)
-    with codec.source_identity(boundaries):
-        for value in values:
-            if value is not None:
-                codec.verify_sources(value)
-    return boundaries
+    try:
+        boundaries, values = _recorded_boundaries(data, operations, root_boundary)
+        with codec.source_identity(boundaries):
+            for value in values:
+                if value is not None:
+                    codec.verify_sources(value)
+            for record in operations:
+                error = record.get("error")
+                if error is not None:
+                    _preflight_exception_record(error)
+        return boundaries
+    except ReplayMismatch:
+        raise
+    except (
+        ImportError,
+        AttributeError,
+        LookupError,
+        OSError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        raise ReplayMismatch(
+            f"Recorded operation source identity cannot be verified: {exc}"
+        ) from exc
 
 
 def _exception_record(exc):
@@ -128,6 +159,16 @@ def _exception_record(exc):
         "module": type(exc).__module__,
         "type": type(exc).__qualname__,
         "message": str(exc),
+        "exception_type": codec.encode(type(exc)),
+    }
+    slot_owner_types = {
+        owner: codec.encode(owner)
+        for owner in type(exc).__mro__
+        if owner is not BaseException
+        and any(
+            isinstance(descriptor, MemberDescriptorType)
+            for descriptor in vars(owner).values()
+        )
     }
     try:
         record["args"] = codec.encode(BaseException.args.__get__(exc, type(exc)))
@@ -152,6 +193,7 @@ def _exception_record(exc):
                 slots.append(
                     {
                         "owner": codec.type_name(owner),
+                        "owner_type": slot_owner_types[owner],
                         "name": name,
                         "value": codec.encode(value),
                     }
@@ -164,6 +206,74 @@ def _exception_record(exc):
     return record
 
 
+def _legacy_exception_type(module, qualname, label):
+    """Restore only source-free native exceptions from pre-provenance records."""
+
+    name = f"{module}:{qualname}"
+    if module != "builtins":
+        raise ReplayMismatch(
+            f"Legacy recorded {label} {name} has no source identity; "
+            "resume with a journal created by the current Botpipe version"
+        )
+    try:
+        cls = codec.resolve_type(name)
+    except (ImportError, AttributeError, LookupError, TypeError, ValueError) as exc:
+        raise ReplayMismatch(f"Recorded {label} {name} cannot be resolved") from exc
+    return cls
+
+
+def _recorded_exception_type(record, *, slot=False):
+    encoded_field = "owner_type" if slot else "exception_type"
+    legacy_field = "owner" if slot else "type"
+    label = "exception slot owner" if slot else "exception type"
+    if encoded_field not in record:
+        if slot:
+            name = record.get(legacy_field)
+            if type(name) is not str or ":" not in name:
+                raise ReplayMismatch(f"Recorded {label} is malformed")
+            module, qualname = name.split(":", 1)
+        else:
+            module, qualname = record.get("module"), record.get(legacy_field)
+            if type(module) is not str or type(qualname) is not str:
+                raise ReplayMismatch(f"Recorded {label} is malformed")
+        return _legacy_exception_type(module, qualname, label)
+    try:
+        cls = codec.decode(record[encoded_field])
+    except ReplayMismatch:
+        raise
+    except (
+        ImportError,
+        AttributeError,
+        LookupError,
+        OSError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        raise ReplayMismatch(
+            f"Recorded {label} source identity cannot be verified: {exc}"
+        ) from exc
+    if not isinstance(cls, type):
+        raise ReplayMismatch(f"Recorded {label} did not resolve to a type")
+    return cls
+
+
+def _preflight_exception_record(record):
+    if type(record) is not dict:
+        raise ReplayMismatch("Recorded exception is malformed")
+    cls = _recorded_exception_type(record)
+    if not issubclass(cls, BaseException):
+        raise ReplayMismatch("Recorded exception type is not an exception")
+    slots = record.get("slots", ())
+    if type(slots) not in (list, tuple):
+        raise ReplayMismatch("Recorded exception slots are malformed")
+    for slot in slots:
+        if type(slot) is not dict:
+            raise ReplayMismatch("Recorded exception slot is malformed")
+        owner = _recorded_exception_type(slot, slot=True)
+        if not issubclass(cls, owner):
+            raise ReplayMismatch("Recorded exception slot owner no longer matches")
+
+
 def _allocate_exception(cls, args, record):
     """Allocate exceptions through native bases without application hooks."""
     if issubclass(cls, OSError):
@@ -171,7 +281,9 @@ def _allocate_exception(cls, args, record):
         # subclasses through cls(...) would run their __new__/__init__ hooks.
         if record.get("native_family") != "OSError":
             raise TypeError("OSError record lacks native reconstruction state")
-        native_args = codec.decode(record["native_args"])
+        native_args = _decode_exception_value(
+            record["native_args"], "native exception state"
+        )
         result = OSError.__new__(cls, *native_args)
         OSError.__init__(result, *native_args)
         return result
@@ -187,20 +299,50 @@ def _allocate_exception(cls, args, record):
     return result
 
 
+def _decode_exception_value(value, label):
+    """Keep source-verification failures out of state-restoration fallback."""
+
+    try:
+        codec.verify_sources(value)
+    except (
+        ImportError,
+        AttributeError,
+        LookupError,
+        OSError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        raise ReplayMismatch(
+            f"Recorded {label} source identity cannot be verified: {exc}"
+        ) from exc
+    return codec.decode(value)
+
+
 def _restore_exception_state(record):
+    cls = _recorded_exception_type(record)
+    slots = record.get("slots", ())
+    if type(slots) not in (list, tuple):
+        raise ReplayMismatch("Recorded exception slots are malformed")
+    slot_owners = []
+    for slot in slots:
+        if type(slot) is not dict:
+            raise ReplayMismatch("Recorded exception slot is malformed")
+        slot_owners.append(_recorded_exception_type(slot, slot=True))
     if not record.get("restorable", True):
         raise TypeError(record.get("state_error", "unsupported exception state"))
-    cls = codec.resolve_type(f"{record['module']}:{record['type']}")
-    args = codec.decode(record["args"]) if "args" in record else (record["message"],)
+    args = (
+        _decode_exception_value(record["args"], "exception arguments")
+        if "args" in record
+        else (record["message"],)
+    )
     if not isinstance(cls, type) or not issubclass(cls, BaseException):
         raise TypeError("Recorded exception type is not an exception")
     result = _allocate_exception(cls, args, record)
     if "attributes" in record:
         object.__getattribute__(result, "__dict__").update(
-            codec.decode(record["attributes"])
+            _decode_exception_value(record["attributes"], "exception attributes")
         )
-    for slot in record.get("slots", ()):
-        owner = codec.resolve_type(slot["owner"])
+    for slot, owner in zip(slots, slot_owners):
         if issubclass(cls, OSError) and owner is OSError:
             continue
         descriptor = vars(owner)[slot["name"]]
@@ -208,13 +350,17 @@ def _restore_exception_state(record):
             descriptor, MemberDescriptorType
         ):
             raise TypeError("Recorded exception slot no longer matches its type")
-        descriptor.__set__(result, codec.decode(slot["value"]))
+        descriptor.__set__(
+            result, _decode_exception_value(slot["value"], "exception slot state")
+        )
     return result
 
 
 def _restore_exception(record):
     try:
         return _restore_exception_state(record)
+    except ReplayMismatch:
+        raise
     except Exception:
         return ActivityFailed(f"{record['type']}: {record['message']}")
 
@@ -223,6 +369,8 @@ def _finalize_exception_record(record):
     """Make initial and replay behavior agree when restoration is unsupported."""
     try:
         _restore_exception_state(record)
+    except ReplayMismatch:
+        raise
     except Exception:
         record["restorable"] = False
         record["state_error"] = "exception state cannot be restored safely"
@@ -236,26 +384,7 @@ def _function_version(fn, seen=None):
 
 
 def _function_version_unscoped(fn, seen=None):
-    fn = inspect.unwrap(getattr(fn, "fn", fn))
     seen = set() if seen is None else seen
-    key = f"{fn.__module__}:{fn.__qualname__}"
-    if key in seen:
-        return key
-    seen.add(key)
-    try:
-        source = inspect.getsource(fn)
-    except (OSError, TypeError):
-        source = fn.__code__.co_code.hex()
-    try:
-        defaults = codec.encode(fn.__defaults__)
-    except TypeError:
-        raise TypeError("Workflow defaults must be durable data") from None
-    values = {
-        "source": source,
-        "defaults": defaults,
-        "kwdefaults": codec.encode(fn.__kwdefaults__),
-        "helpers": {},
-    }
 
     def code_identity(code):
         def constant(value):
@@ -272,9 +401,6 @@ def _function_version_unscoped(fn, seen=None):
             "constants": [constant(value) for value in code.co_consts],
         }
 
-    values["code"] = code_identity(fn.__code__)
-    namespace = getattr(fn, "__globals__", {})
-
     def referenced_names(code):
         names = set(code.co_names)
         for value in code.co_consts:
@@ -282,63 +408,210 @@ def _function_version_unscoped(fn, seen=None):
                 names.update(referenced_names(value))
         return names
 
-    def helper_version(value):
+    def explicit_value(value):
         try:
-            return _function_version(value, seen)
-        except TypeError:
-            # Library helpers may use opaque default sentinels that never cross
-            # a durable boundary. Pin their source without trying to serialize
-            # library configuration as workflow arguments.
-            target = inspect.unwrap(getattr(value, "fn", value))
+            return codec.encode(value)
+        except TypeError as error:
+            if callable(value):
+                return {"callable": _function_version_unscoped(value, seen)}
+            raise error
+
+    def explicit_bound_value(value, location):
+        try:
+            return explicit_value(value)
+        except TypeError as exc:
+            raise TypeError(f"Unsupported explicit partial {location}: {exc}") from None
+
+    def class_version(target):
+        key = f"{target.__module__}:{target.__qualname__}"
+        if key in seen:
+            return key
+        seen.add(key)
+        methods = {}
+        sources = {}
+        for mro_index, base in enumerate(target.__mro__):
+            if base is object:
+                continue
+            base_key = f"{base.__module__}:{base.__qualname__}"
             try:
-                helper_source = inspect.getsource(target)
+                sources[str(mro_index)] = inspect.getsource(base)
             except (OSError, TypeError):
-                helper_source = code_identity(target.__code__)
+                sources[str(mro_index)] = base_key
+            for name, member in sorted(vars(base).items()):
+                candidates = ()
+                if inspect.isfunction(member):
+                    candidates = (member,)
+                elif isinstance(member, (staticmethod, classmethod)):
+                    candidates = (member.__func__,)
+                elif isinstance(member, property):
+                    candidates = tuple(
+                        method
+                        for method in (member.fget, member.fset, member.fdel)
+                        if method is not None
+                    )
+                for method_index, method in enumerate(candidates):
+                    methods[f"{mro_index}:{name}:{method_index}"] = plain_function(
+                        method
+                    )
+        return _hash({"reference": key, "sources": sources, "methods": methods})
+
+    def plain_function(target, *, identity_key=None):
+        key = identity_key or f"{target.__module__}:{target.__qualname__}"
+        if key in seen:
+            return key
+        seen.add(key)
+        try:
+            source = inspect.getsource(target)
+        except (OSError, TypeError):
+            source = code_identity(target.__code__)
+        try:
+            defaults = codec.encode(target.__defaults__)
+            kwdefaults = codec.encode(target.__kwdefaults__)
+        except TypeError:
+            raise TypeError("Callable defaults must be durable data") from None
+        values = {
+            "source": source,
+            "defaults": defaults,
+            "kwdefaults": kwdefaults,
+            "code": code_identity(target.__code__),
+            "helpers": {},
+        }
+        namespace = getattr(target, "__globals__", {})
+
+        def helper_version(value):
+            try:
+                return _function_version_unscoped(value, seen)
+            except TypeError:
+                # Opaque library defaults need not become workflow inputs.  Pin
+                # the implementation itself when it is still inspectable.
+                helper = describe_callable(value).source_targets[0]
+                try:
+                    helper_source = inspect.getsource(helper)
+                except (OSError, TypeError):
+                    code = getattr(helper, "__code__", None)
+                    helper_source = (
+                        code_identity(code)
+                        if code is not None
+                        else (f"{helper.__module__}:{helper.__qualname__}")
+                    )
+                return _hash(
+                    {
+                        "reference": (f"{helper.__module__}:{helper.__qualname__}"),
+                        "source": helper_source,
+                    }
+                )
+
+        for name in sorted(referenced_names(target.__code__)):
+            value = namespace.get(name)
+            if inspect.isfunction(value) or isinstance(value, Workflow):
+                sdk_modules = {
+                    "botpipe.runtime",
+                    "botpipe.sessions",
+                    "botpipe.prompts",
+                    "botpipe.artifacts",
+                    "botpipe.worklists",
+                }
+                if getattr(value, "__module__", "") not in sdk_modules or isinstance(
+                    value, Workflow
+                ):
+                    values["helpers"][name] = helper_version(value)
+            elif isinstance(value, (str, int, float, bool, tuple)) or value is None:
+                try:
+                    values["helpers"][name] = codec.encode(value)
+                except TypeError:
+                    pass
+            elif isinstance(value, type):
+                codec.type_name(value)
+                try:
+                    values["helpers"][name] = TypeAdapter(value).json_schema()
+                except Exception:
+                    pass
+            elif callable(value):
+                values["helpers"][name] = helper_version(value)
+        # Closures containing mutable test providers/counters are not orchestration
+        # source. Immutable configuration is pinned; effects remain managed calls.
+        if target.__closure__:
+            values["closure"] = []
+            for cell in target.__closure__:
+                value = cell.cell_contents
+                if isinstance(value, (str, int, float, bool, tuple)):
+                    values["closure"].append(codec.encode(value))
+                elif inspect.isfunction(value) or isinstance(value, Workflow):
+                    values["closure"].append(helper_version(value))
+                elif isinstance(value, type):
+                    values["closure"].append({"type": codec.type_name(value)})
+                elif callable(value):
+                    values["closure"].append(helper_version(value))
+        return _hash(values)
+
+    descriptor = describe_callable(fn)
+
+    def descriptor_version(item):
+        if item.kind == "workflow":
+            definition = item.implementation
             return _hash(
                 {
-                    "reference": f"{target.__module__}:{target.__qualname__}",
-                    "source": helper_source,
+                    "kind": "workflow",
+                    "name": definition.name,
+                    "version": definition.version,
+                    "policy": definition.policy.to_dict(),
+                    "callable": descriptor_version(item.child),
                 }
             )
+        if item.kind == "function":
+            return plain_function(item.implementation)
+        if item.kind == "decorated":
+            return _hash(
+                {
+                    "kind": "decorated",
+                    "wrapper": plain_function(
+                        item.implementation,
+                        identity_key=(
+                            f"{item.implementation.__module__}:"
+                            f"{item.implementation.__qualname__}#wrapper"
+                        ),
+                    ),
+                    "callable": descriptor_version(item.child),
+                }
+            )
+        if item.kind == "partial":
+            return _hash(
+                {
+                    "kind": "partial",
+                    "callable": descriptor_version(item.child),
+                    "args": [
+                        explicit_bound_value(value, f"argument {index}")
+                        for index, value in enumerate(item.args)
+                    ],
+                    "kwargs": [
+                        [
+                            name,
+                            explicit_bound_value(value, f"keyword {name!r}"),
+                        ]
+                        for name, value in item.kwargs
+                    ],
+                }
+            )
+        if item.kind == "method":
+            return _hash(
+                {
+                    "kind": "method",
+                    "callable": descriptor_version(item.child),
+                    "owner": class_version(item.implementation),
+                }
+            )
+        if item.kind in {"class", "instance"}:
+            return _hash(
+                {
+                    "kind": item.kind,
+                    "implementation": class_version(item.implementation),
+                }
+            )
+        if item.kind in {"builtin", "method_descriptor"}:
+            return _hash({"kind": item.kind, "reference": item.reference})
+        raise TypeError(f"Unsupported callable descriptor {item.kind!r}")
 
-    for name in sorted(referenced_names(fn.__code__)):
-        value = namespace.get(name)
-        if inspect.isfunction(value) or isinstance(value, Workflow):
-            sdk_modules = {
-                "botpipe.runtime",
-                "botpipe.sessions",
-                "botpipe.prompts",
-                "botpipe.artifacts",
-                "botpipe.worklists",
-            }
-            if getattr(value, "__module__", "") not in sdk_modules or isinstance(
-                value, Workflow
-            ):
-                values["helpers"][name] = helper_version(value)
-        elif isinstance(value, (str, int, float, bool, tuple)) or value is None:
-            try:
-                values["helpers"][name] = codec.encode(value)
-            except TypeError:
-                pass
-        elif isinstance(value, type):
-            codec.type_name(value)
-            try:
-                values["helpers"][name] = TypeAdapter(value).json_schema()
-            except Exception:
-                pass
-    # Closures containing mutable test providers/counters are not orchestration
-    # source. Immutable configuration is pinned; effects inside closures must be activities.
-    if fn.__closure__:
-        values["closure"] = []
-        for cell in fn.__closure__:
-            value = cell.cell_contents
-            if isinstance(value, (str, int, float, bool, tuple)):
-                values["closure"].append(codec.encode(value))
-            elif inspect.isfunction(value) or isinstance(value, Workflow):
-                values["closure"].append(helper_version(value))
-            elif isinstance(value, type):
-                values["closure"].append({"type": codec.type_name(value)})
-    return _hash(values)
+    return descriptor_version(descriptor)
 
 
 def _validate_args(fn, args, kwargs):
@@ -412,16 +685,44 @@ class Workflow:
 
     def __init__(self, fn, *, name=None, version="1", policy=None):
         functools.update_wrapper(self, fn)
-        self.fn, self.name, self.version = fn, name or fn.__name__, str(version)
+        self.fn = fn
+        self.name = name or getattr(fn, "__name__", type(fn).__name__)
+        self.version = str(version)
         self.policy = Policy.resolve(policy)
         from .provenance import (
             capture_definition_sources,
             capture_orchestration_sources,
         )
 
+        descriptor = describe_callable(self)
+        sdk_modules = {
+            "botpipe.runtime",
+            "botpipe.sessions",
+            "botpipe.prompts",
+            "botpipe.artifacts",
+            "botpipe.worklists",
+        }
+        source_targets = tuple(
+            target
+            for target in descriptor.boundary_targets
+            if getattr(target, "__module__", "") not in sdk_modules
+        )
+        self._source_boundaries = tuple(
+            dict.fromkeys(
+                boundary
+                for target in source_targets
+                if (boundary := source_boundary(target)) is not None
+            )
+        )
+        self._source_boundary = (
+            self._source_boundaries[0] if self._source_boundaries else None
+        )
         self._source_identity_at_definition = capture_definition_sources(self)
-        self._orchestration_sources_at_definition = capture_orchestration_sources(self)
-        self._source_boundary = source_boundary(self)
+        self._orchestration_sources_at_definition = (
+            capture_orchestration_sources(self, boundary=self._source_boundaries)
+            if self._source_boundaries
+            else None
+        )
 
     def __call__(self, *args, **kwargs):
         ctx = current_run()
@@ -559,8 +860,12 @@ class RunContext:
                 / hashlib.sha256(scope.encode()).hexdigest()[:16]
             )
         self.folder.mkdir(parents=True, exist_ok=True)
-        source = inspect.getsourcefile(definition.fn)
-        self.source_dir = Path(source).resolve().parent if source else self.workspace
+        boundary = definition._source_boundary
+        self.source_dir = (
+            (boundary if boundary and boundary.is_dir() else boundary.parent)
+            if boundary
+            else self.workspace
+        )
         self.policy = Policy.resolve(
             parent.policy if parent else client.policy, definition.policy
         )
@@ -577,10 +882,8 @@ class RunContext:
         self._replay_state = parent._replay_state if parent else {"error": None}
         self.provider_budgets = parent.provider_budgets if parent else ()
         inherited = parent.source_boundaries if parent is not None else ()
-        own_boundary = definition._source_boundary
-        self.source_boundaries = tuple(
-            dict.fromkeys((*inherited, *((own_boundary,) if own_boundary else ())))
-        )
+        own_boundaries = definition._source_boundaries
+        self.source_boundaries = tuple(dict.fromkeys((*inherited, *own_boundaries)))
 
     def take_input_candidate(self, operation_id):
         """Consume a submitted answer only from the input operation it targets."""
@@ -667,13 +970,21 @@ class RunContext:
                 return codec.decode(record["result"])
             if record["status"] == "failed":
                 raise _restore_exception(record["error"])
-            authorized = bool((record.get("response") or {}).get("retry_authorized"))
+            if kind == "provider":
+                provider_checkpoint = ProviderCheckpoint.from_record(
+                    record.get("response")
+                )
+                authorized = isinstance(provider_checkpoint, RetryAuthorizedCheckpoint)
+            else:
+                authorized = bool(
+                    (record.get("response") or {}).get("retry_authorized")
+                )
             if recover is None and not (retry_safe or orchestrator or authorized):
                 raise UncertainOperation(
                     f"Operation {operation_id} was interrupted; reconcile it before retrying",
                     operation_id,
                 )
-            if authorized and recover is None:
+            if authorized and recover is None and kind != "provider":
                 self.save_response(
                     operation_id,
                     {"generation": record["response"].get("generation", 1)},
@@ -767,11 +1078,7 @@ class RunContext:
             dict.fromkeys(
                 (
                     *self.source_boundaries,
-                    *(
-                        (definition._source_boundary,)
-                        if definition._source_boundary
-                        else ()
-                    ),
+                    *definition._source_boundaries,
                 )
             )
         )
@@ -784,8 +1091,7 @@ class RunContext:
             source_boundaries=boundaries,
         )
 
-    def scope_call(self, scope, fn):
-        definition = Workflow(fn, name=getattr(fn, "__name__", "branch"))
+    def scope_call(self, scope, definition):
         return self._child(
             definition, (), {}, f"{self.scope}/{scope}", parallel_branch=True
         )
@@ -871,7 +1177,34 @@ def parallel(*calls, max_workers=None, settle="all"):
     if not all(callable(fn) for fn in calls):
         raise TypeError("parallel expects callables, e.g. lambda: reviewer.run(...)")
     ctx = current_run()
-    inputs = {"calls": [_function_version(fn) for fn in calls], "settle": settle}
+    definitions = tuple(
+        Workflow(fn, name=getattr(fn, "__name__", f"branch-{index}"))
+        for index, fn in enumerate(calls)
+    )
+    inputs = {
+        "identity": "botpipe.parallel-branches.v2",
+        "calls": [
+            {"name": definition.name, "fingerprint": definition.fingerprint}
+            for definition in definitions
+        ],
+        "settle": settle,
+    }
+
+    operation_id = f"{ctx.run_id}:{ctx.scope}:{ctx.ordinal}"
+    recorded = ctx.journal.get(operation_id)
+    if recorded is not None and recorded.get("kind") == "parallel":
+        try:
+            recorded_inputs = codec.decode(recorded["inputs"])
+        except (TypeError, ValueError):
+            recorded_inputs = None
+        if (
+            not isinstance(recorded_inputs, dict)
+            or recorded_inputs.get("identity") != "botpipe.parallel-branches.v2"
+        ):
+            raise ReplayMismatch(
+                f"Parallel operation {operation_id} has legacy callable identity "
+                "that cannot verify branch source; start a new run"
+            )
 
     def execute():
         group = ctx.ordinal - 1
@@ -879,8 +1212,12 @@ def parallel(*calls, max_workers=None, settle="all"):
             return []
         with ThreadPoolExecutor(max_workers=max_workers or len(calls)) as pool:
             futures = [
-                pool.submit(ctx.scope_call, f"parallel-{group}/{index}", fn)
-                for index, fn in enumerate(calls)
+                pool.submit(
+                    ctx.scope_call,
+                    f"parallel-{group}/{index}",
+                    definition,
+                )
+                for index, definition in enumerate(definitions)
             ]
             values = []
             errors = []
@@ -899,8 +1236,25 @@ def parallel(*calls, max_workers=None, settle="all"):
                 raise errors[0]
             return values
 
+    boundaries = tuple(
+        dict.fromkeys(
+            (
+                *ctx.source_boundaries,
+                *(
+                    boundary
+                    for definition in definitions
+                    for boundary in definition._source_boundaries
+                ),
+            )
+        )
+    )
     return ctx.operation(
-        "parallel", inputs, execute, orchestrator=True, name="parallel"
+        "parallel",
+        inputs,
+        execute,
+        orchestrator=True,
+        name="parallel",
+        source_boundaries=boundaries,
     )
 
 
@@ -1001,37 +1355,17 @@ class Botpipe:
                     yield
                     return
                 if owner != {"journal": str(self.journal.path), "run_id": run_id}:
-                    path = Path(owner["journal"])
-                    if not path.is_file():
+                    if (
+                        not isinstance(owner, dict)
+                        or not isinstance(owner.get("journal"), str)
+                        or not isinstance(owner.get("run_id"), str)
+                    ):
                         raise RunBusy(
-                            "Previous run journal is missing; restore it to reconcile workspace ownership"
+                            "Workspace ownership record is unreadable; restore it before continuing"
                         )
-                    import sqlite3
-
-                    db = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
-                    try:
-                        rows = db.execute(
-                            "SELECT kind,status,response,inputs FROM operations WHERE run_id=? "
-                            "AND kind IN ('provider','activity') AND status IN ('started','response')",
-                            (owner["run_id"],),
-                        ).fetchall()
-                    finally:
-                        db.close()
-                    unfinished = any(
-                        (
-                            not json.loads(response or "{}").get("not_dispatched")
-                            or json.loads(response or "{}").get(
-                                "restoration_pending", False
-                            )
-                        )
-                        and (
-                            kind == "activity"
-                            or "text" not in json.loads(response or "{}")
-                            or bool(json.loads(inputs).get("value", {}).get("writes"))
-                        )
-                        for kind, status, response, inputs in rows
-                    )
-                    if unfinished:
+                    if Journal.foreign_has_unresolved_effects(
+                        owner["journal"], owner["run_id"]
+                    ):
                         raise RunBusy(
                             f"Run {owner['run_id']} has unresolved effects; resume or reconcile it first"
                         )
@@ -1256,78 +1590,18 @@ class Botpipe:
         )
 
     def _outputs(self, run_id):
-        from .artifacts import ArtifactHandle, ArtifactMap
-        from .dispatches import aggregate_usage, dispatch_records
+        from .read_projection import project_run
 
-        artifacts = {}
-        usage = {}
-        dispatches = dispatch_records(self.journal.events(run_id))
-        for row in self.journal.operations(run_id):
-            response = row.get("response") or {}
-            observed_usage = (
-                aggregate_usage(dispatches[row["id"]])
-                if row["id"] in dispatches
-                else response.get("usage", {})
-            )
-            for key, value in observed_usage.items():
-                if isinstance(value, (int, float)):
-                    usage[key] = usage.get(key, 0) + value
-            if row["status"] == "completed" and row["kind"] == "provider":
-                # Inspection needs artifact records, not executable imports of
-                # the workflow's possibly local or no-longer-installed model.
-                handles = codec.decode(codec.encoded_field(row["result"], "artifacts"))
-                for name, handle in handles.items():
-                    artifacts[f"{row['scope']}/{row['ordinal']}/{name}"] = handle
-            elif row["status"] == "completed" and row["kind"] in (
-                "worklist.complete",
-                "worklist_complete",
-                "read",
-            ):
-                result = codec.decode(row["result"])
-                if (
-                    isinstance(result, dict)
-                    and {"name", "path", "source_path", "kind", "digest"}
-                    <= result.keys()
-                ):
-                    result = ArtifactHandle.from_record(result)
-                if isinstance(result, ArtifactHandle):
-                    artifacts[f"{row['scope']}/{row['ordinal']}/{result.name}"] = result
-        return ArtifactMap(artifacts), usage
+        projection = project_run(self.journal.snapshot(run_id))
+        return projection.artifacts, projection.usage
 
     def runs(self):
         return self.journal.runs()
 
     def inspect(self, run_id):
-        from .dispatches import aggregate_usage, dispatch_records
+        from .read_projection import project_run
 
-        records = self.journal.operations(run_id)
-        events = self.journal.events(run_id)
-        dispatches = dispatch_records(events)
-        for record in records:
-            response = record.get("response") or {}
-            if record["id"] in dispatches:
-                record["dispatches"] = dispatches[record["id"]]
-                record["usage"] = aggregate_usage(record["dispatches"])
-                record["usage_availability"] = (
-                    "known_total"
-                    if all(
-                        d["usage_availability"] == "known_total"
-                        for d in record["dispatches"]
-                    )
-                    else "partial"
-                    if record["usage"]
-                    else "unknown"
-                )
-            else:
-                record["usage"] = response.get("usage", {})
-        artifacts, usage = self._outputs(run_id)
-        return {
-            "run": self.journal.run(run_id),
-            "operations": records,
-            "events": events,
-            "artifacts": artifacts.to_record(),
-            "usage": usage,
-        }
+        return project_run(self.journal.snapshot(run_id)).inspection()
 
     def resolve(
         self,
@@ -1351,7 +1625,22 @@ class Botpipe:
                 reference = f"{data['module']}:{data['function']}"
                 definition_boundary = self._definition(reference)._source_boundary
             except (ImportError, AttributeError, LookupError, ValueError, BotpipeError):
-                pass
+                # A local/non-importable workflow can reconcile only while its
+                # recorded source remains at the original location. Portable
+                # relocation requires an importable root to anchor ownership.
+                source_file = data.get("source_file")
+                if source_file:
+                    try:
+                        source = Path(source_file).resolve(strict=True)
+                    except OSError:
+                        pass
+                    else:
+                        package = (
+                            (source.parent / "__init__.py").is_file()
+                            or (source.parent / "workflow.toml").is_file()
+                            or source.name in {"workflow.py", "flow.py"}
+                        )
+                        definition_boundary = source.parent if package else source
             source_boundaries = _preflight_recorded_sources(
                 data, operations, definition_boundary
             )
@@ -1366,23 +1655,23 @@ class Botpipe:
                 )
             if artifact_digests is not None and record["kind"] != "provider":
                 raise ValueError("Only provider outputs accept artifact reconciliation")
-            if (record.get("response") or {}).get("not_dispatched"):
-                raise ValueError(
-                    "Budget exhausted before dispatch; no effects need reconciliation. "
-                    "Start a new run to use different provider budget limits"
-                )
             old = dict(record.get("response") or {})
             source = "operator"
             if record["kind"] == "provider":
                 from .providers import ProviderRequest, ProviderResponse
 
+                checkpoint = ProviderCheckpoint.from_record(old)
+                if isinstance(checkpoint, NotDispatchedCheckpoint):
+                    raise ValueError(
+                        "Budget exhausted before dispatch; no effects need reconciliation. "
+                        "Start a new run to use different provider budget limits"
+                    )
                 with codec.source_identity(source_boundaries):
                     inputs = codec.decode(record["inputs"])
-                request_data = old.get("request") or {}
+                request_data = checkpoint.request_data or {}
                 # A retry marker names the *next* generation; reconcile the
                 # attempt whose effects are still awaiting resolution.
-                generation = old.get("generation", 0)
-                previous = generation - 1 if old.get("retry_authorized") else generation
+                previous = checkpoint.attempt_generation
                 request = ProviderRequest(
                     operation_id=operation_id,
                     prompt=request_data.get("prompt", inputs["prompt"]),
@@ -1405,41 +1694,23 @@ class Botpipe:
                 )
 
                 def reconcile_provider():
-                    nonlocal response, retry, source, old
-                    if "text" in old:
+                    nonlocal response, retry, source, checkpoint
+                    if isinstance(checkpoint, RespondedCheckpoint):
                         # This journaled response already passed the provider
                         # boundary; it is as authoritative as a recovered receipt.
-                        outcome = Completed(
-                            ProviderResponse(
-                                **{
-                                    key: old[key]
-                                    for key in (
-                                        "text",
-                                        "session_id",
-                                        "usage",
-                                        "metadata",
-                                    )
-                                    if key in old
-                                }
-                            )
-                        )
+                        outcome = Completed(checkpoint.response)
                     else:
                         outcome = recover_outcome(self.provider, request)
-                    if isinstance(outcome, Completed):
-                        response = outcome.response
+                    action = ProviderLifecycle.reconciliation_action(outcome)
+                    if action is RecoveryAction.USE_RESPONSE:
+                        checkpoint = ProviderLifecycle.completed(
+                            checkpoint, outcome.response
+                        )
+                        response = checkpoint.response
                         retry = False
                         source = "recovered"
-                        old.pop("retry_authorized", None)
-                        old["generation"] = previous
-                    elif not isinstance(outcome, Stopped):
-                        state = (
-                            "still running"
-                            if isinstance(outcome, Running)
-                            else "not confirmed stopped"
-                        )
-                        raise BotpipeError(
-                            f"The provider is {state}; reconciliation is blocked. {outcome.detail or ''}".strip()
-                        )
+                    elif action is RecoveryAction.BLOCK:
+                        raise BotpipeError(ProviderLifecycle.blocked_message(outcome))
                     if artifact_digests is not None:
                         from .artifacts import Artifact, ArtifactStore
 
@@ -1465,9 +1736,12 @@ class Botpipe:
                         )
                         artifact_operation = f"{operation_id}:generation:{previous}"
                         if store.has_capture_evidence(artifact_operation):
-                            if (old.get("artifact_resolution") or {}).get(
-                                "digests"
-                            ) != artifact_digests:
+                            resolution = (
+                                checkpoint.artifact_resolution
+                                if isinstance(checkpoint, RespondedCheckpoint)
+                                else None
+                            )
+                            if (resolution or {}).get("digests") != artifact_digests:
                                 raise ValueError(
                                     "Artifact capture already has durable evidence; resume it instead"
                                 )
@@ -1475,10 +1749,18 @@ class Botpipe:
                             approved = store.check_capture_digests(
                                 declarations, artifact_digests
                             )
-                            old["artifact_resolution"] = {
-                                "source": "operator",
-                                "digests": approved,
-                            }
+                            if response is _UNSET:
+                                raise ValueError(
+                                    "Artifact reconciliation also needs a provider response"
+                                )
+                            if not isinstance(response, ProviderResponse):
+                                response = ProviderResponse(**response)
+                            checkpoint = ProviderLifecycle.completed(
+                                checkpoint, response
+                            )
+                            checkpoint = ProviderLifecycle.with_artifact_resolution(
+                                checkpoint, approved
+                            )
 
                 target = request.workspace.resolve()
                 if target != self.workspace:
@@ -1494,12 +1776,11 @@ class Botpipe:
                         raise TypeError(
                             "Provider reconciliation needs ProviderResponse or its field mapping"
                         )
-                    old.pop("retry_authorized", None)
-                    old["generation"] = previous
+                    checkpoint = ProviderLifecycle.completed(checkpoint, response)
                     _persist_response(
                         self.journal,
                         operation_id,
-                        {**old, **response.to_record()},
+                        checkpoint.to_record(),
                         session_key=inputs.get("session"),
                     )
             elif response is not _UNSET:
@@ -1515,16 +1796,17 @@ class Botpipe:
             if retry:
                 # Explicit retry is represented by an authorization marker; the
                 # original intent/identity remains, and adapters keep old receipts.
-                _persist_response(
-                    self.journal,
-                    operation_id,
-                    {
+                if record["kind"] == "provider":
+                    checkpoint = ProviderLifecycle.authorize_retry(checkpoint)
+                    retry_record = checkpoint.to_record()
+                else:
+                    retry_record = {
                         "retry_authorized": True,
                         "generation": old.get("generation", 0)
                         + (0 if old.get("retry_authorized") else 1),
                         **({"request": old["request"]} if "request" in old else {}),
-                    },
-                )
+                    }
+                _persist_response(self.journal, operation_id, retry_record)
             self.journal.event(
                 run_id,
                 "operation_reconciled",
@@ -1532,8 +1814,8 @@ class Botpipe:
                     "retry": retry,
                     "source": source,
                     **(
-                        {"artifacts": old["artifact_resolution"]}
-                        if artifact_digests is not None
+                        {"artifacts": checkpoint.artifact_resolution}
+                        if artifact_digests is not None and record["kind"] == "provider"
                         else {}
                     ),
                 },

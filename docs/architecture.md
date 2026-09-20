@@ -19,6 +19,12 @@ provider sessions, human-input events, usage, and immutable artifact references.
 Files become durable before the ledger refers to them. A workspace lock protects
 one active run from another process.
 
+Run records own root execution facts; operation records own their checkpoints.
+The journal commits an operation checkpoint, its native session update, and the
+associated event together. Physical-dispatch events retain separate evidence
+about each actual provider attempt and its usage. An operation response cannot
+retroactively establish the usage of an earlier unknown dispatch.
+
 Atomic publication flushes file contents before replacement. On POSIX it also
 flushes directory entries and propagates flush failures. Windows retains the
 file flush and atomic replacement, but Python cannot fsync directory handles
@@ -84,6 +90,12 @@ passes them through current validation and silently changes their meaning.
 Historical typed checkpoints without a source capsule are likewise refused on
 resume because current source cannot be used to bless unverifiable old state.
 
+Recorded operation failures carry source evidence for the concrete exception
+class and classes that own its stored slots. Replay verifies that evidence
+before restoring exception state without application constructors. Missing or
+changed source evidence is a replay failure, not an `ActivityFailed` fallback;
+that fallback is only for a verified exception whose state cannot be restored.
+
 The automatic fingerprint pins the whole orchestration module and bounded,
 owned Python helper and contract modules, including class behavior. Mutable
 application files are outside this fingerprint. It is not an immutable process
@@ -92,6 +104,13 @@ values, and configuration semantics
 can change outside that source bundle. Authors should bump
 `@workflow(version=...)` when those dependencies change meaningfully and start a
 new run when the original environment cannot be reproduced.
+
+Callable identity describes executable behavior and supported explicit bindings,
+including recursive partials, bound methods, and callable instances. It does not
+serialize arbitrary receiver state, closures, or the process environment. Live
+`Session` objects remain usable in ordinary Python composition. Code identity,
+recorded prompt/data observations, and the full package provenance surface serve
+different purposes: a package resource edit is not by itself a new replay gate.
 
 An operation that may have started an external effect but has no committed
 outcome is `interrupted`. Botpipe will not infer that the effect failed or rerun
@@ -105,6 +124,27 @@ without a completed response accepts a manual response or retry authorization.
 Running and unknown attempts remain blocked; a legacy recovery hook returning
 `None` establishes no knowledge of termination. A native launch interrupted
 before its process identity was recorded therefore remains uncertain.
+
+One provider checkpoint model interprets saved state for normal execution,
+recovery, manual reconciliation, and workspace ownership checks. The provider
+lifecycle owns the corresponding decisions; sessions retain the artifact and
+validation work. These are provider-specific rules, not a second control-flow
+language for workflows or a universal state machine for inputs and activities.
+
+| Durable fact | Permitted continuation |
+| --- | --- |
+| Preparation began; no dispatch intent exists | Finish preparation before dispatch. |
+| Dispatch intent exists; no response is recorded | Recover the same attempt; uncertainty never authorizes redispatch. |
+| Dispatch was rejected before effects | Finish restoring destinations, then replay the recorded rejection. |
+| A completed response is recorded | Validate and capture that response without another provider call. |
+| A validated value is recorded | Finish capture and the result checkpoint without revalidating. |
+| Output validation failed | Finish rollback before replaying the failure or starting a separate repair operation. |
+| An explicit retry is authorized | Reconcile the previous generation before preparing the next one; repeated authorization does not skip generations. |
+
+Valid historical provider checkpoints are decoded into this model. Unknown or
+contradictory checkpoint state blocks continuation and does not establish that
+effects stopped. Retry generations remain within the existing operation record;
+validation repair calls and physical dispatches retain their existing identities.
 
 Adapters return `ProviderResponse` with string text, an optional string session
 ID, and plain JSON objects for usage and metadata. Botpipe validates this
@@ -179,9 +219,24 @@ Concurrent mutation through one shared session is rejected. Parallel provider
 edits require an explicit isolated workspace per branch; read-only sessions may
 share the application workspace.
 
+`parallel()` records each prepared branch's complete workflow fingerprint and
+uses the same definition to execute it. Its result carries the union of the
+caller's and branches' source ownership, including types returned across package
+boundaries. Branch identity is checked before branch execution. Dynamically
+created callables can only be checked when orchestration reaches that call site;
+run-status bookkeeping may already have been committed by then.
+Historical parallel records without complete branch identity cannot be upgraded
+from current code and are rejected on replay.
+
 ## Inspection
 
 Before a run, inspection reports the callable signature, typed schemas, policy,
 source, and source digest. Python topology is dynamic, so it does not claim to
 enumerate future branches. After a run, inspection adds the operations and edges
 actually observed. A completed run proves only the path taken for those inputs.
+
+Inspection uses one journal snapshot of run, operation, and event records. A
+shared read projection derives artifacts and usage from that snapshot without
+hydrating application result models. Foreign-workspace ownership checks use the
+journal's read-only unresolved-effects query; missing or malformed evidence keeps
+the workspace fenced.

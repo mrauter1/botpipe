@@ -32,8 +32,21 @@ from .providers import (
     ProviderResponse,
     ProviderTimeoutError,
 )
+from .provider_checkpoints import (
+    EmptyCheckpoint,
+    IntentCheckpoint,
+    NotDispatchedCheckpoint,
+    PreparingCheckpoint,
+    ProviderCheckpoint,
+    ProviderLifecycle,
+    RecoveryAction,
+    RespondedCheckpoint,
+    RetryAuthorizedCheckpoint,
+    ValidatedCheckpoint,
+    ValidationFailedCheckpoint,
+)
 from .runtime import _async_call, current_run
-from .recovery import Completed, Stopped, recover_outcome
+from .recovery import recover_outcome
 
 T = TypeVar("T")
 
@@ -235,10 +248,10 @@ class Session:
                     operation_id = ctx.operation_id
                     fresh_response = False
                     row = ctx.journal.get(operation_id)
-                    saved = row.get("response") or {}
-                    generation = saved.get("generation", 0)
-                    authorized = saved.get("retry_authorized", False)
-                    prepared_generation = generation - 1 if authorized else generation
+                    checkpoint = ProviderCheckpoint.from_record(row.get("response"))
+                    generation = checkpoint.generation
+                    authorized = isinstance(checkpoint, RetryAuthorizedCheckpoint)
+                    prepared_generation = checkpoint.attempt_generation
                     artifact_operation = (
                         f"{operation_id}:generation:{prepared_generation}"
                     )
@@ -260,28 +273,30 @@ class Session:
                                 f"Artifact restoration is incomplete; resume after resolving the conflict: {exc}",
                                 operation_id,
                             ) from exc
-                        if saved.get("restoration_pending"):
-                            saved["restoration_pending"] = False
-                            ctx.save_response(operation_id, saved)
+                        nonlocal checkpoint
+                        if (
+                            isinstance(checkpoint, NotDispatchedCheckpoint)
+                            and checkpoint.restoration_pending
+                        ):
+                            checkpoint = replace(checkpoint, restoration_pending=False)
+                            ctx.save_response(operation_id, checkpoint.to_record())
 
-                    if saved.get("not_dispatched"):
+                    if isinstance(checkpoint, NotDispatchedCheckpoint):
                         restore()
-                        if "policy_error" in saved:
-                            raise ProviderPolicyError(saved["policy_error"])
-                        raise BudgetExceeded(
-                            saved.get("budget_error", "Provider budget exhausted")
-                        )
+                        if checkpoint.error_kind == "policy_error":
+                            raise ProviderPolicyError(checkpoint.error)
+                        raise BudgetExceeded(checkpoint.error)
 
-                    if "output_error" in saved:
+                    if isinstance(checkpoint, ValidationFailedCheckpoint):
                         # The provider completed, then validation failed. Finish
                         # an interrupted rollback before replaying that failure.
                         rollback()
-                        error = saved["output_error"]
+                        error = checkpoint.output_error
                         failure = (
                             OutputValidationError if error["retryable"] else TypeError
                         )
                         raise failure(error["message"])
-                    if "validated_value" in saved:
+                    if isinstance(checkpoint, ValidatedCheckpoint):
                         try:
                             captured = store.captured(artifact_operation)
                         except (OSError, ArtifactError) as exc:
@@ -290,18 +305,20 @@ class Session:
                             ) from exc
                         if captured is not None:
                             return Result(
-                                codec.decode(saved["validated_value"]),
+                                codec.decode(checkpoint.validated_value),
                                 captured,
-                                saved.get("usage", {}),
+                                checkpoint.response.usage,
                                 operation_id,
                             )
-                    preparing = not saved or saved.get("preparing", False)
-                    if not saved:
+                    preparing = isinstance(
+                        checkpoint, (EmptyCheckpoint, PreparingCheckpoint)
+                    )
+                    if isinstance(checkpoint, EmptyCheckpoint):
                         # Validate paths before any destination can move. This
                         # marker proves a resumed preparation has not dispatched.
                         store.destinations(writes)
-                        saved = {"generation": generation, "preparing": True}
-                        ctx.save_response(operation_id, saved)
+                        checkpoint = PreparingCheckpoint(generation)
+                        ctx.save_response(operation_id, checkpoint.to_record())
                     try:
                         destinations = (
                             store.destinations(writes)
@@ -356,7 +373,7 @@ class Session:
                             + feedback
                         )
                     binding = ctx.journal.session(self.key) or {}
-                    request_data = saved.get("request") or {
+                    request_data = checkpoint.request_data or {
                         "session_id": binding.get("session_id"),
                         "receipt_dir": str(ctx.folder / "receipts"),
                         "prompt": complete_prompt,
@@ -383,15 +400,18 @@ class Session:
                         # process may still be writing them, or its completed
                         # response may already be recoverable from a receipt.
                         outcome = recover_outcome(ctx.client.provider, request)
-                        if isinstance(outcome, Completed):
+                        action = ProviderLifecycle.recovery_action(checkpoint, outcome)
+                        if action is RecoveryAction.USE_RESPONSE:
                             generation = prepared_generation
-                            saved = {
-                                **outcome.response.to_record(),
-                                "request": request_data,
-                                "generation": generation,
-                            }
-                            ctx.save_response(operation_id, saved, session_key=self.key)
-                        elif isinstance(outcome, Stopped):
+                            checkpoint = ProviderLifecycle.completed(
+                                checkpoint, outcome.response
+                            )
+                            ctx.save_response(
+                                operation_id,
+                                checkpoint.to_record(),
+                                session_key=self.key,
+                            )
+                        elif action is RecoveryAction.START_RETRY:
                             rollback()
                             artifact_operation = (
                                 f"{operation_id}:generation:{generation}"
@@ -412,30 +432,23 @@ class Session:
                                 or "Provider is not confirmed stopped; retry is blocked",
                                 operation_id,
                             )
-                    if "text" in saved:
-                        response = ProviderResponse(
-                            **{
-                                k: saved[k]
-                                for k in ("text", "session_id", "usage", "metadata")
-                                if k in saved
-                            }
-                        )
+                    if isinstance(checkpoint, RespondedCheckpoint):
+                        response = checkpoint.response
                     else:
                         if authorized or preparing or not recover:
+                            checkpoint = IntentCheckpoint(generation, request_data)
                             ctx.save_response(
                                 operation_id,
-                                {"request": request_data, "generation": generation},
+                                checkpoint.to_record(),
                             )
                         dispatched = False
                         try:
-                            if (
-                                recover
-                                and not authorized
-                                and not preparing
-                                and not saved.get("not_dispatched")
-                            ):
+                            if recover and not authorized and not preparing:
                                 outcome = recover_outcome(ctx.client.provider, request)
-                                if not isinstance(outcome, Completed):
+                                action = ProviderLifecycle.recovery_action(
+                                    checkpoint, outcome
+                                )
+                                if action is not RecoveryAction.USE_RESPONSE:
                                     raise UncertainOperation(
                                         outcome.detail
                                         or "Provider intent has no durable response; reconcile before retrying",
@@ -481,14 +494,14 @@ class Session:
                                 fresh_response = True
                         except BudgetExceeded as exc:
                             if not dispatched:
-                                saved = {
-                                    "request": request_data,
-                                    "generation": generation,
-                                    "not_dispatched": True,
-                                    "restoration_pending": True,
-                                    "budget_error": str(exc),
-                                }
-                                ctx.save_response(operation_id, saved)
+                                checkpoint = NotDispatchedCheckpoint(
+                                    generation,
+                                    request_data,
+                                    True,
+                                    "budget_error",
+                                    str(exc),
+                                )
+                                ctx.save_response(operation_id, checkpoint.to_record())
                                 restore()
                             else:
                                 raise UncertainOperation(
@@ -500,14 +513,14 @@ class Session:
                                 raise UncertainOperation(
                                     str(exc), operation_id
                                 ) from exc
-                            saved = {
-                                "request": request_data,
-                                "generation": generation,
-                                "not_dispatched": True,
-                                "restoration_pending": True,
-                                "policy_error": str(exc),
-                            }
-                            ctx.save_response(operation_id, saved)
+                            checkpoint = NotDispatchedCheckpoint(
+                                generation,
+                                request_data,
+                                True,
+                                "policy_error",
+                                str(exc),
+                            )
+                            ctx.save_response(operation_id, checkpoint.to_record())
                             restore()
                             raise
                         except Exception as exc:
@@ -518,25 +531,23 @@ class Session:
                                 operation_id,
                             )
                         try:
-                            response_record = response.to_record()
+                            response.to_record()
                         except (ValueError, TypeError, RecursionError) as exc:
                             raise UncertainOperation(
                                 f"Provider returned an invalid response: {exc}",
                                 operation_id,
                             ) from exc
-                        saved = {
-                            **response_record,
-                            "request": request_data,
-                            "generation": generation,
-                        }
+                        checkpoint = RespondedCheckpoint(
+                            generation, request_data, response
+                        )
                         ctx.save_response(
                             operation_id,
-                            saved,
+                            checkpoint.to_record(),
                             session_key=self.key,
                         )
                     try:
-                        if "validated_value" in saved:
-                            value = codec.decode(saved["validated_value"])
+                        if isinstance(checkpoint, ValidatedCheckpoint):
+                            value = codec.decode(checkpoint.validated_value)
                         elif returns is str:
                             value = response.text
                         else:
@@ -547,7 +558,7 @@ class Session:
                             value = TypeAdapter(returns).validate_json(
                                 fenced.group(1) if fenced else text
                             )
-                        if "validated_value" not in saved:
+                        if not isinstance(checkpoint, ValidatedCheckpoint):
                             # Persist normalized state before capture. Recovery
                             # can finish the same result without rerunning hooks.
                             value_record = codec.encode(value)
@@ -556,26 +567,38 @@ class Session:
                                     value, ArtifactMap(), response.usage, operation_id
                                 )
                             )
-                            saved = {**saved, "validated_value": value_record}
-                            ctx.save_response(operation_id, saved, session_key=self.key)
+                            checkpoint = ValidatedCheckpoint(
+                                generation=checkpoint.generation,
+                                request=checkpoint.request,
+                                response=checkpoint.response,
+                                artifact_resolution=checkpoint.artifact_resolution,
+                                validated_value=value_record,
+                            )
+                            ctx.save_response(
+                                operation_id,
+                                checkpoint.to_record(),
+                                session_key=self.key,
+                            )
                         artifacts = store.capture(
                             writes,
                             artifact_operation,
                             recover=not fresh_response,
-                            expected_digests=(
-                                saved.get("artifact_resolution") or {}
-                            ).get("digests"),
+                            expected_digests=(checkpoint.artifact_resolution or {}).get(
+                                "digests"
+                            ),
                         )
                     except (ValueError, TypeError) as exc:
                         retryable = isinstance(exc, ValueError)
-                        saved = {
-                            **saved,
-                            "output_error": {
-                                "message": str(exc),
-                                "retryable": retryable,
-                            },
-                        }
-                        ctx.save_response(operation_id, saved, session_key=self.key)
+                        checkpoint = ProviderLifecycle.validation_failed(
+                            checkpoint,
+                            message=str(exc),
+                            retryable=retryable,
+                        )
+                        ctx.save_response(
+                            operation_id,
+                            checkpoint.to_record(),
+                            session_key=self.key,
+                        )
                         rollback()
                         if retryable:
                             raise OutputValidationError(str(exc)) from exc

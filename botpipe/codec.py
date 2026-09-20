@@ -8,13 +8,14 @@ import dataclasses
 import importlib
 import json
 import math
+import os
 import re
 import sys
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta, timezone
 from enum import Enum
 from inspect import get_annotations, getattr_static
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from types import MappingProxyType, MemberDescriptorType, SimpleNamespace
 from typing import ForwardRef, get_args, get_origin, get_type_hints
 
@@ -28,6 +29,7 @@ _TYPE_NAME = re.compile(r"^[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*:[^:\x00\r\n]{1,1000}$
 _SOURCE_BOUNDARY = contextvars.ContextVar("botpipe_source_boundary", default=None)
 _SOURCE_CAPTURE = contextvars.ContextVar("botpipe_source_capture", default=None)
 _DECODE_SOURCES = contextvars.ContextVar("botpipe_decode_sources", default=None)
+_OWNER_SCHEMA = "botpipe.source-owners.v1"
 
 
 @contextmanager
@@ -43,6 +45,70 @@ def source_identity(boundary):
         yield
     finally:
         _SOURCE_BOUNDARY.reset(token)
+
+
+def _boundary_kind(path):
+    if path.is_file():
+        return "file"
+    if path.is_dir():
+        return "directory"
+    raise TypeError(
+        f"Source ownership boundary is neither a file nor directory: {path}"
+    )
+
+
+def _source_owner_record(boundaries):
+    """Describe operation ownership relative to its first (workflow) boundary."""
+
+    paths = tuple(Path(item).resolve(strict=True) for item in boundaries)
+    if not paths:
+        return None
+    root = paths[0]
+    base = root if root.is_dir() else root.parent
+    items = [{"kind": _boundary_kind(root), "root": True}]
+    for path in paths[1:]:
+        relative = Path(os.path.relpath(path, base)).as_posix()
+        _portable_owner_relative(relative, "source owner")
+        items.append({"kind": _boundary_kind(path), "relative": relative})
+    return {"schema": _OWNER_SCHEMA, "boundaries": items}
+
+
+def _portable_owner_relative(relative, path):
+    if type(relative) is not str or not relative or "\x00" in relative:
+        raise TypeError(f"{path}: invalid source owner locator")
+    posix = PurePosixPath(relative)
+    windows = PureWindowsPath(relative)
+    if (
+        posix.is_absolute()
+        or windows.is_absolute()
+        or windows.drive
+        or "\\" in relative
+        or posix.as_posix() != relative
+    ):
+        raise TypeError(f"{path}: invalid portable source ownership path {relative!r}")
+    seen_name = False
+    for part in posix.parts:
+        if part == "..":
+            if seen_name:
+                raise TypeError(
+                    f"{path}: invalid portable source ownership path {relative!r}"
+                )
+        elif part != ".":
+            seen_name = True
+    return posix
+
+
+def _resolve_owner_relative(base, relative, path):
+    parts = _portable_owner_relative(relative, path).parts
+    candidate = base
+    for part in parts:
+        if part == "..":
+            candidate = candidate.parent
+        elif part != ".":
+            candidate = candidate / part
+            if candidate.is_symlink():
+                raise TypeError(f"{path}: source owner locator traverses a symlink")
+    return candidate.resolve(strict=True)
 
 
 @contextmanager
@@ -596,7 +662,7 @@ def encode(value, *, record_owners=False):
         encoded = _encode(value, "$.value", 0, _Traversal())
     finally:
         _SOURCE_CAPTURE.reset(token)
-    owners = list(_SOURCE_BOUNDARY.get() or ()) if record_owners else []
+    owners = _source_owner_record(_SOURCE_BOUNDARY.get()) if record_owners else None
     if not sources and not owners:
         return encoded
     capsule = {
@@ -605,7 +671,7 @@ def encode(value, *, record_owners=False):
         "sources": dict(sorted(sources.items())),
         "value": encoded,
     }
-    if owners:
+    if owners is not None:
         capsule["owners"] = owners
     return capsule
 
@@ -876,23 +942,52 @@ def _state_record(value, path, kind):
     return record
 
 
-def encoded_field(record, name):
-    """Return one encoded state field without importing or hydrating its type."""
+def encoded_body(record):
+    """Read a source capsule's value without resolving owners or application types."""
 
-    if type(record) is not dict:
-        raise TypeError("$: durable state record must be an object")
-    if record.get("$botpipe") == "capsule":
+    if type(record) is dict and record.get("$botpipe") == "capsule":
         capsule = _record(
             record,
             "$",
             {"$botpipe", "version", "sources", "value"},
             optional={"owners"},
         )
-        if capsule["version"] != 1:
+        if type(capsule["version"]) is not int or capsule["version"] != 1:
             raise TypeError(
                 f"$: unsupported source capsule version {capsule['version']!r}"
             )
-        record = capsule["value"]
+        _string_mapping(capsule["sources"], "$.sources")
+        owners = capsule.get("owners", [])
+        if type(owners) is list:
+            if not all(type(owner) is str for owner in owners):
+                raise TypeError("$.owners: legacy source owners must be path strings")
+        elif type(owners) is dict:
+            owner_record = _record(owners, "$.owners", {"schema", "boundaries"})
+            if owner_record["schema"] != _OWNER_SCHEMA:
+                raise TypeError("$.owners: unsupported source owner schema")
+            boundaries = owner_record["boundaries"]
+            if type(boundaries) is not list or not boundaries:
+                raise TypeError("$.owners.boundaries: expected a nonempty list")
+            first = _record(boundaries[0], "$.owners.boundaries[0]", {"root", "kind"})
+            if first["root"] is not True or first["kind"] not in {"file", "directory"}:
+                raise TypeError("$.owners.boundaries[0]: invalid source root locator")
+            for boundary in boundaries[1:]:
+                item = _record(boundary, "$.owners.boundaries", {"relative", "kind"})
+                if item["kind"] not in {"file", "directory"}:
+                    raise TypeError("$.owners.boundaries: invalid source boundary kind")
+                _portable_owner_relative(item["relative"], "$.owners.boundaries")
+        else:
+            raise TypeError("$.owners: source owners must be a locator record")
+        return capsule["value"]
+    return record
+
+
+def encoded_field(record, name):
+    """Return one encoded state field without importing or hydrating its type."""
+
+    record = encoded_body(record)
+    if type(record) is not dict:
+        raise TypeError("$: durable state record must be an object")
     kind = record.get("$botpipe")
     if kind not in {"model", "dataclass"}:
         raise TypeError(
@@ -977,7 +1072,7 @@ def verify_sources(value, path="$"):
         _DECODE_SOURCES.reset(token)
 
 
-def recorded_source_boundaries(value):
+def recorded_source_boundaries(value, root_boundary=None):
     """Return owned boundaries named by one already-verified source capsule."""
 
     if type(value) is not dict or value.get("$botpipe") != "capsule":
@@ -992,9 +1087,59 @@ def recorded_source_boundaries(value):
     from .provenance import type_source_boundary
 
     owners = record.get("owners", [])
-    if type(owners) is not list or not all(type(item) is str for item in owners):
-        raise TypeError("$.owners: source owners must be path strings")
-    result = [Path(item).resolve(strict=True) for item in owners]
+    if type(owners) is list:
+        # Version 1 capsules originally stored absolute locations. They remain
+        # usable at that exact location, but intentionally gain no relocation
+        # semantics retroactively.
+        if not all(type(item) is str for item in owners):
+            raise TypeError("$.owners: legacy source owners must be path strings")
+        result = [Path(item).resolve(strict=True) for item in owners]
+    elif type(owners) is dict:
+        owner_record = _record(owners, "$.owners", {"schema", "boundaries"})
+        if owner_record["schema"] != _OWNER_SCHEMA:
+            raise TypeError(
+                f"$.owners: unsupported source owner schema {owner_record['schema']!r}"
+            )
+        locators = owner_record["boundaries"]
+        if type(locators) is not list or not locators:
+            raise TypeError(
+                "$.owners.boundaries: source owners must be a nonempty list"
+            )
+        if root_boundary is None:
+            raise TypeError(
+                "$.owners: portable source ownership requires the current workflow boundary"
+            )
+        root = Path(root_boundary).resolve(strict=True)
+        first = _record(locators[0], "$.owners.boundaries[0]", {"kind", "root"})
+        if first["root"] is not True or first["kind"] not in {"file", "directory"}:
+            raise TypeError("$.owners.boundaries[0]: invalid source root locator")
+        if _boundary_kind(root) != first["kind"]:
+            raise TypeError("$.owners: current workflow boundary kind changed")
+        result = [root]
+        base = root if root.is_dir() else root.parent
+        for index, locator in enumerate(locators[1:], 1):
+            item = _record(
+                locator,
+                f"$.owners.boundaries[{index}]",
+                {"kind", "relative"},
+            )
+            relative = item["relative"]
+            if item["kind"] not in {"file", "directory"}:
+                raise TypeError(
+                    f"$.owners.boundaries[{index}]: invalid source owner locator"
+                )
+            candidate = _resolve_owner_relative(
+                base, relative, f"$.owners.boundaries[{index}]"
+            )
+            if _boundary_kind(candidate) != item["kind"]:
+                raise TypeError(
+                    f"$.owners.boundaries[{index}]: source owner kind changed"
+                )
+            result.append(candidate)
+        if len(set(result)) != len(result):
+            raise TypeError("$.owners: source owner locators are ambiguous")
+    else:
+        raise TypeError("$.owners: source owners must be a locator record")
     for name, identity in sources.items():
         if type(identity) is dict and identity.get("kind") == "python":
             result.extend(type_source_boundary(resolve_type(name), identity))
