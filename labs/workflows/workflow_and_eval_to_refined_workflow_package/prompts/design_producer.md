@@ -93,3 +93,10 @@ After writing every declared artifact, return a JSON result matching the injecte
 - Do not treat token optimization as permission for a semantic behavior change.
 - Do not defer core change decisions into vague prose.
 - Do not assume hidden runtime support or automatic promotion behavior.
+
+## Optimizer v2 handoff
+
+- `optimizer_handoff`, when present, is a validated accepted receipt, candidate set, candidate, evidence anchor, and baseline surface identity. Preserve its `candidate_id`, `candidate_set_id`, kind, targets, proposed change, risks, and validation plan.
+- Treat the selected candidate as a proposal to materialize inside the bounded candidate workspace. Do not edit authoritative source files or claim that the proposal was already validated.
+- `candidate_evaluation` is derived from frozen execution trees and an isolated validation run. `paired_evaluation`, when present, is the only measured baseline/candidate comparison.
+- Never promote or copy the candidate into the authoritative workflow. Publication records evidence and a next action only.

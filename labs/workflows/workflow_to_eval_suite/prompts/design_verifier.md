@@ -70,3 +70,9 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 - Do not collapse category coverage into generic prose.
 - Do not ask for a replan when local repair is sufficient.
 - Do not approve a manifest that still hides case ids, case kinds, expected artifacts, or workflow-parameter assumptions.
+
+## Optimizer v2 evaluation-case handoff
+
+- `optimizer_handoff`, when present, contains one validated `evaluation_case` candidate. Turn every supplied case description into concrete typed cases without changing the candidate identity or treating development cases as withheld evaluation evidence.
+- `validated_eval_case_manifest` is the callable-validated manifest. Preserve its ordered case IDs, workflow parameters, and expected artifacts.
+- `evaluation_suite_id` is derived from that validated manifest and `source_candidate_id`; copy both exactly into the package payload and JSON summary. Do not execute the selected workflow or claim measured improvement.

@@ -37,6 +37,7 @@ class SourceManifest:
     signature: str
     source_path: str | None
     source_sha256: str
+    workflow_version: str | None
     topology_dynamic: bool
     sites: tuple[SourceSite, ...] = ()
     branch_lines: tuple[int, ...] = ()
@@ -61,12 +62,31 @@ class OperationObservation:
     result: Any
     error: str | None
     artifacts: tuple[str, ...] = ()
+    dispatches: tuple[ProviderDispatchObservation, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ProviderDispatchObservation:
+    dispatch_id: str
+    attempt: int | None
+    generation: int | None
+    outcome: str
+    usage_availability: str
+    usage: dict[str, float]
+    elapsed_seconds: float | None
 
 
 @dataclass(frozen=True, slots=True)
 class RunObservation:
     run_id: str
+    run_ref: str
+    task_id: str | None
     workflow_name: str | None
+    workflow_version: str | None
+    workflow_identity: str | None
+    surface_id: str | None
+    orchestration_id: str | None
+    provenance_state: str
     status: str
     operations: tuple[OperationObservation, ...]
     artifacts: tuple[str, ...] = ()
@@ -185,6 +205,7 @@ def capture_source_manifest(workflow: Callable[..., Any]) -> SourceManifest:
         signature=str(inspect.signature(target)),
         source_path=None if source_path is None else str(Path(source_path).resolve()),
         source_sha256=sha256(source.encode()).hexdigest(),
+        workflow_version=getattr(workflow, "fingerprint", None),
         topology_dynamic=True,
         sites=tuple(sorted(sites, key=lambda item: (item.line, item.site_id))),
         branch_lines=tuple(sorted(set(branches))),
@@ -198,18 +219,87 @@ def load_run_observation(payload: Mapping[str, Any]) -> RunObservation:
     run = _mapping(payload.get("run"))
     run_id = _text(run.get("run_id") or payload.get("run_id"), "run_id")
     workflow_name = run.get("workflow_name") or run.get("workflow") or run.get("name")
+    provenance_start = _mapping(run.get("provenance_start"))
+    provenance_end = _mapping(run.get("provenance_end"))
+    start_identity = provenance_start.get("workflow_identity")
+    end_identity = provenance_end.get("workflow_identity")
+    start_surface = provenance_start.get("surface_id")
+    end_surface = provenance_end.get("surface_id")
+    start_orchestration = provenance_start.get("orchestration_id")
+    end_orchestration = provenance_end.get("orchestration_id")
+    if (
+        provenance_start.get("verified") is True
+        and provenance_end.get("verified") is True
+        and start_identity == end_identity
+        and start_surface == end_surface
+        and start_orchestration == end_orchestration
+        and start_identity
+        and start_surface
+        and start_orchestration
+    ):
+        provenance_state = "known"
+        workflow_identity_value = str(start_identity)
+        surface_id = str(start_surface)
+        orchestration_id = str(start_orchestration)
+    elif any(
+        value
+        for value in (
+            start_identity,
+            end_identity,
+            start_surface,
+            end_surface,
+            start_orchestration,
+            end_orchestration,
+        )
+    ):
+        provenance_state = "mixed"
+        workflow_identity_value = None
+        surface_id = None
+        orchestration_id = None
+    else:
+        provenance_state = "unknown"
+        workflow_identity_value = None
+        surface_id = None
+        orchestration_id = None
     raw_operations = payload.get("operations", ())
     if not isinstance(raw_operations, Sequence) or isinstance(
         raw_operations, (str, bytes)
     ):
         raise TypeError("inspection operations must be a sequence")
-    operations = tuple(_load_operation(item, run_id) for item in raw_operations)
+    raw_dispatches: Mapping[str, Any] = {}
+    try:
+        from botpipe.dispatches import dispatch_records
+
+        events = payload.get("events", ())
+        if isinstance(events, Sequence) and not isinstance(events, (str, bytes)):
+            raw_dispatches = dispatch_records(events)
+    except (KeyError, TypeError, ValueError):
+        raw_dispatches = {}
+    operations = tuple(
+        _load_operation(
+            item,
+            run_id,
+            raw_dispatches.get(
+                str(_mapping(item).get("operation_id") or _mapping(item).get("id")), ()
+            ),
+        )
+        for item in raw_operations
+    )
     ids = [item.operation_id for item in operations]
     if len(ids) != len(set(ids)):
         raise ValueError("inspection contains duplicate operation ids")
     return RunObservation(
         run_id=run_id,
+        run_ref=(f"{run.get('task_id')}/{run_id}" if run.get("task_id") else run_id),
+        task_id=None if run.get("task_id") is None else str(run.get("task_id")),
         workflow_name=None if workflow_name is None else str(workflow_name),
+        workflow_version=(
+            None if run.get("version") is None else str(run.get("version"))
+        ),
+        workflow_identity=workflow_identity_value,
+        surface_id=surface_id,
+        orchestration_id=orchestration_id,
+        provenance_state=provenance_state,
         status=str(run.get("status") or "unknown").lower(),
         operations=operations,
         artifacts=_artifact_names(payload.get("artifacts", ())),
@@ -409,7 +499,9 @@ def write_optimization_report(report: OptimizationReport, path: str | Path) -> P
     return target
 
 
-def _load_operation(raw: Any, run_id: str) -> OperationObservation:
+def _load_operation(
+    raw: Any, run_id: str, event_dispatches: Any = ()
+) -> OperationObservation:
     item = _mapping(raw)
     operation_id = _text(item.get("operation_id") or item.get("id"), "operation id")
     result = _decode(item.get("result"))
@@ -427,6 +519,11 @@ def _load_operation(raw: Any, run_id: str) -> OperationObservation:
         attempts = max(1, int(attempts))
     except (TypeError, ValueError):
         attempts = 1
+    supplied_dispatches = item.get("dispatches", event_dispatches)
+    if not isinstance(supplied_dispatches, Sequence) or isinstance(
+        supplied_dispatches, (str, bytes)
+    ):
+        supplied_dispatches = ()
     return OperationObservation(
         operation_id=operation_id,
         run_id=str(item.get("run_id") or run_id),
@@ -443,7 +540,38 @@ def _load_operation(raw: Any, run_id: str) -> OperationObservation:
         result=value,
         error=None if item.get("error") is None else str(item.get("error")),
         artifacts=_artifact_names(result_artifacts or item.get("artifacts") or ()),
+        dispatches=tuple(_load_dispatch(value) for value in supplied_dispatches),
     )
+
+
+def _load_dispatch(raw: Any) -> ProviderDispatchObservation:
+    item = _mapping(raw)
+    elapsed = item.get("elapsed_seconds")
+    if (
+        not isinstance(elapsed, (int, float))
+        or isinstance(elapsed, bool)
+        or not math.isfinite(elapsed)
+        or elapsed < 0
+    ):
+        elapsed = None
+    return ProviderDispatchObservation(
+        dispatch_id=_text(item.get("dispatch_id"), "dispatch id"),
+        attempt=_optional_integer(item.get("attempt")),
+        generation=_optional_integer(item.get("generation")),
+        outcome=str(item.get("outcome") or "unknown").lower(),
+        usage_availability=str(item.get("usage_availability") or "unknown").lower(),
+        usage=_number_mapping(item.get("usage") or item),
+        elapsed_seconds=None if elapsed is None else float(elapsed),
+    )
+
+
+def _optional_integer(value: Any) -> int | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _source_call_identity(call: ast.Call) -> tuple[str | None, str]:
@@ -495,16 +623,16 @@ def _extract_outcome(value: Any) -> str | None:
 def _duration_ms(item: Mapping[str, Any]) -> float | None:
     explicit = item.get("duration_ms")
     if isinstance(explicit, (int, float)) and not isinstance(explicit, bool):
-        return max(0.0, float(explicit))
+        value = float(explicit)
+        return value if math.isfinite(value) and value >= 0 else None
     started, finished = (
         _timestamp(item.get("started_at")),
         _timestamp(item.get("finished_at")),
     )
-    return (
-        None
-        if started is None or finished is None
-        else max(0, (finished - started).total_seconds() * 1000)
-    )
+    if started is None or finished is None:
+        return None
+    value = (finished - started).total_seconds() * 1000
+    return value if math.isfinite(value) and value >= 0 else None
 
 
 def _timestamp(value: Any) -> datetime | None:

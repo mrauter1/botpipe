@@ -208,11 +208,11 @@ def test_optimizer_without_observations_packages_an_explicit_noop(tmp_path):
             ),
         )
         assert result.ok, result.error
-        assert [phase.name for phase in result.value.phases] == [
-            "frame_observed_optimization",
-            "package_validated_candidates",
-        ]
-        assert len(provider.calls) == 4
+        assert result.value.candidate_set.next_action == "collect_evidence"
+        assert result.value.candidate_set.candidates == []
+        assert result.value.review is None
+        assert result.value.provider_budget["used_turns"] == 0
+        assert len(provider.calls) == 0
 
 
 @pytest.mark.parametrize("pause_outcome", ["blocked", "question"])
@@ -294,12 +294,10 @@ def test_optimizer_insufficient_evidence_skips_generation(tmp_path):
             ),
         )
         assert optimized.ok, optimized.error
-        assert [phase.name for phase in optimized.value.phases] == [
-            "frame_observed_optimization",
-            "rank_observed_targets",
-            "package_validated_candidates",
-        ]
-        assert len(client.provider.calls) == 6
+        assert optimized.value.candidate_set.next_action == "no_change"
+        assert optimized.value.candidate_set.candidates == []
+        assert optimized.value.provider_budget["used_turns"] == 0
+        assert len(client.provider.calls) == 0
 
 
 def test_optimizer_no_failure_scenarios_skips_failure_specific_passes(tmp_path):
@@ -328,13 +326,10 @@ def test_optimizer_no_failure_scenarios_skips_failure_specific_passes(tmp_path):
             ),
         )
         assert optimized.ok, optimized.error
-        assert [phase.name for phase in optimized.value.phases] == [
-            "frame_observed_optimization",
-            "rank_observed_targets",
-            "mine_observed_failures",
-            "package_validated_candidates",
-        ]
-        assert len(client.provider.calls) == 8
+        assert optimized.value.candidate_set.next_action == "no_change"
+        assert optimized.value.candidate_set.candidates == []
+        assert optimized.value.provider_budget["used_turns"] == 0
+        assert len(client.provider.calls) == 0
 
 
 def test_security_child_passes_immutable_handles_with_external_state_directory(

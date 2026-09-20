@@ -9,11 +9,15 @@ from labs.workflows._shared import (
     LabWorkflowResult,
     ReplanRequired,
     artifact,
-    execute_candidate_validation,
     finish,
     observe_workflow,
     prepare_selected_candidate_surface,
     run_phase,
+)
+from labs.workflows.optimizer_integration import (
+    freeze_candidate_baseline,
+    staged_workflow_reference,
+    validate_candidate_and_compare,
 )
 
 from .contracts import (
@@ -47,11 +51,28 @@ def WorkflowPackageToComposableBuildingBlocks(
     relative_source = str(Path(source_path).resolve().relative_to(candidate.repo_root))
     if relative_source not in candidate.authoritative_hashes:
         raise ValueError("candidate_paths must include the selected workflow source")
+    validation_reference = staged_workflow_reference(
+        params.selected_workflow,
+        relative_source=relative_source,
+        function=context["selected_workflow_contract"].get("function"),
+    )
     context["candidate_surface"] = {
         "relative_path": relative_source,
         "allowed_roots": list(candidate.allowed_roots),
         "allowed_paths": list(candidate.allowed_paths),
         "authoritative_sha256": candidate.authoritative_hashes[relative_source],
+    }
+    frozen_candidate = freeze_candidate_baseline(
+        candidate_workspace=candidate,
+        selected_workflow=params.selected_workflow,
+        staging_parent=str(run.folder / "decomposition-execution" / "frozen"),
+        workspace=str(run.workspace),
+    )
+    context["frozen_candidate"] = {
+        "execution_tree_id": frozen_candidate["snapshot"]["execution_tree_id"],
+        "baseline_surface_id": frozen_candidate["baseline_surface_manifest"][
+            "surface_id"
+        ],
     }
     completed = []
     prior_handles = ()
@@ -135,21 +156,18 @@ def WorkflowPackageToComposableBuildingBlocks(
                     )
                     completed.append(phase_3)
                     prior_handles = prior_handles + phase_3.handles
-                    evaluation = execute_candidate_validation(
-                        candidate,
-                        params.target_test_argv,
-                        params.validation_timeout,
+                    evaluation = validate_candidate_and_compare(
+                        candidate_workspace=candidate,
+                        frozen_candidate=frozen_candidate,
+                        selected_workflow=validation_reference,
+                        staging_parent=str(run.folder / "decomposition-execution"),
+                        target_test_argv=params.target_test_argv or (),
+                        validation_timeout=params.validation_timeout,
+                        workspace=str(run.workspace),
+                        invocation_id=run.run_id,
                     )
-                    if not evaluation.ok:
-                        raise ValueError(
-                            "candidate validation command failed: "
-                            f"returncode={evaluation.command.returncode}; stderr={evaluation.command.stderr}"
-                        )
-                    if not evaluation.manifest.changed_paths:
-                        raise ValueError(
-                            "candidate decomposition must change at least one allowed source file"
-                        )
-                    context["candidate_evaluation"] = evaluation.to_dict()
+                    context["candidate_evaluation"] = evaluation["validation"]
+                    context["candidate_manifest"] = evaluation["candidate_manifest"]
                     phase_4 = run_phase(
                         phase="evaluate_candidate_decomposition",
                         returns=CandidateDecompositionEvaluationPayload,

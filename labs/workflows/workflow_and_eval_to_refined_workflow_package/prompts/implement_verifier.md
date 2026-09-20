@@ -71,3 +71,10 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 - Do not redo evaluation work here.
 - Do not approve hidden candidate files that are not accounted for in the build artifacts.
 - Do not ask for a replan when local repair is sufficient.
+
+## Optimizer v2 handoff
+
+- `optimizer_handoff`, when present, is a validated accepted receipt, candidate set, candidate, evidence anchor, and baseline surface identity. Preserve its `candidate_id`, `candidate_set_id`, kind, targets, proposed change, risks, and validation plan.
+- Treat the selected candidate as a proposal to materialize inside the bounded candidate workspace. Do not edit authoritative source files or claim that the proposal was already validated.
+- `candidate_evaluation` is derived from frozen execution trees and an isolated validation run. `paired_evaluation`, when present, is the only measured baseline/candidate comparison.
+- Never promote or copy the candidate into the authoritative workflow. Publication records evidence and a next action only.

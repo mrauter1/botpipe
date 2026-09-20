@@ -18,7 +18,11 @@ def _successful_provider(request):
         request.prompt.split("\n\nInput:\n", 1)[1]
     )[0]
     fixture_artifacts, fixture_details = _publication_fixture(phase_input)
-    if any(name.startswith("candidate_") for name in request.artifacts):
+    if (
+        request.workspace.name == "candidate"
+        and (request.workspace.parent / ".botpipe-candidate.json").is_file()
+        and any(name.startswith("candidate_") for name in request.artifacts)
+    ):
         candidate_sources = list(request.workspace.rglob("workflow.py"))
         if candidate_sources:
             with candidate_sources[0].open("a", encoding="utf-8") as stream:
@@ -240,6 +244,12 @@ def _publication_fixture(phase_input):
                 "priority": "P2",
             }
         ]
+    if phase == "package_workflow_eval_suite":
+        details["evaluation_suite_id"] = phase_input["evaluation_suite_id"]
+        handoff = phase_input.get("optimizer_handoff")
+        details["source_candidate_id"] = (
+            handoff["candidate_id"] if handoff is not None else None
+        )
     return artifacts, details
 
 
@@ -409,6 +419,15 @@ def test_all_labs_workflows_complete_staged_fake_provider_runs(tmp_path):
         params = module.Params(**invocation_parameters[entry.name])
         workspace = tmp_path / entry.name
         workspace.mkdir()
+        if entry.name == "workflow_and_eval_to_refined_workflow_package":
+            (workspace / "evaluation-summary.json").write_text(
+                json.dumps({"selected_workflow_name": "release_candidate_to_go_no_go"}),
+                encoding="utf-8",
+            )
+            (workspace / "evaluation-findings.json").write_text(
+                "# Evaluation findings\n\nNo blocking regression.\n",
+                encoding="utf-8",
+            )
         provider = FakeProvider([_successful_provider] * 64)
         result = Botpipe(workspace, provider=provider).run(
             function,
@@ -419,5 +438,9 @@ def test_all_labs_workflows_complete_staged_fake_provider_runs(tmp_path):
         )
         assert result.ok, f"{entry.name}: {result.error}"
         assert result.value.workflow_name == entry.name
-        assert result.value.phases
-        assert all(phase.outcome == "accepted" for phase in result.value.phases)
+        if entry.name == "workflow_run_traces_to_optimization_candidates":
+            assert result.value.candidate_set.next_action == "collect_evidence"
+            assert result.value.provider_budget["used_turns"] == 0
+        else:
+            assert result.value.phases
+            assert all(phase.outcome == "accepted" for phase in result.value.phases)

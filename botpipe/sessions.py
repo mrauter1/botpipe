@@ -22,7 +22,7 @@ from .artifacts import (
     ArtifactMap,
     ArtifactStore,
 )
-from .errors import BotpipeError, UncertainOperation
+from .errors import BotpipeError, BudgetExceeded, UncertainOperation
 from .models import Result
 from .policy import Policy, SandboxMode
 from .prompts import Prompt
@@ -32,6 +32,7 @@ from .providers import (
     ProviderPolicyError,
     ProviderRequest,
     ProviderResponse,
+    ProviderTimeoutError,
 )
 from .runtime import _async_call, current_run
 
@@ -235,6 +236,10 @@ class Session:
                     operation_id = ctx.operation_id
                     row = ctx.journal.get(operation_id)
                     saved = row.get("response") or {}
+                    if saved.get("not_dispatched"):
+                        raise BudgetExceeded(
+                            saved.get("budget_error", "Provider budget exhausted")
+                        )
                     generation = saved.get("generation", 0)
                     authorized = saved.get("retry_authorized", False)
                     prepared_generation = generation - 1 if authorized else generation
@@ -349,8 +354,13 @@ class Session:
                                 operation_id,
                                 {"request": request_data, "generation": generation},
                             )
+                        dispatched = False
                         try:
-                            if recover and not authorized:
+                            if (
+                                recover
+                                and not authorized
+                                and not saved.get("not_dispatched")
+                            ):
                                 recover_fn = getattr(
                                     ctx.client.provider, "recover", None
                                 )
@@ -361,7 +371,49 @@ class Session:
                                         operation_id,
                                     )
                             else:
-                                response = ctx.client.provider.run(request)
+                                if not getattr(
+                                    ctx.client.provider, "_reserves_dispatch", False
+                                ):
+                                    from .dispatches import Dispatch
+
+                                    dispatch = Dispatch(ctx.client.provider, request)
+                                    request = replace(request, timeout=dispatch.timeout)
+                                    dispatched = True
+                                    dispatch.started()
+                                    try:
+                                        response = ctx.client.provider.run(request)
+                                    except BaseException as exc:
+                                        dispatch.finish(
+                                            "timed_out"
+                                            if isinstance(exc, ProviderTimeoutError)
+                                            else "failed"
+                                            if isinstance(exc, Exception)
+                                            else "interrupted",
+                                            usage=getattr(exc, "usage", None),
+                                            error=exc,
+                                        )
+                                        raise
+                                    dispatch.finish(
+                                        "completed"
+                                        if isinstance(response, ProviderResponse)
+                                        else "failed",
+                                        usage=getattr(response, "usage", None),
+                                    )
+                                else:
+                                    response = ctx.client.provider.run(request)
+                        except BudgetExceeded as exc:
+                            if not dispatched:
+                                ctx.journal.response(
+                                    operation_id,
+                                    {
+                                        "request": request_data,
+                                        "generation": generation,
+                                        "not_dispatched": True,
+                                        "budget_error": str(exc),
+                                    },
+                                )
+                                store.restore(artifact_operation)
+                            raise
                         except ProviderPolicyError:
                             store.restore(artifact_operation)
                             raise

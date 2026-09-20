@@ -81,3 +81,9 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 - Do not overwrite evaluation artifacts during verification.
 - Do not approve hidden execution or implicit promotion.
 - Do not ask for a replan when local repair is sufficient.
+
+## Isolated candidate validation
+
+- The candidate is materialized only in the bounded candidate workspace. `candidate_evaluation` comes from frozen execution-tree compilation and the configured argv validation under its timeout.
+- Use derived changed paths and validation results; do not trust model-authored file counts, hashes, or success claims.
+- Publication may recommend a later promotion review, but this workflow must not copy candidate files into authoritative source or auto-promote them.

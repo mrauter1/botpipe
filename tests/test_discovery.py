@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from botpipe.discovery import (
+    WorkflowDiscoveryError,
     WorkflowInputError,
     discover_workflows,
     resolve_workflow,
@@ -67,6 +68,35 @@ def test_workspace_name_shadows_packaged_name(tmp_path: Path) -> None:
         item for item in discover_workflows(tmp_path) if item.name == "ralph_loop"
     )
     assert entry.source_kind == "workspace"
+
+
+def test_file_reference_rejects_cached_module_from_another_checkout(tmp_path):
+    sources = []
+    for checkout, value in (("original", 1), ("candidate", 2)):
+        package = tmp_path / checkout / "discovery_collision_case"
+        package.mkdir(parents=True)
+        (package / "__init__.py").write_text("")
+        source = package / "workflow.py"
+        source.write_text(f"def example(): return {value}\n")
+        sources.append(source)
+
+    assert resolve_workflow(f"{sources[0]}:example", tmp_path)() == 1
+    with pytest.raises(WorkflowDiscoveryError, match="another location"):
+        resolve_workflow(f"{sources[1]}:example", tmp_path)
+
+
+def test_module_reference_rejects_cached_module_from_another_workspace(tmp_path):
+    roots = [tmp_path / "original", tmp_path / "candidate"]
+    for value, root in enumerate(roots):
+        package = root / "discovery_module_collision_case"
+        package.mkdir(parents=True)
+        (package / "__init__.py").write_text("")
+        (package / "workflow.py").write_text(f"def example(): return {value}\n")
+
+    reference = "discovery_module_collision_case.workflow:example"
+    assert resolve_workflow(reference, roots[0])() == 0
+    with pytest.raises(WorkflowDiscoveryError, match="another location"):
+        resolve_workflow(reference, roots[1])
 
 
 def test_input_binding_validates_and_converts_annotations(tmp_path: Path) -> None:

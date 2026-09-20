@@ -170,7 +170,8 @@ a security boundary.
   systems.
 
 See [Authoring](docs/authoring.md), [SDK](docs/sdk.md),
-[Architecture](docs/architecture.md), [CLI](docs/cli.md), and the
+[Architecture](docs/architecture.md), [CLI](docs/cli.md), the
+[Optimizer guide](docs/optimizer.md), and the
 [major-version migration guide](docs/migration.md).
 
 ## Development

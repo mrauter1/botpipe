@@ -25,7 +25,19 @@ result = client.run(
 
 Parameters are validated by the package-local Pydantic `Params` model before any operation starts. `request` contains the human-readable task or evidence request.
 
+An optimizer-v2 evaluation-case recommendation may be supplied with the
+`optimization_receipt_path` and `candidate_id` pair. Both fields are optional as
+a pair and neither may appear alone. The workflow validates the accepted
+receipt, review, evidence snapshot, baseline surface, handoff, and candidate,
+and rejects every candidate kind except `evaluation_case`.
+
 After case design, a retry-safe activity validates the manifest before packaging. Every case must have a unique ID, one of `benchmark`, `edge`, or `adversarial`, a prompt, expected artifacts, and valid callable inputs. For the common `workflow(params: BaseModel, request: str = "")` shape, `workflow_parameters` is the flat `Params` object and the case `prompt` supplies the human request separately. Other callable shapes use a full keyword-argument mapping. The typed validation result states when expected artifact names could not be checked against a static surface because ordinary Python workflows declare outputs dynamically.
+
+The published suite receives a content-derived `evaluation_suite_id`. Suites
+created from an optimizer recommendation also retain the exact
+`source_candidate_id`. Candidate-suggested cases remain development cases; this
+workflow packages and validates them but does not execute them or claim measured
+improvement.
 
 ## Phases and evidence
 

@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 
 import pytest
 from pydantic import BaseModel
 
-from botpipe import Botpipe, Session, workflow
+from botpipe import Botpipe, Session, current_run, workflow
 from botpipe.providers import FakeProvider, ProviderResponse
 from botpipe_optimizer import (
+    capture_evidence_snapshot,
     capture_source_manifest,
     evaluate_candidate_workspace,
     load_run_observation,
@@ -18,11 +20,36 @@ from botpipe_optimizer import (
     validate_optimization_candidate,
     validate_workflow_parameters,
 )
+from botpipe_optimizer.recommendations import (
+    finalize_candidate_review_payload,
+    finalize_candidate_set_payload,
+    load_optimization_candidate,
+    publish_recommendation,
+    validate_candidate_review,
+    validate_candidate_set,
+)
+from labs.workflows.workflow_run_traces_to_optimization_candidates import (
+    Params as OptimizerParams,
+)
+from labs.workflows.workflow_run_traces_to_optimization_candidates import (
+    WorkflowRunTracesToOptimizationCandidates,
+)
 
 
 class EvalInputs(BaseModel):
     topic: str
     limit: int = 2
+
+
+@workflow(name="alias_observed")
+def alias_observed_workflow():
+    return current_run().operation(
+        "activity",
+        {"value": "observed"},
+        lambda: "observed",
+        retry_safe=True,
+        name="observed activity",
+    )
 
 
 def inspected_run(*, run_id="run-1", status="failed", operations=()):
@@ -49,6 +76,34 @@ def operation(operation_id, *, name="draft", status="completed", attempts=1, tok
         "usage": {"total_tokens": tokens},
         "inputs": {},
         "result": {"value": {"outcome": "accepted"}, "artifacts": {}},
+    }
+
+
+def provenanced_run(
+    *,
+    operations,
+    surface="surface-current",
+    orchestration="orchestration-current",
+    run_id="run-1",
+):
+    provenance = {
+        "verified": True,
+        "workflow_identity": "workflow-example",
+        "surface_id": surface,
+        "orchestration_id": orchestration,
+    }
+    return {
+        "run": {
+            "run_id": run_id,
+            "task_id": "task",
+            "workflow": "example",
+            "status": "failed",
+            "provenance_start": provenance,
+            "provenance_end": provenance,
+        },
+        "operations": operations,
+        "events": [],
+        "artifacts": {},
     }
 
 
@@ -131,6 +186,8 @@ def test_optimizer_consumes_real_journaled_typed_outcome_and_usage(tmp_path):
     report = optimize_observations("observed", [observation])
 
     assert decision.outcome == "accepted"
+    assert len(decision.dispatches) == 1
+    assert decision.dispatches[0].usage_availability == "known_total"
     assert decision.usage["total_tokens"] == 12
     assert (
         next(
@@ -256,3 +313,385 @@ def test_callable_parameter_validation_binds_non_model_signature():
     }
     with pytest.raises(ValueError, match="invocation arguments"):
         validate_workflow_parameters(plain, {"limit": 3})
+
+
+def test_v2_objective_eligibility_keeps_missing_usage_distinct_from_zero():
+    def example():
+        return None
+
+    manifest = capture_source_manifest(example)
+    known_zero = operation("zero", tokens=0)
+    unknown = operation("unknown", name="unknown")
+    unknown["usage"] = {}
+    positive = operation("positive", name="positive", tokens=9)
+    snapshot = capture_evidence_snapshot(
+        "example",
+        [provenanced_run(operations=[known_zero, unknown, positive])],
+        source_manifest=manifest,
+        objective="token_usage",
+        current_workflow_identity="workflow-example",
+        current_surface_id="surface-current",
+        current_orchestration_id="orchestration-current",
+    )
+
+    metrics = {metric.step_id: metric for metric in snapshot.step_metrics}
+    assert metrics["draft"].complete_usage is True
+    assert metrics["draft"].known_total_tokens == 0
+    assert metrics["unknown"].complete_usage is False
+    assert metrics["unknown"].known_total_tokens is None
+    assert [item.step_id for item in snapshot.shortlist] == ["positive"]
+    assert metrics["unknown"].metric_id in snapshot.measure_first
+
+
+def test_v2_reliability_groups_surfaces_and_ranks_distinct_affected_runs():
+    def example():
+        return None
+
+    manifest = capture_source_manifest(example)
+    current_failure = operation("current-failure", status="failed")
+    historical_failure = operation("old-failure", status="failed")
+    snapshot = capture_evidence_snapshot(
+        "example",
+        [
+            provenanced_run(operations=[current_failure], run_id="current"),
+            provenanced_run(
+                operations=[historical_failure], surface="surface-old", run_id="old"
+            ),
+        ],
+        source_manifest=manifest,
+        objective="reliability",
+        current_workflow_identity="workflow-example",
+        current_surface_id="surface-current",
+        current_orchestration_id="orchestration-current",
+    )
+
+    assert len(snapshot.groups) == 2
+    assert snapshot.recommendation_basis == "current_verified"
+    assert len(snapshot.step_metrics) == 1
+    assert snapshot.shortlist[0].direct_failure_run_count == 1
+    cited = {
+        observation.operation_id
+        for observation in snapshot.observations
+        if observation.group_id == snapshot.selected_group_id
+    }
+    assert cited == {"current-failure"}
+
+
+def test_v2_same_surface_with_different_orchestration_stays_separate():
+    def example():
+        return None
+
+    manifest = capture_source_manifest(example)
+    snapshot = capture_evidence_snapshot(
+        "example",
+        [
+            provenanced_run(
+                operations=[operation("current", status="failed")],
+                orchestration="orchestration-current",
+                run_id="current",
+            ),
+            provenanced_run(
+                operations=[operation("historical", status="failed")],
+                orchestration="orchestration-old",
+                run_id="old",
+            ),
+        ],
+        source_manifest=manifest,
+        objective="reliability",
+        current_workflow_identity="workflow-example",
+        current_surface_id="surface-current",
+        current_orchestration_id="orchestration-current",
+    )
+
+    assert len(snapshot.groups) == 2
+    selected = next(item for item in snapshot.groups if item.current_match)
+    assert selected.orchestration_id == "orchestration-current"
+    assert snapshot.selected_group_id == selected.group_id
+
+
+def test_v2_evidence_and_candidate_bytes_are_bounded_and_identities_are_verified(
+    tmp_path,
+):
+    def example():
+        return None
+
+    manifest = capture_source_manifest(example)
+    snapshot = capture_evidence_snapshot(
+        "example",
+        [provenanced_run(operations=[operation("failed", status="failed")])],
+        source_manifest=manifest,
+        objective="reliability",
+        current_workflow_identity="workflow-example",
+        current_surface_id="surface-current",
+        current_orchestration_id="orchestration-current",
+        max_evidence_bytes=100_000,
+    )
+    observation_id = snapshot.shortlist and next(
+        item.observation_id
+        for item in snapshot.observations
+        if item.group_id == snapshot.selected_group_id
+    )
+    candidate_set = finalize_candidate_set_payload(
+        {
+            "schema": "botpipe.workflow_optimization.candidate_set/v2",
+            "selected_workflow": "example",
+            "evidence_snapshot_id": snapshot.snapshot_id,
+            "baseline_surface_manifest_id": snapshot.baseline_surface_manifest_id,
+            "candidates": [
+                {
+                    "kind": "workflow",
+                    "title": "Handle the observed failure",
+                    "targets": ["workflow.py"],
+                    "cited_observation_ids": [observation_id],
+                    "proposed_change": "Tighten failure handling.",
+                    "expected_effect": "The observed failure is rejected earlier.",
+                    "risks": ["May reject a valid edge case."],
+                    "validation_plan": {
+                        "description": "Replay the failure.",
+                        "checks": ["Run the regression case."],
+                        "falsification": "The failure still reaches the provider.",
+                    },
+                    "payload": {
+                        "target_paths": ["workflow.py"],
+                        "workflow_change": "Add an explicit guard.",
+                    },
+                }
+            ],
+            "next_action": "implement_candidate",
+            "no_candidate_reason": None,
+        }
+    )
+    validate_candidate_set(
+        candidate_set,
+        evidence_snapshot=snapshot,
+        max_candidates=1,
+        allowed_kinds={"workflow"},
+        expected_selected_workflow="example",
+        max_output_bytes=100_000,
+    )
+    with pytest.raises(ValueError, match="max_output_bytes"):
+        validate_candidate_set(
+            candidate_set,
+            evidence_snapshot=snapshot,
+            max_candidates=1,
+            allowed_kinds={"workflow"},
+            expected_selected_workflow="example",
+            max_output_bytes=10,
+        )
+    review = finalize_candidate_review_payload(
+        {
+            "schema": "botpipe.workflow_optimization.candidate_review/v2",
+            "candidate_set_id": candidate_set.candidate_set_id,
+            "evidence_snapshot_id": snapshot.snapshot_id,
+            "baseline_surface_manifest_id": snapshot.baseline_surface_manifest_id,
+            "accepted": True,
+            "reviewed_candidate_ids": [candidate_set.candidates[0].candidate_id],
+            "findings": [],
+        }
+    )
+    validate_candidate_review(
+        review, candidate_set=candidate_set, max_output_bytes=100_000
+    )
+
+    output = tmp_path / "published"
+    receipt = publish_recommendation(
+        output_dir=output,
+        evidence_snapshot=snapshot,
+        candidate_set=candidate_set,
+        review=review,
+        baseline_manifest={"surface_id": snapshot.baseline_surface_manifest_id},
+        max_output_bytes=100_000,
+    )
+    selection = load_optimization_candidate(
+        optimization_receipt_path=output / "optimization_publication_receipt.json",
+        candidate_id=candidate_set.candidates[0].candidate_id,
+        expected_selected_workflow="example",
+        allowed_kinds=("workflow",),
+        max_output_bytes=100_000,
+        max_evidence_bytes=100_000,
+    )
+    assert selection.receipt == receipt
+    assert selection.candidate == candidate_set.candidates[0]
+    (output / "workflow_optimization_candidates.json").write_text("{}")
+    with pytest.raises(ValueError, match="changed after publication"):
+        load_optimization_candidate(
+            optimization_receipt_path=output / "optimization_publication_receipt.json",
+            candidate_id=candidate_set.candidates[0].candidate_id,
+            expected_selected_workflow="example",
+            allowed_kinds=("workflow",),
+            max_output_bytes=100_000,
+            max_evidence_bytes=100_000,
+        )
+
+
+def test_v2_no_eligible_evidence_uses_zero_provider_turns(tmp_path):
+    provider = FakeProvider([])
+    with Botpipe(tmp_path, provider=provider) as client:
+        result = client.run(
+            WorkflowRunTracesToOptimizationCandidates,
+            OptimizerParams(
+                selected_workflow="release_candidate_to_go_no_go",
+                task_title="Review release workflow",
+            ),
+            request="Recommend the next useful action.",
+            task_id="optimizer",
+            run_id="empty",
+        )
+        inspection = client.inspect(result.run_id)
+
+    assert result.ok
+    assert result.value.candidate_set.next_action == "collect_evidence"
+    assert result.value.candidate_set.candidates == []
+    assert result.value.review is None
+    assert result.value.provider_budget["used_turns"] == 0
+    assert not [item for item in inspection["operations"] if item["kind"] == "provider"]
+
+
+def test_v2_file_reference_uses_canonical_name_and_exact_task_run_refs(tmp_path):
+    provider = FakeProvider([])
+    reference = "test_optimizer:alias_observed_workflow"
+    with Botpipe(tmp_path, provider=provider) as client:
+        observed = client.run(
+            alias_observed_workflow, task_id="evidence", run_id="observed"
+        )
+        assert observed.ok
+        result = client.run(
+            WorkflowRunTracesToOptimizationCandidates,
+            OptimizerParams(selected_workflow=reference, task_title="Alias selection"),
+            task_id="optimizer",
+            run_id="alias",
+        )
+        mismatch = client.run(
+            WorkflowRunTracesToOptimizationCandidates,
+            OptimizerParams(
+                selected_workflow=reference,
+                task_title="Exact selection",
+                run_refs=["wrong-task/observed"],
+            ),
+            task_id="optimizer",
+            run_id="mismatch",
+        )
+
+    assert result.ok, result.error
+    assert result.value.evidence_snapshot.selected_workflow == "alias_observed"
+    assert result.value.evidence_snapshot.selection.admitted_run_count == 1
+    assert result.value.provider_budget["used_turns"] == 0
+    assert not mismatch.ok
+    assert "run reference task does not match journal" in mismatch.error
+
+
+def test_v2_eligible_evidence_uses_one_producer_and_independent_verifier(tmp_path):
+    from botpipe_optimizer.recommendations import (
+        finalize_candidate_review_payload,
+        finalize_candidate_set_payload,
+    )
+
+    @workflow(name="release_candidate_to_go_no_go")
+    def failing_release():
+        return current_run().operation(
+            "activity",
+            {"case": "observed-failure"},
+            lambda: (_ for _ in ()).throw(RuntimeError("observed failure")),
+            retry_safe=True,
+            name="explode",
+        )
+
+    def prompt_input(request):
+        body = request.prompt.rsplit("\n\nInput:\n", 1)[1]
+        return json.JSONDecoder().raw_decode(body)[0]
+
+    def propose(request):
+        value = prompt_input(request)
+        evidence = value["evidence_snapshot"]
+        observation_id = next(
+            item["observation_id"]
+            for item in evidence["observations"]
+            if item["group_id"] == evidence["selected_group_id"]
+        )
+        result = finalize_candidate_set_payload(
+            {
+                "schema": "botpipe.workflow_optimization.candidate_set/v2",
+                "selected_workflow": evidence["selected_workflow"],
+                "evidence_snapshot_id": evidence["snapshot_id"],
+                "baseline_surface_manifest_id": evidence[
+                    "baseline_surface_manifest_id"
+                ],
+                "candidates": [
+                    {
+                        "kind": "workflow",
+                        "title": "Guard the observed failure",
+                        "targets": ["workflow.py"],
+                        "cited_observation_ids": [observation_id],
+                        "proposed_change": "Add a typed failure guard.",
+                        "expected_effect": "The observed invalid state is rejected earlier.",
+                        "risks": ["The guard may reject a valid boundary case."],
+                        "validation_plan": {
+                            "description": "Replay the observed failure.",
+                            "checks": ["Run the regression case."],
+                            "falsification": "The invalid state still reaches execution.",
+                        },
+                        "payload": {
+                            "target_paths": ["workflow.py"],
+                            "workflow_change": "Validate the state before execution.",
+                        },
+                    }
+                ],
+                "next_action": "implement_candidate",
+                "no_candidate_reason": None,
+            }
+        )
+        return result.model_dump(mode="json", by_alias=True)
+
+    def review(request):
+        candidate_set = prompt_input(request)["candidate_set"]
+        result = finalize_candidate_review_payload(
+            {
+                "schema": "botpipe.workflow_optimization.candidate_review/v2",
+                "candidate_set_id": candidate_set["candidate_set_id"],
+                "evidence_snapshot_id": candidate_set["evidence_snapshot_id"],
+                "baseline_surface_manifest_id": candidate_set[
+                    "baseline_surface_manifest_id"
+                ],
+                "accepted": True,
+                "reviewed_candidate_ids": [
+                    item["candidate_id"] for item in candidate_set["candidates"]
+                ],
+                "findings": [],
+            }
+        )
+        return result.model_dump(mode="json", by_alias=True)
+
+    class TimedFakeProvider(FakeProvider):
+        supports_timeout = True
+
+    provider = TimedFakeProvider([propose, review])
+    with Botpipe(tmp_path, provider=provider) as client:
+        failed = client.run(
+            failing_release, task_id="release", run_id="failed-observation"
+        )
+        assert not failed.ok
+        result = client.run(
+            WorkflowRunTracesToOptimizationCandidates,
+            OptimizerParams(
+                selected_workflow="release_candidate_to_go_no_go",
+                task_title="Review release workflow",
+                include_adversarial_generation=False,
+                include_token_optimization=False,
+            ),
+            request="Recommend the next useful action.",
+            task_id="optimizer",
+            run_id="recommend",
+        )
+        inspection = client.inspect(result.run_id)
+
+    assert result.ok, result.error
+    assert result.value.review is not None and result.value.review.accepted
+    assert result.value.candidate_set.candidates[0].cited_observation_ids
+    assert result.value.provider_budget["used_turns"] == 2
+    providers = [
+        item for item in inspection["operations"] if item["kind"] == "provider"
+    ]
+    assert [item["name"] for item in providers] == [
+        "propose evidence-bound candidates",
+        "independently review candidate set",
+    ]

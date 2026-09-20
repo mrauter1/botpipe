@@ -90,3 +90,9 @@ After writing every declared artifact, return a JSON result matching the injecte
 - Do not write outside `candidate_decomposition_surface/` except for the named build artifacts.
 - Do not create undeclared workflow packages, docs, or tests that are missing from `candidate_building_block_index.json`.
 - Do not hide publication policy or promotion behavior in provider prose only; durable outputs must capture it explicitly.
+
+## Isolated candidate validation
+
+- The candidate is materialized only in the bounded candidate workspace. `candidate_evaluation` comes from frozen execution-tree compilation and the configured argv validation under its timeout.
+- Use derived changed paths and validation results; do not trust model-authored file counts, hashes, or success claims.
+- Publication may recommend a later promotion review, but this workflow must not copy candidate files into authoritative source or auto-promote them.

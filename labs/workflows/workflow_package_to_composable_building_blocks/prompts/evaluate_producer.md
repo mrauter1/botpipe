@@ -98,3 +98,9 @@ After writing every declared artifact, return a JSON result matching the injecte
 - Do not mutate the authoritative selected workflow package.
 - Do not hide promotion or rollback policy only in provider prose.
 - Do not treat missing overlay-validation evidence as acceptable for publication.
+
+## Isolated candidate validation
+
+- The candidate is materialized only in the bounded candidate workspace. `candidate_evaluation` comes from frozen execution-tree compilation and the configured argv validation under its timeout.
+- Use derived changed paths and validation results; do not trust model-authored file counts, hashes, or success claims.
+- Publication may recommend a later promotion review, but this workflow must not copy candidate files into authoritative source or auto-promote them.

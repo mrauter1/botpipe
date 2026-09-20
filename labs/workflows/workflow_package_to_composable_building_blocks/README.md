@@ -28,6 +28,14 @@ result = client.run(
 
 Parameters are validated by the package-local Pydantic `Params` model before any operation starts. `request` contains the human-readable task or evidence request.
 
+Candidate validation freezes the original project and selected workflow surface
+before model edits, imports the staged workflow in a clean subprocess, and runs
+the configured check inside an isolated execution arm. Prefer
+`target_test_argv`; legacy `target_test_command` is parsed into argv without a
+shell, and the two forms are mutually exclusive. `validation_timeout` bounds the
+check. The derived manifest and validation report are evidence for review only;
+the workflow never promotes the candidate into the authoritative package.
+
 The candidate workspace snapshots the selected package and hashes each original file. The decomposition may add new building-block modules only inside that package boundary, while explicit `candidate_paths` can narrow the editable surface. A configured `target_test_argv` command runs without shell parsing in an isolated repository overlay. Its typed report distinguishes modified, added, removed, and unchanged paths and verifies that authoritative sources were not changed.
 
 ## Phases and evidence

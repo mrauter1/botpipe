@@ -1,6 +1,7 @@
 """Durable workflows expressed as ordinary Python functions."""
 
 from .artifacts import Artifact, ArtifactError, ArtifactHandle, ArtifactMap
+from .budgets import ProviderBudget, provider_budget
 from .errors import (
     BotpipeError,
     BudgetExceeded,
@@ -34,6 +35,8 @@ __all__ = [
     "ArtifactMap",
     "Botpipe",
     "BotpipeError",
+    "ProviderBudget",
+    "provider_budget",
     "BudgetExceeded",
     "InputRequired",
     "ReplayMismatch",

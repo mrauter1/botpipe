@@ -9,11 +9,18 @@ from labs.workflows._shared import (
     LabWorkflowResult,
     ReplanRequired,
     artifact,
-    execute_candidate_validation,
     finish,
     observe_workflow,
     prepare_selected_candidate_surface,
     run_phase,
+)
+from labs.workflows.optimizer_integration import (
+    freeze_candidate_baseline,
+    load_legacy_evaluation_inputs,
+    load_optimizer_candidate_handoff,
+    staged_workflow_reference,
+    validate_candidate_and_compare,
+    validate_materialized_handoff,
 )
 
 from .contracts import (
@@ -34,6 +41,33 @@ def WorkflowAndEvalToRefinedWorkflowPackage(
     _verifier = Session(key="verifier")
     context = {"request": request, "parameters": params.model_dump(mode="json")}
     context["selected_workflow_contract"] = observe_workflow(params.selected_workflow)
+    selected_workflow_name = context["selected_workflow_contract"]["name"]
+    optimizer_handoff = None
+    if params.optimization_receipt_path:
+        optimizer_handoff = load_optimizer_candidate_handoff(
+            workspace=str(current_run().workspace),
+            optimization_receipt_path=params.optimization_receipt_path,
+            candidate_id=params.candidate_id or "",
+            expected_selected_workflow=selected_workflow_name,
+            selected_workflow_reference=params.selected_workflow,
+            selected_workflow_source_path=context["selected_workflow_contract"][
+                "source"
+            ]["path"],
+            allowed_kinds=(
+                "producer_prompt",
+                "verifier_rubric",
+                "tokens",
+                "workflow",
+            ),
+        )
+        context["optimizer_handoff"] = optimizer_handoff
+    else:
+        context["legacy_evaluation"] = load_legacy_evaluation_inputs(
+            workspace=str(current_run().workspace),
+            evaluation_summary_path=params.evaluation_summary_path or "",
+            evaluation_findings_path=params.evaluation_findings_path or "",
+            expected_selected_workflow=selected_workflow_name,
+        )
     source_path = context["selected_workflow_contract"]["source"]["path"]
     if not source_path:
         raise ValueError("selected workflow must expose an inspectable source file")
@@ -42,16 +76,42 @@ def WorkflowAndEvalToRefinedWorkflowPackage(
         source_path,
         str(run.folder / "candidate-workspace"),
         str(run.workspace),
-        params.candidate_paths,
+        (
+            optimizer_handoff["candidate_paths"]
+            if optimizer_handoff is not None
+            else params.candidate_paths
+        ),
     )
+    if optimizer_handoff is not None:
+        validate_materialized_handoff(
+            optimizer_handoff,
+            candidate.authoritative_hashes,
+        )
     relative_source = str(Path(source_path).resolve().relative_to(candidate.repo_root))
     if relative_source not in candidate.authoritative_hashes:
         raise ValueError("candidate_paths must include the selected workflow source")
+    validation_reference = staged_workflow_reference(
+        params.selected_workflow,
+        relative_source=relative_source,
+        function=context["selected_workflow_contract"].get("function"),
+    )
     context["candidate_surface"] = {
         "relative_path": relative_source,
         "allowed_roots": list(candidate.allowed_roots),
         "allowed_paths": list(candidate.allowed_paths),
         "authoritative_sha256": candidate.authoritative_hashes[relative_source],
+    }
+    frozen_candidate = freeze_candidate_baseline(
+        candidate_workspace=candidate,
+        selected_workflow=params.selected_workflow,
+        staging_parent=str(run.folder / "candidate-execution" / "frozen"),
+        workspace=str(run.workspace),
+    )
+    context["frozen_candidate"] = {
+        "execution_tree_id": frozen_candidate["snapshot"]["execution_tree_id"],
+        "baseline_surface_id": frozen_candidate["baseline_surface_manifest"][
+            "surface_id"
+        ],
     }
     completed = []
     prior_handles = ()
@@ -135,21 +195,20 @@ def WorkflowAndEvalToRefinedWorkflowPackage(
                     )
                     completed.append(phase_3)
                     prior_handles = prior_handles + phase_3.handles
-                    evaluation = execute_candidate_validation(
-                        candidate,
-                        params.target_test_argv,
-                        params.validation_timeout,
+                    evaluation = validate_candidate_and_compare(
+                        candidate_workspace=candidate,
+                        frozen_candidate=frozen_candidate,
+                        selected_workflow=validation_reference,
+                        staging_parent=str(run.folder / "candidate-execution"),
+                        target_test_argv=params.target_test_argv or (),
+                        validation_timeout=params.validation_timeout,
+                        evaluation_spec_path=params.evaluation_spec_path,
+                        workspace=str(run.workspace),
+                        invocation_id=run.run_id,
                     )
-                    if not evaluation.ok:
-                        raise ValueError(
-                            "candidate validation command failed: "
-                            f"returncode={evaluation.command.returncode}; stderr={evaluation.command.stderr}"
-                        )
-                    if not evaluation.manifest.changed_paths:
-                        raise ValueError(
-                            "candidate refinement must change at least one allowed source file"
-                        )
-                    context["candidate_evaluation"] = evaluation.to_dict()
+                    context["candidate_evaluation"] = evaluation["validation"]
+                    context["candidate_manifest"] = evaluation["candidate_manifest"]
+                    context["paired_evaluation"] = evaluation["paired_evaluation"]
                     phase_4 = run_phase(
                         phase="evaluate_refined_workflow",
                         returns=WorkflowRefinementEvaluationPayload,

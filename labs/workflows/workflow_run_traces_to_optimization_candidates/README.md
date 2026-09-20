@@ -1,55 +1,27 @@
-# Workflow Run Traces To Optimization Candidates
+# Workflow run traces to optimization candidates
 
-Turn selected workflow run traces into step-local and workflow-level optimization candidates without mutating the authoritative workflow.
+This candidate-only workflow captures bounded run evidence and the selected workflow's exact baseline surface, runs one producer turn plus one independent verifier turn, and deterministically publishes recommendations. It never executes, refines, evaluates, or promotes the selected workflow. If no objective-eligible evidence exists it makes zero provider calls and publishes a `collect_evidence` or `no_change` result.
 
-Canonical name: `workflow_run_traces_to_optimization_candidates`
-Aliases: `workflow-optimization-candidates`, `trace-to-optimization-candidates`
-
-## Durable function design
-
-`workflow.py` exports one ordinary Python function decorated with `@workflow`. Python controls phase order, optional passes, loops, and nested workflows. Each phase runs a producer and verifier through durable `Session` operations. Producers return `LabPhaseDraft`; each verifier returns a package-specific `LabPhaseOutcome` subclass from `contracts.py`, so domain evidence is typed before control flow consumes it.
-
-Every declared output is a required `Artifact`. Botpipe snapshots the provider-written file before the operation completes, and later phases read those immutable handles. A verifier may cite only captured artifact names. The final typed `LabWorkflowResult` carries the accepted handles in `artifacts`, convenience snapshot paths in `artifact_paths`, and unique candidate identifiers. When phases reuse an artifact name, the later accepted handle wins.
-
-The optimizer reads `Botpipe.inspect()` records and a captured callable/source manifest. Only observed operations receive metrics or candidate scores. Declared paths with no observations are published as evidence gaps. Every deterministic candidate cites the operation IDs that support it.
-
-## Invocation
-
-```python
-from botpipe import Botpipe
-from labs.workflows.workflow_run_traces_to_optimization_candidates import (
-    Params,
-    workflow_callable,
-)
-
-client = Botpipe(workspace=".")
-result = client.run(
-    workflow_callable, Params(...), request="Describe the requested outcome"
-)
+```bash
+botpipe run labs/workflows/workflow_run_traces_to_optimization_candidates "Diagnose devloop" --task review-1 \
+  -wf selected_workflow devloop -wf task_title "Diagnose devloop" \
+  -wf objective reliability
 ```
 
-Parameters are validated by the package-local Pydantic `Params` model before any operation starts. `request` contains the human-readable task or evidence request.
+The default limits are 25 runs, one shortlisted step, three total candidates, six provider dispatches, 600 seconds per provider turn, 1800 seconds overall, 50 MiB of evidence, and 10 MiB of recommendation output. `objective` is `reliability`, `token_usage`, or `latency`. Empty `route_tags` means no route filter. Kind flags restrict the single CandidateSet; they do not add passes.
 
-## Phases and evidence
+`max_candidates_per_pass` maps to the total `max_candidates` cap with a warning; conflicting values fail. Deprecated `optimization_depth=cheap|standard` maps only to dispatch/deadline limits (6/1800 or 12/3600). `ablation` remains planning-only.
 
-| Phase | Required produced artifacts |
-| --- | --- |
-| `frame_observed_optimization` | `workflow_optimization_scope.json`, `observed_trace_corpus.json`, `selected_workflow_source_manifest.json` |
-| `rank_observed_targets` | `step_optimization_priority_report.json`, `step_trace_metrics.json` |
-| `mine_observed_failures` | `workflow_failure_scenarios.json` |
-| `optimize_producer_contracts` | `producer_prompt_optimization_candidates.json` |
-| `optimize_verifier_rubrics` | `verifier_rubric_optimization_candidates.json` |
-| `optimize_tokens` | `token_optimization_candidates.json` |
-| `generate_adversarial_cases` | `adversarial_case_candidates.json` |
-| `optimize_workflow_boundary` | `workflow_level_optimization_candidates.json` |
-| `package_validated_candidates` | `workflow_optimization_scorecard.json`, `optimization_next_actions.md` |
+Canonical outputs are:
 
-Producer and verifier prompts remain phase-specific. `accepted` advances, while `needs_rework` repeats the phase with structured feedback and its previous artifact snapshots. `needs_replan` returns control to the phase's declared target through a workflow-owned Python loop. `question` and `blocked` suspend with `ask()` and retry the phase with the operator's `input_answer`; `failed` rejects the phase. No route table executes these outcomes.
+- `workflow_optimization_evidence.json`
+- `baseline_surface_manifest.json`
+- `workflow_optimization_candidates.json`
+- `workflow_optimization_candidate_review.json` when model review ran
+- `workflow_optimization_report.md`
+- `workflow_refinement_evidence.json`
+- `optimization_publication_receipt.json`, written last as the commit marker
 
-## Inspection and replay
+To implement one reviewed workflow/prompt/token/rubric proposal, pass `optimization_receipt_path` and its exact `candidate_id` to `workflow_and_eval_to_refined_workflow_package`. Evaluation-case candidates go to `workflow_to_eval_suite`. Recommendation receipts always say `improvement = not_evaluated`.
 
-The journal records prompt reads, provider results, typed outcomes, usage, artifact dependencies, and operation timing. Replay uses the committed typed results and artifact snapshots. Source inspection reports dynamic topology and does not claim that unvisited Python branches executed.
-
-## Validation
-
-`tests/test_labs.py` imports and resolves every labs manifest, stages every package with `FakeProvider`, checks typed accepted outcomes, and verifies that all required artifacts were captured.
+Resume rehashes the frozen evidence and baseline and preserves the runtime provider budget. Baseline/evidence drift or an incompatible old checkpoint requires a new analysis. Historical v1 receipts remain historical evidence and are not upgraded.

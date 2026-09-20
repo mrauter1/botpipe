@@ -43,6 +43,7 @@ class Journal:
             started_at TEXT NOT NULL, finished_at TEXT,
             UNIQUE(run_id,scope,ordinal));
           CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, value TEXT NOT NULL);
+          CREATE TABLE IF NOT EXISTS provider_budgets (id TEXT PRIMARY KEY, state TEXT NOT NULL);
           CREATE TABLE IF NOT EXISTS events (seq INTEGER PRIMARY KEY AUTOINCREMENT,
             run_id TEXT NOT NULL, operation_id TEXT, event TEXT NOT NULL, data TEXT NOT NULL, at TEXT NOT NULL);
           PRAGMA user_version=1;

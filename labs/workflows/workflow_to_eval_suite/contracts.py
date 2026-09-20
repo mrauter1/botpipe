@@ -46,6 +46,8 @@ class WorkflowEvalSuitePayload(LabPhaseOutcome):
     authoritative_artifacts: list[str] = Field(min_length=1)
     next_action: str = Field(min_length=1)
     ready_for_publication: bool
+    evaluation_suite_id: str = Field(min_length=1)
+    source_candidate_id: str | None = None
     replan_reason: str | None = None
 
 
@@ -62,6 +64,8 @@ class WorkflowEvalSuiteSummaryPayload(BaseModel):
     authoritative_artifacts: list[str] = Field(min_length=1)
     next_action: str = Field(min_length=1)
     ready_for_publication: bool
+    evaluation_suite_id: str = Field(min_length=1)
+    source_candidate_id: str | None = None
 
 
 class ValidatedEvalCasePayload(BaseModel):

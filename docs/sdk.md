@@ -11,7 +11,6 @@ client = Botpipe(
     provider_config={"command": ["codex", "exec"]},
     policy=Policy(model="gpt-5.5"),
     state_dir=None,
-    policy=None,
     max_operations=1000,
     timeout=3600,
 )
@@ -57,11 +56,31 @@ workspace for an editing branch.
 `parallel(*callables, max_workers=None, settle="all")` returns ordered results
 from independent durable scopes.
 
+`provider_budget(*, max_turns, max_seconds=None, turn_timeout_seconds=None)` limits
+actual provider dispatches in its dynamic scope. Child workflows and parallel
+branches share the same journal-backed counter. Initial calls, typed-output
+repairs, and explicitly authorized manual retries each reserve a turn before
+dispatch; native receipt recovery does not. Time limits require a
+provider with `supports_timeout=True`. The absolute deadline includes suspended
+time, survives resume, and never extends. Nested budgets all apply.
+
 ## Runtime context
 
 `current_run()` is available inside workflows and activities. It exposes
 `workspace`, `folder`, `task_folder`, `task_id`, `run_id`, `scope`, `client`,
 `policy`, and `journal`.
+
+Run metadata includes `provenance_start` and `provenance_end`. Each observation
+records a workflow identity, orchestration fingerprint, and exact package
+surface hash when Botpipe can verify them. Capture failures remain explicit as
+`verified: false` with unknown identity fields; Botpipe never substitutes the
+current package hash for missing historical provenance. Different verified
+start/end surfaces mean the run changed source while executing and must not be
+pooled as one stable optimizer baseline.
+
+Verified provenance requires source-backed module definitions. Functions created
+later inside another function, transformed bytecode, stale imports, or unavailable
+source remain executable but carry unverified provenance.
 
 Integration code can call:
 

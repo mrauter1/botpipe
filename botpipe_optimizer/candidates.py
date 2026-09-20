@@ -6,10 +6,7 @@ import hashlib
 import json
 import os
 import shutil
-import signal
-import subprocess
 import tempfile
-import time
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -53,6 +50,8 @@ class CommandResult:
     stdout: str
     stderr: str
     timed_out: bool
+    stdout_truncated: bool = False
+    stderr_truncated: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,8 +72,16 @@ def prepare_candidate_workspace(
     repo_root: str | Path,
     relative_paths: Sequence[str | Path],
     destination: str | Path,
+    *,
+    max_files: int = 100000,
+    max_bytes: int = 512 * 1024 * 1024,
 ) -> CandidateWorkspace:
     """Snapshot allowed repo files or package trees into baseline and candidate roots."""
+    if any(
+        isinstance(value, bool) or not isinstance(value, int) or value <= 0
+        for value in (max_files, max_bytes)
+    ):
+        raise ValueError("candidate snapshot limits must be positive integers")
     repo = Path(repo_root).resolve()
     if not repo.is_dir():
         raise FileNotFoundError(f"repository root does not exist: {repo}")
@@ -100,6 +107,13 @@ def prepare_candidate_workspace(
     if not paths:
         raise ValueError("candidate surface must contain at least one ordinary file")
     ordered_paths = tuple(sorted(paths))
+    if len(ordered_paths) > max_files:
+        raise ValueError(f"candidate baseline exceeds max_files={max_files}")
+    total_bytes = sum(
+        _ordinary_source(repo, relative).stat().st_size for relative in ordered_paths
+    )
+    if total_bytes > max_bytes:
+        raise ValueError(f"candidate baseline exceeds max_bytes={max_bytes}")
     hashes: dict[str, str] = {}
     for relative in ordered_paths:
         source = _ordinary_source(repo, relative)
@@ -216,72 +230,179 @@ def evaluate_candidate_workspace(
     argv: Sequence[str],
     *,
     timeout: float = 300,
+    max_stream_bytes: int = 1024 * 1024,
 ) -> CandidateEvaluationReport:
-    """Overlay the candidate into an isolated repo copy and execute an argv command."""
+    """Execute one bounded command against a private, manifest-checked candidate tree.
+
+    A private working directory and import isolation are not an OS sandbox.
+    Call this effect through a non-retry-safe activity when used in a workflow.
+    """
+    from .execution_trees import (
+        assert_execution_arm_unchanged,
+        materialize_execution_arm,
+        snapshot_execution_arm,
+    )
+    from .processes import run_bounded_process
+
     command = _argv(argv)
-    if timeout <= 0:
-        raise ValueError("timeout must be positive")
-    validate_authoritative_sources_unchanged(workspace)
-    manifest = candidate_manifest(workspace)
     with tempfile.TemporaryDirectory(prefix="botpipe-candidate-eval-") as temporary:
-        overlay = Path(temporary) / "repo"
-        shutil.copytree(
-            workspace.repo_root, overlay, symlinks=False, ignore=_ignore_runtime_state
+        parent = Path(temporary)
+        bundle = freeze_candidate_workspace(workspace, parent)
+        candidate = candidate_surface_manifest(workspace, bundle)
+        manifest = candidate_manifest(workspace)
+        arm = materialize_execution_arm(
+            bundle.snapshot,
+            parent,
+            candidate_manifest=candidate,
+            removed_paths=manifest.removed_paths,
         )
-        for relative in manifest.removed_paths:
-            target = overlay / relative
-            if target.exists():
-                target.unlink()
-        for relative in _surface_files(workspace.candidate_root):
-            source = workspace.candidate_root / relative
-            target = overlay / relative
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source, target)
-        stdout_path, stderr_path = (
-            Path(temporary) / "stdout",
-            Path(temporary) / "stderr",
+        expected = snapshot_execution_arm(arm)
+        process = run_bounded_process(
+            command,
+            cwd=arm.root,
+            timeout_seconds=timeout,
+            max_stream_bytes=max_stream_bytes,
         )
-        with (
-            stdout_path.open("w+", encoding="utf-8") as stdout_file,
-            stderr_path.open(
-                "w+",
-                encoding="utf-8",
-            ) as stderr_file,
-        ):
-            process = subprocess.Popen(
-                command,
-                cwd=overlay,
-                stdout=stdout_file,
-                stderr=stderr_file,
-                text=True,
-                start_new_session=os.name == "posix",
-            )
-            timed_out = False
-            try:
-                returncode = process.wait(timeout=timeout)
-            except subprocess.TimeoutExpired:
-                timed_out = True
-                _terminate_process_group(process)
-                process.wait()
-                returncode = -1
-            except BaseException:
-                _terminate_process_group(process)
-                process.wait()
-                raise
-            else:
-                # A successful command can leave servers or test workers in its process group.
-                _terminate_process_group(process, direct_process_finished=True)
-            stdout_file.seek(0)
-            stderr_file.seek(0)
-            result = CommandResult(
-                command,
-                returncode,
-                stdout_file.read(),
-                stderr_file.read(),
-                timed_out,
-            )
+        assert_execution_arm_unchanged(expected, arm.root, phase="candidate command")
+        validate_authoritative_sources_unchanged(workspace)
+        result = CommandResult(
+            command,
+            process.exit_code if process.exit_code is not None else -1,
+            process.stdout,
+            process.stderr,
+            process.timed_out,
+            process.stdout_truncated,
+            process.stderr_truncated,
+        )
+        return CandidateEvaluationReport(manifest, result, True)
+
+
+@dataclass(frozen=True, slots=True)
+class FrozenCandidateBundle:
+    """Captured baseline shared by concrete validation and optional paired evaluation."""
+
+    snapshot: Any
+    baseline_surface_manifest: dict[str, Any]
+    boundary: dict[str, Any]
+
+
+def freeze_candidate_workspace(
+    workspace: CandidateWorkspace,
+    owned_parent: Path,
+    *,
+    boundary: dict[str, Any] | None = None,
+    selected_package_root: Path | None = None,
+    selected_package_import_path: str | None = None,
+    execution_source_root: Path | None = None,
+    max_files: int = 100000,
+    max_bytes: int = 512 * 1024 * 1024,
+) -> FrozenCandidateBundle:
+    """Freeze source before candidate editing; keep this result for the whole run."""
+    from .execution_trees import capture_execution_tree
+    from .surface_identity import derive_surface_manifest
+
     validate_authoritative_sources_unchanged(workspace)
-    return CandidateEvaluationReport(manifest, result, True)
+    identity_boundary = dict(
+        boundary
+        or {
+            "editable_paths": list(workspace.allowed_paths),
+            "editable_roots": list(workspace.allowed_roots),
+        }
+    )
+    baseline_kind = identity_boundary.pop("surface_kind", "baseline")
+    baseline = derive_surface_manifest(
+        workspace.baseline_root,
+        expected_root=workspace.baseline_root,
+        boundary=identity_boundary,
+        surface_kind=baseline_kind,
+    )
+    # Baseline bytes are independently checked against the originally captured source.
+    for entry in baseline["files"]:
+        if (
+            workspace.authoritative_hashes.get(entry["relative_path"])
+            != entry["surface_sha256"]
+        ):
+            raise ValueError("baseline candidate snapshot changed")
+        source = workspace.repo_root / entry["relative_path"]
+        executable = (
+            bool(source.stat().st_mode & 0o111) if os.name == "posix" else False
+        )
+        if executable != entry["executable"]:
+            raise ValueError(
+                "authoritative source executable mode changed before freezing"
+            )
+    if set(baseline["relative_paths"]) != set(workspace.allowed_paths):
+        raise ValueError("baseline candidate file inventory changed")
+    snapshot = capture_execution_tree(
+        execution_source_root or workspace.repo_root,
+        owned_parent,
+        selected_package_root=selected_package_root,
+        selected_package_import_path=selected_package_import_path,
+        excluded_roots=(workspace.root,),
+        max_files=max_files,
+        max_bytes=max_bytes,
+    )
+    return FrozenCandidateBundle(snapshot, baseline, identity_boundary)
+
+
+def candidate_surface_manifest(
+    workspace: CandidateWorkspace, bundle: FrozenCandidateBundle
+) -> dict[str, Any]:
+    """Derive current candidate files and bind them to the frozen edit allowlist."""
+    from .execution_trees import verify_frozen_execution_tree
+    from .surface_identity import derive_surface_manifest, validate_surface_manifest
+
+    validate_authoritative_sources_unchanged(workspace)
+    verify_frozen_execution_tree(bundle.snapshot)
+    manifest = candidate_manifest(workspace)
+    derived = derive_surface_manifest(
+        workspace.candidate_root,
+        expected_root=workspace.candidate_root,
+        boundary=bundle.boundary,
+        surface_kind="candidate",
+    )
+    return validate_surface_manifest(
+        derived,
+        expected_root=workspace.candidate_root,
+        expected_boundary=bundle.boundary,
+        expected_surface_kind="candidate",
+        baseline_manifest=bundle.baseline_surface_manifest,
+        allowed_added_path_prefixes=workspace.allowed_roots,
+        allowed_removed_paths=manifest.removed_paths,
+    )
+
+
+def validate_candidate(
+    workspace: CandidateWorkspace,
+    bundle: FrozenCandidateBundle,
+    *,
+    workflow_refs: Sequence[str],
+    staging_parent: Path,
+    target_test_argv: Sequence[str] | None = None,
+    target_test_command: str | None = None,
+    **limits: Any,
+):
+    """Import concrete native workflows and optionally execute tests in fresh staging."""
+    from .candidate_validation import validate_frozen_candidate
+
+    candidate = candidate_surface_manifest(workspace, bundle)
+    return validate_frozen_candidate(
+        bundle.snapshot,
+        baseline_surface_manifest=bundle.baseline_surface_manifest,
+        candidate_surface_manifest=candidate,
+        expected_baseline_root=workspace.baseline_root,
+        expected_candidate_root=workspace.candidate_root,
+        expected_boundary=bundle.boundary,
+        baseline_surface_kind=bundle.baseline_surface_manifest["surface_kind"],
+        candidate_surface_kind="candidate",
+        workflow_refs=workflow_refs,
+        staging_parent=staging_parent,
+        allowed_added_path_prefixes=workspace.allowed_roots,
+        allowed_removed_paths=candidate_manifest(workspace).removed_paths,
+        target_test_argv=target_test_argv,
+        target_test_command=target_test_command,
+        **limits,
+    )
 
 
 def repository_root_for(
@@ -385,39 +506,6 @@ def _reject_symlink_alias(path: Path) -> None:
             raise ValueError(f"candidate destination contains a symlink alias: {path}")
 
 
-def _terminate_process_group(
-    process: subprocess.Popen[str],
-    *,
-    direct_process_finished: bool = False,
-) -> None:
-    if os.name != "posix":
-        if process.poll() is None:
-            process.terminate()
-            try:
-                process.wait(timeout=1)
-            except subprocess.TimeoutExpired:
-                process.kill()
-        return
-
-    def send(sig: signal.Signals) -> bool:
-        try:
-            os.killpg(process.pid, sig)
-        except ProcessLookupError:
-            return False
-        return True
-
-    if not send(signal.SIGTERM):
-        return
-    deadline = time.monotonic() + (0.2 if direct_process_finished else 1.0)
-    while time.monotonic() < deadline:
-        try:
-            os.killpg(process.pid, 0)
-        except ProcessLookupError:
-            return
-        time.sleep(0.01)
-    send(signal.SIGKILL)
-
-
 def _surface_files(root: Path) -> set[str]:
     result: set[str] = set()
     for path in root.rglob("*"):
@@ -459,7 +547,11 @@ def _ignore_runtime_state(_directory: str, names: list[str]) -> set[str]:
 
 
 def _digest(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 __all__ = [
@@ -468,9 +560,13 @@ __all__ = [
     "CandidateManifest",
     "CandidateWorkspace",
     "CommandResult",
+    "FrozenCandidateBundle",
     "candidate_manifest",
+    "candidate_surface_manifest",
     "evaluate_candidate_workspace",
+    "freeze_candidate_workspace",
     "prepare_candidate_workspace",
     "repository_root_for",
     "validate_authoritative_sources_unchanged",
+    "validate_candidate",
 ]

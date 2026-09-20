@@ -5,11 +5,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import signal
 import subprocess
 import tempfile
 import threading
-import time
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -17,6 +15,7 @@ from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
 from .policy import NetworkMode, PermissionMode, Policy, SandboxMode
+from .processes import ProcessContainment
 
 
 class ProviderError(RuntimeError):
@@ -200,6 +199,30 @@ def _record_response(value: Any, path: Path) -> ProviderResponse:
 def _pid_alive(pid: Any) -> bool | None:
     if not isinstance(pid, int) or pid <= 0:
         return None
+    if os.name == "nt":
+        # os.kill(pid, 0) calls TerminateProcess on Windows; it is not a probe.
+        import ctypes
+        from ctypes import wintypes
+
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        kernel.OpenProcess.restype = wintypes.HANDLE
+        kernel.GetExitCodeProcess.argtypes = [
+            wintypes.HANDLE,
+            ctypes.POINTER(wintypes.DWORD),
+        ]
+        kernel.GetExitCodeProcess.restype = wintypes.BOOL
+        kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+        handle = kernel.OpenProcess(0x1000, False, pid)
+        if not handle:
+            return False if ctypes.get_last_error() == 87 else None
+        try:
+            code = wintypes.DWORD()
+            if not kernel.GetExitCodeProcess(handle, ctypes.byref(code)):
+                return None
+            return code.value == 259
+        finally:
+            kernel.CloseHandle(handle)
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -286,9 +309,22 @@ def _json_literal(value: Any) -> str:
     return json.dumps(value, separators=(",", ":"))
 
 
+def _stream_usage(stdout: bytes) -> dict:
+    """Retain reported partial usage from failed CLI output without guessing totals."""
+    values = {}
+    for line in stdout.splitlines():
+        try:
+            values.update(_usage(json.loads(line)))
+        except (ValueError, UnicodeDecodeError):
+            pass
+    return values
+
+
 class _CLIProvider:
     name = ""
     supports_safe_read_retry = False
+    supports_timeout = True
+    _reserves_dispatch = True
 
     def __init__(
         self, command: str | Iterable[str], *, env: Mapping[str, str] | None = None
@@ -346,11 +382,16 @@ class _CLIProvider:
         request.receipt_dir.mkdir(parents=True, exist_ok=True)
         effective = request.policy.effective()
         command, env, emission = self._build(request, effective)
+        from .dispatches import Dispatch
+
+        dispatch = Dispatch(self, request)
+        effective_timeout = dispatch.timeout
         started: dict[str, Any] = {
             "version": 1,
             "provider": self.name,
             "operation_id": request.operation_id,
             "attempt": request.attempt,
+            "dispatch_id": dispatch.id,
             "status": "starting",
             "started_at": _now(),
             "command": command,
@@ -358,11 +399,15 @@ class _CLIProvider:
             "policy": effective.to_dict(),
             "emission": emission,
         }
-        _atomic_json(path, started)  # intent precedes the potentially effectful spawn
         process: subprocess.Popen[bytes] | None = None
+        containment = None
         stdout = b""
         stderr = b""
         try:
+            _atomic_json(
+                path, started
+            )  # intent precedes the potentially effectful spawn
+            containment = ProcessContainment.create()
             process = subprocess.Popen(
                 command,
                 stdin=subprocess.PIPE,
@@ -370,14 +415,23 @@ class _CLIProvider:
                 stderr=subprocess.PIPE,
                 cwd=request.workspace,
                 env={**os.environ, **env},
-                start_new_session=(os.name != "nt"),
+                **containment.creation_kwargs,
             )
+            try:
+                containment.attach_and_start(process)
+            except BaseException:
+                # Windows children start suspended; assignment failure must
+                # terminate that child before any user code is allowed to run.
+                process.kill()
+                process.wait()
+                raise
+            process._botpipe_containment = containment
+            dispatch.started()
             started.update(status="running", pid=process.pid, spawned_at=_now())
             if os.name != "nt":
                 started["process_group"] = process.pid
             _atomic_json(path, started)
             try:
-                effective_timeout = effective.timeout or request.timeout
                 stdout, stderr = self._communicate(
                     process,
                     request.prompt.encode(),
@@ -385,6 +439,8 @@ class _CLIProvider:
                     receipt=path,
                     started=started,
                 )
+                containment.ensure_tree_exited(process, grace_seconds=0.1)
+                dispatch.stopped()
             except subprocess.TimeoutExpired as exc:
                 if not getattr(exc, "stopped", False):
                     self._stop(process)
@@ -393,6 +449,7 @@ class _CLIProvider:
                     stderr = exc.stderr or b""
                 else:
                     stdout, stderr = process.communicate()
+                dispatch.stopped()
                 raw = self._save_streams(path, stdout, stderr)
                 failed = {
                     **started,
@@ -447,8 +504,14 @@ class _CLIProvider:
                 "response": _response_record(response),
             }
             _atomic_json(path, completed)
+            dispatch.finish("completed", usage=response.usage)
             return response
         except ProviderError as exc:
+            dispatch.finish(
+                "timed_out" if isinstance(exc, ProviderTimeoutError) else "failed",
+                usage=_stream_usage(stdout),
+                error=exc,
+            )
             if path.exists() and process is not None and process.poll() is not None:
                 current = _read_receipt(path)
                 if current.get("status") not in ("completed", "failed"):
@@ -460,11 +523,21 @@ class _CLIProvider:
                     )
                     _atomic_json(path, current)
             raise
-        except (KeyboardInterrupt, SystemExit):
+        except (KeyboardInterrupt, SystemExit) as exc:
+            if (
+                process is not None
+                and getattr(process, "_botpipe_containment", None) is not None
+            ):
+                self._stop(process)
+            dispatch.finish("interrupted", usage=_stream_usage(stdout), error=exc)
             raise
         except BaseException as exc:
-            if process is not None and process.poll() is None:
+            if (
+                process is not None
+                and getattr(process, "_botpipe_containment", None) is not None
+            ):
                 self._stop(process)
+            dispatch.finish("failed", usage=_stream_usage(stdout), error=exc)
             if path.exists():
                 current = _read_receipt(path)
                 if current.get("status") not in ("completed", "failed"):
@@ -477,6 +550,9 @@ class _CLIProvider:
             raise ProviderError(
                 f"provider {self.name!r} adapter failed: {exc}"
             ) from exc
+        finally:
+            if containment is not None:
+                containment.close()
 
     def _communicate(
         self,
@@ -491,55 +567,10 @@ class _CLIProvider:
 
     @staticmethod
     def _stop(process: subprocess.Popen[bytes]) -> None:
-        if os.name == "nt":
-            if process.poll() is not None:
-                return
-            try:
-                process.terminate()
-                process.wait(timeout=1)
-            except (ProcessLookupError, subprocess.TimeoutExpired):
-                if process.poll() is None:
-                    try:
-                        process.kill()
-                    except ProcessLookupError:
-                        pass
-                    process.wait()
-            return
-
-        process_group = process.pid  # Popen uses start_new_session=True on POSIX.
-        try:
-            os.killpg(process_group, signal.SIGTERM)
-        except ProcessLookupError:
-            if process.poll() is None:
-                process.wait()
-            return
-
-        deadline = time.monotonic() + 1.0
-        while time.monotonic() < deadline:
-            # Reap the group leader promptly, but continue checking the group:
-            # descendants may ignore TERM after their parent exits.
-            if process.poll() is None:
-                try:
-                    process.wait(
-                        timeout=min(0.05, max(0.0, deadline - time.monotonic()))
-                    )
-                except subprocess.TimeoutExpired:
-                    pass
-            if _process_group_alive(process_group) is False:
-                break
-            time.sleep(0.02)
-
-        if _process_group_alive(process_group) is not False:
-            try:
-                os.killpg(process_group, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-        if process.poll() is None:
-            try:
-                process.wait(timeout=1)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait()
+        containment = getattr(process, "_botpipe_containment", None)
+        if containment is None:
+            raise RuntimeError("Cannot terminate a process without verified ownership")
+        containment.terminate(process, grace_seconds=1.0)
 
     @staticmethod
     def _save_streams(receipt: Path, stdout: bytes, stderr: bytes) -> dict[str, str]:
@@ -696,6 +727,7 @@ class CodexProvider(_CLIProvider):
             for thread in threads:
                 thread.join(timeout=1)
             raise
+        process._botpipe_containment.ensure_tree_exited(process, grace_seconds=0.1)
         for thread in threads:
             thread.join()
         if errors:

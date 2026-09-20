@@ -12,6 +12,10 @@ from labs.workflows._shared import (
     run_phase,
     validate_selected_eval_manifest,
 )
+from labs.workflows.optimizer_integration import (
+    evaluation_suite_identity,
+    load_optimizer_candidate_handoff,
+)
 
 from .contracts import (
     EvalCaseDesignPayload,
@@ -28,6 +32,21 @@ def WorkflowToEvalSuite(params: Params, request: str = "") -> LabWorkflowResult:
     _verifier = Session(key="verifier")
     context = {"request": request, "parameters": params.model_dump(mode="json")}
     context["selected_workflow_contract"] = observe_workflow(params.selected_workflow)
+    optimizer_handoff = None
+    if params.optimization_receipt_path:
+        optimizer_handoff = load_optimizer_candidate_handoff(
+            workspace=str(current_run().workspace),
+            optimization_receipt_path=params.optimization_receipt_path,
+            candidate_id=params.candidate_id or "",
+            expected_selected_workflow=context["selected_workflow_contract"]["name"],
+            selected_workflow_reference=params.selected_workflow,
+            selected_workflow_source_path=context["selected_workflow_contract"][
+                "source"
+            ]["path"],
+            allowed_kinds=("evaluation_case",),
+        )
+        context["optimizer_handoff"] = optimizer_handoff
+        context["evaluation_claim_scope"] = "development_cases"
     completed = []
     prior_handles = ()
     frame_evaluation_target_checkpoint = len(completed)
@@ -101,6 +120,14 @@ def WorkflowToEvalSuite(params: Params, request: str = "") -> LabWorkflowResult:
                     context["validated_eval_case_manifest"] = (
                         validated_manifest.model_dump(mode="json")
                     )
+                    context["evaluation_suite_id"] = evaluation_suite_identity(
+                        context["validated_eval_case_manifest"],
+                        source_candidate_id=(
+                            optimizer_handoff["candidate_id"]
+                            if optimizer_handoff is not None
+                            else None
+                        ),
+                    )
                     phase_3 = run_phase(
                         phase="package_workflow_eval_suite",
                         returns=WorkflowEvalSuitePayload,
@@ -125,6 +152,23 @@ def WorkflowToEvalSuite(params: Params, request: str = "") -> LabWorkflowResult:
                     )
                     completed.append(phase_3)
                     prior_handles = prior_handles + phase_3.handles
+                    details = phase_3.evidence.details
+                    if (
+                        details.get("evaluation_suite_id")
+                        != context["evaluation_suite_id"]
+                    ):
+                        raise ValueError(
+                            "eval suite identity must match the validated case manifest"
+                        )
+                    expected_candidate = (
+                        optimizer_handoff["candidate_id"]
+                        if optimizer_handoff is not None
+                        else None
+                    )
+                    if details.get("source_candidate_id") != expected_candidate:
+                        raise ValueError(
+                            "eval suite source_candidate_id must match the optimizer handoff"
+                        )
                     break
                 except ReplanRequired as change:
                     if change.target != "design_eval_cases":

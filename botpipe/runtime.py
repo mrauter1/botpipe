@@ -36,6 +36,7 @@ from .errors import (
 from .journal import Journal, now, workspace_lock
 from .models import RunResult
 from .policy import Policy
+from .provenance import capture_workflow_provenance
 
 _CURRENT = contextvars.ContextVar("botpipe_run", default=None)
 _OPERATION = contextvars.ContextVar("botpipe_operation", default=None)
@@ -263,6 +264,9 @@ class Workflow:
         functools.update_wrapper(self, fn)
         self.fn, self.name, self.version = fn, name or fn.__name__, str(version)
         self.policy = Policy.resolve(policy)
+        from .provenance import capture_definition_sources
+
+        self._source_identity_at_definition = capture_definition_sources(self)
 
     def __call__(self, *args, **kwargs):
         ctx = current_run()
@@ -406,6 +410,7 @@ class RunContext:
         self._guard = parent._guard if parent else threading.RLock()
         self._execution_lock = threading.RLock()
         self._replay_state = parent._replay_state if parent else {"error": None}
+        self.provider_budgets = parent.provider_budgets if parent else ()
 
     @property
     def operation_id(self):
@@ -722,9 +727,12 @@ class Botpipe:
                     finally:
                         db.close()
                     unfinished = any(
-                        kind == "activity"
-                        or "text" not in json.loads(response or "{}")
-                        or bool(json.loads(inputs).get("value", {}).get("writes"))
+                        not json.loads(response or "{}").get("not_dispatched")
+                        and (
+                            kind == "activity"
+                            or "text" not in json.loads(response or "{}")
+                            or bool(json.loads(inputs).get("value", {}).get("writes"))
+                        )
                         for kind, status, response, inputs in rows
                     )
                     if unfinished:
@@ -773,6 +781,9 @@ class Botpipe:
             "error": None,
         }
         with self._ownership(run_id):
+            data["provenance_start"] = capture_workflow_provenance(
+                definition, self.workspace
+            )
             self.journal.create_run(data)
             return self._execute(definition, data, args, kwargs)
 
@@ -914,6 +925,7 @@ class Botpipe:
             pending_input=pending,
             usage=usage,
             updated_at=now(),
+            provenance_end=capture_workflow_provenance(definition, self.workspace),
         )
         return RunResult(
             ctx.run_id,
@@ -929,12 +941,19 @@ class Botpipe:
 
     def _outputs(self, run_id):
         from .artifacts import ArtifactHandle, ArtifactMap
+        from .dispatches import aggregate_usage, dispatch_records
 
         artifacts = {}
         usage = {}
+        dispatches = dispatch_records(self.journal.events(run_id))
         for row in self.journal.operations(run_id):
             response = row.get("response") or {}
-            for key, value in response.get("usage", {}).items():
+            observed_usage = (
+                aggregate_usage(dispatches[row["id"]])
+                if row["id"] in dispatches
+                else response.get("usage", {})
+            )
+            for key, value in observed_usage.items():
                 if isinstance(value, (int, float)):
                     usage[key] = usage.get(key, 0) + value
             if row["status"] == "completed" and row["kind"] == "provider":
@@ -963,15 +982,33 @@ class Botpipe:
         return self.journal.runs()
 
     def inspect(self, run_id):
+        from .dispatches import aggregate_usage, dispatch_records
+
         records = self.journal.operations(run_id)
+        events = self.journal.events(run_id)
+        dispatches = dispatch_records(events)
         for record in records:
             response = record.get("response") or {}
-            record["usage"] = response.get("usage", {})
+            if record["id"] in dispatches:
+                record["dispatches"] = dispatches[record["id"]]
+                record["usage"] = aggregate_usage(record["dispatches"])
+                record["usage_availability"] = (
+                    "known_total"
+                    if all(
+                        d["usage_availability"] == "known_total"
+                        for d in record["dispatches"]
+                    )
+                    else "partial"
+                    if record["usage"]
+                    else "unknown"
+                )
+            else:
+                record["usage"] = response.get("usage", {})
         artifacts, usage = self._outputs(run_id)
         return {
             "run": self.journal.run(run_id),
             "operations": records,
-            "events": self.journal.events(run_id),
+            "events": events,
             "artifacts": artifacts.to_record(),
             "usage": usage,
         }
@@ -988,6 +1025,11 @@ class Botpipe:
             if record["kind"] not in ("provider", "activity"):
                 raise ValueError(
                     "Only provider turns and activities require effect reconciliation"
+                )
+            if (record.get("response") or {}).get("not_dispatched"):
+                raise ValueError(
+                    "Budget exhausted before dispatch; no effects need reconciliation. "
+                    "Start a new run to use different provider budget limits"
                 )
             if response is not _UNSET:
                 from .providers import (

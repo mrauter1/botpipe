@@ -366,7 +366,26 @@ def _import_module(name: str, workspace: Path) -> ModuleType:
     candidates = (workspace, workspace / ".botpipe" / "workflows")
     with _python_paths(candidates):
         try:
-            return importlib.import_module(name)
+            module = importlib.import_module(name)
+            for root in candidates:
+                local = root.joinpath(*name.split("."))
+                expected = next(
+                    (
+                        path
+                        for path in (local / "__init__.py", local.with_suffix(".py"))
+                        if path.is_file()
+                    ),
+                    None,
+                )
+                if expected is not None:
+                    origin = getattr(module, "__file__", None)
+                    if origin is None or Path(origin).resolve() != expected.resolve():
+                        raise ImportError(
+                            f"module {name!r} is already imported from another location; "
+                            "use a separate Python process for this workspace"
+                        )
+                    break
+            return module
         except Exception as exc:
             raise WorkflowDiscoveryError(
                 f"could not import workflow module {name!r}: {exc}"
@@ -380,7 +399,14 @@ def _load_file_module(path: Path) -> ModuleType:
     with _python_paths((import_root, path.parent)):
         try:
             if module_name:
-                return importlib.import_module(module_name)
+                module = importlib.import_module(module_name)
+                origin = getattr(module, "__file__", None)
+                if origin is None or Path(origin).resolve() != path.resolve():
+                    raise ImportError(
+                        f"module {module_name!r} is already imported from another location; "
+                        "use a separate Python process for this workflow file"
+                    )
+                return module
             unique = hashlib.sha256(str(path).encode()).hexdigest()[:16]
             spec = importlib.util.spec_from_file_location(
                 f"_botpipe_workflow_{unique}", path
