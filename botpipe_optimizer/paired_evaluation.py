@@ -387,7 +387,11 @@ def run_paired_evaluation(
         "schema": PAIRED_EVALUATION_SCHEMA,
         "spec_id": spec_id,
         "execution_output_root": str(destination),
-        "frozen_inputs": {k: v for k, v in frozen.items() if k.endswith("_id")},
+        "frozen_inputs": {
+            k: v
+            for k, v in frozen.items()
+            if k.endswith("_id") or k == "evaluator_executable"
+        },
         "plan": {
             "case_ids": spec.case_ids,
             "repetitions": spec.repetitions,
@@ -452,6 +456,9 @@ def validate_paired_evaluation_record(
         raise ValueError(
             "paired evaluation output root is unavailable or outside workflow output"
         )
+    _validate_cached_frozen_inputs(
+        spec, spec_id, root / "frozen", value.get("frozen_inputs")
+    )
     arms = value.get("arms")
     if not isinstance(arms, Mapping) or set(arms) != {"baseline", "candidate"}:
         raise ValueError("paired evaluation must define both arms")
@@ -717,7 +724,11 @@ def _validate_budget(result, spec):
     if not isinstance(b, Mapping):
         raise ValueError("botpipe result requires provider_budget")
     maximum, used = b.get("max_turns"), b.get("used_turns")
-    if isinstance(maximum, bool) or not isinstance(maximum, int) or maximum != spec.max_provider_turns_per_arm:
+    if (
+        isinstance(maximum, bool)
+        or not isinstance(maximum, int)
+        or maximum != spec.max_provider_turns_per_arm
+    ):
         raise ValueError("provider budget cap mismatch")
     if isinstance(used, bool) or not isinstance(used, int) or not 0 <= used <= maximum:
         raise ValueError("invalid provider budget usage")
@@ -743,11 +754,7 @@ def _freeze(spec, spec_path, root):
     eid, cid = _sha256(evaluator), _sha256(cases)
     _check_id(spec.evaluator_content_id, eid, "evaluator")
     _check_id(spec.case_input_content_id, cid, "case input")
-    targets = {
-        "spec_path": root / "evaluation-spec.json",
-        "evaluator_path": root / f"evaluator-{evaluator.name}",
-        "case_input_path": root / f"cases-{cases.name}",
-    }
+    targets = _frozen_paths(spec, root)
     shutil.copy2(spec_path, targets["spec_path"])
     shutil.copy2(evaluator, targets["evaluator_path"])
     shutil.copy2(cases, targets["case_input_path"])
@@ -758,6 +765,37 @@ def _freeze(spec, spec_path, root):
         "case_input_id": cid,
         "evaluator_executable": bool(evaluator.stat().st_mode & stat.S_IXUSR),
     }
+
+
+def _frozen_paths(spec, root):
+    return {
+        "spec_path": root / "evaluation-spec.json",
+        "evaluator_path": root / f"evaluator-{Path(spec.evaluator_path).name}",
+        "case_input_path": root / f"cases-{Path(spec.case_input_path).name}",
+    }
+
+
+def _validate_cached_frozen_inputs(spec, spec_id, root, identities):
+    if root.is_symlink() or not root.is_dir():
+        raise ValueError("cached frozen input directory is unavailable")
+    if (
+        not isinstance(identities, Mapping)
+        or any(
+            not isinstance(identities.get(key), str) or not identities[key]
+            for key in ("spec_file_id", "evaluator_id", "case_input_id")
+        )
+        or not isinstance(identities.get("evaluator_executable"), bool)
+    ):
+        raise ValueError(
+            "cached frozen input identities are missing; start a new evaluation"
+        )
+    frozen = {**identities, **_frozen_paths(spec, root)}
+    _assert_frozen(frozen)
+    _check_id(spec.evaluator_content_id, identities["evaluator_id"], "evaluator")
+    _check_id(spec.case_input_content_id, identities["case_input_id"], "case input")
+    _, frozen_spec_id = load_evaluation_spec(frozen["spec_path"])
+    if frozen_spec_id != spec_id:
+        raise ValueError("cached frozen specification differs from evaluation plan")
 
 
 def _assert_frozen(frozen):

@@ -1,7 +1,7 @@
 """Standard-library bootstrap for isolated candidate checks."""
 
 from __future__ import annotations
-import hashlib, json, os, runpy, sys, traceback
+import hashlib, importlib.machinery, json, os, runpy, sys, traceback
 from pathlib import Path
 
 
@@ -12,6 +12,13 @@ def main() -> int:
     result_path = Path(sys.argv[2]).resolve()
     config = json.loads(config_path.read_text(encoding="utf-8"))
     root = Path(config["staged_root"]).resolve(strict=True)
+    sources = [
+        Path(x).resolve(strict=True)
+        for x in config.get("project_import_roots", [str(root)])
+    ]
+    if any(not path.is_dir() or not _under(path, root) for path in sources):
+        raise ValueError("project import roots must be directories inside staging")
+    prefixes = set(config["project_prefixes"])
     deps = [Path(x).resolve(strict=True) for x in config["dependency_roots"]]
     script_dir = Path(__file__).resolve().parent
     stdlib = []
@@ -21,10 +28,13 @@ def main() -> int:
         path = Path(raw).resolve()
         if path not in [script_dir, root, *deps]:
             stdlib.append(str(path))
-    sys.path[:] = [str(root), *(str(x) for x in deps), *stdlib]
+    sys.path[:] = [*(str(x) for x in sources), *(str(x) for x in deps), *stdlib]
+    sys.meta_path.insert(0, _StagedImports(root, sources, prefixes))
     os.chdir(root)
     code = 0
+    environment = {}
     try:
+        environment = _environment(deps)
         if config["mode"] == "compile":
             from botpipe.core.compiler import compile_workflow
             from botpipe.runtime.loader import resolve_workflow_reference
@@ -54,7 +64,7 @@ def main() -> int:
         _validate(
             origins,
             root,
-            set(config["project_prefixes"]),
+            prefixes,
             deps,
             [Path(value) for value in stdlib],
             Path(__file__).resolve(),
@@ -71,7 +81,7 @@ def main() -> int:
                 _validate(
                     origins,
                     root,
-                    set(config["project_prefixes"]),
+                    prefixes,
                     deps,
                     [Path(value) for value in stdlib],
                     Path(__file__).resolve(),
@@ -83,10 +93,60 @@ def main() -> int:
         else:
             code = 1
             payload = _error(exc)
+    payload["environment"] = environment
     temporary = result_path.with_name(f".{result_path.name}.{os.getpid()}.tmp")
     temporary.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
     os.replace(temporary, result_path)
     return code
+
+
+class _StagedImports:
+    """Resolve project names only in staging, including namespace packages."""
+
+    def __init__(self, root: Path, sources: list[Path], prefixes: set[str]):
+        self.root, self.sources, self.prefixes = root, sources, prefixes
+
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname.split(".", 1)[0] not in self.prefixes:
+            return None
+        search = (
+            self.sources
+            if path is None
+            else [
+                Path(entry)
+                for entry in path
+                if _under(Path(entry).resolve(), self.root)
+            ]
+        )
+        spec = importlib.machinery.PathFinder.find_spec(
+            fullname, [str(p) for p in search]
+        )
+        if spec is None:
+            raise ModuleNotFoundError(
+                f"project module {fullname!r} is missing from staged tree",
+                name=fullname,
+            )
+        return spec
+
+
+def _environment(deps: list[Path]) -> dict[str, object]:
+    import importlib.metadata
+
+    return {
+        "interpreter": str(Path(sys.executable).resolve()),
+        "python_version": sys.version,
+        "implementation": sys.implementation.name,
+        "platform": sys.platform,
+        "dependency_roots": [str(path) for path in deps],
+        "distributions": sorted(
+            (
+                {"name": dist.metadata["Name"], "version": dist.version}
+                for dist in importlib.metadata.distributions()
+                if dist.metadata.get("Name")
+            ),
+            key=lambda item: (item["name"], item["version"] or ""),
+        ),
+    }
 
 
 def _run(argv: list[str]) -> int:

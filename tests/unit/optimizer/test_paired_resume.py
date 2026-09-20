@@ -234,6 +234,31 @@ def test_t18_both_arms_receive_the_same_frozen_plan_and_limits(
     }
 
 
+@pytest.mark.parametrize(
+    "filename", ["evaluation-spec.json", "evaluator-evaluator.py", "cases-cases.json"]
+)
+@pytest.mark.parametrize("mutation", ["delete", "change"])
+def test_complete_cache_rejects_missing_or_changed_frozen_inputs(
+    paired_inputs,
+    monkeypatch,
+    filename,
+    mutation,
+):
+    calls = []
+    _install_real_runner(monkeypatch, paired_inputs, calls)
+    first = _run(paired_inputs)
+    assert first["comparison"]["state"] == "improved"
+    path = Path(first["execution_output_root"]) / "frozen" / filename
+    if mutation == "delete":
+        path.unlink()
+    else:
+        path.write_text("changed frozen input\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="saved results changed"):
+        _run(paired_inputs)
+    assert len(calls) == 2
+
+
 def test_matching_interrupted_marker_requires_restart_without_relaunch(
     paired_inputs, monkeypatch
 ):

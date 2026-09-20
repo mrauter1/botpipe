@@ -1,7 +1,7 @@
 """Isolated compilation and checks for frozen workflow candidates."""
 
 from __future__ import annotations
-import importlib.metadata, json, os, shlex, sys, tempfile
+import json, os, shlex, sys, tempfile
 from collections.abc import Mapping, Sequence
 from hashlib import sha256
 from pathlib import Path
@@ -237,7 +237,7 @@ def validate_frozen_candidate(
             derived_changes=changes,
             compiled_workflows=tuple(compiled),
             checks=tuple(checks),
-            environment=_environment(Path(interpreter), deps),
+            environment=(compile_check.result or {}).get("environment", {}),
             errors=tuple(errors),
         )
     finally:
@@ -297,6 +297,7 @@ def _bootstrap(
             json.dumps(
                 {
                     "staged_root": str(arm.root),
+                    "project_import_roots": [str(x) for x in _source_roots(arm.root)],
                     "dependency_roots": [str(x) for x in deps],
                     "project_prefixes": list(prefixes),
                     **dict(payload),
@@ -395,34 +396,24 @@ def _dependency_roots(source: Path) -> tuple[Path, ...]:
     )
 
 
+def _source_roots(root: Path) -> tuple[Path, ...]:
+    """Support flat and conventional src layouts without executing editable hooks."""
+    return (root, root / "src") if (root / "src").is_dir() else (root,)
+
+
 def _prefixes(root: Path) -> tuple[str, ...]:
+    # Directories are importable namespace packages even without __init__.py.
     return tuple(
-        (
-            x.name if x.is_dir() else x.stem
-            for x in sorted(root.iterdir())
-            if not x.name.startswith(".")
-            and (
-                x.is_dir()
-                and (x / "__init__.py").is_file()
-                or (x.is_file() and x.suffix == ".py")
-            )
+        sorted(
+            {
+                x.name if x.is_dir() else x.stem
+                for source in _source_roots(root)
+                for x in source.iterdir()
+                if (x.is_dir() and x.name.isidentifier())
+                or (x.is_file() and x.suffix == ".py" and x.stem.isidentifier())
+            }
         )
     )
-
-
-def _environment(interpreter: Path, deps: Sequence[Path]) -> dict[str, Any]:
-    return {
-        "interpreter": str(interpreter.resolve()),
-        "python_version": sys.version,
-        "implementation": sys.implementation.name,
-        "platform": sys.platform,
-        "dependency_roots": [str(x) for x in deps],
-        "distributions": [
-            {"name": d.metadata.get("Name"), "version": d.version}
-            for d in importlib.metadata.distributions()
-            if d.metadata.get("Name")
-        ],
-    }
 
 
 def _env() -> dict[str, str]:

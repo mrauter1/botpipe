@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import shutil
 import stat
@@ -349,11 +350,6 @@ def capture_evidence_snapshot(
             )
             continue
         required = [run_dir / "run.json", run_dir / "trace.jsonl"]
-        optional = [
-            run_dir / "git_tracking.jsonl",
-            run_dir / "static_step_graph.json",
-            run_dir / "provenance.json",
-        ]
         missing = next((item.name for item in required if not item.is_file()), None)
         if missing:
             if explicit_run_refs:
@@ -364,9 +360,8 @@ def capture_evidence_snapshot(
                 )
             )
             continue
-        files = required + [item for item in optional if item.is_file()]
         try:
-            watermark = {item: _watermark(item) for item in files}
+            watermark = {item: _watermark(item) for item in required}
             size = sum(mark[2] for mark in watermark.values())
         except OSError as exc:
             excluded.append(
@@ -457,45 +452,6 @@ def capture_evidence_snapshot(
                 ExcludedRun(run_ref=run_ref, reason="active_run_excluded", bytes=size)
             )
             continue
-        graph = None
-        graph_path = run_dir / "static_step_graph.json"
-        if graph_path.is_file():
-            try:
-                graph = _read_json(graph_path)
-            except (OSError, ValueError, json.JSONDecodeError) as exc:
-                issues.append(
-                    EvidenceIssue(
-                        run_ref=run_ref,
-                        dimension="topology",
-                        reason="invalid",
-                        detail=_error_detail(exc),
-                    )
-                )
-        else:
-            issues.append(
-                EvidenceIssue(run_ref=run_ref, dimension="topology", reason="missing")
-            )
-        git_path = run_dir / "git_tracking.jsonl"
-        if not git_path.is_file() or git_path.stat().st_size == 0:
-            issues.append(
-                EvidenceIssue(
-                    run_ref=run_ref, dimension="git", reason="missing_or_empty"
-                )
-            )
-        else:
-            try:
-                _read_jsonl(git_path)
-            except (OSError, ValueError, json.JSONDecodeError) as exc:
-                issues.append(
-                    EvidenceIssue(
-                        run_ref=run_ref,
-                        dimension="git",
-                        reason="invalid",
-                        detail=_error_detail(exc),
-                    )
-                )
-        provenance = _provenance(run_ref, run_json, trace, graph, selected_workflow)
-        drafts = _observations(run_ref, trace, graph, routes, issues)
         captured.append(
             _Captured(
                 run_dir=run_dir,
@@ -503,8 +459,10 @@ def capture_evidence_snapshot(
                 trace=trace,
                 watermark=watermark,
                 core_bytes=size,
-                provenance=provenance,
-                drafts=drafts,
+                provenance=_provenance(
+                    run_ref, run_json, trace, None, selected_workflow
+                ),
+                drafts=[],
             )
         )
         remaining -= size
@@ -512,16 +470,7 @@ def capture_evidence_snapshot(
 
     stable: list[_Captured] = []
     for item in captured:
-        try:
-            unchanged = all(
-                _watermark(path) == mark for path, mark in item.watermark.items()
-            )
-            unchanged = unchanged and _read_json(item.run_dir / "run.json").get(
-                "status"
-            ) == item.run_json.get("status")
-        except (OSError, ValueError, json.JSONDecodeError):
-            unchanged = False
-        if unchanged:
+        if _core_unchanged(item):
             stable.append(item)
         else:
             excluded.append(
@@ -540,6 +489,44 @@ def capture_evidence_snapshot(
             )
             admitted_bytes -= item.core_bytes
             remaining += item.core_bytes
+
+    # Reserve the complete core sample before spending on optional topology.
+    # Git only supplies diagnostics and is checked after trace-linked raw evidence.
+    enriched: list[_Captured] = []
+    for item in stable:
+        run_ref = item.provenance["run_ref"]
+        graph, spent, omitted = _optional_input(
+            item.run_dir / "static_step_graph.json",
+            run_ref,
+            "topology",
+            remaining,
+            issues,
+        )
+        if not _core_unchanged(item):
+            excluded.append(
+                ExcludedRun(
+                    run_ref=run_ref,
+                    reason="concurrently_changed",
+                    bytes=item.core_bytes,
+                )
+            )
+            issues.append(
+                EvidenceIssue(
+                    run_ref=run_ref, dimension="core", reason="concurrently_changed"
+                )
+            )
+            admitted_bytes -= item.core_bytes
+            remaining += item.core_bytes
+            continue
+        remaining -= spent
+        admitted_bytes += spent
+        omitted_bytes += omitted
+        item.provenance = _provenance(
+            run_ref, item.run_json, item.trace, graph, selected_workflow
+        )
+        item.drafts = _observations(run_ref, item.trace, graph, routes, issues)
+        enriched.append(item)
+    stable = enriched
 
     # Explicit identity/status errors above must not create or mutate output.
     destination.mkdir(parents=True, exist_ok=True)
@@ -576,6 +563,18 @@ def capture_evidence_snapshot(
         normalized[draft.observation["observation_id"]] = Observation.model_validate(
             {**draft.observation, "raw_references": refs}
         )
+
+    for item in stable:
+        _, spent, omitted = _optional_input(
+            item.run_dir / "git_tracking.jsonl",
+            item.provenance["run_ref"],
+            "git",
+            remaining,
+            issues,
+        )
+        remaining -= spent
+        admitted_bytes += spent
+        omitted_bytes += omitted
 
     observations = _lineage(
         [
@@ -636,6 +635,7 @@ def capture_evidence_snapshot(
             "omitted_bytes": omitted_bytes,
             "budget_limited": bool(
                 omitted_ids
+                or any(item.reason == "budget_omitted" for item in issues)
                 or any(item.reason == "input_limit_exceeded" for item in excluded)
             ),
             "omitted_observation_ids": sorted(omitted_ids),
@@ -643,6 +643,63 @@ def capture_evidence_snapshot(
     }
     payload["snapshot_id"] = _snapshot_digest(payload)
     return EvidenceSnapshot.model_validate(payload)
+
+
+def _core_unchanged(item: _Captured) -> bool:
+    try:
+        return all(_watermark(path) == mark for path, mark in item.watermark.items())
+    except OSError:
+        return False
+
+
+def _optional_input(
+    path: Path,
+    run_ref: str,
+    dimension: str,
+    remaining: int,
+    issues: list[EvidenceIssue],
+):
+    """Read one stable optional file without changing core-run eligibility."""
+
+    def issue(reason, detail=None):
+        issues.append(
+            EvidenceIssue(
+                run_ref=run_ref, dimension=dimension, reason=reason, detail=detail
+            )
+        )
+
+    try:
+        if not stat.S_ISREG(path.stat(follow_symlinks=False).st_mode):
+            raise ValueError("optional evidence must be a regular non-symlink file")
+        mark = _watermark(path)
+        size = mark[2]
+        if dimension == "git" and size == 0:
+            issue("missing_or_empty")
+            return None, 0, 0
+        if size > remaining:
+            issue(
+                "budget_omitted",
+                f"{path.name}: {size} bytes exceed remaining evidence budget",
+            )
+            return None, 0, size
+        data = _read_regular_bounded(path, max(1, size), path.name).decode("utf-8")
+        if _watermark(path) != mark:
+            issue("concurrently_changed")
+            return None, 0, 0
+        if dimension == "git":
+            value = [json.loads(line) for line in data.splitlines() if line.strip()]
+            if any(not isinstance(record, dict) for record in value):
+                raise ValueError("Git log entries must be JSON objects")
+        else:
+            value = json.loads(data)
+            if not isinstance(value, dict):
+                raise ValueError("topology must be a JSON object")
+        return value, size, 0
+    except FileNotFoundError:
+        issue("missing_or_empty" if dimension == "git" else "missing")
+    except (OSError, ValueError) as exc:
+        issue("invalid", _error_detail(exc))
+    return None, 0, 0
 
 
 def write_evidence_snapshot(snapshot: EvidenceSnapshot, path: Path) -> Path:
@@ -1588,12 +1645,15 @@ def _outcome(record):
 
 
 def _elapsed(record):
-    value = record.get("elapsed_seconds")
-    if isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0:
-        return float(value)
-    value = record.get("elapsed_ms")
-    if isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0:
-        return float(value) / 1000
+    for field, divisor in (("elapsed_seconds", 1), ("elapsed_ms", 1000)):
+        value = record.get(field)
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            try:
+                elapsed = float(value) / divisor
+            except OverflowError:
+                continue
+            if math.isfinite(elapsed) and elapsed >= 0:
+                return elapsed
     start, end = _text(record.get("started_at")), _text(record.get("ended_at"))
     if start and end:
         try:

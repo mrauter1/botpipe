@@ -265,6 +265,83 @@ def test_t06_missing_git_and_topology_are_visible_optional_gaps(tmp_path):
     assert {i.dimension for i in snap.issues} >= {"git", "topology"}
 
 
+@pytest.mark.parametrize(
+    "filename,dimension",
+    [("git_tracking.jsonl", "git"), ("static_step_graph.json", "topology")],
+)
+def test_optional_input_budget_cannot_discard_core_runs(
+    tmp_path, monkeypatch, filename, dimension
+):
+    runs = [
+        _run(tmp_path, f"run{i}", [_step(1, "review", "needs_rework")], graph=False)
+        for i in (1, 2)
+    ]
+    core_bytes = sum(
+        (run / name).stat().st_size
+        for run in runs
+        for name in ("run.json", "trace.jsonl")
+    )
+    before = _capture(tmp_path, runs, max_evidence_bytes=core_bytes + 64)
+    optional = runs[0] / filename
+    optional.write_text(json.dumps({"padding": "x" * 4096}) + "\n")
+    original = evidence_module._read_regular_bounded
+
+    def bounded_read(path, *args):
+        assert path != optional, "over-budget optional input must not be read"
+        return original(path, *args)
+
+    monkeypatch.setattr(evidence_module, "_read_regular_bounded", bounded_read)
+    after = _capture(tmp_path, runs, max_evidence_bytes=core_bytes + 64)
+    assert after.runs == before.runs
+    assert after.observations == before.observations
+    assert after.step_metrics == before.step_metrics
+    assert after.selection.admitted_run_count == 2
+    assert after.excluded_runs == ()
+    assert after.budget.admitted_bytes == core_bytes
+    assert after.budget.omitted_bytes == optional.stat().st_size
+    assert after.budget.budget_limited
+    assert any(
+        issue.dimension == dimension and issue.reason == "budget_omitted"
+        for issue in after.issues
+    )
+
+
+def test_optional_files_cannot_take_budget_reserved_for_later_core_runs(tmp_path):
+    runs = [
+        _run(tmp_path, f"run{i}", [_step(1, "review", "needs_rework")], graph=False)
+        for i in (1, 2)
+    ]
+    core_bytes = sum(
+        (run / name).stat().st_size
+        for run in runs
+        for name in ("run.json", "trace.jsonl")
+    )
+    # Fits if consumed after the first run, but would then displace the second.
+    optional = runs[0] / "git_tracking.jsonl"
+    optional.write_text(json.dumps({"commit": "x" * 128}) + "\n")
+    snapshot = _capture(tmp_path, runs, max_evidence_bytes=core_bytes + 16)
+    assert snapshot.selection.admitted_run_count == 2
+    assert snapshot.excluded_runs == ()
+    assert snapshot.budget.admitted_bytes == core_bytes
+    assert snapshot.budget.omitted_bytes == optional.stat().st_size
+
+
+@pytest.mark.parametrize("field", ["elapsed_seconds", "elapsed_ms"])
+@pytest.mark.parametrize("value", [float("inf"), float("-inf"), float("nan"), 10**400])
+def test_invalid_elapsed_is_measure_first_instead_of_a_latency_target(
+    tmp_path, field, value
+):
+    record = _step(1, "review", "done", **{field: value})
+    snapshot = _capture(
+        tmp_path, [_run(tmp_path, "run1", [record])], objective="latency"
+    )
+    assert snapshot.observations[0].elapsed_seconds is None
+    assert not snapshot.step_metrics[0].complete_elapsed
+    assert snapshot.shortlist == ()
+    assert snapshot.measure_first == (snapshot.step_metrics[0].metric_id,)
+    json.dumps(snapshot.model_dump(mode="json"), allow_nan=False)
+
+
 def test_t06_git_absent_empty_and_disabled_preserve_same_trace_observation(tmp_path):
     records = [_step(1, "review", "needs_rework")]
     runs = [_run(tmp_path, f"run{i}", records) for i in (1, 2, 3)]

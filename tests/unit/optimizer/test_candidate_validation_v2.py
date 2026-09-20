@@ -454,8 +454,12 @@ def test_t01_invalid_candidate_cannot_hide_behind_imported_original(
         )
 
 
+@pytest.mark.parametrize("source_layout", ["flat", "src"])
+@pytest.mark.parametrize("namespace", [False, True])
 def test_t02_valid_candidate_behavior_and_origins_come_from_staged_tree(
     tmp_path: Path,
+    source_layout: str,
+    namespace: bool,
 ) -> None:
     from botpipe_optimizer.candidate_validation import validate_frozen_candidate
 
@@ -464,6 +468,9 @@ def test_t02_valid_candidate_behavior_and_origins_come_from_staged_tree(
     staging.mkdir()
     workflow_relative = "botpipe/workflows/devloop/workflow.py"
     check_relative = "checks with spaces/check candidate.py"
+    helper_relative = (
+        "src/" if source_layout == "src" else ""
+    ) + "candidate_helpers/logic.py"
     baseline_root = tmp_path / "baseline"
     candidate_root = tmp_path / "candidate"
     (baseline_root / workflow_relative).parent.mkdir(parents=True)
@@ -477,9 +484,17 @@ def test_t02_valid_candidate_behavior_and_origins_come_from_staged_tree(
     (candidate_root / check_relative).parent.mkdir(parents=True)
     (candidate_root / check_relative).write_text(
         "from botpipe.workflows.devloop.workflow import AUDIT_RESULT_VERSION\n"
-        "assert AUDIT_RESULT_VERSION == 2\n",
+        "from candidate_helpers.logic import VALUE\n"
+        "assert AUDIT_RESULT_VERSION == 2\n"
+        "assert VALUE == 'candidate'\n",
         encoding="utf-8",
     )
+    for root, value in ((baseline_root, "baseline"), (candidate_root, "candidate")):
+        helper = root / helper_relative
+        helper.parent.mkdir(parents=True)
+        helper.write_text(f"VALUE = {value!r}\n", encoding="utf-8")
+        if not namespace:
+            (helper.parent / "__init__.py").write_text("", encoding="utf-8")
     boundary = {
         "workflow_name": "devloop",
         "package_root_relative_path": "botpipe/workflows/devloop",
@@ -499,6 +514,11 @@ def test_t02_valid_candidate_behavior_and_origins_come_from_staged_tree(
     consumer = tmp_path / "consumer"
     consumer.mkdir()
     (consumer / "README.md").write_text("consumer project\n", encoding="utf-8")
+    consumer_helper = consumer / helper_relative
+    consumer_helper.parent.mkdir(parents=True)
+    consumer_helper.write_text("VALUE = 'baseline'\n", encoding="utf-8")
+    if not namespace:
+        (consumer_helper.parent / "__init__.py").write_text("", encoding="utf-8")
     installed_package = tmp_path / "installed" / "botpipe"
     shutil.copytree(
         repo_root / "botpipe",
@@ -513,6 +533,18 @@ def test_t02_valid_candidate_behavior_and_origins_come_from_staged_tree(
     )
     fake_site_packages = tmp_path / "fake-site-packages"
     fake_site_packages.mkdir()
+    installed_helper = fake_site_packages / "candidate_helpers"
+    installed_helper.mkdir()
+    (installed_helper / "__init__.py").write_text("", encoding="utf-8")
+    (installed_helper / "logic.py").write_text(
+        "VALUE = 'installed original'\n", encoding="utf-8"
+    )
+    distribution = fake_site_packages / "validation_probe-1.2.3.dist-info"
+    distribution.mkdir()
+    (distribution / "METADATA").write_text(
+        "Metadata-Version: 2.1\nName: validation-probe\nVersion: 1.2.3\n",
+        encoding="utf-8",
+    )
     (fake_site_packages / "botpipe-editable.pth").write_text(
         str(repo_root) + "\n",
         encoding="utf-8",
@@ -536,7 +568,7 @@ def test_t02_valid_candidate_behavior_and_origins_come_from_staged_tree(
         )
         assert result.success is True
         assert result.derived_changes == tuple(
-            sorted((check_relative, workflow_relative))
+            sorted((check_relative, workflow_relative, helper_relative))
         )
         candidate_digests = {
             entry["relative_path"]: entry["surface_sha256"]
@@ -561,6 +593,19 @@ def test_t02_valid_candidate_behavior_and_origins_come_from_staged_tree(
         assert all(
             not Path(origin).is_relative_to(repo_root) for origin in project_origins
         )
+        helper_origins = [
+            entry["origin"]
+            for check in result.checks
+            if check.result is not None
+            for entry in check.result.get("module_origins", [])
+            if entry["module"] == "candidate_helpers.logic"
+        ]
+        assert helper_origins
+        assert all(Path(origin).is_relative_to(staging) for origin in helper_origins)
+        assert {"name": "validation-probe", "version": "1.2.3"} in result.environment[
+            "distributions"
+        ]
+        assert result.environment == result.checks[0].result["environment"]
         assert (repo_root / workflow_relative).read_text(
             encoding="utf-8"
         ) == authoritative

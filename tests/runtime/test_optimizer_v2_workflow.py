@@ -244,6 +244,42 @@ def test_invalid_explicit_run_replaces_stale_success_receipt(tmp_path: Path):
     assert provider.calls == []
 
 
+@pytest.mark.parametrize("failing_phase", ["resolve", "inspect"])
+def test_capture_invalidates_previous_receipt_before_workflow_inspection(
+    tmp_path, monkeypatch, failing_phase
+):
+    from types import SimpleNamespace
+    from labs.workflows.workflow_run_traces_to_optimization_candidates import workflow
+
+    receipt_path = tmp_path / "optimization_publication_receipt.json"
+    receipt_path.write_text(json.dumps({"status": "accepted"}))
+    ctx = SimpleNamespace(
+        root=tmp_path,
+        workflow_folder=tmp_path,
+        params=SimpleNamespace(selected_workflow="unknown-workflow"),
+    )
+
+    def reject(*args):
+        receipt = json.loads(receipt_path.read_text())
+        assert receipt["status"] == "incomplete"
+        assert receipt["stop_reason"] == "validating_inputs"
+        raise ValueError("invalid selected workflow")
+
+    if failing_phase == "resolve":
+        monkeypatch.setattr(workflow, "resolve_workflow_reference", reject)
+    else:
+        monkeypatch.setattr(
+            workflow, "resolve_workflow_reference", lambda *args: object()
+        )
+        monkeypatch.setattr(workflow, "inspect_resolved_workflow", reject)
+    with pytest.raises(ValueError, match="invalid selected workflow"):
+        workflow.WorkflowRunTracesToOptimizationCandidates.capture.fn(ctx)
+    assert (
+        json.loads(receipt_path.read_text())["stop_reason"]
+        == "invalid_input: invalid selected workflow"
+    )
+
+
 def test_provider_timeout_writes_precise_incomplete_receipt(tmp_path: Path):
     _project(tmp_path)
     _record_rework(tmp_path)

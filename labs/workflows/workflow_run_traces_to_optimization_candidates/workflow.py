@@ -478,9 +478,7 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
     )
     def capture(ctx):
         p = ctx.params
-        resolved = resolve_workflow_reference(ctx.root, p.selected_workflow)
-        capability = inspect_resolved_workflow(ctx.root, resolved)
-        name = resolved.reference.workflow_name
+        name = p.selected_workflow
         # Replace any stale success marker before validation so a failed new
         # invocation can never leave an older accepted receipt consumable.
         write_incomplete_receipt(
@@ -489,6 +487,9 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             stop_reason="validating_inputs",
         )
         try:
+            resolved = resolve_workflow_reference(ctx.root, p.selected_workflow)
+            capability = inspect_resolved_workflow(ctx.root, resolved)
+            name = resolved.reference.workflow_name
             runs = list_selected_workflow_runs(
                 ctx.root,
                 name,

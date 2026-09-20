@@ -44,6 +44,8 @@ These rankings do not estimate probability, monetary cost, reducibility, or futu
 
 Budget reservations are persisted before dispatch. Resume keeps consumed turns and the non-extending deadline. A stale evidence snapshot, changed baseline, changed invocation, clock rollback, or incompatible budget rejects resume and requires a new analysis.
 
+Core run metadata and traces receive budget priority across the selected runs. Oversized optional topology or Git files become explicit evidence gaps and do not exclude those runs. Git diagnostics also yield to trace-linked raw evidence. Invalid or non-finite durations remain unavailable for latency ranking.
+
 ## Outputs
 
 The optimizer's canonical outputs live in its workflow folder:
@@ -77,9 +79,13 @@ An `evaluation_case` candidate does not enter workflow refinement. Pass it to `w
 
 Concrete validation captures the project and any selected installed package layer, builds private baseline and candidate execution trees, overlays only allowed candidate paths, and compiles/tests the staged candidate. The validation receipt derives changes and results from those trees. It does not trust model-authored file counts, hashes, or success claims.
 
+Python validation supports flat and conventional `src/` layouts, including namespace packages. Project-owned imports resolve only inside staging, even when an installed package has the same name. Environment metadata comes from the interpreter executing the isolated check and its actual import paths.
+
 ## Optional paired evaluation
 
 Set `evaluation_spec_path` on the refinement run to request measured comparison. Omit it to skip paired execution. The harness freezes the spec, evaluator, cases, ordered case IDs, repetitions, settings, metrics, thresholds, and limits before either arm starts. It launches exactly one evaluator subprocess for the baseline and one for the candidate in separate execution trees and never promotes a candidate automatically.
+
+Resume reuses a completed comparison only after verifying its frozen specification, evaluator, and case bytes and the evaluator's executable mode. Missing or changed frozen inputs or identities require a new refinement run; they never cause a silent evaluator relaunch.
 
 An evaluation spec uses this shape:
 
