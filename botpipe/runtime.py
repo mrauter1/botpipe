@@ -15,13 +15,14 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from pathlib import Path
-from types import CodeType, MemberDescriptorType
+from types import MemberDescriptorType
 from typing import get_type_hints
 
 from pydantic import TypeAdapter, ValidationError
 
 from . import codec
 from ._callables import describe_callable
+from ._code_identity import code_identity
 from .errors import (
     ActivityFailed,
     BotpipeError,
@@ -377,241 +378,104 @@ def _finalize_exception_record(record):
     return record
 
 
-def _function_version(fn, seen=None):
-    """Pin callable code and referenced Python helpers/constants, not edited work data."""
+def _function_version(fn):
+    """Hash one canonical, identity-preserving graph of callable code."""
     with codec.without_source_identity():
-        return _function_version_unscoped(fn, seen)
+        return _function_version_unscoped(fn)
 
 
-def _function_version_unscoped(fn, seen=None):
-    seen = set() if seen is None else seen
+def _function_version_unscoped(fn):
+    graph = describe_callable(fn)
+    skipped = object()
 
-    def code_identity(code):
-        def constant(value):
-            if isinstance(value, CodeType):
-                return code_identity(value)
+    def encoded_binding(node, binding):
+        if binding.kind == "type":
+            name = codec.type_name(binding.value)
             try:
-                return codec.encode(value)
-            except TypeError:
-                return repr(value)
-
-        return {
-            "bytes": code.co_code.hex(),
-            "names": code.co_names,
-            "constants": [constant(value) for value in code.co_consts],
-        }
-
-    def referenced_names(code):
-        names = set(code.co_names)
-        for value in code.co_consts:
-            if isinstance(value, CodeType):
-                names.update(referenced_names(value))
-        return names
-
-    def explicit_value(value):
+                schema = TypeAdapter(binding.value).json_schema()
+            except Exception:  # noqa: BLE001 - schema generation is third-party code
+                schema = None
+            return {"type": name, "schema": schema}
         try:
-            return codec.encode(value)
-        except TypeError as error:
-            if callable(value):
-                return {"callable": _function_version_unscoped(value, seen)}
-            raise error
-
-    def explicit_bound_value(value, location):
-        try:
-            return explicit_value(value)
+            return codec.encode(binding.value)
         except TypeError as exc:
-            raise TypeError(f"Unsupported explicit partial {location}: {exc}") from None
-
-    def class_version(target):
-        key = f"{target.__module__}:{target.__qualname__}"
-        if key in seen:
-            return key
-        seen.add(key)
-        methods = {}
-        sources = {}
-        for mro_index, base in enumerate(target.__mro__):
-            if base is object:
-                continue
-            base_key = f"{base.__module__}:{base.__qualname__}"
-            try:
-                sources[str(mro_index)] = inspect.getsource(base)
-            except (OSError, TypeError):
-                sources[str(mro_index)] = base_key
-            for name, member in sorted(vars(base).items()):
-                candidates = ()
-                if inspect.isfunction(member):
-                    candidates = (member,)
-                elif isinstance(member, (staticmethod, classmethod)):
-                    candidates = (member.__func__,)
-                elif isinstance(member, property):
-                    candidates = tuple(
-                        method
-                        for method in (member.fget, member.fset, member.fdel)
-                        if method is not None
-                    )
-                for method_index, method in enumerate(candidates):
-                    methods[f"{mro_index}:{name}:{method_index}"] = plain_function(
-                        method
-                    )
-        return _hash({"reference": key, "sources": sources, "methods": methods})
-
-    def plain_function(target, *, identity_key=None):
-        key = identity_key or f"{target.__module__}:{target.__qualname__}"
-        if key in seen:
-            return key
-        seen.add(key)
-        try:
-            source = inspect.getsource(target)
-        except (OSError, TypeError):
-            source = code_identity(target.__code__)
-        try:
-            defaults = codec.encode(target.__defaults__)
-            kwdefaults = codec.encode(target.__kwdefaults__)
-        except TypeError:
-            raise TypeError("Callable defaults must be durable data") from None
-        values = {
-            "source": source,
-            "defaults": defaults,
-            "kwdefaults": kwdefaults,
-            "code": code_identity(target.__code__),
-            "helpers": {},
-        }
-        namespace = getattr(target, "__globals__", {})
-
-        def helper_version(value):
-            try:
-                return _function_version_unscoped(value, seen)
-            except TypeError:
-                # Opaque library defaults need not become workflow inputs.  Pin
-                # the implementation itself when it is still inspectable.
-                helper = describe_callable(value).source_targets[0]
-                try:
-                    helper_source = inspect.getsource(helper)
-                except (OSError, TypeError):
-                    code = getattr(helper, "__code__", None)
-                    helper_source = (
-                        code_identity(code)
-                        if code is not None
-                        else (f"{helper.__module__}:{helper.__qualname__}")
-                    )
-                return _hash(
-                    {
-                        "reference": (f"{helper.__module__}:{helper.__qualname__}"),
-                        "source": helper_source,
-                    }
+            if callable(binding.value):
+                # The matching graph edge pins executable identity.  Explicit
+                # defaults and partial bindings retain durable callable-instance state
+                # here when the codec supports it.
+                return skipped
+            if not binding.required:
+                return skipped
+            if node.kind == "partial":
+                location = binding.label.replace("argument:", "argument ").replace(
+                    "keyword:", "keyword "
                 )
+                if binding.label.startswith("keyword:"):
+                    location = f"keyword {binding.label.removeprefix('keyword:')!r}"
+                raise TypeError(
+                    f"Unsupported explicit partial {location}: {exc}"
+                ) from None
+            raise TypeError("Callable defaults must be durable data") from None
 
-        for name in sorted(referenced_names(target.__code__)):
-            value = namespace.get(name)
-            if inspect.isfunction(value) or isinstance(value, Workflow):
-                sdk_modules = {
-                    "botpipe.runtime",
-                    "botpipe.sessions",
-                    "botpipe.prompts",
-                    "botpipe.artifacts",
-                    "botpipe.worklists",
-                }
-                if getattr(value, "__module__", "") not in sdk_modules or isinstance(
-                    value, Workflow
-                ):
-                    values["helpers"][name] = helper_version(value)
-            elif isinstance(value, (str, int, float, bool, tuple)) or value is None:
-                try:
-                    values["helpers"][name] = codec.encode(value)
-                except TypeError:
-                    pass
-            elif isinstance(value, type):
-                codec.type_name(value)
-                try:
-                    values["helpers"][name] = TypeAdapter(value).json_schema()
-                except Exception:
-                    pass
-            elif callable(value):
-                values["helpers"][name] = helper_version(value)
-        # Closures containing mutable test providers/counters are not orchestration
-        # source. Immutable configuration is pinned; effects remain managed calls.
-        if target.__closure__:
-            values["closure"] = []
-            for cell in target.__closure__:
-                value = cell.cell_contents
-                if isinstance(value, (str, int, float, bool, tuple)):
-                    values["closure"].append(codec.encode(value))
-                elif inspect.isfunction(value) or isinstance(value, Workflow):
-                    values["closure"].append(helper_version(value))
-                elif isinstance(value, type):
-                    values["closure"].append({"type": codec.type_name(value)})
-                elif callable(value):
-                    values["closure"].append(helper_version(value))
-        return _hash(values)
+    def function_metadata(target):
+        try:
+            # The graph already represents wrappers. Inspect this node's code
+            # directly instead of repeatedly unwrapping shared decorator suffixes.
+            source = inspect.getsource(target.__code__)
+        except (OSError, TypeError, ValueError):
+            source = code_identity(target.__code__)
+        return {
+            "reference": f"{target.__module__}:{target.__qualname__}",
+            "source": source,
+            "code": code_identity(target.__code__),
+        }
 
-    descriptor = describe_callable(fn)
+    def class_metadata(node):
+        sources = []
+        for target in node.source_targets:
+            reference = f"{target.__module__}:{target.__qualname__}"
+            try:
+                source = inspect.getsource(target)
+            except (OSError, TypeError, ValueError):
+                source = reference
+            sources.append({"reference": reference, "source": source})
+        return sources
 
-    def descriptor_version(item):
-        if item.kind == "workflow":
-            definition = item.implementation
-            return _hash(
-                {
-                    "kind": "workflow",
-                    "name": definition.name,
-                    "version": definition.version,
-                    "policy": definition.policy.to_dict(),
-                    "callable": descriptor_version(item.child),
-                }
-            )
-        if item.kind == "function":
-            return plain_function(item.implementation)
-        if item.kind == "decorated":
-            return _hash(
-                {
-                    "kind": "decorated",
-                    "wrapper": plain_function(
-                        item.implementation,
-                        identity_key=(
-                            f"{item.implementation.__module__}:"
-                            f"{item.implementation.__qualname__}#wrapper"
-                        ),
-                    ),
-                    "callable": descriptor_version(item.child),
-                }
-            )
-        if item.kind == "partial":
-            return _hash(
-                {
-                    "kind": "partial",
-                    "callable": descriptor_version(item.child),
-                    "args": [
-                        explicit_bound_value(value, f"argument {index}")
-                        for index, value in enumerate(item.args)
-                    ],
-                    "kwargs": [
-                        [
-                            name,
-                            explicit_bound_value(value, f"keyword {name!r}"),
-                        ]
-                        for name, value in item.kwargs
-                    ],
-                }
-            )
-        if item.kind == "method":
-            return _hash(
-                {
-                    "kind": "method",
-                    "callable": descriptor_version(item.child),
-                    "owner": class_version(item.implementation),
-                }
-            )
-        if item.kind in {"class", "instance"}:
-            return _hash(
-                {
-                    "kind": item.kind,
-                    "implementation": class_version(item.implementation),
-                }
-            )
-        if item.kind in {"builtin", "method_descriptor"}:
-            return _hash({"kind": item.kind, "reference": item.reference})
-        raise TypeError(f"Unsupported callable descriptor {item.kind!r}")
+    records = []
+    for node in graph.nodes:
+        record = {
+            "kind": node.kind,
+            "edges": [[edge.label, edge.target] for edge in node.edges],
+            "bindings": [],
+        }
+        for binding in node.bindings:
+            encoded = encoded_binding(node, binding)
+            if encoded is not skipped:
+                record["bindings"].append([binding.label, encoded])
+        if node.kind == "workflow":
+            definition = node.value
+            record["metadata"] = {
+                "name": definition.name,
+                "version": definition.version,
+                "policy": definition.policy.to_dict(),
+            }
+        elif node.kind in {"function", "decorated"}:
+            record["metadata"] = function_metadata(node.value)
+        elif node.kind == "class":
+            record["metadata"] = {"sources": class_metadata(node)}
+        elif node.kind in {"builtin", "builtin_type", "method_descriptor"}:
+            record["reference"] = node.reference
+        elif node.kind not in {"partial", "method", "instance"}:
+            raise TypeError(f"Unsupported callable graph node {node.kind!r}")
+        records.append(record)
 
-    return descriptor_version(descriptor)
+    return _hash(
+        {
+            "schema": "botpipe.callable-graph.v2",
+            "root": graph.root,
+            "nodes": records,
+        }
+    )
 
 
 def _validate_args(fn, args, kwargs):
@@ -717,9 +581,13 @@ class Workflow:
         self._source_boundary = (
             self._source_boundaries[0] if self._source_boundaries else None
         )
-        self._source_identity_at_definition = capture_definition_sources(self)
+        self._source_identity_at_definition = capture_definition_sources(
+            self, graph=descriptor
+        )
         self._orchestration_sources_at_definition = (
-            capture_orchestration_sources(self, boundary=self._source_boundaries)
+            capture_orchestration_sources(
+                self, boundary=self._source_boundaries, graph=descriptor
+            )
             if self._source_boundaries
             else None
         )
@@ -864,6 +732,8 @@ class RunContext:
         self.source_dir = (
             (boundary if boundary and boundary.is_dir() else boundary.parent)
             if boundary
+            else parent.source_dir
+            if parent is not None
             else self.workspace
         )
         self.policy = Policy.resolve(

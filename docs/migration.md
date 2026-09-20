@@ -112,3 +112,10 @@ gain relocation support retroactively. Missing owners, changed boundary kinds,
 and symlink redirects within relative owner locators are rejected rather than
 silently selecting different code. The root anchor uses the supplied workflow's
 canonical source location and its separately verified executable identity.
+
+Callable-graph fingerprints replace the earlier function/tree fingerprints.
+They distinguish explicit callable bindings and shared references and include
+custom metaclass execution. Existing runs with the earlier identity format must
+use their original runtime or be restarted. Current code cannot reconstruct the
+executable evidence omitted from those histories; there is no automatic identity
+migration.

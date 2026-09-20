@@ -112,6 +112,21 @@ serialize arbitrary receiver state, closures, or the process environment. Live
 recorded prompt/data observations, and the full package provenance surface serve
 different purposes: a package resource edit is not by itself a new replay gate.
 
+Executable identity is a rooted callable graph. Ordered, labeled edges describe
+wrappers, partial bindings, referenced helpers, and class construction, including
+custom metaclass execution. Each callable is recorded once per calculation;
+local node references represent recursion and shared dependencies. Object
+addresses never enter the fingerprint. Sharing is observable Python behavior:
+binding one callback twice differs from binding two independently created callbacks.
+Fingerprinting and source capture use the same executable dependency description.
+
+Graph expansion scales with distinct callables and dependency edges, rather than
+the number of paths through shared helpers. Caches belong to one calculation so
+later changes to code and bindings remain visible. The repeatable benchmark in
+`benchmarks/callable_identity.py` measures fingerprinting, the workflow catalog,
+and fake-provider execution and replay separately. Timing measurements complement
+deterministic graph-size regression tests; they are not wall-clock CI thresholds.
+
 An operation that may have started an external effect but has no committed
 outcome is `interrupted`. Botpipe will not infer that the effect failed or rerun
 it. The operator must record the observed response or explicitly authorize a
@@ -227,6 +242,11 @@ created callables can only be checked when orchestration reaches that call site;
 run-status bookkeeping may already have been committed by then.
 Historical parallel records without complete branch identity cannot be upgraded
 from current code and are rejected on replay.
+
+Prompt paths use the branch's application source directory when it has one.
+Branches composed only from SDK callables inherit their parent's source directory;
+the workspace is the fallback for a root without application source. Additional
+executable dependencies do not change this resource origin.
 
 ## Inspection
 

@@ -10,6 +10,7 @@ from types import CodeType, ModuleType
 from typing import Any, get_type_hints
 
 from ._callables import describe_callable
+from ._code_identity import code_identity as _code_binding
 from .surface_identity import (
     canonical_workflow_identity,
     derive_workflow_surface_manifest,
@@ -33,10 +34,17 @@ def _active_module_code(source: Path) -> CodeType | None:
         del frame
 
 
-def capture_definition_sources(definition: Any) -> dict[str, Any] | None:
+def capture_definition_sources(
+    definition: Any, *, graph: Any | None = None
+) -> dict[str, Any] | None:
     """Remember source bytes at definition time without importing or walking packages."""
     try:
-        targets = describe_callable(definition).source_targets
+        targets = (
+            (definition,)
+            if graph is None
+            and (inspect.isfunction(definition) or isinstance(definition, type))
+            else (graph or describe_callable(definition)).source_targets
+        )
         if not targets:
             return None
         target = targets[0]
@@ -61,28 +69,9 @@ def _referenced_names(code: CodeType) -> set[str]:
     return names
 
 
-def _code_binding(code: CodeType) -> dict[str, Any]:
-    def constant(value):
-        if isinstance(value, CodeType):
-            return _code_binding(value)
-        if value is None or type(value) in (str, int, float, bool, bytes):
-            return repr(value)
-        return f"<{type(value).__module__}:{type(value).__qualname__}>"
-
-    return {
-        "code": code.co_code.hex(),
-        "names": list(code.co_names),
-        "constants": [constant(value) for value in code.co_consts],
-    }
-
-
 def _value_binding(value: Any) -> Any:
     """Describe only directly owned callable code; never traverse object graphs."""
-    target = (
-        value
-        if isinstance(value, ModuleType)
-        else inspect.unwrap(getattr(value, "fn", value))
-    )
+    target = value
     if inspect.isfunction(target):
         return _code_binding(target.__code__)
     if isinstance(target, ModuleType):
@@ -90,7 +79,7 @@ def _value_binding(value: Any) -> Any:
         for name, member in vars(target).items():
             if not (inspect.isfunction(member) or isinstance(member, type)):
                 continue
-            candidate = inspect.unwrap(member)
+            candidate = member
             if candidate.__module__ != target.__name__:
                 continue
             binding = _value_binding(candidate)
@@ -115,11 +104,16 @@ def _value_binding(value: Any) -> Any:
     return methods
 
 
-def source_boundary(definition: Any) -> Path | None:
+def source_boundary(definition: Any, *, graph: Any | None = None) -> Path | None:
     """Return the bounded ownership root without making it source identity."""
 
     try:
-        targets = describe_callable(definition).source_targets
+        targets = (
+            (definition,)
+            if graph is None
+            and (inspect.isfunction(definition) or isinstance(definition, type))
+            else (graph or describe_callable(definition)).source_targets
+        )
         if not targets:
             return None
         target = targets[0]
@@ -138,14 +132,18 @@ def source_boundary(definition: Any) -> Path | None:
 
 
 def capture_orchestration_sources(
-    definition: Any, *, boundary: str | Path | None = None
+    definition: Any,
+    *,
+    boundary: str | Path | None = None,
+    graph: Any | None = None,
 ) -> dict[str, Any] | None:
     """Capture complete, bounded modules that define owned orchestration values."""
     try:
-        descriptor = describe_callable(definition)
-        if not descriptor.source_targets:
+        descriptor = graph or describe_callable(definition)
+        descriptor_targets = descriptor.source_targets
+        if not descriptor_targets:
             return None
-        target = descriptor.source_targets[0]
+        target = descriptor_targets[0]
         raw = inspect.getsourcefile(target)
         if raw is None:
             return None
@@ -170,13 +168,30 @@ def capture_orchestration_sources(
         )
         values = []
         seen_values = set()
+        # Every source target in the supplied graph is enqueued below. Keep its
+        # callable objects alive and marked so overlapping partials/receivers do
+        # not normalize the same graph suffix again during source discovery.
+        callable_targets: dict[int, tuple[Any, tuple[Any, ...]]] = {
+            id(node.value): (node.value, ()) for node in descriptor.nodes
+        }
 
         def enqueue(label: str, value: Any) -> None:
-            if isinstance(value, ModuleType) or isinstance(value, type):
+            if isinstance(value, (ModuleType, type)) or inspect.isfunction(value):
                 candidates = (value,)
             elif callable(value):
                 try:
-                    candidates = describe_callable(value).source_targets
+                    marker = id(value)
+                    cached = callable_targets.get(marker)
+                    if cached is not None and cached[0] is value:
+                        candidates = cached[1]
+                    else:
+                        discovered = describe_callable(value)
+                        candidates = discovered.source_targets
+                        for node in discovered.nodes:
+                            callable_targets.setdefault(
+                                id(node.value), (node.value, ())
+                            )
+                        callable_targets[marker] = (value, candidates)
                 except TypeError:
                     return
             else:
@@ -221,10 +236,10 @@ def capture_orchestration_sources(
             for index, contract in enumerate(contracts):
                 enqueue(f"{label}[{index}]", contract)
 
-        for target_index, callable_target in enumerate(descriptor.source_targets):
+        for target_index, callable_target in enumerate(descriptor_targets):
             label = (
                 "<workflow>"
-                if len(descriptor.source_targets) == 1
+                if len(descriptor_targets) == 1
                 else f"<workflow>.callable:{target_index}"
             )
             enqueue(label, callable_target)
@@ -237,7 +252,9 @@ def capture_orchestration_sources(
                 for name in sorted(_referenced_names(value.__code__)):
                     enqueue(f"{label}.{name}", namespace.get(name))
                 try:
-                    annotations = get_type_hints(value)
+                    # Resolve this node only. typing's implicit namespace lookup
+                    # follows __wrapped__ repeatedly and can loop on cycles.
+                    annotations = get_type_hints(value, globalns=namespace)
                 except (NameError, TypeError, ValueError):
                     annotations = value.__annotations__
                 for name, annotation in annotations.items():
@@ -281,7 +298,8 @@ def capture_orchestration_sources(
                     else path.relative_to(boundary_path).as_posix()
                 )
             )
-            files[relative] = sha256(path.read_bytes()).hexdigest()
+            if relative not in files:
+                files[relative] = sha256(path.read_bytes()).hexdigest()
             binding = _value_binding(value)
             if binding is not None:
                 bindings[name] = binding

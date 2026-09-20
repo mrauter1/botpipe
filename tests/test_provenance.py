@@ -14,6 +14,57 @@ from botpipe.surface_identity import derive_workflow_surface_manifest
 from botpipe_optimizer.optimization import load_run_observation
 
 
+def test_source_capture_reuses_supplied_graph_for_overlapping_partials(
+    tmp_path, monkeypatch
+):
+    from botpipe import provenance
+    from botpipe._callables import describe_callable
+
+    source = tmp_path / "shared.py"
+    code = (
+        "from functools import partial\n"
+        "def invoke(callback): return callback()\n"
+        "def leaf(): return 1\n"
+        "p0 = leaf\n"
+        + "".join(f"p{i} = partial(invoke, p{i - 1})\n" for i in range(1, 25))
+        + "def entry(): return ("
+        + ", ".join(f"p{i}" for i in range(1, 25))
+        + ")\n"
+    )
+    source.write_text(code)
+    namespace = {"__name__": "shared"}
+    exec(compile(code, str(source), "exec"), namespace)  # noqa: S102
+    entry = namespace["entry"]
+    graph = describe_callable(entry)
+    assert len(graph.nodes) == 27
+
+    def unexpected_traversal(value):
+        pytest.fail("Source capture rebuilt a callable already in the graph")
+
+    monkeypatch.setattr(provenance, "describe_callable", unexpected_traversal)
+    captured = provenance.capture_orchestration_sources(
+        entry, boundary=tmp_path, graph=graph
+    )
+    assert captured is not None
+    assert set(captured["files"]) == {"shared.py"}
+    assert len(captured["bindings"]) == 3
+
+
+def test_source_capture_keeps_code_for_cyclic_decorator(tmp_path):
+    from botpipe.provenance import capture_orchestration_sources
+
+    source = tmp_path / "cyclic.py"
+    code = "def entry(): return 1\nentry.__wrapped__ = entry\n"
+    source.write_text(code)
+    namespace = {"__name__": "cyclic"}
+    exec(compile(code, str(source), "exec"), namespace)  # noqa: S102
+    captured = capture_orchestration_sources(namespace["entry"], boundary=tmp_path)
+    assert captured is not None
+    assert set(captured["files"]) == {"cyclic.py"}
+    assert len(captured["bindings"]) == 1
+    assert captured["bindings"]["<workflow>"]["name"] == "entry"
+
+
 def _package(root: Path) -> Path:
     package = root / "sample"
     package.mkdir(parents=True)
