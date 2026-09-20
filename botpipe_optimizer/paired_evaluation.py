@@ -279,12 +279,13 @@ def _freeze(spec,spec_path,root):
     eid,cid=_sha256(evaluator),_sha256(cases); _check_id(spec.evaluator_content_id,eid,"evaluator"); _check_id(spec.case_input_content_id,cid,"case input")
     targets={"spec_path":root/"evaluation-spec.json","evaluator_path":root/f"evaluator-{evaluator.name}","case_input_path":root/f"cases-{cases.name}"}
     shutil.copy2(spec_path,targets["spec_path"]); shutil.copy2(evaluator,targets["evaluator_path"]); shutil.copy2(cases,targets["case_input_path"])
-    return {**targets,"spec_id":_sha256(targets["spec_path"]),"evaluator_id":eid,"case_input_id":cid,"evaluator_executable":bool(evaluator.stat().st_mode & stat.S_IXUSR)}
+    return {**targets,"spec_file_id":_sha256(targets["spec_path"]),"evaluator_id":eid,"case_input_id":cid,"evaluator_executable":bool(evaluator.stat().st_mode & stat.S_IXUSR)}
 
 def _assert_frozen(frozen):
-    for stem in ("spec","evaluator","case_input"):
+    for stem in ("evaluator","case_input"):
         p=_regular(frozen[f"{stem}_path"],f"frozen {stem}")
         if _sha256(p)!=frozen[f"{stem}_id"]: raise ValueError(f"frozen {stem} changed")
+    if _sha256(_regular(frozen["spec_path"], "frozen spec")) != frozen["spec_file_id"]: raise ValueError("frozen spec changed")
     if bool(Path(frozen["evaluator_path"]).stat().st_mode & stat.S_IXUSR) != frozen["evaluator_executable"]: raise ValueError("frozen evaluator mode changed")
 
 def _inventory(root,max_bytes,max_files):

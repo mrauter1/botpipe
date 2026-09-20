@@ -817,3 +817,17 @@ def test_company_helper_accepts_single_file_workflow_references(
     assert snapshot_path == ctx.workflow_folder / "company" / "single_file_company_operation_snapshot.json"
     assert payload["company_operation"]["selected_workflow_names"] == ["single_file_review"]
     assert payload["company_operation"]["task_count"] == 0
+
+
+def test_company_task_id_is_not_a_status_alias(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from botpipe_optimizer import company
+    ctx = _build_lifecycle_context(tmp_path)
+    captured = {}
+    def collect(root, **kwargs):
+        captured.update(kwargs)
+        return ()
+    monkeypatch.setattr(company, "list_task_operation_summaries", collect)
+    path = company.write_company_operation_snapshot(ctx, task_ids=["paused"], statuses=["paused"])
+    assert captured["task_ids"] == ["paused"]
+    assert captured["statuses"] == ["awaiting_input"]
+    assert json.loads(path.read_text())["company_operation"]["selected_task_ids"] == ["paused"]

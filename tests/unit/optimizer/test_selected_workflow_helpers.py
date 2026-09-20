@@ -199,7 +199,7 @@ def test_shared_selected_workflow_helper_reuses_one_capture_and_envelope_shape(
     resolve_calls: list[tuple[Path, str | type[object]]] = []
     inspect_calls: list[tuple[Path, str | type[object]]] = []
     original_resolve = selected_workflow_helpers.resolve_workflow_reference
-    original_inspect = selected_workflow_helpers.inspect_workflow_reference
+    original_inspect = selected_workflow_helpers.inspect_resolved_workflow
 
     def _record_resolve(root, workflow):
         resolve_calls.append((Path(root), workflow))
@@ -210,7 +210,7 @@ def test_shared_selected_workflow_helper_reuses_one_capture_and_envelope_shape(
         return original_inspect(root, workflow)
 
     monkeypatch.setattr(selected_workflow_helpers, "resolve_workflow_reference", _record_resolve)
-    monkeypatch.setattr(selected_workflow_helpers, "inspect_workflow_reference", _record_inspect)
+    monkeypatch.setattr(selected_workflow_helpers, "inspect_resolved_workflow", _record_inspect)
 
     inspection = selected_workflow_helpers.inspect_selected_workflow(ctx, "release_decision")
     artifact = selected_workflow_helpers.write_selected_workflow_artifact(
@@ -223,7 +223,9 @@ def test_shared_selected_workflow_helper_reuses_one_capture_and_envelope_shape(
 
     assert resolve_calls == [(tmp_path.resolve(), "release_decision")]
     workflow_cls = resolve_workflow_reference(tmp_path, "release_decision").workflow_cls
-    assert inspect_calls == [(tmp_path.resolve(), workflow_cls)]
+    assert len(inspect_calls) == 1
+    assert inspect_calls[0][0] == tmp_path.resolve()
+    assert inspect_calls[0][1].workflow_cls is workflow_cls
     assert inspection.capture.selected_workflow_name == "release_candidate_to_go_no_go"
     assert artifact.capture == inspection.capture
     assert artifact.path == ctx.workflow_folder / "shared" / "selected_workflow_capability.json"
@@ -642,7 +644,7 @@ def test_refinement_helper_snapshots_selected_workflow_authoring_surface_via_sha
     resolve_calls: list[tuple[Path, str | type[object]]] = []
     inspect_calls: list[tuple[Path, str | type[object]]] = []
     original_resolve = selected_workflow_helpers.resolve_workflow_reference
-    original_inspect = selected_workflow_helpers.inspect_workflow_reference
+    original_inspect = selected_workflow_helpers.inspect_resolved_workflow
 
     def _record_resolve(root, workflow):
         resolve_calls.append((Path(root), workflow))
@@ -653,7 +655,7 @@ def test_refinement_helper_snapshots_selected_workflow_authoring_surface_via_sha
         return original_inspect(root, workflow)
 
     monkeypatch.setattr(selected_workflow_helpers, "resolve_workflow_reference", _record_resolve)
-    monkeypatch.setattr(selected_workflow_helpers, "inspect_workflow_reference", _record_inspect)
+    monkeypatch.setattr(selected_workflow_helpers, "inspect_resolved_workflow", _record_inspect)
 
     snapshot_path = write_selected_workflow_authoring_surface(
         ctx,
@@ -663,7 +665,9 @@ def test_refinement_helper_snapshots_selected_workflow_authoring_surface_via_sha
 
     assert resolve_calls == [(tmp_path.resolve(), "release_decision")]
     workflow_cls = resolve_workflow_reference(tmp_path, "release_decision").workflow_cls
-    assert inspect_calls == [(tmp_path.resolve(), workflow_cls)]
+    assert len(inspect_calls) == 1
+    assert inspect_calls[0][0] == tmp_path.resolve()
+    assert inspect_calls[0][1].workflow_cls is workflow_cls
     assert snapshot_path == ctx.workflow_folder / "refinement" / "selected_workflow_authoring_surface.json"
     payload = json.loads(snapshot_path.read_text(encoding="utf-8"))
     assert payload["repo_root"] == str(tmp_path.resolve())
@@ -947,7 +951,7 @@ def test_decomposition_helper_writes_selected_workflow_identity_authoring_surfac
     resolve_calls: list[tuple[Path, str | type[object]]] = []
     inspect_calls: list[tuple[Path, str | type[object]]] = []
     original_resolve = selected_workflow_helpers.resolve_workflow_reference
-    original_inspect = selected_workflow_helpers.inspect_workflow_reference
+    original_inspect = selected_workflow_helpers.inspect_resolved_workflow
 
     def _record_resolve(root, workflow):
         resolve_calls.append((Path(root), workflow))
@@ -958,7 +962,7 @@ def test_decomposition_helper_writes_selected_workflow_identity_authoring_surfac
         return original_inspect(root, workflow)
 
     monkeypatch.setattr(selected_workflow_helpers, "resolve_workflow_reference", _record_resolve)
-    monkeypatch.setattr(selected_workflow_helpers, "inspect_workflow_reference", _record_inspect)
+    monkeypatch.setattr(selected_workflow_helpers, "inspect_resolved_workflow", _record_inspect)
 
     snapshot_path = write_selected_workflow_decomposition_surface(
         ctx,
@@ -968,7 +972,9 @@ def test_decomposition_helper_writes_selected_workflow_identity_authoring_surfac
 
     workflow_cls = resolve_workflow_reference(tmp_path, "release_decision").workflow_cls
     assert resolve_calls == [(tmp_path.resolve(), "release_decision")]
-    assert inspect_calls == [(tmp_path.resolve(), workflow_cls)]
+    assert len(inspect_calls) == 1
+    assert inspect_calls[0][0] == tmp_path.resolve()
+    assert inspect_calls[0][1].workflow_cls is workflow_cls
     assert snapshot_path == ctx.workflow_folder / "decomposition" / "selected_workflow_decomposition_surface.json"
     payload = json.loads(snapshot_path.read_text(encoding="utf-8"))
     assert payload["repo_root"] == str(tmp_path.resolve())
@@ -1667,35 +1673,21 @@ def test_evaluation_helper_validates_eval_cases_via_selected_workflow_snapshot_a
         export_parameters=True,
         write_doc=True,
     )
-    snapshot_calls: list[tuple[str | type[object], str]] = []
-    snapshot_read_paths: list[Path] = []
-    snapshot_validation_calls: list[tuple[dict[str, object], str]] = []
-    parameter_calls: list[tuple[type[object] | None, dict[str, object]]] = []
-    original_snapshot = evaluation_helpers.write_selected_workflow_capability_snapshot
-    original_read_json = evaluation_helpers.read_json_object
-    original_validate_snapshot = evaluation_helpers.validate_selected_workflow_capability_snapshot
+    inspection_calls = []
+    parameter_calls = []
+    original_inspect = evaluation_helpers.inspect_selected_workflow
     original_coerce = evaluation_helpers.coerce_workflow_parameter_mapping
 
-    def _record_snapshot(ctx, workflow, relative_path="selected_workflow_capability.json"):
-        snapshot_calls.append((workflow, str(relative_path)))
-        return original_snapshot(ctx, workflow, relative_path)
-
-    def _record_read_json(path):
-        snapshot_read_paths.append(Path(path))
-        return original_read_json(path)
-
-    def _record_validate_snapshot(payload, **kwargs):
-        snapshot_validation_calls.append((dict(payload), str(kwargs.get("expected_label"))))
-        return original_validate_snapshot(payload, **kwargs)
+    def _record_inspect(ctx, workflow):
+        inspection_calls.append(workflow)
+        return original_inspect(ctx, workflow)
 
     def _record_coerce(parameters_cls, raw_values):
         payload = dict(raw_values or {})
         parameter_calls.append((parameters_cls, payload))
         return original_coerce(parameters_cls, raw_values)
 
-    monkeypatch.setattr(evaluation_helpers, "write_selected_workflow_capability_snapshot", _record_snapshot)
-    monkeypatch.setattr(evaluation_helpers, "read_json_object", _record_read_json)
-    monkeypatch.setattr(evaluation_helpers, "validate_selected_workflow_capability_snapshot", _record_validate_snapshot)
+    monkeypatch.setattr(evaluation_helpers, "inspect_selected_workflow", _record_inspect)
     monkeypatch.setattr(evaluation_helpers, "coerce_workflow_parameter_mapping", _record_coerce)
 
     validated_path = write_validated_eval_case_manifest(
@@ -1721,13 +1713,9 @@ def test_evaluation_helper_validates_eval_cases_via_selected_workflow_snapshot_a
         "eval/validated_eval_case_manifest.json",
     )
 
-    assert snapshot_calls == [("release_decision", "selected_workflow_capability.json")]
-    assert snapshot_read_paths == [ctx.workflow_folder / "selected_workflow_capability.json"]
-    assert len(snapshot_validation_calls) == 1
-    snapshot_payload, expected_label = snapshot_validation_calls[0]
-    assert expected_label == "the resolved workflow"
+    assert inspection_calls == ["release_decision"]
+    snapshot_payload = json.loads((ctx.workflow_folder / "selected_workflow_capability.json").read_text())
     assert snapshot_payload["selected_workflow_name"] == "release_candidate_to_go_no_go"
-    assert snapshot_payload["workflow_name"] == "workflow_to_eval_suite"
     assert snapshot_payload["selected_workflow_capability"]["workflow_name"] == "release_candidate_to_go_no_go"
     assert len(parameter_calls) == 2
     assert [payload for _, payload in parameter_calls] == [
@@ -1836,45 +1824,19 @@ def test_evaluation_helper_accepts_single_file_workflow_references(tmp_path: Pat
             "workflow_parameters": {},
         }
     ]
-def test_evaluation_helper_rejects_snapshot_mismatch_through_shared_snapshot_validator(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_evaluation_helper_uses_inspection_instead_of_a_mutable_previous_snapshot(tmp_path: Path) -> None:
     ctx = _build_lifecycle_context(tmp_path, workflow_name="workflow_to_eval_suite")
-    _write_runtime_valid_catalog_workflow(
-        tmp_path,
-        "release_candidate_to_go_no_go",
-        aliases=("release_decision",),
-        export_parameters=True,
-    )
-    original_read_json = evaluation_helpers.read_json_object
+    _write_runtime_valid_catalog_workflow(tmp_path, "release_candidate_to_go_no_go", aliases=("release_decision",), export_parameters=True)
+    snapshot = ctx.workflow_folder / "selected_workflow_capability.json"
+    snapshot.parent.mkdir(parents=True, exist_ok=True)
+    snapshot.write_text('{"selected_workflow_name": "wrong", "selected_workflow_capability": {}}')
+    result = write_validated_eval_case_manifest(ctx, "release_decision", {
+        "cases": [{"case_id": "baseline_release", "case_kind": "benchmark", "prompt": "Assess the release candidate.", "expected_artifacts": ["assessment_note"]}]
+    })
+    assert json.loads(result.read_text())["selected_workflow_name"] == "release_candidate_to_go_no_go"
+    assert json.loads(snapshot.read_text())["selected_workflow_name"] == "release_candidate_to_go_no_go"
 
-    def _mismatched_snapshot(path):
-        payload = original_read_json(path)
-        payload["selected_workflow_name"] = "incident_to_hardening_program"
-        payload["selected_workflow_capability"]["workflow_name"] = "incident_to_hardening_program"
-        return payload
 
-    monkeypatch.setattr(evaluation_helpers, "read_json_object", _mismatched_snapshot)
-
-    with pytest.raises(
-        ValueError,
-        match="selected_workflow_capability.json selected_workflow_name must match the resolved workflow",
-    ):
-        write_validated_eval_case_manifest(
-            ctx,
-            "release_decision",
-            {
-                "cases": [
-                    {
-                        "case_id": "baseline_release",
-                        "case_kind": "benchmark",
-                        "prompt": "Assess a routine release candidate with complete evidence.",
-                        "expected_artifacts": ["assessment_note"],
-                    }
-                ]
-            },
-        )
 def test_evaluation_helper_rejects_invalid_case_shapes_and_unknown_expected_artifacts(tmp_path: Path) -> None:
     ctx = _build_lifecycle_context(tmp_path, workflow_name="workflow_to_eval_suite")
     _write_runtime_valid_catalog_workflow(
@@ -2019,3 +1981,17 @@ def test_evaluation_helper_preserves_shared_loader_failure_for_invalid_case_para
                 ]
             },
         )
+
+
+def test_invalid_eval_case_input_preserves_previous_outputs(tmp_path: Path) -> None:
+    ctx = _build_lifecycle_context(tmp_path, workflow_name="workflow_to_eval_suite")
+    _write_runtime_valid_catalog_workflow(tmp_path, "release_candidate_to_go_no_go", aliases=("release_decision",), export_parameters=True)
+    snapshot = ctx.workflow_folder / "selected_workflow_capability.json"
+    manifest = ctx.workflow_folder / "validated_eval_case_manifest.json"
+    snapshot.parent.mkdir(parents=True, exist_ok=True)
+    snapshot.write_text('{"previous": "capability"}')
+    manifest.write_text('{"previous": "cases"}')
+    before = {path: path.read_bytes() for path in (snapshot, manifest)}
+    with pytest.raises(ValueError):
+        write_validated_eval_case_manifest(ctx, "release_decision", {"cases": []})
+    assert {path: path.read_bytes() for path in before} == before

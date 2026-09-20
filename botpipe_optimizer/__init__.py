@@ -63,8 +63,18 @@ from .portfolio import (
     write_workflow_portfolio_snapshot,
 )
 from .refinement import write_selected_workflow_authoring_surface
+from .evidence import EvidenceSnapshot, capture_evidence_snapshot
+from .records import CandidateSet
+from .recommendations import load_optimization_candidate
+from .paired_evaluation import EvaluationSpec, run_paired_evaluation
 
 __all__ = [
+    "CandidateSet",
+    "EvidenceSnapshot",
+    "EvaluationSpec",
+    "capture_evidence_snapshot",
+    "load_optimization_candidate",
+    "run_paired_evaluation",
     "EXCLUDED_RUN_REPORT_SCHEMA",
     "FAILURE_SCENARIOS_SCHEMA",
     "OptimizationArtifactSpec",

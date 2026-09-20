@@ -79,3 +79,7 @@
 - Do not omit any of the three legal case kinds.
 - Do not rely on undeclared workflow parameters or unknown expected artifacts.
 - Do not hide the suite design only in provider prose; the durable output must live in the named artifacts.
+
+## Optimizer handoff
+
+When `invocation_contract.optimization_selection` is present, implement its selected `evaluation_case` proposal using the cited evidence and captured baseline. Keep the proposal's scope and validation plan visible. These are development cases because their failure evidence was exposed during authoring. Publish a new suite; never edit the evaluator or cases of an existing frozen comparison.
