@@ -624,6 +624,12 @@ def validate_candidate_surface_manifest(
             raise ValueError(f"{manifest_label} surface_sha256 must match {candidate_root.name}")
         if entry.get("size_bytes") != surface_path.stat().st_size:
             raise ValueError(f"{manifest_label} size_bytes must match {candidate_root.name}")
+        if "executable" in entry and entry.get("executable") is not _is_executable(
+            surface_path
+        ):
+            raise ValueError(
+                f"{manifest_label} executable must match {candidate_root.name}"
+            )
         baseline_entry = baseline_files.get(relative_path)
         changed = baseline_entry is None or baseline_entry.get("surface_sha256") != expected_digest
         if entry.get("changed_from_baseline") is not changed:

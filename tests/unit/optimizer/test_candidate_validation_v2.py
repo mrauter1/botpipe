@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import shutil
-import sys
+import importlib
 import json
 import os
+import shutil
+import sys
 import time
 from pathlib import Path
 
@@ -45,15 +46,36 @@ def test_t03_surface_manifest_rejects_forged_derived_fields(tmp_path: Path) -> N
     )
     assert validated["surface_id"] == manifest["surface_id"]
 
+    other_root = tmp_path / "other-surface"
+    other_root.mkdir()
+    (other_root / "workflow.py").write_text("VALUE = 1\n", encoding="utf-8")
     for field, false_value in (
+        ("root", str(other_root)),
         ("file_count", 99),
         ("size_bytes", 0),
         ("surface_id", "sha256:" + "0" * 64),
         ("relative_paths", ["forged.py"]),
+        ("mode_semantics", "forged-mode-semantics"),
     ):
         forged = dict(manifest)
         forged[field] = false_value
         with pytest.raises(ValueError, match=field):
+            validate_surface_manifest(
+                forged,
+                expected_root=root,
+                expected_boundary=boundary,
+                expected_surface_kind="candidate",
+            )
+
+    for field, false_value in (
+        ("surface_sha256", "0" * 64),
+        ("size_bytes", manifest["files"][0]["size_bytes"] + 1),
+        ("executable", not manifest["files"][0]["executable"]),
+    ):
+        forged = dict(manifest)
+        forged["files"] = [dict(entry) for entry in manifest["files"]]
+        forged["files"][0][field] = false_value
+        with pytest.raises(ValueError, match="files"):
             validate_surface_manifest(
                 forged,
                 expected_root=root,
@@ -251,6 +273,21 @@ def test_t16_tree_limits_symlinks_and_logs_are_bounded(tmp_path: Path) -> None:
     assert result.stdout_truncated and result.stderr_truncated
 
 
+@pytest.mark.skipif(os.name != "posix", reason="POSIX FIFO acceptance")
+def test_t16_execution_tree_rejects_fifo_before_copy(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    staging = tmp_path / "staging"
+    source.mkdir()
+    staging.mkdir()
+    (source / "workflow.py").write_text("VALUE = 1\n", encoding="utf-8")
+    os.mkfifo(source / "events.fifo")
+
+    with pytest.raises(ValueError, match="special file: events.fifo"):
+        capture_execution_tree(source, staging)
+
+    assert list(staging.iterdir()) == []
+
+
 @pytest.mark.parametrize("leader_exits", [False, True])
 def test_t16_bounded_process_reaps_children_on_timeout_and_normal_leader_exit(
     tmp_path: Path,
@@ -331,18 +368,20 @@ def test_t19_cleanup_refuses_unowned_overlapping_and_wrong_marker_paths(
     assert (preexisting / "data.txt").is_file()
 
 
+@pytest.mark.parametrize("workflow_name", ["devloop", "ralph_loop"])
 def test_t01_invalid_candidate_cannot_hide_behind_imported_original(
     tmp_path: Path,
+    workflow_name: str,
 ) -> None:
     # Importing the authoritative module here reproduces the historical module-cache bug.
-    import botpipe.workflows.devloop.workflow  # noqa: F401
+    importlib.import_module(f"botpipe.workflows.{workflow_name}.workflow")
 
     from botpipe_optimizer.candidate_validation import validate_frozen_candidate
 
     repo_root = Path(__file__).resolve().parents[3]
     staging = tmp_path / "staging"
     staging.mkdir()
-    relative = "botpipe/workflows/devloop/workflow.py"
+    relative = f"botpipe/workflows/{workflow_name}/workflow.py"
     baseline_root = tmp_path / "baseline"
     candidate_root = tmp_path / "candidate"
     (baseline_root / relative).parent.mkdir(parents=True)
@@ -352,8 +391,8 @@ def test_t01_invalid_candidate_cannot_hide_behind_imported_original(
         "this is invalid python !!!\n", encoding="utf-8"
     )
     boundary = {
-        "workflow_name": "devloop",
-        "package_root_relative_path": "botpipe/workflows/devloop",
+        "workflow_name": workflow_name,
+        "package_root_relative_path": f"botpipe/workflows/{workflow_name}",
     }
     baseline = derive_surface_manifest(
         baseline_root,
@@ -399,7 +438,7 @@ def test_t01_invalid_candidate_cannot_hide_behind_imported_original(
             expected_boundary=boundary,
             baseline_surface_kind="baseline",
             candidate_surface_kind="candidate",
-            workflow_refs=["devloop"],
+            workflow_refs=[workflow_name],
             staging_parent=staging,
             target_test_argv=[sys.executable, "-c", "raise SystemExit(0)"],
             dependency_roots=dependency_roots,

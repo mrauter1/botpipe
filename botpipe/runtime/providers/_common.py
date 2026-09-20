@@ -434,8 +434,18 @@ async def _wait_for_process_leader(
     pending = set(stream_tasks)
     try:
         while not waiter.done():
+            # On POSIX, asyncio's wait() may remain pending after the leader is
+            # reaped while a descendant still owns one of the subprocess
+            # pipes. Observe returncode independently so the caller can reap
+            # that descendant through the registered containment boundary.
+            if process.returncode is not None:
+                waiter.cancel()
+                await asyncio.gather(waiter, return_exceptions=True)
+                return
             done, _ = await asyncio.wait(
-                {waiter, *pending}, return_when=asyncio.FIRST_COMPLETED
+                {waiter, *pending},
+                timeout=0.02,
+                return_when=asyncio.FIRST_COMPLETED,
             )
             for task in done:
                 if task is waiter:

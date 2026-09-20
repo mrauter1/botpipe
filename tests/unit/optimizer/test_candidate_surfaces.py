@@ -358,6 +358,60 @@ def test_candidate_surface_helpers_validate_candidate_manifest_checks_boundary_a
     assert validated["baseline_relative_paths"] == expected_relative_paths
     assert "workflows/demo_workflow/prompts/extra.md" in validated["relative_paths"]
 
+    def assert_forgery_rejected(forged_manifest, match: str) -> None:
+        with pytest.raises(ValueError, match=match):
+            validate_candidate_surface_manifest(
+                forged_manifest,
+                repo_root=tmp_path,
+                manifest_label="candidate_workflow_manifest.json",
+                expected_surface_kind="candidate",
+                expected_boundary=expected_boundary,
+                expected_surface_root=candidate_root,
+                boundary_field_map={
+                    "package_name": "package_name",
+                    "package_root_relative_path": "package_root_relative_path",
+                    "doc_relative_path": "doc_relative_path",
+                    "runtime_test_relative_path": "runtime_test_relative_path",
+                },
+                optional_boundary_fields=(
+                    "doc_relative_path",
+                    "runtime_test_relative_path",
+                ),
+                baseline_manifest=baseline_manifest,
+                baseline_manifest_label="baseline_workflow_manifest.json",
+                allowed_added_path_prefixes=[boundary["package_root_relative_path"]],
+                allowed_added_exact_paths=[
+                    boundary["doc_relative_path"],
+                    boundary["runtime_test_relative_path"],
+                ],
+            )
+
+    other_root = ctx.workflow_folder / "other_candidate_surface"
+    other_root.mkdir()
+    for field, false_value, match in (
+        ("surface_root", str(other_root), "surface_root"),
+        ("file_count", base_candidate_manifest["file_count"] + 1, "file_count"),
+        ("added_relative_paths", [], "added_relative_paths"),
+    ):
+        forged = dict(base_candidate_manifest)
+        forged[field] = false_value
+        assert_forgery_rejected(forged, match)
+
+    for field, false_value, match in (
+        (
+            "size_bytes",
+            base_candidate_manifest["files"][0]["size_bytes"] + 1,
+            "size_bytes",
+        ),
+        ("executable", True, "executable"),
+    ):
+        forged = dict(base_candidate_manifest)
+        forged["files"] = [
+            dict(entry) for entry in base_candidate_manifest["files"]
+        ]
+        forged["files"][0][field] = false_value
+        assert_forgery_rejected(forged, match)
+
     forged_changes = dict(base_candidate_manifest)
     forged_changes["changed_relative_paths"] = []
     with pytest.raises(ValueError, match="changed_relative_paths"):

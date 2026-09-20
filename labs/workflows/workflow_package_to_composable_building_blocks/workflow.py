@@ -145,6 +145,7 @@ def _after_implement_candidate_decomposition(ctx):
     ctx.state.candidate_file_count = actual_candidate_file_count
     ctx.state.candidate_changed_paths = actual_changed_relative_paths
     ctx.state.candidate_building_block_names = actual_building_block_names
+    ctx.state.candidate_decomposition_surface_id = candidate_manifest["surface_id"]
     return None
 
 
@@ -213,6 +214,9 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
         candidate_file_count: int = 0
         candidate_changed_paths: list[str] = Field(default_factory=list)
         candidate_building_block_names: list[str] = Field(default_factory=list)
+        baseline_parent_surface_id: str | None = None
+        baseline_authoritative_sources: dict[str, str] = Field(default_factory=dict)
+        candidate_decomposition_surface_id: str | None = None
         evaluation_authoritative_artifacts: list[str] = Field(default_factory=list)
         evaluation_next_action: str | None = None
         published: bool = False
@@ -358,7 +362,7 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
     @python_step(
         name="bootstrap",
         requires=[request],
-        writes=[invocation_contract],
+        writes=[invocation_contract, workflow_decomposition_receipt],
         routes={"inputs_prepared": "capture_decomposition_context"},
     )
     def bootstrap(ctx):
@@ -382,10 +386,24 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
                 "candidate_file_count": 0,
                 "candidate_changed_paths": [],
                 "candidate_building_block_names": [],
+                "baseline_parent_surface_id": None,
+                "baseline_authoritative_sources": {},
+                "candidate_decomposition_surface_id": None,
                 "evaluation_authoritative_artifacts": [],
                 "evaluation_next_action": None,
                 "published": False,
             }
+        )
+        write_workflow_json(
+            ctx,
+            "workflow_decomposition_receipt.json",
+            {
+                "workflow_name": ctx.workflow_name,
+                "run_id": ctx.run_id,
+                "published": False,
+                "status": "incomplete",
+                "stop_reason": "decomposition_in_progress",
+            },
         )
         open_workflow_sessions(ctx, "frame_session", "design_session", "build_session", "evaluate_session")
         write_invocation_contract(
@@ -436,7 +454,7 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
                 expected_label="selected workflow capture",
             )
             boundary = _decomposition_surface_boundary(surface_snapshot, repo_root)
-            _write_baseline_parent_manifest(
+            baseline_manifest = _write_baseline_parent_manifest(
                 ctx,
                 repo_root=repo_root,
                 selected_workflow_name=capture.selected_workflow_name,
@@ -446,6 +464,11 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
         except _CaptureBlockedError as exc:
             return Event("blocked", reason=str(exc))
         ctx.state.selected_workflow_name = capture.selected_workflow_name
+        ctx.state.baseline_parent_surface_id = baseline_manifest["surface_id"]
+        ctx.state.baseline_authoritative_sources = {
+            entry["relative_path"]: entry["source_path"]
+            for entry in baseline_manifest["files"]
+        }
         return Event("decomposition_context_captured")
 
     @python_step(
@@ -518,7 +541,13 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
             request_path=ctx.run_folder / "request.md",
             workflow_folder=ctx.workflow_folder,
         )
-        _validate_baseline_parent_manifest(baseline_manifest, repo_root, boundary)
+        _assert_decomposition_anchors(ctx, baseline_manifest, candidate_manifest)
+        _validate_baseline_parent_manifest(
+            baseline_manifest,
+            repo_root,
+            boundary,
+            expected_surface_root=required_dirs["baseline_parent_workflow_surface"],
+        )
         validate_authoritative_surface_sources_unchanged(
             baseline_manifest,
             repo_root,
@@ -593,6 +622,35 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
             ),
         )
 
+        # Recheck the exact published files after all subprocesses have returned.
+        baseline_manifest = _read_json(required_paths["baseline_parent_manifest"])
+        candidate_manifest = _read_json(
+            required_paths["candidate_decomposition_manifest"]
+        )
+        _assert_decomposition_anchors(ctx, baseline_manifest, candidate_manifest)
+        _validate_baseline_parent_manifest(
+            baseline_manifest,
+            repo_root,
+            boundary,
+            expected_surface_root=required_dirs[
+                "baseline_parent_workflow_surface"
+            ],
+        )
+        validate_authoritative_surface_sources_unchanged(
+            baseline_manifest,
+            repo_root,
+            baseline_manifest_label="baseline_parent_manifest.json",
+            drift_error_prefix="authoritative selected workflow file changed during validation",
+        )
+        _validate_candidate_decomposition_manifest(
+            candidate_manifest,
+            repo_root=repo_root,
+            boundary=boundary,
+            baseline_manifest=baseline_manifest,
+            declared_building_blocks=declared_building_blocks,
+            expected_surface_root=required_dirs["candidate_decomposition_surface"],
+        )
+
         write_publication_receipt(
             ctx,
             "workflow_decomposition_receipt.json",
@@ -635,6 +693,7 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
                 "next_action": ctx.state.evaluation_next_action,
                 "validation_result": validation_result,
                 "published": True,
+                "status": "accepted",
             },
         )
         ctx.state.selected_workflow_name = selected_workflow_name
@@ -643,6 +702,28 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
 
     entry = bootstrap
 
+
+def _assert_decomposition_anchors(ctx, baseline, candidate) -> None:
+    if (
+        not ctx.state.baseline_parent_surface_id
+        or not ctx.state.candidate_decomposition_surface_id
+    ):
+        raise ValueError(
+            "decomposition checkpoint lacks surface anchors; start a new decomposition run"
+        )
+    if baseline.get("surface_id") != ctx.state.baseline_parent_surface_id:
+        raise ValueError("baseline surface changed; start a new decomposition run")
+    sources = {
+        entry.get("relative_path"): entry.get("source_path")
+        for entry in baseline.get("files", [])
+    }
+    if sources != ctx.state.baseline_authoritative_sources:
+        raise ValueError("baseline source paths changed; start a new decomposition run")
+    if (
+        candidate.get("surface_id")
+        != ctx.state.candidate_decomposition_surface_id
+    ):
+        raise ValueError("candidate decomposition surface changed after implementation")
 
 
 def _decomposition_surface_boundary(
@@ -865,8 +946,21 @@ def _write_candidate_decomposition_manifest(
         boundary=identity_boundary,
         surface_kind="candidate_decomposition",
     )
+    legacy_files = {
+        entry["relative_path"]: entry for entry in legacy_surface["files"]
+    }
+    files = [
+        {
+            **entry,
+            "changed_from_baseline": legacy_files[entry["relative_path"]][
+                "changed_from_baseline"
+            ],
+        }
+        for entry in canonical["files"]
+    ]
     manifest = {
         **canonical,
+        "files": files,
         "selected_workflow_name": selected_workflow_name,
         "parent_package_name": boundary["parent_package_name"],
         "parent_package_root_relative_path": boundary["parent_package_root_relative_path"],
@@ -943,6 +1037,8 @@ def _validate_baseline_parent_manifest(
     baseline_manifest: Mapping[str, Any],
     repo_root: Path,
     boundary: Mapping[str, Any],
+    *,
+    expected_surface_root: Path,
 ) -> None:
     validate_baseline_surface_manifest(
         baseline_manifest,
@@ -950,6 +1046,7 @@ def _validate_baseline_parent_manifest(
         manifest_label="baseline_parent_manifest.json",
         expected_surface_kind="baseline_parent",
         expected_boundary=boundary,
+        expected_surface_root=expected_surface_root,
         boundary_field_map={
             "parent_package_name": "parent_package_name",
             "parent_package_root_relative_path": "parent_package_root_relative_path",

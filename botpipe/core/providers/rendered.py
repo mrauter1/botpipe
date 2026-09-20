@@ -12,7 +12,12 @@ from datetime import datetime, timezone
 from typing import Literal
 from uuid import uuid4
 
-from ..errors import FailureContext, WorkflowExecutionError, exception_failure_context, replace_execution_error
+from ..errors import (
+    FailureContext,
+    WorkflowExecutionError,
+    exception_failure_context,
+    replace_execution_error,
+)
 from ..prompts import ResolvedPrompt
 from .models import (
     LLMRequest,
@@ -24,7 +29,11 @@ from .models import (
     ProviderTurnContext,
     VerifierRequest,
 )
-from .budget import ProviderDispatchReservation, current_provider_dispatch_budget, provider_dispatch_reservation_active
+from .budget import (
+    ProviderDispatchReservation,
+    current_provider_dispatch_budget,
+    provider_dispatch_reservation_active,
+)
 from .parsing import parse_outcome_json
 from .protocols import ProviderTransport, validate_provider_transport
 from .rendering import render_provider_turn
@@ -38,7 +47,9 @@ class RenderedLLMProvider:
         self,
         transport: ProviderTransport,
         *,
-        operation_executor: Callable[[RenderedProviderTurn], ProviderTurnResult] | None = None,
+        operation_executor: (
+            Callable[[RenderedProviderTurn], ProviderTurnResult] | None
+        ) = None,
     ) -> None:
         self._transport = validate_provider_transport(transport)
         if operation_executor is not None and not callable(operation_executor):
@@ -46,15 +57,21 @@ class RenderedLLMProvider:
         self._operation_executor = operation_executor
 
     async def run_producer(self, request: ProducerRequest) -> ProducerResponse:
-        result = await self._run_turn(_step_context(request, turn_kind="producer", prompt=request.producer_prompt))
+        result = await self._run_turn(
+            _step_context(request, turn_kind="producer", prompt=request.producer_prompt)
+        )
         return _producer_response(result)
 
     async def run_verifier(self, request: VerifierRequest) -> OutcomeResponse:
-        result = await self._run_turn(_step_context(request, turn_kind="verifier", prompt=request.verifier_prompt))
+        result = await self._run_turn(
+            _step_context(request, turn_kind="verifier", prompt=request.verifier_prompt)
+        )
         return _outcome_response(result)
 
     async def run_llm(self, request: LLMRequest) -> OutcomeResponse:
-        result = await self._run_turn(_step_context(request, turn_kind=request.turn_kind, prompt=request.prompt))
+        result = await self._run_turn(
+            _step_context(request, turn_kind=request.turn_kind, prompt=request.prompt)
+        )
         return _outcome_response(result)
 
     def run_operation(self, request: OperationRequest) -> OperationResponse:
@@ -68,7 +85,9 @@ class RenderedLLMProvider:
 
     async def _run_turn(self, context: ProviderTurnContext):
         turn = render_provider_turn(context)
-        checkpoint_provider_attempt = getattr(context.context, "_checkpoint_provider_attempt", None)
+        checkpoint_provider_attempt = getattr(
+            context.context, "_checkpoint_provider_attempt", None
+        )
         if callable(checkpoint_provider_attempt):
             checkpoint_provider_attempt(turn)
         return await self._dispatch_turn(turn)
@@ -77,35 +96,84 @@ class RenderedLLMProvider:
         if provider_dispatch_reservation_active():
             return await self._transport.run_turn(turn)
         budget = current_provider_dispatch_budget()
-        if budget is not None and getattr(self._transport, "supports_cancellation", False) is not True:
-            raise WorkflowExecutionError("configured provider dispatch guarantees require a cancellable transport")
-        reservation = budget.reserve() if budget else ProviderDispatchReservation(uuid4().hex, 1, None)
+        if (
+            budget is not None
+            and getattr(self._transport, "supports_cancellation", False) is not True
+        ):
+            raise WorkflowExecutionError(
+                "configured provider dispatch guarantees require a cancellable transport"
+            )
+        reservation = (
+            budget.reserve()
+            if budget
+            else ProviderDispatchReservation(uuid4().hex, 1, None)
+        )
         identity = _effective_dispatch_identity(self._transport, turn)
-        started = datetime.now(timezone.utc); clock = time.monotonic()
+        started = datetime.now(timezone.utc)
+        clock = time.monotonic()
         base = _dispatch_payload(turn, reservation, identity)
-        _emit_dispatch(turn, "provider_dispatch_reserved", {**base, "started_at": started.isoformat()})
-        _emit_dispatch(turn, "provider_dispatch_started", {**base, "started_at": started.isoformat()})
-        result = None; outcome = "failed"; error = None
+        _emit_dispatch(
+            turn,
+            "provider_dispatch_reserved",
+            {**base, "started_at": started.isoformat()},
+        )
+        _emit_dispatch(
+            turn,
+            "provider_dispatch_started",
+            {**base, "started_at": started.isoformat()},
+        )
+        result = None
+        outcome = "failed"
+        error = None
         try:
             call = self._transport.run_turn(turn)
-            result = await call if reservation.timeout_seconds is None else await asyncio.wait_for(call, reservation.timeout_seconds)
+            result = (
+                await call
+                if reservation.timeout_seconds is None
+                else await asyncio.wait_for(call, reservation.timeout_seconds)
+            )
             outcome = "succeeded"
             return result
         except asyncio.CancelledError:
-            outcome = "interrupted"; raise
+            outcome = "interrupted"
+            raise
         except asyncio.TimeoutError as exc:
-            error = {"error_type":"ProviderDispatchTimeout","error":f"provider dispatch exceeded {reservation.timeout_seconds:.3f} seconds"}
-            raise WorkflowExecutionError(error["error"], failure_context=FailureContext(kind="provider_dispatch_timeout", step_name=turn.step_name, provider_attributable=True, details=error)) from exc
+            error = {
+                "error_type": "ProviderDispatchTimeout",
+                "error": f"provider dispatch exceeded {reservation.timeout_seconds:.3f} seconds",
+            }
+            raise WorkflowExecutionError(
+                error["error"],
+                failure_context=FailureContext(
+                    kind="provider_dispatch_timeout",
+                    step_name=turn.step_name,
+                    provider_attributable=True,
+                    details=error,
+                ),
+            ) from exc
         except Exception as exc:
-            error = {"error_type":type(exc).__name__,"error":str(exc)}; raise
+            error = {"error_type": type(exc).__name__, "error": str(exc)}
+            raise
         finally:
-            payload = {**base,"started_at":started.isoformat(),"ended_at":datetime.now(timezone.utc).isoformat(),"elapsed_seconds":max(0.0,time.monotonic()-clock),"outcome":outcome,"token_usage":_dispatch_usage(None if result is None else result.usage)}
-            if error is not None: payload["error"] = error
+            payload = {
+                **base,
+                "started_at": started.isoformat(),
+                "ended_at": datetime.now(timezone.utc).isoformat(),
+                "elapsed_seconds": max(0.0, time.monotonic() - clock),
+                "outcome": outcome,
+                "token_usage": _dispatch_usage(
+                    None if result is None else result.usage
+                ),
+            }
+            if error is not None:
+                payload["error"] = error
             _emit_dispatch(turn, "provider_dispatch_finished", payload)
 
     def _run_operation_turn(self, context: ProviderTurnContext):
         turn = render_provider_turn(context)
-        checkpoint_provider_attempt = getattr(context.context, "_checkpoint_provider_attempt", None)
+        checkpoint_provider_attempt = getattr(
+            context.context, "_checkpoint_provider_attempt", None
+        )
         if callable(checkpoint_provider_attempt):
             checkpoint_provider_attempt(turn)
         try:
@@ -118,7 +186,9 @@ class RenderedLLMProvider:
         # async transport path and must not route through this sync bridge.
         if self._operation_executor is not None:
             if current_provider_dispatch_budget() is not None:
-                raise RuntimeError("budgeted synchronous provider operations inside an active event loop are unsupported")
+                raise RuntimeError(
+                    "budgeted synchronous provider operations inside an active event loop are unsupported"
+                )
             return self._operation_executor(turn)
         raise RuntimeError(
             "RenderedLLMProvider requires an explicit operation_executor to support llm()/classify() "
@@ -127,30 +197,65 @@ class RenderedLLMProvider:
 
 
 def _effective_dispatch_identity(transport, turn):
-    provider = getattr(transport, "provider_name", None) or type(transport).__name__.removesuffix("Transport").lower()
+    provider = (
+        getattr(transport, "provider_name", None)
+        or type(transport).__name__.removesuffix("Transport").lower()
+    )
     resolver = getattr(transport, "effective_dispatch_identity", None)
     resolved = resolver(turn) if callable(resolver) else {}
-    return {"provider": resolved.get("provider", provider), "model": resolved.get("model"), "effort": resolved.get("effort")}
+    return {
+        "provider": resolved.get("provider", provider),
+        "model": resolved.get("model"),
+        "effort": resolved.get("effort"),
+    }
 
 
 def _dispatch_payload(turn, reservation, identity):
-    phase = "direct_llm" if turn.turn_kind == "step" else "repair" if turn.turn_kind == "outcome_repair" else turn.turn_kind
-    payload = {"dispatch_id":reservation.dispatch_id,"dispatch_sequence":reservation.sequence,"step_name":turn.step_name,"phase":phase,"turn_kind":turn.turn_kind,"attempt":turn.attempt,**identity}
+    phase = (
+        "direct_llm"
+        if turn.turn_kind == "step"
+        else "repair" if turn.turn_kind == "outcome_repair" else turn.turn_kind
+    )
+    payload = {
+        "dispatch_id": reservation.dispatch_id,
+        "dispatch_sequence": reservation.sequence,
+        "step_name": turn.step_name,
+        "phase": phase,
+        "turn_kind": turn.turn_kind,
+        "attempt": turn.attempt,
+        **identity,
+    }
     if turn.step_execution_id:
         payload["step_execution_id"] = turn.step_execution_id
         parts = turn.step_execution_id.split(":")
-        if len(parts) >= 4: payload.update(scope=parts[1], item_id=parts[2])
-    if reservation.timeout_seconds is not None: payload["timeout_seconds"] = reservation.timeout_seconds
+        if len(parts) >= 4:
+            payload.update(scope=parts[1], item_id=parts[2])
+    if reservation.timeout_seconds is not None:
+        payload["timeout_seconds"] = reservation.timeout_seconds
     return payload
 
 
 def _dispatch_usage(usage):
-    raw = asdict(usage) if is_dataclass(usage) else dict(usage) if isinstance(usage, Mapping) else {}
-    return {key: raw.get(key) for key in ("input_tokens","output_tokens","total_tokens","cached_input_tokens","reasoning_tokens")} | {"source":raw.get("source") or "unavailable"}
+    raw = (
+        asdict(usage)
+        if is_dataclass(usage)
+        else dict(usage) if isinstance(usage, Mapping) else {}
+    )
+    return {
+        key: raw.get(key)
+        for key in (
+            "input_tokens",
+            "output_tokens",
+            "total_tokens",
+            "cached_input_tokens",
+            "reasoning_tokens",
+        )
+    } | {"source": raw.get("source") or "unavailable"}
 
 
 def _emit_dispatch(turn, event_type, payload):
-    if turn.runtime_event_sink is not None: turn.runtime_event_sink(event_type, payload)
+    if turn.runtime_event_sink is not None:
+        turn.runtime_event_sink(event_type, payload)
 
 
 def _producer_response(result) -> ProducerResponse:
@@ -182,7 +287,9 @@ def run_provider_coro_sync(awaitable):
         asyncio.get_running_loop()
     except RuntimeError:
         return asyncio.run(awaitable)
-    raise RuntimeError("Synchronous provider execution cannot run inside an active event loop; use the async API.")
+    raise RuntimeError(
+        "Synchronous provider execution cannot run inside an active event loop; use the async API."
+    )
 
 
 def _step_context(
@@ -252,7 +359,9 @@ def _operation_context(request: OperationRequest) -> ProviderTurnContext:
     )
 
 
-def _resume_rendered_prompt_text(context: object, *, turn_kind: str, attempt: int) -> str | None:
+def _resume_rendered_prompt_text(
+    context: object, *, turn_kind: str, attempt: int
+) -> str | None:
     cursor = getattr(context, "_provider_attempt_resume_cursor", None)
     if not isinstance(cursor, dict):
         return None
@@ -268,7 +377,9 @@ def _resume_rendered_prompt_text(context: object, *, turn_kind: str, attempt: in
     return prompt_text if isinstance(prompt_text, str) else None
 
 
-def _with_failed_turn_snapshot(exc: WorkflowExecutionError, result: ProviderTurnResult) -> WorkflowExecutionError:
+def _with_failed_turn_snapshot(
+    exc: WorkflowExecutionError, result: ProviderTurnResult
+) -> WorkflowExecutionError:
     failure_context = exception_failure_context(exc)
     if failure_context is None:
         return exc
@@ -277,8 +388,13 @@ def _with_failed_turn_snapshot(exc: WorkflowExecutionError, result: ProviderTurn
     if failure_context.details.get("provider_failure_stage") != "outcome_contract":
         return exc
     details = dict(failure_context.details)
-    details.setdefault("provider_raw_output_sha256", hashlib.sha256(result.raw_text.encode("utf-8")).hexdigest())
-    details.setdefault("provider_raw_output_excerpt", _bounded_output_excerpt(result.raw_text))
+    details.setdefault(
+        "provider_raw_output_sha256",
+        hashlib.sha256(result.raw_text.encode("utf-8")).hexdigest(),
+    )
+    details.setdefault(
+        "provider_raw_output_excerpt", _bounded_output_excerpt(result.raw_text)
+    )
     session_payload = _session_payload(result.session)
     if session_payload is not None:
         details.setdefault("failed_provider_session", session_payload)
