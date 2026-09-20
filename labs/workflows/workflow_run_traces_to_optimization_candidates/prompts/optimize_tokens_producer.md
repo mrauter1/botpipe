@@ -1,3 +1,7 @@
+## Durable producer result
+
+After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+
 # Optimize Tokens Producer
 
 ## Step Contract
@@ -31,10 +35,10 @@
 - Use trace-corpus token evidence only.
 - Do not claim preserved semantics unless the rationale is explicit.
 
-## Route Guidance
+## Outcome guidance
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
 - Use `token_candidates_ready` when grounded compression candidates exist.
 - Use `token_pass_not_applicable` when token optimization is disabled or not justified.

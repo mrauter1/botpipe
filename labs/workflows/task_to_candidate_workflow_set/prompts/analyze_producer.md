@@ -1,3 +1,7 @@
+## Durable producer result
+
+After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+
 # Analyze Candidate Workflows Producer
 
 ## Step Contract
@@ -58,16 +62,16 @@
 - Explicitly include the builder baseline in the comparison when it exists.
 - Make the posture explicit enough that a downstream strategy workflow can turn it into a final route without redoing candidate retrieval.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance for the verifier
+### Outcome guidance for the verifier
 - `candidate_workflows_analyzed`: the comparison is explicit, the builder baseline was considered, and the portfolio posture is justified clearly.
 - `needs_rework`: the same analysis boundary holds, but the matrix, gap analysis, or posture explanation needs local repair.
 - `needs_replan`: the framing, legal comparison boundary, or portfolio posture changed materially.
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Use `blocked` only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Out Of Scope
 

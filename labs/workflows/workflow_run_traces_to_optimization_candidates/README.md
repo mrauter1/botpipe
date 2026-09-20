@@ -1,163 +1,55 @@
-# `workflow_run_traces_to_optimization_candidates`
+# Workflow Run Traces To Optimization Candidates
 
-`workflow_run_traces_to_optimization_candidates` is a bundled authoring-only workflow that consumes runtime-owned trace evidence from completed runs and publishes candidate-only optimization artifacts plus `workflow_refinement_evidence.json`. It does not mutate the selected workflow source, does not run the selected workflow by default, and does not execute ablations.
+Turn selected workflow run traces into step-local and workflow-level optimization candidates without mutating the authoritative workflow.
 
-## Problem and value
+Canonical name: `workflow_run_traces_to_optimization_candidates`
+Aliases: `workflow-optimization-candidates`, `trace-to-optimization-candidates`
 
-- Problem solved: turn completed run evidence into explicit optimization candidates instead of scattered postmortem notes and ad hoc prompt tweaks.
-- Why it matters: once runtime observability is durable, the next leverage point is ranking where a workflow is weak and packaging proposed improvements without silently applying them.
-- Classification: reusable workflow building block.
-- Why Botpipe fits: the work needs deterministic evidence ingestion, verifier-gated candidate passes, and a publication receipt that proves the optimizer stayed candidate-only and non-mutating.
+## Durable function design
+
+`workflow.py` exports one ordinary Python function decorated with `@workflow`. Python controls phase order, optional passes, loops, and nested workflows. Each phase runs a producer and verifier through durable `Session` operations. Producers return `LabPhaseDraft`; each verifier returns a package-specific `LabPhaseOutcome` subclass from `contracts.py`, so domain evidence is typed before control flow consumes it.
+
+Every declared output is a required `Artifact`. Botpipe snapshots the provider-written file before the operation completes, and later phases read those immutable handles. A verifier may cite only captured artifact names. The final typed `LabWorkflowResult` carries the accepted handles in `artifacts`, convenience snapshot paths in `artifact_paths`, and unique candidate identifiers. When phases reuse an artifact name, the later accepted handle wins.
+
+The optimizer reads `Botpipe.inspect()` records and a captured callable/source manifest. Only observed operations receive metrics or candidate scores. Declared paths with no observations are published as evidence gaps. Every deterministic candidate cites the operation IDs that support it.
 
 ## Invocation
 
-- Lab path: `labs/workflows/workflow_run_traces_to_optimization_candidates/`
-- Discovery: lab workflow; copy or reference the workflow folder explicitly before running it by name.
-- Direct run:
+```python
+from botpipe import Botpipe
+from labs.workflows.workflow_run_traces_to_optimization_candidates import (
+    Params,
+    workflow_callable,
+)
 
-```bash
-botpipe run workflow_run_traces_to_optimization_candidates <task-id> \
-  --message "Rank the highest-leverage optimization targets for the release workflow." \
-  -wf selected_workflow release_candidate_to_go_no_go \
-  -wf task_title "Optimize release go/no-go workflow" \
-  -wf run_refs release-audit-123/run-20260426T120000Z-abcd1234 \
-  -wf run_statuses failed \
-  -wf run_statuses paused \
-  -wf route_tags needs_rework \
-  -wf route_tags blocked \
-  -wf history_limit 25 \
-  -wf top_k_steps 1 \
-  -wf optimization_depth cheap
+client = Botpipe(workspace=".")
+result = client.run(
+    workflow_callable, Params(...), request="Describe the requested outcome"
+)
 ```
 
-## Parameters
+Parameters are validated by the package-local Pydantic `Params` model before any operation starts. `request` contains the human-readable task or evidence request.
 
-- `selected_workflow` required.
-- `task_title` required.
-- `run_refs` optional and repeatable. `run_refs` uses `<task_id>/<run_id>`.
-- `run_statuses` optional and repeatable. `run_statuses` filter run-level terminal state.
-- `route_tags` optional and repeatable. `route_tags` filter step-level evidence inside otherwise eligible runs.
-- `history_limit` optional, default `25`.
-- `top_k_steps` optional, default `1`.
-- `optimization_depth` optional, one of `cheap`, `standard`, or `ablation`. Even `ablation` mode does not execute ablations here.
-- `include_adversarial_generation`, `include_token_optimization`, and `include_workflow_level_candidates` are optional booleans that short-circuit their passes explicitly when disabled.
-- `max_failure_scenarios`, `max_candidates_per_pass`, `focus`, `sponsor_role`, `desired_outcome`, and `constraints` are optional.
-- The published `workflow_optimization_scope.json` records `optimization_depth` and `max_candidates_per_pass` for prompt and publication semantics only; it does not authorize reruns, ablations, refinement execution, or source mutation.
+## Phases and evidence
 
-## Artifact Ownership
+| Phase | Required produced artifacts |
+| --- | --- |
+| `frame_observed_optimization` | `workflow_optimization_scope.json`, `observed_trace_corpus.json`, `selected_workflow_source_manifest.json` |
+| `rank_observed_targets` | `step_optimization_priority_report.json`, `step_trace_metrics.json` |
+| `mine_observed_failures` | `workflow_failure_scenarios.json` |
+| `optimize_producer_contracts` | `producer_prompt_optimization_candidates.json` |
+| `optimize_verifier_rubrics` | `verifier_rubric_optimization_candidates.json` |
+| `optimize_tokens` | `token_optimization_candidates.json` |
+| `generate_adversarial_cases` | `adversarial_case_candidates.json` |
+| `optimize_workflow_boundary` | `workflow_level_optimization_candidates.json` |
+| `package_validated_candidates` | `workflow_optimization_scorecard.json`, `optimization_next_actions.md` |
 
-The optimizer uses deterministic helpers to prepare trace corpora, step metrics, source manifests, and failure-scenario seeds.
-The optimizer uses deterministic helpers in `stdlib/optimization.py` to capture selected-workflow context, finalize optional-pass artifacts, and validate the scorecard publication surface.
-LLM producers author failure and candidate artifacts. Workflow handlers keep optimizer-only route and packaging policy local.
-Workflow handlers validate accepted LLM-authored artifacts and leave them in place; they do not deterministically rewrite them.
+Producer and verifier prompts remain phase-specific. `accepted` advances, while `needs_rework` repeats the phase with structured feedback and its previous artifact snapshots. `needs_replan` returns control to the phase's declared target through a workflow-owned Python loop. `question` and `blocked` suspend with `ask()` and retry the phase with the operator's `input_answer`; `failed` rejects the phase. No route table executes these outcomes.
 
-## Artifacts
+## Inspection and replay
 
-Frame artifacts:
+The journal records prompt reads, provider results, typed outcomes, usage, artifact dependencies, and operation timing. Replay uses the committed typed results and artifact snapshots. Source inspection reports dynamic topology and does not claim that unvisited Python branches executed.
 
-- `selected_workflow_capability.json`
-- `selected_workflow_authoring_surface.json`
-- `selected_workflow_decomposition_surface.json`
-- `selected_workflow_source_manifest.json`
-- `workflow_optimization_scope.json`
-- `workflow_optimization_trace_corpus.json`
-- `excluded_run_report.json`
+## Validation
 
-Analysis and candidate artifacts:
-
-- `step_trace_metrics.json`
-- `step_optimization_priority_report.json`
-- `workflow_failure_scenario_seeds.json`
-- `workflow_failure_scenarios.json`
-- `producer_prompt_optimization_candidates.json`
-- `verifier_rubric_optimization_candidates.json`
-- `token_optimization_candidates.json`
-- `adversarial_case_candidates.json`
-- `workflow_level_optimization_candidates.json`
-
-Publication artifacts:
-
-- `workflow_optimization_scorecard.json`
-- `workflow_refinement_evidence.json`
-- `workflow_optimization_packet.md`
-- `optimization_publication_receipt.json`
-
-## Topology
-
-Ordered step sequence:
-
-1. `frame`
-2. `rank_targets`
-3. `mine_failures`
-4. `optimize_producer`
-5. `optimize_verifier_rubric`
-6. `optimize_tokens`
-7. `adversarial_cases`
-8. `workflow_level`
-9. `package`
-
-Supported `pairs` subsets must be ordered prefixes only.
-
-### Route grammar
-
-Helper routes:
-- `question` when provider questions are allowed by the interaction policy
-- question routes use `outcome.route_fields.questions`; blocked and failed routes use nullable `outcome.route_fields.reason`
-
-Application routes:
-- workflow-specific routes such as `input_prepared`, `workflow_selected`, `optimization_candidates_ranked`, and `package_ready`
-
-Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem
-
-## Step-local optimization phase
-
-- `frame` resolves the selected workflow, writes selected-workflow snapshots, captures `selected_workflow_source_manifest.json`, filters eligible runs, excludes historical runs missing Plan-1 observability, and writes the trace corpus.
-- `rank_targets` combines deterministic metrics with LLM attribution to rank highest-leverage upstream steps rather than downstream symptoms.
-- `mine_failures` consumes deterministic failure-scenario seeds and turns them into explicit producer-authored failure scenarios.
-- `optimize_producer` proposes producer-side candidates only.
-- `optimize_verifier_rubric` is one merged acceptance-function pass covering verifier prompt, rubric, and route-metadata pressure.
-- `optimize_tokens` proposes token reductions and classifies them by risk instead of treating compression as automatically safe.
-- `adversarial_cases` proposes eval-case candidates only; it does not publish or run an eval suite.
-
-## Workflow-level optimization phase
-
-- `workflow_level` runs after local passes and proposes cross-step candidates such as artifact handoff changes, route-metadata updates, context rendering changes, or workflow-parameter adjustments.
-- `package` validates candidate artifacts, verifies the selected workflow source manifest is unchanged, writes the scorecard and packet, and publishes `workflow_refinement_evidence.json`.
-
-## Failure Scenario Seeds
-
-`workflow_failure_scenario_seeds.json` is deterministic input. `workflow_failure_scenarios.json` is the final producer-authored failure-scenario artifact.
-
-## Optimization Depth
-
-- All depths use existing traces only. This workflow does not execute target-workflow reruns, ablations, or refinement runs.
-- `cheap`: existing traces only; concise candidate generation.
-- `standard`: existing traces only; deeper LLM cross-checking; no reruns.
-- `ablation`: ablation planning mode only; no ablation execution.
-
-## Candidate Budget
-
-`max_candidates_per_pass` is a soft prompt budget. It is not a schema limit and is not deterministically enforced. Verifiers may treat over-budget output as a focus concern, but the workflow does not reject solely on candidate count.
-
-## Refinement handoff
-
-- `workflow_refinement_evidence.json` is the explicit handoff into `workflow_and_eval_to_refined_workflow_package`.
-- Optimization artifacts are candidate-only. They are prioritization and diagnosis input, not proof of improvement.
-- `optimization_ablation_results`, when present from a later workflow, are stronger evidence than candidate estimates.
-- `adversarial_case_candidates` should usually feed `workflow_to_eval_suite` before prompt or workflow promotion.
-
-## Non-mutation guarantee
-
-- The optimizer writes all outputs under its own workflow folder.
-- It does not edit the selected workflow package.
-- It captures `selected_workflow_source_manifest.json` during `frame` and revalidates that manifest during `package`.
-- If the manifest changes, publication fails instead of silently proceeding.
-
-## Validation commands
-
-```bash
-pytest -q tests/unit/test_optimization_helpers.py
-pytest -q tests/runtime/test_workflow_run_traces_to_optimization_candidates.py
-pytest -q tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py
-pytest -q tests/test_architecture_baseline_docs.py
-```
+`tests/test_labs.py` imports and resolves every labs manifest, stages every package with `FakeProvider`, checks typed accepted outcomes, and verifies that all required artifacts were captured.

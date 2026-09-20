@@ -1,175 +1,122 @@
-"""Packaged Ralph-loop workflow."""
+"""Durable, imperative Ralph loop."""
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from typing import Literal
 
-from botpipe import FINISH, Md, Prompt, Route, Session, Workflow, Worklist, produce_verify_step
-from botpipe.core import Artifact
+from pydantic import BaseModel, ConfigDict
+
+from botpipe import Artifact, Session, Worklist, workflow
 
 
-class RalphLoop(Workflow):
-    """Plan a repository change into work items, then implement each item."""
+class ReviewDecision(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    verdict: Literal["accepted", "needs_rework"]
 
-    name = "ralph_loop"
 
-    class Input(BaseModel):
-        request: str
+PLAN = """
+Read the supplied request and inspect the repository.
+If a previous plan-review artifact is supplied, address every required change;
+do not re-emit a rejected plan unchanged.
 
-    work = Artifact.json(
-        "{{ workflow.folder }}/work.json",
-        name="work",
-        required=True,
-    )
-    plan_review = Md(
-        "plan_review",
-        path="{{ workflow.folder }}/plan_review.md",
-        required=False,
-    )
+Write work.json with the complete implementation plan, ordered into independently
+implementable items. Give each item a stable, unique id and acceptance checks.
+Use this structure, with new items initially marked planned:
+{
+  "goal": "The requested outcome",
+  "items": [
+    {
+      "id": "item-1",
+      "title": "Short imperative title",
+      "status": "planned",
+      "goal": "What to implement",
+      "acceptance_checks": ["What must be true"]
+    }
+  ]
+}
+""".strip()
 
-    items = Worklist.from_artifact(
-        name="item",
-        artifact=work,
-        collection="items",
-        item_id="id",
-        title="title",
-        status="status",
-    )
+REVIEW_PLAN = """
+Verify the supplied work.json against the original request and repository.
+Accept only if it fully covers the request, is ordered, and each item is
+independently implementable with concrete acceptance checks.
 
-    plan_session = Session.run()
-    plan_verifier_session = Session.run()
-    item_session = Session.work_item(items)
+Write plan_review.md with your decision and exact required rework, if any.
+Return a structured object whose verdict is accepted or needs_rework.
+""".strip()
 
-    plan = produce_verify_step(
-        session=plan_session,
-        verifier_session=plan_verifier_session,
-        reads=[plan_review],
-        producer_prompt=Prompt.inline(
-            """
-            Read {{ message }}. Inspect the repository.
+IMPLEMENT = """
+Read the supplied work.json and current item's complete payload.
+If a previous implementation-review artifact is supplied, address every blocking
+finding before making unrelated changes.
 
-            If plan_review.md exists, read it first. If it contains
-            `needs_rework` or required rework, update work.json to address
-            every listed issue. Do not re-emit the prior plan unchanged.
+Implement this item completely and correctly in the repository. Edit files,
+add or update tests as needed, run validation, and fix failures.
+""".strip()
 
-            Review path:
-            {{ workflow.folder }}/plan_review.md
+REVIEW_IMPLEMENTATION = """
+Independently verify the repository implementation for the supplied current item.
+Do not rely on the producer's summary or claimed validation. Inspect work.json,
+the item payload, repository diff, source, tests, artifacts, and command output.
+Accept only if the item is correctly and completely implemented with no
+remaining gaps against its goal and acceptance checks.
 
-            Write work.json with a complete implementation plan decomposed into
-            independently implementable items.
+Write implementation_review.md at its declared item-specific path, including
+your decision and exact rework instructions if rejected. Return a structured
+object whose verdict is accepted or needs_rework.
+""".strip()
 
-            Shape:
-            {
-              "goal": "The requested outcome",
-              "items": [
-                {
-                  "id": "item-1",
-                  "title": "Short imperative title",
-                  "status": "planned",
-                  "goal": "What to implement",
-                  "acceptance_checks": ["What must be true"]
-                }
-              ]
-            }
-            """.strip()
-        ),
-        verifier_prompt=Prompt.inline(
-            """
-            Verify work.json.
 
-            Accept only if it fully covers {{ message }}, is ordered, and
-            each item is independently implementable with acceptance checks.
+@workflow(name="ralph_loop", version="1")
+def ralph_loop(request: str):
+    work = Artifact.json("work.json", required=True)
+    plan_review = Artifact.md("plan_review.md", required=True)
+    planner = Session(key="planner")
+    plan_reviewer = Session(key="plan-reviewer")
+    feedback = ()
 
-            Write plan_review.md with the decision and required rework, if any.
-            """.strip()
-        ),
-        producer_writes=[work],
-        verifier_writes=[
-            plan_review,
-        ],
-        routes={
-            "accepted": Route.to(
-                "implement",
-                required_writes=["work", "plan_review"],
-            ),
-            "needs_rework": Route.to(
-                "plan",
-                handoff=(
-                    "The verifier rejected the plan. Read "
-                    "{{ workflow.folder }}/plan_review.md and address every "
-                    "required rework item before rewriting work.json."
-                ),
-                required_writes=["plan_review"],
-            ),
-        },
-    )
+    while True:
+        plan = planner.run(PLAN, input=request, reads=feedback, writes=(work,))
+        review = plan_reviewer.run(
+            REVIEW_PLAN,
+            input=request,
+            reads=(plan.artifacts.work,),
+            writes=(plan_review,),
+            returns=ReviewDecision,
+        )
+        if review.value.verdict == "accepted":
+            break
+        feedback = (review.artifacts.plan_review,)
 
-    implement = produce_verify_step(
-        scope=items,
-        session=item_session,
-        requires=[plan.work],
-        verifier_requires=[plan.work],
-        producer_prompt=Prompt.inline(
-            """
-            Read work.json and the current item.
+    items = Worklist.from_artifact(plan.artifacts.work, collection="items")
+    for item in items:
+        session = Session.work_item(item)
+        item_review = Artifact.md(
+            f"items/{item.dir_key}/implementation_review.md",
+            required=True,
+        )
+        feedback = ()
+        while True:
+            session.run(
+                IMPLEMENT,
+                input=item.payload,
+                reads=(items.artifact, *feedback),
+            )
+            review = session.run(
+                REVIEW_IMPLEMENTATION,
+                input=item.payload,
+                reads=(items.artifact,),
+                writes=(item_review,),
+                returns=ReviewDecision,
+            )
+            if review.value.verdict == "accepted":
+                items.complete(item)
+                break
+            feedback = (review.artifacts.implementation_review,)
 
-            Current item:
-            - id: {{ item.id }}
-            - title: {{ item.title }}
-            - payload: {{ item.payload }}
+    return items.artifact
 
-            If implementation_review.md exists for the current item, read it
-            first. If it contains NEEDS_REWORK or blocking findings, address
-            every listed finding before making unrelated changes.
 
-            Review path:
-            {{ workflow.folder }}/items/{{ item.dir_key }}/implementation_review.md
+RalphLoop = ralph_loop
 
-            Implement this item completely and correctly in the repository.
-            Edit files, add or update tests, run validation, and fix failures.
-            """.strip()
-        ),
-        verifier_prompt=Prompt.inline(
-            """
-            Verify the repository implementation for the current item.
-
-            Independently verify the repository state. Do not rely on the
-            producer's summary or claimed validation. Inspect source, tests,
-            artifacts, and command output yourself.
-
-            Check work.json, the item payload, repo diff, source files, tests,
-            and relevant command output.
-
-            Accept only if the item is correctly and completely implemented
-            with no remaining gaps.
-
-            Write implementation_review.md with the decision and exact rework
-            instructions if rejected.
-            """.strip()
-        ),
-        verifier_writes=[
-            Md(
-                "implementation_review",
-                path="{{ workflow.folder }}/items/{{ item.dir_key }}/implementation_review.md",
-                required=True,
-            ),
-        ],
-        routes={
-            "accepted": Route.complete_and_advance(
-                "implement",
-                exhausted=FINISH,
-                required_writes=["implementation_review"],
-            ),
-            "needs_rework": Route.to(
-                "implement",
-                handoff=(
-                    "The verifier rejected item {{ item.id }}. Read "
-                    "{{ workflow.folder }}/items/{{ item.dir_key }}/implementation_review.md "
-                    "and address every required change before continuing."
-                ),
-                required_writes=["implementation_review"],
-            ),
-        },
-    )
-
-    entry = plan
+__all__ = ["RalphLoop", "ReviewDecision", "ralph_loop"]

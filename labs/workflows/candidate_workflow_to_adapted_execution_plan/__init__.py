@@ -1,6 +1,4 @@
-"""Candidate-workflow-to-adapted-execution-plan package."""
-
 from .params import Params
-from .workflow import CandidateWorkflowToAdaptedExecutionPlan
+from .workflow import CandidateWorkflowToAdaptedExecutionPlan, workflow_callable
 
-__all__ = ["CandidateWorkflowToAdaptedExecutionPlan", "Params"]
+__all__ = ["CandidateWorkflowToAdaptedExecutionPlan", "Params", "workflow_callable"]

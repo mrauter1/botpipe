@@ -1,3 +1,3 @@
-from .flow import Params, WebGameGoalBuilderWorkflow
+from .flow import ImageToGameResult, Params, WebGameGoalBuilderWorkflow, image_to_game
 
-__all__ = ["WebGameGoalBuilderWorkflow", "Params"]
+__all__ = ["ImageToGameResult", "Params", "WebGameGoalBuilderWorkflow", "image_to_game"]

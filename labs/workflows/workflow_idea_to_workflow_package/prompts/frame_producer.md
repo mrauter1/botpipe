@@ -1,3 +1,7 @@
+## Durable producer result
+
+After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+
 # Frame Candidate Producer
 
 ## Step Contract
@@ -46,16 +50,16 @@
 - The brief must explain why the chosen addition matters, who would sponsor it, why Botpipe is a fit, and what terminal outcome it should produce.
 - The artifacts must stay consistent with the current repository architecture and not rely on retired pre-greenfield source-tree paths.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance for the verifier
+### Outcome guidance for the verifier
 - `candidate_selected`: the comparison is complete, explicit, and supports one choice.
 - `needs_rework`: the same framing boundary still holds, but the comparison or brief is incomplete or weak.
 - `needs_replan`: the candidate set or selection framing is materially wrong.
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only for true intent gaps, missing prerequisites, or unrecoverable contradictions.
+- Use `blocked` only when a missing prerequisite or irreconcilable contradiction prevents safe progress.
 
 ## Out Of Scope
 

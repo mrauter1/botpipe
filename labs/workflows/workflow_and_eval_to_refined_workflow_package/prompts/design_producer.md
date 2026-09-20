@@ -1,3 +1,7 @@
+## Durable producer result
+
+After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+
 # Design Refinement Plan Producer
 
 ## Step Contract
@@ -65,16 +69,16 @@
 - Keep the candidate surface scoped to the selected workflow boundary and avoid hidden runtime support.
 - Make the guardrails concrete enough that build and evaluation can detect drift instead of inferring it.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance for the verifier
+### Outcome guidance for the verifier
 - `refinement_plan_designed`: the strategy, change plan, and guardrails are explicit enough for implementation.
 - `needs_rework`: the same planning boundary still holds, but the planning artifacts need local repair.
 - `needs_replan`: planning showed the selected workflow, evidence interpretation, or acceptance boundary changed materially.
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Use `blocked` only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Out Of Scope
 

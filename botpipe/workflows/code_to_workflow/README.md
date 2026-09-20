@@ -1,5 +1,10 @@
-# Code To Workflow
+# Code to Workflow
 
-`code_to_workflow` reads the current workspace, captures bounded source and trace evidence, and asks Codex to produce a runnable Botpipe workflow under `.botpipe/workflows/<generated_workflow_name>/`.
+`code_to_workflow(request, generated_workflow_name=...)` captures a bounded
+source manifest and trace corpus, distills observable behavior, designs an
+imperative durable workflow, builds it, validates coverage and discovery, and
+publishes a receipt.
 
-The workflow exposes only one optional parameter, `generated_workflow_name`. All source scope, behavior focus, and validation intent should be described in the run message.
+Each stage has an independent typed verifier. Local rework repeats the current
+stage; design failures return to behavior distillation; build failures can
+return to design with the build review as explicit feedback.

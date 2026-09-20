@@ -1,3 +1,7 @@
+## Durable producer result
+
+After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+
 # Implement Refined Workflow Producer
 
 ## Step Contract
@@ -61,16 +65,16 @@
 - Keep the candidate surface aligned with `workflow_change_plan` and `regression_guardrails`.
 - Make the changed file list explicit enough that the verifier and publish step can detect drift.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance for the verifier
+### Outcome guidance for the verifier
 - `workflow_refinement_applied`: the candidate surface and build artifacts are complete and aligned for evaluation.
 - `needs_rework`: the same implementation boundary still holds, but the candidate files or build artifacts need local repair.
 - `needs_replan`: implementation exposed a material change to the selected workflow boundary or accepted plan.
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Use `blocked` only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Out Of Scope
 

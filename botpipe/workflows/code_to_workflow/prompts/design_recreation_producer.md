@@ -2,12 +2,12 @@ Goal:
 Design a Botpipe workflow that recreates the behavior inventory with equivalent externally observable behavior.
 
 Context:
-- Request: {{ message }}
-- Invocation contract: {{ workflow.folder }}/invocation_contract.json
-- Behavior inventory: {{ workflow.folder }}/behavior_inventory.json
-- Behavior report: {{ workflow.folder }}/behavior_inventory.md
-- Trace notes: {{ workflow.folder }}/trace_pattern_notes.md
-- Botpipe workflow authoring skill: {{ package.folder }}/skills/botpipe-workflow-autoring.md
+- Request: the supplied request
+- Invocation contract: invocation_contract.json
+- Behavior inventory: behavior_inventory.json
+- Behavior report: behavior_inventory.md
+- Trace notes: trace_pattern_notes.md
+- Botpipe workflow authoring skill: the packaged Botpipe workflow authoring guidance
 - Botpipe authoring examples may be provided as readable artifacts.
 - If design_review.md exists, read it first and address every required correction.
 
@@ -26,7 +26,7 @@ Required `coverage_map.json` shape:
     {
       "behavior_id": "behavior-1",
       "status": "implemented",
-      "target": "generated step, artifact, route, prompt, or validation",
+      "target": "generated function, artifact, branch, prompt, or validation",
       "evidence": ["design or validation references"],
       "reason": "required when status is unsupported"
     }
@@ -35,7 +35,7 @@ Required `coverage_map.json` shape:
 
 Constraints:
 - Use the public `botpipe` authoring surface for generated workflow design.
-- Apply the Botpipe workflow authoring skill, especially its provider-heavy, session-design, route, trace, and validation guidance.
+- Apply the Botpipe workflow authoring skill, especially its provider-turn, session-design, control-flow, trace, and validation guidance.
 - Keep generated output under `.botpipe/workflows/<generated_workflow_name>/`.
 - Prefer provider-heavy producer/verifier steps where semantic reasoning is required.
 - Use deterministic Python only for narrow bootstrap, validation, and publication duties.

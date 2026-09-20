@@ -1,3 +1,7 @@
+## Durable producer result
+
+After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+
 # Package Workflow Eval Suite Producer
 
 ## Step Contract
@@ -73,16 +77,16 @@
 - Keep `case_count`, `case_ids`, `case_kinds`, and `covered_expected_artifacts` aligned with the designed manifest.
 - Make the next action concrete enough that another operator could continue without re-deriving the suite.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance for the verifier
+### Outcome guidance for the verifier
 - `workflow_eval_suite_ready`: the suite package, summary, and next action are complete and aligned for publication.
 - `needs_rework`: the same evaluation-suite boundary still holds, but the package artifacts need local repair.
 - `needs_replan`: packaging revealed that the evaluation surface changed materially and case design must be revisited.
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Use `blocked` only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Out Of Scope
 

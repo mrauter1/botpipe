@@ -1,4 +1,4 @@
 from .params import Params
-from .workflow import IncidentToHardeningProgram
+from .workflow import IncidentToHardeningProgram, workflow_callable
 
-__all__ = ["Params", "IncidentToHardeningProgram"]
+__all__ = ["IncidentToHardeningProgram", "Params", "workflow_callable"]

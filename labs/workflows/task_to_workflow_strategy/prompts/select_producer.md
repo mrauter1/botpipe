@@ -1,3 +1,7 @@
+## Durable producer result
+
+After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+
 # Select Strategy Producer
 
 ## Step Contract
@@ -59,16 +63,16 @@
 - `material_gap` -> `create_new`
 - Justify `create_new` only when the child package already proved the material gap is durable enough that reuse, composition, and adaptation are not credible.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance for the verifier
+### Outcome guidance for the verifier
 - `strategy_selected`: the child candidate package was consumed explicitly, the builder baseline remains visible, and one route plus downstream workflow set is justified clearly.
 - `needs_rework`: the same selection boundary holds, but the final route rationale or recommended workflow set needs local repair.
 - `needs_replan`: the framing, legal route set, or adopted child candidate package changed materially.
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Use `blocked` only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Out Of Scope
 

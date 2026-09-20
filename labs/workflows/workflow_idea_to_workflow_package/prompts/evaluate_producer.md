@@ -1,3 +1,7 @@
+## Durable producer result
+
+After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+
 # Evaluate Package Producer
 
 ## Step Contract
@@ -57,12 +61,12 @@
 - Name concrete validation commands or compile checks, even if they fail or are deferred.
 - Call out missing proof explicitly instead of hiding it.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance for the verifier
+### Outcome guidance for the verifier
 - `evaluation_passed`: verification evidence and rollback evidence are strong enough for publication.
 - `needs_rework`: the same design still holds, but the built workflow or evidence needs local repair.
 - `needs_replan`: evaluation proves the design boundary itself is wrong.

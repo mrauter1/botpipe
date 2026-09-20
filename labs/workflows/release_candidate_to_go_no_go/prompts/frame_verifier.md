@@ -1,3 +1,7 @@
+## Durable verifier outcome
+
+Return a JSON result matching the injected schema. Use `accepted` when the artifacts meet the positive phase condition described below, `needs_rework` when the same phase can be repaired, `needs_replan` when an accepted earlier plan must be revisited, `question` or `blocked` when operator input is required, and `failed` for a terminal domain failure. The phase labels below describe semantic checks; do not return old route labels as the `outcome`. Cite only artifact names supplied by the runtime.
+
 # Frame Release Verifier
 
 ## Step Contract
@@ -25,10 +29,10 @@
 
 ### Write policy
 - Do not modify files.
-- Return exactly one `Outcome` that satisfies the runtime schema.
+- Return exactly one typed JSON result that satisfies the runtime schema.
 
 ### Required outcome structure
-- The runtime injects the legal routes and payload schema.
+- The runtime injects the typed output schema.
 - Your payload must satisfy the runtime schema and use artifact names, not prose-only evidence.
 - Populate:
 - `summary`
@@ -42,12 +46,12 @@
 - Treat missing blocker criteria, rollback expectations, or evidence-source expectations as real framing defects.
 - Keep the runtime/provider boundary crisp: the runtime injects the compact human-readable step contract, while prompt templates own the operational guidance and raw provider output never re-enters prompts.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route selection rules
+### Outcome selection rules
 - Choose `release_framed` only if the release trigger, target environment, sponsor goal, decision criteria, and evidence intake expectations are explicit and mutually consistent.
 - Choose `needs_rework` when the same framing boundary still holds and the artifacts can be repaired locally.
 - Choose `needs_replan` when the release boundary, go/no-go criteria, or evidence surface changed materially enough that this work item must be reframed.

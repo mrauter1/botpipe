@@ -1,3 +1,7 @@
+## Durable producer result
+
+After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+
 # Design Package Producer
 
 ## Step Contract
@@ -68,16 +72,16 @@
 - Reuse the existing scaffold contract from `runtime_cli_module`; do not invent a hidden generator layer.
 - Make rework vs replan rules explicit and tied to role, artifact, and acceptance boundaries.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance for the verifier
+### Outcome guidance for the verifier
 - `design_accepted`: the design is implementation-ready.
 - `needs_rework`: the same design boundary holds, but the spec or prompt matrix needs local correction.
 - `needs_replan`: the chosen addition or authoring boundary changed materially.
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only for genuine missing intent, blocked prerequisites, or unrecoverable contradictions.
+- Use `blocked` only when a missing prerequisite or irreconcilable contradiction prevents safe progress.
 
 ## Out Of Scope
 

@@ -1,11 +1,12 @@
-"""Workflow-specific parameter model for the adaptation-planning building block."""
+"""Typed invocation parameters."""
 
 from __future__ import annotations
 
 from botpipe_optimizer import SelectedWorkflowTaskFramingWithEvidenceParameters
 
+
 class Params(SelectedWorkflowTaskFramingWithEvidenceParameters):
-    """Invocation contract for ``candidate_workflow_to_adapted_execution_plan``."""
+    pass
 
 
 __all__ = ["Params"]

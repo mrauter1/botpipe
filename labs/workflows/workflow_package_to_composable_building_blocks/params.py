@@ -1,25 +1,23 @@
-"""Workflow-specific parameter model for the decomposition building block."""
+"""Typed invocation parameters."""
 
 from __future__ import annotations
 
-from botpipe_optimizer import SelectedWorkflowTaskFramingParameters
-from botpipe.stdlib import deduped_string_list_fields, required_text_fields
+import sys
 
 from pydantic import Field
 
+from botpipe_optimizer import SelectedWorkflowTaskFramingParameters
+
 
 class Params(SelectedWorkflowTaskFramingParameters):
-    """Invocation contract for ``workflow_package_to_composable_building_blocks``."""
-
     evidence_paths: list[str] = Field(default_factory=list)
-    target_test_command: str = "pytest -q"
-    max_candidate_building_blocks: int = Field(default=3, ge=1)
-
-    _validate_decomposition_required_text = required_text_fields(
-        "target_test_command",
-        error_message="value must be non-empty",
+    candidate_paths: list[str] = Field(default_factory=list)
+    target_test_argv: list[str] = Field(
+        default_factory=lambda: [sys.executable, "-m", "pytest", "-q"],
+        min_length=1,
     )
-    _normalize_evidence_paths = deduped_string_list_fields("evidence_paths")
+    validation_timeout: float = Field(default=300, gt=0)
+    max_candidate_building_blocks: int = Field(default=3, ge=1)
 
 
 __all__ = ["Params"]

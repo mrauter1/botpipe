@@ -1,4 +1,6 @@
 name = "devloop"
+function = "devloop"
+version = "1"
 title = "Devloop"
-description = "Plan, implement, and verify a software change through phased producer/verifier gates."
+description = "Plan, implement, test or document, and audit a change through imperative producer/verifier loops."
 aliases = ["default"]

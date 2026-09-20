@@ -1,3 +1,7 @@
+## Durable producer result
+
+After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+
 # Design Decomposition Plan Producer
 
 ## Step Contract
@@ -69,16 +73,16 @@
 - Use `decomposition_evidence_manifest`, `decomposition_request_brief`, and `decomposition_acceptance_criteria` as the authoritative extraction trigger and acceptance surface.
 - Keep runtime-owned metadata narrow; do not move the provider-facing plan into runtime-only abstractions.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance for the verifier
+### Outcome guidance for the verifier
 - `decomposition_plan_designed`: the extraction strategy, interface contracts, parent rewrite plan, and guardrails are explicit enough for implementation.
 - `needs_rework`: the same planning boundary still holds, but the plan artifacts need local repair.
 - `needs_replan`: the selected workflow, package set, or acceptance surface changed materially and framing must restart.
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Use `blocked` only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Out Of Scope
 

@@ -1,3 +1,7 @@
+## Durable producer result
+
+After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+
 # Workflow Level Producer
 
 ## Step Contract
@@ -10,7 +14,7 @@
 
 | Artifact | Direction | Notes |
 | --- | --- | --- |
-| `selected_workflow_capability` | Read | Canonical compiled workflow graph. |
+| `selected_workflow_capability` | Read | Canonical callable contract and dynamic source manifest. |
 | `selected_workflow_authoring_surface` | Read | Canonical editable surfaces. |
 | `selected_workflow_decomposition_surface` | Read | Cross-step surface and docs/tests. |
 | `workflow_optimization_scope` | Read | Requested depth and soft candidate budget. |
@@ -24,7 +28,7 @@
 - Read `workflow_optimization_scope.json`.
 - Apply `optimization_depth`.
 - Treat `max_candidates_per_pass` as a soft candidate budget.
-- Allowed targets include artifact handoff, route metadata, split/merge, prompt README, context rendering, session policy, workflow parameter, workflow code, eval gap, input quality gap, and operator process gap.
+- Allowed targets include artifact handoff, typed outcome criteria, split/merge, prompt README, context rendering, session policy, workflow parameter, workflow code, eval gap, input quality gap, and operator process gap.
 - Prefer the highest-leverage candidates. Do not pad the list. If you exceed the budget, explain why in the candidate rationale or summary.
 - Keep candidate-only language and note when refinement workflow or ablation would be required.
 
@@ -33,10 +37,10 @@
 - Only propose workflow-level changes when local fixes are insufficient or clearly downstream symptoms.
 - Do not claim workflow-level changes are proven improvements.
 
-## Route Guidance
+## Outcome guidance
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
 - Use `workflow_level_candidates_ready` when grounded workflow-level candidates exist.
 - Use `workflow_level_pass_not_applicable` when local changes or no-op packaging remain the right boundary.

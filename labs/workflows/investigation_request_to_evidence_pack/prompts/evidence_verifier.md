@@ -1,3 +1,7 @@
+## Durable verifier outcome
+
+Return a JSON result matching the injected schema. Use `accepted` when the artifacts meet the positive phase condition described below, `needs_rework` when the same phase can be repaired, `needs_replan` when an accepted earlier plan must be revisited, `question` or `blocked` when operator input is required, and `failed` for a terminal domain failure. The phase labels below describe semantic checks; do not return old route labels as the `outcome`. Cite only artifact names supplied by the runtime.
+
 # Assemble Evidence Pack Verifier
 
 ## Step Contract
@@ -29,7 +33,7 @@
 
 ### Write policy
 - Do not modify files.
-- Return exactly one `Outcome` that satisfies the runtime schema.
+- Return exactly one typed JSON result that satisfies the runtime schema.
 
 ### Required outcome structure
 - Populate:
@@ -47,12 +51,12 @@
 - Treat missing source inventory, coverage mapping, or explicit gap tracking as real defects in the durable handoff.
 - Keep the route decision anchored to the artifact set rather than to plausible prose-only explanations.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route selection rules
+### Outcome selection rules
 - Choose `evidence_pack_ready` only if the evidence pack traces inspected sources, covers the declared investigation objectives, records unresolved gaps explicitly, and keeps `evidence_pack_summary` consistent with the durable artifacts.
 - Choose `needs_rework` when the same evidence boundary still holds and the pack can be strengthened locally.
 - Choose `needs_replan` when the investigation boundary or evidence plan changed materially enough that framing must be revisited.

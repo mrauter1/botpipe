@@ -1,3 +1,7 @@
+## Durable producer result
+
+After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+
 # Build Package Producer
 
 ## Step Contract
@@ -63,12 +67,12 @@
 - The generated layout summary and build report must make the chosen shape obvious.
 - The build report must be sufficient for a verifier to check completeness without guessing.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance for the verifier
+### Outcome guidance for the verifier
 - `package_built`: the generated workflow files and build evidence are complete and consistent for the chosen shape.
 - `needs_rework`: the same design still holds, but the built files or evidence need local correction.
 - `needs_replan`: the accepted design cannot be implemented as written and must change materially first.

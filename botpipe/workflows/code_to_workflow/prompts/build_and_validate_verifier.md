@@ -19,7 +19,7 @@ Inspect:
 Accept with `build_validated` only if:
 - `flow.py` and `workflow.toml` exist in the generated workflow directory.
 - The generated workflow shape matches the accepted design.
-- The implementation follows the Botpipe workflow authoring skill's guidance for provider-heavy work, session boundaries, artifact handoffs, routes, public authoring APIs, and validation.
+- The implementation follows the Botpipe workflow authoring skill's guidance for provider work, session boundaries, artifact handoffs, Python branches, public authoring APIs, and validation.
 - The generated workflow implements the accepted session topology deliberately: shared sessions are used for dependent continuation where designed, and independent sessions have enough artifact/prompt context to work without hidden history.
 - Validation evidence is real, specific, and sufficient for the requested scope.
 - Botpipe can discover and compile the generated workflow from the target workspace. If an environment cannot run the CLI, inspect the generated authoring code for the same failure classes, including missing package-relative imports, unresolved artifact references, and simple helper artifacts used as shared workflow-level inputs.

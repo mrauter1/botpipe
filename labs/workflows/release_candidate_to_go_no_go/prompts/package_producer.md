@@ -1,3 +1,7 @@
+## Durable producer result
+
+After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+
 # Prepare Decision Package Producer
 
 ## Step Contract
@@ -51,16 +55,16 @@
 - Make blockers and conditions explicit instead of burying them in prose.
 - Preserve the exact recommendation vocabulary: `go`, `conditional_go`, or `no_go`.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance for the verifier
+### Outcome guidance for the verifier
 - `decision_package_ready`: the package and communications draft are complete and aligned to the assessed recommendation.
 - `needs_rework`: the same package boundary still holds, but the final package needs local repair.
 - `needs_replan`: package assembly shows that the assessment itself must change materially before publication.
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only for genuine missing prerequisites or irrecoverable contradictions.
+- Use `blocked` only when a missing prerequisite or irreconcilable contradiction prevents safe progress.
 
 ## Out Of Scope
 

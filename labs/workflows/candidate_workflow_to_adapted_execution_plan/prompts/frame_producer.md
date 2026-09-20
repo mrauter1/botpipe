@@ -1,3 +1,7 @@
+## Durable producer result
+
+After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+
 # Frame Adaptation Request Producer
 
 ## Step Contract
@@ -56,16 +60,16 @@
 - Keep the runtime/provider boundary crisp: the runtime injects the compact human-readable step contract, while prompt templates own the operational guidance and raw provider output never re-enters prompts.
 - Make the acceptance surface specific enough that the next step can assess fit, parameterization, and execution notes without silently widening the selected workflow boundary.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance for the verifier
+### Outcome guidance for the verifier
 - `adaptation_request_framed`: the selected workflow, task boundary, and adaptation success criteria are explicit enough for fit analysis.
 - `needs_rework`: the same framing boundary still holds, but the brief or criteria need local repair.
 - `needs_replan`: the task trigger, selected workflow, or execution boundary changed materially and framing must restart.
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only for genuine intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Use `blocked` only for genuine intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Out Of Scope
 

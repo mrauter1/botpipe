@@ -1,4 +1,4 @@
 from .params import Params
-from .workflow import ReleaseCandidateToGoNoGo
+from .workflow import ReleaseCandidateToGoNoGo, workflow_callable
 
-__all__ = ["Params", "ReleaseCandidateToGoNoGo"]
+__all__ = ["Params", "ReleaseCandidateToGoNoGo", "workflow_callable"]

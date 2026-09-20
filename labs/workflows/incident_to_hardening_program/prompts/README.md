@@ -1,56 +1,11 @@
-# Incident Hardening Prompts
+# Durable phase prompts
 
-## Shared README Boundary
+Each phase has a producer and verifier prompt. Python workflow code declares their order, immutable reads, and exact artifact writes. The runtime appends the input payload, artifact destinations, and typed JSON schema.
 
-- This README keeps the family-wide prompt contract in one place so individual prompt files can stay step-local.
-- Prompt files still own the step role, purpose, current work-item boundary, exact artifact read/write set, and any evidence or route guidance that changes the local decision.
-- Keep provider-facing operational guidance in prompt files, but keep repeated family-wide reminders here.
-- The runtime injects a compact human-readable step contract with required inputs, writable artifacts, route-specific required writes, expected output payload requirements, available routes, route metadata, optional route handoff, and optional retry feedback.
-- Provider raw output is runtime telemetry. It is persisted for logs, traces, extension events, debugging, and replay, but it is not rendered into provider prompts.
-- Provider prose is control metadata unless it is written into a declared artifact.
-- Verifier prompts return one JSON object through the selected route and step payload; they do not mutate artifacts unless the step contract says otherwise.
+The producer writes every declared artifact and returns a `LabPhaseDraft` with a summary, evidence notes, and any stable candidate identifiers. The verifier reads immutable artifact snapshots and returns `LabPhaseOutcome`:
 
-## Keep In Each Prompt
+- `accepted` when the phase-specific success condition is met;
+- `needs_rework` when the same phase can repair its artifacts;
+- `blocked` when a required prerequisite is absent.
 
-- role and step name
-- step purpose and current work-item boundary
-- exact artifacts to read, write, or leave untouched
-- step-specific evidence requirements, route reminders, and forbidden actions
-
-## Step Surface
-
-| Step | Prompt pair | Writes | Step-complete route |
-| --- | --- | --- | --- |
-| `frame_incident` | `frame_producer.md` / `frame_verifier.md` | `incident_scope_brief`, `response_objectives`, `evidence_intake_register` | `incident_framed` |
-| `assemble_evidence_pack` | `evidence_producer.md` / `evidence_verifier.md` | `incident_timeline`, `affected_surface`, `blast_radius`, `observability_gaps`, `evidence_gap_register` | `evidence_pack_ready` |
-| `rank_cause_hypotheses` | `analysis_producer.md` / `analysis_verifier.md` | `cause_hypothesis_ranking`, `immediate_mitigation_plan`, `validation_plan`, `incident_summary` | `hypotheses_ranked` |
-| `prepare_hardening_program` | `program_producer.md` / `program_verifier.md` | `hardening_program`, `hardening_backlog`, `follow_up_owners`, `stakeholder_communications_draft`, `incident_resolution_package` | `hardening_program_ready` |
-
-## Route Surface
-
-Helper routes:
-
-- `question` when provider questions are allowed by the interaction policy
-- question routes use `outcome.route_fields.questions`; blocked and failed routes use nullable `outcome.route_fields.reason`
-
-Application routes:
-
-- `inputs_prepared`
-- `incident_framed`
-- `evidence_pack_ready`
-- `hypotheses_ranked`
-- `hardening_program_ready`
-- `needs_rework`
-- `needs_replan`
-- `incident_package_published`
-
-Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
-
-## Verifier Payloads
-
-| Step | Payload |
-| --- | --- |
-| `frame_incident` | `IncidentFramingPayload` |
-| `assemble_evidence_pack` | `IncidentEvidencePayload` |
-| `rank_cause_hypotheses` | `IncidentHypothesisPayload` |
-| `prepare_hardening_program` | `IncidentHardeningProgramPayload` |
+Names such as `release_framed` or `strategy_selected` in older domain guidance describe the positive success condition. They are descriptive success conditions, not runtime control values. The verifier cites only artifacts supplied by the runtime. Provider output and artifact validation failures may receive bounded repair feedback through a new journaled turn.

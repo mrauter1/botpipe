@@ -1,381 +1,75 @@
 # Architecture
 
-This project is greenfield. The runtime keeps deterministic execution, package discovery, `workflow.toml` metadata-only behavior, `ctx.invoke_workflow(...)`, checkpoint/resume behavior, tracing, and provider/session boundaries while exposing one active public authoring surface.
-
-## Internal Layout
-
-The internal workflow kernel lives under:
-
-- `core/`
-- `runtime/`
-- `stdlib/`
-- `extensions/`
-
-The public authoring contract does not point workflow authors at internal modules.
-Public workflow code imports from `botpipe`.
-
-`botpipe` is the active public authoring surface:
-
-- `Workflow`
-- `step`, `produce_verify_step`, `workflow_step`, `python_step`
-- `Json`, `Md`, `Text`, `Raw`
-- `Prompt`, `Route`, `FINISH`, `SELF`
-
-Legacy aliases are intentionally removed from the active public contract; workflow authoring stays on the canonical `botpipe` surface.
-
-`botpipe.core` remains the internal and power-user kernel surface for strict runtime code and tests. It is not the default public authoring API.
-
-## Workflow Surfaces
-
-Botpipe has three first-class workflow discovery roots:
-
-- repo-local workflows under `{workspace}/workflows/`
-- workspace-local workflows under `{workspace}/.botpipe/workflows/`
-- package-installed workflows under `botpipe/workflows/`
-
-Resolution precedence is workspace-local, then repo-local, then package-installed. This lets `.botpipe/workflows/` override repository workflows, and repository workflows override packaged defaults.
-
-Repo-local workflows may be package directories or single files:
-
-```text
-{workspace}/workflows/
-  release_review/
-    flow.py or workflow.py
-    specs.py optional
-    workflow.toml optional
-    prompts/ optional
-    assets/ optional
-
-{workspace}/workflows/release_review.py
-```
-
-Package-installed workflows use package directories:
-
-```text
-botpipe/workflows/
-  release_review/
-    __init__.py
-    flow.py or workflow.py
-    specs.py optional
-    workflow.toml
-    README.md
-    prompts/
-    assets/
-```
-
-Workspace-local workflows may be package directories or single files:
-
-```text
-{workspace}/.botpipe/workflows/
-  release_review/
-    flow.py or workflow.py
-    specs.py optional
-    workflow.toml optional
-    prompts/ optional
-    assets/ optional
-
-{workspace}/.botpipe/workflows/release_review.py
-```
-
-`flow.py` is the preferred scaffold and documentation shape. `workflow.py` remains supported. Workspace-local single-file workflows are supported; package-installed single-file workflows are not.
-
-Workspace-local single Python file workflows remain first-class runnable entries.
-
-Workflow packages are still reusable building blocks. Package-installed workflows should re-export the main workflow class from package `__init__.py`, and package-installed workflows that export `Params` should include `"Params"` in `__all__`.
-
-`workflow.toml` is optional for execution and metadata-only when present. It is limited to human-facing fields such as `name`, `title`, `description`, and `aliases`. It does not define topology, prompts, transitions, parameters, route policy, artifacts, or execution semantics.
-
-Shallow workflow discovery stays import-free and scans only:
-
-- `botpipe/workflows/*/workflow.toml`
-- `botpipe/workflows/*/flow.py`
-- `botpipe/workflows/*/workflow.py`
-- `{workspace}/.botpipe/workflows/*/workflow.toml`
-- `{workspace}/.botpipe/workflows/*/flow.py`
-- `{workspace}/.botpipe/workflows/*/workflow.py`
-- `{workspace}/.botpipe/workflows/*.py`
-
-Deep inspection and execution may import and compile workflow modules. That richer seam reports compiled step contracts, parameters, prompt paths, support-file paths, and source metadata without widening `workflow.toml`.
-
-Route declarations are ordinary Python objects, not a string DSL. Dict transition shorthand still works, but richer public contracts use step-local `routes={...}` plus `Route.to(...)`.
-
-Validation is intentionally split across compile time and runtime. Compile time owns workflow topology, declared names, route legality, declared worklists, artifact-reference ambiguity, callback existence, and schema shape. Runtime owns worklist contents, generated boards, runtime-created prompt context, item-scoped artifact paths, provider failures, and semantic validation that depends on data created during the run.
-
-Everything is a route. The compiled route table is the only authority for provider legality, runtime legality, route visibility, route schemas, and route execution metadata. `GLOBAL` may define workflow-wide helper-route defaults, step-local routes override inherited routes by tag, and `Route.disabled()` suppresses inherited routes before provider-visible or runtime-available route sets are derived. Interactive-only routes such as default `question` and `blocked` are hidden in full-auto mode, while default `failed` remains provider-visible unless a workflow overrides or suppresses it.
-
-Worklists are lazy runtime resources. The compiler validates the declared worklist contract, but the engine does not require the backing source to exist at workflow start. Selection materialization happens when the run first touches the worklist through scoped execution, prompt rendering, session continuity, or explicit context access.
-
-Branch outcome and rendering boundaries normalize dictionary manifests to the
-existing `BranchManifest`/`BranchResult` types. Internal policy helpers use those
-types; custom outcome callbacks still receive the serialized dictionary payload
-through the existing callable-signature adapter. `all_done`, `all_settled`, and
-`any_done` retain their distinct policy names and evaluation order.
-
-SDK result construction and retention share one declared-write collector and one
-`ArtifactMap` converter. Each phase collects afresh: the collector resolves
-declarations against that phase's context, and does not track which attempt
-actually produced a file or provide a complete inventory of scoped outputs.
-
-## CLI Contract
-
-The public executable name is `botpipe`.
-
-The CLI remains message-first and workflow-reference oriented:
-
-```bash
-botpipe workflows list
-botpipe workflows show <workflow>
-
-botpipe run <workflow> "..." [--task <task-id>]
-botpipe resume <workflow> <task-id> [--run-id <run-id>]
-botpipe answer <workflow> <task-id> --answer "..." [--run-id <run-id>]
-
-botpipe runs list [--workflow <workflow>] [--task <task-id>] [--status <status>]
-botpipe runs show <workflow> <task-id> [--run-id <run-id>]
-botpipe logs <workflow> <task-id> [--run-id <run-id>] [--events|--trace|--raw]
-
-botpipe init workflow <name>
-```
-
-Workflow references may be names, files, modules, or explicit classes:
-
-```bash
-botpipe run release_review "Review this release" --task task-1
-botpipe run .botpipe/workflows/release_review.py "Review this release" --task task-1
-botpipe run .botpipe/workflows/release_review/flow.py:ReleaseReview "Review this release" --task task-1
-botpipe run botpipe.workflows.release_review.workflow:ReleaseReview "Review this release" --task task-1
-```
-
-There is no public raw execution mode. File and module refs resolve through the same workflow runtime path as named workflows rather than bypassing the engine.
-
-`botpipe run` is message-first, accepts `--message` for compatibility, generates a concise task id when `--task` is omitted, and accepts repeatable workflow-specific parameters through `-wf <name> <value>`.
-
-Mutating commands also accept generic runtime controls:
-
-- `--provider`
-- `--model`
-- `--model-effort`
-- `--max-steps` (`0` disables the step limit)
-
-## Provider Selection
-
-Public provider selection is typed and package-runtime-owned. The runtime discovers `botpipe.yaml` or `botpipe.config` from the user config directory and the repo root, then merges those layers with CLI overrides.
-
-Typed example:
-
-```yaml
-provider:
-  name: claude
-  model: claude-sonnet
-  model_effort: high
-  claude:
-    permission_strategy: inherit
-provider_policy:
-  default:
-    permissions:
-      mode: full_auto_sandboxed
-      disable_dangerous_bypass: true
-    sandbox:
-      enabled: true
-      required: true
-      mode: workspace_write
-      workspace:
-        filesystem:
-          allow_read: ["."]
-          allow_write: [".", "./build", "./dist"]
-          deny_read: ["./.env", "./secrets/**"]
-          deny_write: ["/etc", "/usr/local/bin"]
-        network:
-          enabled: true
-          mode: full
-  strict:
-    sandbox:
-      required: true
-      allowed_modes: ["read_only", "workspace_write"]
-runtime:
-  max_steps: 0
-```
-
-Contract:
-
-- `provider.name` selects the built-in backend, currently `codex` or `claude`
-- `provider.model` and `provider.model_effort` are generic typed overrides that target the selected provider
-- provider-specific blocks such as `provider.codex.*` and `provider.claude.*` remain typed config, not ad-hoc loader strings
-- `provider_policy.default` merges on top of the runtime-owned system policy baseline; `provider_policy.strict` validates the fully resolved per-turn policy
-- CLI overrides use `--provider`, `--model`, and `--model-effort`
-- provider construction is framework-owned and resolved from the typed provider name
-
-Provider policy is resolved against a concrete backend before provider
-execution. Backend capability gaps must be explicit: if the selected provider
-cannot enforce a requested control, Botpipe fails by default or records the gap
-only when provider-policy validation is configured to warn. For example, the
-current Codex emission surface does not enforce `deny_read` or domain-level
-network filters, while other backends may expose different controls.
-
-Built-in runtime adapters live under `runtime/providers/` and are selected only through `runtime/provider_backends.py`.
-
-CLI-backed providers now cross the runtime boundary through a shared layered seam:
-
-- `LLMProvider`: the existing semantic engine-facing surface
-- `RenderedLLMProvider`: shared runtime prompt rendering plus verifier/LLM outcome parsing
-- `ProviderTransport`: CLI transport only
-
-That means Codex and Claude transports receive only shared rendered turns and return only raw assistant text plus session metadata. They do not render workflow prompts, inject workflow contracts, or parse workflow outcome JSON themselves.
-
-The shared renderer injects a compact human-readable Runtime Step Contract with readable inputs, required inputs, writable artifacts, route-specific output requirements, explicit expected output payload requirements, available routes, route summaries, optional route handoff, and optional retry feedback.
-
-Provider raw output is runtime telemetry. It remains available to logs, traces, extension events, debugging, and replay, but it is not rendered back into provider prompts.
-
-Provider loading is not a public factory surface. Operators stay on typed config plus the generic CLI flags above.
-
-## Resumability
-
-Provider resumability is modeled as an opaque continuation token stored in `session_id`.
-
-Framework-owned persisted session payloads use canonical fields such as:
-
-- `provider`
-- `session_id`
-- `provider_metadata`
-- `model_override`
-- `effort_override`
-- `pending_clarification_note`
-- timestamps
-
-`session_id` is the only cross-provider continuation handle in the runtime model. Provider-specific extra state belongs under `provider_metadata`.
-
-Verifier and single-LLM turns remain strict runtime contracts: built-in CLI adapters must return machine-parseable JSON outcomes that the runtime validates locally before the workflow engine accepts them. Provider-specific continuation aliases do not leak into framework-owned session payloads.
-
-Sessions now distinguish slot, default continuity policy, and explicit runtime overrides:
-
-- `Session` names a provider conversation slot
-- `Continuity` defines the default reuse policy for that slot
-- `ctx.open_session(..., scope=...)` remains supported as an explicit runtime binding override
-
-`scope=` is not deprecated. `ctx.open_session(session)`, `ctx.open_session(session, scope="cluster-1")`, and positional `ctx.open_session(session, "cluster-1")` remain valid public behavior.
-
-Artifact contracts and provider-output contracts are separate:
-
-- artifact schema validates files written to disk
-- `expected_output_schema` validates `Outcome.payload`
-
-## Workspace Layout
-
-Runtime data lives under task, workflow, and run scopes:
-
-```text
-.botpipe/
-  tasks/
-    <task-id>/
-      task.json
-      request.md
-      messages.jsonl
-
-      wf_<workflow_name>/
-        workflow.json
-        runs/
-          <run-id>/
-            request.md
-            run.json
-            events.jsonl
-            checkpoint.json
-            sessions/
-            trace.jsonl
-            raw/
-            children.jsonl
-            parent.json
-```
-
-Semantics:
-
-- task scope stores shared task files plus the append-only `messages.jsonl` ledger
-- workflow scope stores persistent workflow-level state for one workflow on one task
-- run scope stores immutable request snapshots and run-local execution artifacts
-
-The task `request.md` is the latest rendered request snapshot for the task. Each run also stores its own immutable `request.md` snapshot at run start.
-
-`ctx.message` and `ctx.request.text` read the run-local `request.md` snapshot. Resume keeps using the persisted run-local snapshot instead of re-reading task-level request metadata or fresh CLI message text. Prompt-like surfaces use Jinja roots such as `{{ message }}`, `{{ input.<field> }}`, `{{ state.<field> }}`, and `{{ params.<field> }}` so request text, typed input, workflow state, and workflow configuration stay semantically distinct. This applies to file prompts, inline prompts, operation prompts, and workflow-step messages.
-
-## Runtime Observability
-
-Runtime observability is runtime-owned and enabled by default. Git tracking is attempted by default and automatically disabled with a warning when git is unavailable or unsafe to use; explicit required git tracking fails fast.
-
-- Runtime git tracking uses `git add --all` plus deterministic `botpipe: ...` commit messages.
-- The repository must be clean before a required git-tracked run or resume starts.
-- Git commits are the workspace replay boundary.
-- Botpipe does not classify changed paths for replay.
-- `trace.jsonl`, `git_tracking.jsonl`, `static_step_graph.json`, and runtime-owned `raw/` outputs are written without requiring workflow declarations.
-
-Normal runs write runtime-owned evidence under each run folder:
-
-- `trace.jsonl`
-- `git_tracking.jsonl`
-- `static_step_graph.json`
-- `raw/`
-
-`run.json` summarizes the runtime-owned tracing and git-tracking state.
-
-Strict run-metadata parsing is owned by `runtime.workspace` and shared by the
-runner and the public `botpipe.runtime.load_run_metadata(run)` inspection API.
-The public reader accepts a `RunRecord` or a run-directory string/`Path`, reads
-`run.json`, and validates its schema. A schema-less legacy object is normalized
-in memory without rewriting the file. Missing files, invalid JSON, and unsupported
-schemas raise errors. Non-object JSON now raises `WorkflowExecutionError` instead
-of the previous incidental `AttributeError`; schema-error labels are unchanged.
-
-Child-output metadata uses a strict, shallow merge of explicitly supplied fields.
-Unspecified status, pending-input, error, timestamp, and extension fields remain
-untouched; explicit `None` becomes JSON null. An empty patch performs no I/O.
-The merge uses the existing workspace writer's temporary-file, file-fsync, and
-replacement sequence. Read, serialization, or replacement errors propagate;
-serialization or replacement failure before replacement leaves the original
-contents intact and cleans up the temporary file on the handled error path.
-
-This is atomic file replacement for Botpipe-managed regular files, not a
-concurrent read-modify-write transaction or a multi-file durability guarantee.
-The writer does not fsync the parent directory or preserve inode identity,
-hardlink/symlink-target behavior, or file metadata such as permissions and xattrs.
-JSON values remain compatible, although Unicode may be escaped in the file.
-Workspace discovery and status updates retain their separate tolerant-loading
-semantics.
-
-Workflows do not declare `GitTracking` or `Tracing`; runtime observability is configured only through `botpipe.runtime.config`.
-
-`workflow_run_traces_to_optimization_candidates` consumes runtime-owned `run.json`, `events.jsonl`, `trace.jsonl`, `git_tracking.jsonl`, `static_step_graph.json`, and `raw/` evidence.
-
-The optimizer is a bundled authoring-only workflow:
-
-- it emits candidate-only optimization artifacts plus `workflow_refinement_evidence.json`
-- it does not mutate the selected workflow source
-- it does not run the selected workflow by default
-- it does not execute ablations by default
-
-## Recursive Operation
-
-The old `recursive_botpipe/` wrapper and template surface has been removed.
-Recursive or self-improving workflows should now use the normal Botpipe runtime
-surfaces directly: durable tasks, resumable runs, trace/event inspection,
-explicit workflow artifacts, and SDK/CLI parity. This keeps recursive operation
-inside the same execution model as ordinary workflows instead of maintaining a
-parallel wrapper contract.
-
-## Composition And Parity
-
-Sub-workflows are first-class. Runtime-backed contexts expose:
+Botpipe is a durable-functions runtime for trusted Python workflows.
+
+## The invariant
+
+Python owns control flow. Every material observation or external effect goes
+through a recorded Botpipe operation.
+
+The workflow body can use normal functions, conditions, loops, exceptions,
+nested workflows, and `parallel()`. Botpipe does not compile that code into a
+second state machine. Instead it assigns deterministic operation identities and
+replays committed results from a SQLite ledger.
+
+## Ledger and replay
+
+Each run records metadata, source fingerprints, operation intent and outcomes,
+provider sessions, human-input events, usage, and immutable artifact references.
+Files become durable before the ledger refers to them. A workspace lock protects
+one active run from another process.
+
+On replay, a completed operation returns its recorded result. A changed kind,
+scope, input, prompt, schema, or source raises a mismatch instead of silently
+doing different work. Workflow versions label intentional releases; they do not
+bypass source validation.
+
+The automatic fingerprint follows the workflow and referenced Python helpers
+and contracts. It is not an immutable process or environment snapshot: provider
+installations, external modules, environment values, and configuration semantics
+can change outside that source bundle. Authors should bump
+`@workflow(version=...)` when those dependencies change meaningfully and start a
+new run when the original environment cannot be reproduced.
+
+An operation that may have started an external effect but has no committed
+outcome is `interrupted`. Botpipe will not infer that the effect failed or rerun
+it. The operator must record the observed response or explicitly authorize a
+retry with `Botpipe.resolve()`.
+
+While a workspace has an unresolved uncertain effect, its durable workspace
+fence blocks a different run from starting there, even when clients choose
+different state directories. Resolve the recorded effect before continuing work
+in that workspace.
+
+## Operation boundary
+
+Provider calls, activities, prompt-file reads, human input, worklist snapshots,
+and artifact publication are operations. Runtime integrations can use
+`current_run().operation(...)` for the same durable boundary.
 
 ```python
-ctx.invoke_workflow(...)
+@activity(retry_safe=False)
+def create_ticket(title: str) -> dict[str, str]:
+    return remote_api.create_ticket(title)
 ```
 
-Supported forms:
+`retry_safe=True` means retry is safe according to the activity contract. It is
+not an exactly-once guarantee.
 
-```python
-ctx.invoke_workflow("child_workflow", message="Do the child task", parameters={"mode": "strict"})
-ctx.invoke_workflow(ChildWorkflow, message="Do the child task", parameters={"mode": "strict"})
-```
+## Scopes and concurrency
 
-Child runs stay under the same task but get their own workflow namespace, run id, checkpoint, event log, trace, sessions, and run-local request snapshot. Parent-child linkage is metadata-only through `children.jsonl` and `parent.json`; child runs are never nested under parent run folders.
+The root workflow has a scope. Nested workflows and parallel branches derive
+child scopes from deterministic call sites and ordinals. Worklist iteration
+stays in the current scope; `Session.work_item()` derives stable provider
+identity from the worklist and item ID. Each parallel callable receives an
+independent scope, so scheduling order does not change operation identity.
+Concurrent mutation through one shared session is rejected. Parallel provider
+edits require an explicit isolated workspace per branch; read-only sessions may
+share the application workspace.
 
-When a parent uses `workflow_step(message="{{ message }}", ...)`, the rendered message becomes the child run's own request snapshot. Typed child `input` remains separate from that request text.
+## Inspection
 
-The packaged default workflows are package-local under `botpipe/workflows/`, including `devloop` and `ralph_loop`. Framework-owned workflow-specific helpers and custom runners are not part of the architecture.
+Before a run, inspection reports the callable signature, typed schemas, policy,
+source, and source digest. Python topology is dynamic, so it does not claim to
+enumerate future branches. After a run, inspection adds the operations and edges
+actually observed. A completed run proves only the path taken for those inputs.

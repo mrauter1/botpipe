@@ -1,4 +1,4 @@
 from .params import Params
-from .workflow import WorkflowAndEvalToRefinedWorkflowPackage, _write_candidate_workflow_manifest
+from .workflow import WorkflowAndEvalToRefinedWorkflowPackage, workflow_callable
 
-__all__ = ["Params", "WorkflowAndEvalToRefinedWorkflowPackage"]
+__all__ = ["Params", "WorkflowAndEvalToRefinedWorkflowPackage", "workflow_callable"]

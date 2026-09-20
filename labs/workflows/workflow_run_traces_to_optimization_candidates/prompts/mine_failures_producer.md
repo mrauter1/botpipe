@@ -1,3 +1,7 @@
+## Durable producer result
+
+After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+
 # Mine Failures Producer
 
 ## Step Contract
@@ -30,13 +34,13 @@
 
 ## Evidence
 
-- Use deterministic trace evidence, raw output references when present, and static graph context already captured.
+- Use journaled operation evidence, typed outcomes, artifact references, and the dynamic source manifest already captured.
 - Do not require evidence-reference arrays to exist in order to write a valid scenario.
 
-## Route Guidance
+## Outcome guidance
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
 - Use `failure_scenarios_mined` when at least one grounded failure scenario exists.
 - Use `no_failure_scenarios` when ranked targets do not produce defensible scenarios.

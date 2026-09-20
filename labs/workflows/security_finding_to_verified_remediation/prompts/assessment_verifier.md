@@ -1,3 +1,7 @@
+## Durable verifier outcome
+
+Return a JSON result matching the injected schema. Use `accepted` when the artifacts meet the positive phase condition described below, `needs_rework` when the same phase can be repaired, `needs_replan` when an accepted earlier plan must be revisited, `question` or `blocked` when operator input is required, and `failed` for a terminal domain failure. The phase labels below describe semantic checks; do not return old route labels as the `outcome`. Cite only artifact names supplied by the runtime.
+
 # Assess Security Finding Verifier
 
 ## Step Contract
@@ -29,7 +33,7 @@
 
 ### Write policy
 - Do not modify files.
-- Return exactly one `Outcome` that satisfies the runtime schema.
+- Return exactly one typed JSON result that satisfies the runtime schema.
 
 ### Required outcome structure
 - Populate:
@@ -45,12 +49,12 @@
 - Treat mixed certainty levels, hidden evidence gaps, or plan selection without real option comparison as real defects.
 - Keep the route decision aligned to the current assessment boundary rather than silently shifting into remediation planning.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route selection rules
+### Outcome selection rules
 - Choose `finding_assessed` only if the exploit analysis is evidence-backed, the affected surface is explicit, root-cause reasoning is coherent, and remediation options are compared clearly enough for planning.
 - Choose `needs_rework` when the same assessment boundary still holds and the artifacts can be strengthened locally.
 - Choose `needs_replan` when the evidence boundary or remediation framing changed materially enough that the adopted evidence pack is no longer sufficient as the planning baseline.

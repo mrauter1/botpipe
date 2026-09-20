@@ -1,245 +1,46 @@
-# `investigation_request_to_evidence_pack`
+# Investigation Request To Evidence Pack
 
-`investigation_request_to_evidence_pack` is a reusable workflow building block that turns an ambiguous investigation request into a durable evidence pack with explicit framing, source inventory, coverage mapping, findings, unresolved gaps, a machine-readable summary, and a deterministic publication receipt.
+Frame an investigation request, assemble a durable evidence pack, and return typed downstream-readiness evidence.
 
-## Problem and value
+Canonical name: `investigation_request_to_evidence_pack`
+Aliases: `investigation-evidence-pack`, `evidence-pack-building-block`
 
-- Problem solved: convert a vague request like "assemble the evidence pack for this security finding" or "gather the release-readiness proof" into an evidence artifact set another workflow or human can consume without guessing scope, sources reviewed, or missing proof.
-- Why it matters: release, incident, security, delivery-recovery, and customer-escalation work often fails when downstream assessment starts from scattered notes instead of an authoritative evidence package.
-- Likely sponsors: security engineers, release managers, SRE leads, engineering managers, TPMs, or escalation owners who need a durable evidence base before a decision or remediation plan can be trusted.
-- Classification: reusable workflow building block. It is directly runnable, but its main value is composition into larger domain workflows.
-- Why Botpipe fits: the work spans framing, repository inspection, source tracing, gap capture, and durable artifact production across explicit producer/verifier loops.
-- Why one-shot is insufficient: scope drift, missing proof, and source constraints must be surfaced through artifacts and verifier-gated local repair instead of disappearing into a single chat summary.
+## Durable function design
+
+`workflow.py` exports one ordinary Python function decorated with `@workflow`. Python controls phase order, optional passes, loops, and nested workflows. Each phase runs a producer and verifier through durable `Session` operations. Producers return `LabPhaseDraft`; each verifier returns a package-specific `LabPhaseOutcome` subclass from `contracts.py`, so domain evidence is typed before control flow consumes it.
+
+Every declared output is a required `Artifact`. Botpipe snapshots the provider-written file before the operation completes, and later phases read those immutable handles. A verifier may cite only captured artifact names. The final typed `LabWorkflowResult` carries the accepted handles in `artifacts`, convenience snapshot paths in `artifact_paths`, and unique candidate identifiers. When phases reuse an artifact name, the later accepted handle wins.
 
 ## Invocation
 
-- Lab path: `labs/workflows/investigation_request_to_evidence_pack/`
-- Discovery: lab workflow; copy or reference the workflow folder explicitly before running it by name.
-- Direct run:
-
-```bash
-botpipe run investigation_request_to_evidence_pack <task-id> \
-  --message "Assemble the evidence pack for the admin impersonation privilege-escalation finding." \
-  -wf investigation_title "Admin impersonation privilege escalation" \
-  -wf investigation_kind security_remediation \
-  -wf sponsor_role "security engineering" \
-  -wf evidence_paths pentest/findings/admin-impersonation.md \
-  -wf source_constraints "Use repository artifacts and named pentest evidence only."
-```
-
-Params:
-
-- `investigation_title` required
-- `investigation_kind` required: `release_readiness`, `incident_response`, `security_remediation`, `delivery_recovery`, `customer_escalation`, or `general`
-- `sponsor_role` optional
-- `evidence_paths` optional and repeatable
-- `source_constraints` optional and repeatable
-
-Composed usage stays explicit in workflow code through the authoring-only helper seam:
-
 ```python
-from botpipe.stdlib import adopt_child_artifacts, run_child_workflow
-
-child = run_child_workflow(
-    ctx,
-    "investigation_request_to_evidence_pack",
-    message="Assemble the release readiness evidence pack.",
-    parameters={
-        "investigation_title": "Release 2026.04 readiness",
-        "investigation_kind": "release_readiness",
-        "evidence_paths": ["docs/releases/2026.04.md"],
-    },
+from botpipe import Botpipe
+from labs.workflows.investigation_request_to_evidence_pack import (
+    Params,
+    workflow_callable,
 )
-adopt_child_artifacts(
-    ctx,
-    child,
-    mapping={
-        "investigation_scope_brief": "adopted/release_scope_brief.md",
-        "evidence_pack": "adopted/release_evidence_pack.md",
-        "evidence_pack_summary": "adopted/release_evidence_pack_summary.json",
-    },
+
+client = Botpipe(workspace=".")
+result = client.run(
+    workflow_callable, Params(...), request="Describe the requested outcome"
 )
 ```
 
-## Candidate additions considered
+Parameters are validated by the package-local Pydantic `Params` model before any operation starts. `request` contains the human-readable task or evidence request.
 
-| Candidate | Why it matters | Trade-off | Decision |
-| --- | --- | --- | --- |
-| `workflow_idea_to_workflow_package` | The repository’s workflow-builder and the mandatory comparison baseline for new additions | Already credible enough for the current portfolio, so another builder-first cycle would delay reusable operational leverage | Deferred |
-| `security_finding_to_verified_remediation` | High-value domain workflow from finding to bounded fix and closure evidence | Valuable, but it would likely duplicate framing-plus-evidence-pack behavior before extraction is proven | Deferred |
-| `investigation_request_to_evidence_pack` | Reusable building block for release, incident, security, delivery, and escalation workflows | Needs explicit composition proof to justify itself as a building block instead of another monolithic workflow | Chosen |
+## Phases and evidence
 
-## Framework improvement candidates considered
+| Phase | Required produced artifacts |
+| --- | --- |
+| `frame_investigation` | `investigation_scope_brief.md`, `evidence_intake_plan.md` |
+| `assemble_evidence_pack` | `evidence_pack.md`, `source_register.json`, `evidence_gaps.md`, `investigation_summary.json` |
 
-| Candidate | Benefits | Trade-offs | Decision |
-| --- | --- | --- | --- |
-| Authoring-only composition helpers | Enables explicit child-workflow invocation and parent-local artifact adoption without widening runtime behavior | Must stay additive and visible in workflow code | Chosen in the paired framework phase and exercised by this building block |
-| Runtime-owned subworkflow step | Could make composition terser | Hides sequencing in the runtime and violates the explicit-workflow doctrine | Rejected |
-| Legacy recursive wrapper removal | Removes the stale wrapper/template surface that duplicated Botpipe runtime behavior | Cleanup is separate from evidence-pack authoring; recursive operation should use the normal SDK/CLI runtime surfaces | Completed outside this workflow |
+Producer and verifier prompts remain phase-specific. `accepted` advances, while `needs_rework` repeats the phase with structured feedback and its previous artifact snapshots. `needs_replan` returns control to the phase's declared target through a workflow-owned Python loop. `question` and `blocked` suspend with `ask()` and retry the phase with the operator's `input_answer`; `failed` rejects the phase. No route table executes these outcomes.
 
-## Meaningful design decisions
+## Inspection and replay
 
-### 1. Building-block boundary
+The journal records prompt reads, provider results, typed outcomes, usage, artifact dependencies, and operation timing. Replay uses the committed typed results and artifact snapshots. Source inspection reports dynamic topology and does not claim that unvisited Python branches executed.
 
-- Alternatives considered:
-- evidence assembly only after a parent has already framed the work
-- framing plus evidence-pack assembly as one reusable building block
-- full investigation through diagnosis and remediation
-- Selected: framing plus evidence-pack assembly with deterministic bootstrap and publish edges
-- Why: the repeated unit of value in the shipped workflows is not evidence gathering alone, but framed evidence gathering that yields an authoritative pack another workflow can trust.
+## Validation
 
-### 2. Evidence authority strategy
-
-- Alternatives considered:
-- make `evidence_pack.md` the only deliverable
-- make the receipt the only machine-readable artifact
-- keep `evidence_pack.md` as the human-facing deliverable, `evidence_pack_summary.json` as the machine-readable authority, and `evidence_pack_receipt.json` as the deterministic terminal receipt
-- Selected: dual human-facing plus machine-readable evidence contract with a separate deterministic receipt
-- Why: composition needs a stable JSON handoff artifact, while downstream humans still need a readable evidence narrative.
-
-### 3. Reuse proof strategy
-
-- Alternatives considered:
-- migrate `release_candidate_to_go_no_go` immediately
-- prove only direct execution
-- add a targeted fixture parent workflow that composes the building block through the new helper seam
-- Selected: targeted fixture parent composition proof
-- Why: it proves reusable composition without expanding the regression surface across already-shipped workflows.
-
-## Implementation candidates considered
-
-| Candidate | Description | Trade-off | Decision |
-| --- | --- | --- | --- |
-| Monolithic pair step | Frame and assemble the evidence pack in one provider-owned loop | Faster to author, but blurs artifact ownership and makes rework less precise | Rejected |
-| Explicit two-step package with deterministic bootstrap and publish | Separate framing and evidence-pack assembly, then publish a deterministic receipt | More artifacts to manage, but much clearer contracts and composition value | Selected |
-| Immediate migration of existing workflows | Replace the repeated release/incident evidence steps right away | Larger regression surface and weaker isolation for cycle-two proof | Rejected |
-
-## Workflow contract
-
-### Objective
-
-Turn an investigation request into a durable evidence pack that another workflow or human can consume without guessing what was reviewed, what remains missing, or why the scope is authoritative.
-
-### Global deterministic workflow responsibilities
-
-- Bootstrap the authoritative invocation contract from workflow parameters and the run request.
-- Hold framing and evidence-pack assembly as separate work items.
-- Keep runtime control data narrow: `expected_output_schema`, `available_routes`, step-local `Route.to(...)` metadata, and `required_writes` only.
-- Publish a deterministic evidence-pack receipt only after the terminal artifacts exist.
-
-### Provider-owned cognitive responsibilities
-
-- Interpret the investigation request and repository context.
-- Frame the investigation boundary, downstream objectives, and evidence intake plan.
-- Inspect evidence sources, record concrete findings, and make missing proof explicit.
-- Assemble the final evidence pack so a downstream assessor or parent workflow can use it directly.
-
-### Work-item boundary doctrine
-
-- `frame_investigation`: scope, objectives, and evidence intake only.
-- `assemble_evidence_pack`: source inventory, coverage, findings, gaps, human-facing evidence pack, and machine-readable summary only.
-- `needs_rework`: the same work-item boundary still holds.
-- `needs_replan`: the investigation boundary, downstream consumer, or evidence surface changed materially.
-
-### Role topology
-
-- `investigation strategist` / `investigation critic`
-- `evidence assembler` / `evidence verifier`
-- deterministic `bootstrap` and `publish_evidence_pack` `python_step`s
-
-### Control flow
-
-1. `bootstrap`
-2. `frame_investigation`
-3. `assemble_evidence_pack`
-4. `publish_evidence_pack`
-
-### Route grammar
-
-Helper routes:
-
-- `question` when provider questions are allowed by the interaction policy
-- question routes use `outcome.route_fields.questions`; blocked and failed routes use nullable `outcome.route_fields.reason`
-
-Application routes:
-
-- `inputs_prepared`
-- `investigation_framed`
-- `evidence_pack_ready`
-- `needs_rework`
-- `needs_replan`
-- `evidence_pack_published`
-
-Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
-
-### Artifact contract
-
-| Step | Required reads | Required writes | Authority / downstream use |
-| --- | --- | --- | --- |
-| `bootstrap` | `request.md`, workflow params | `invocation_contract.json` | authoritative run-local input snapshot |
-| `frame_investigation` | request, invocation contract, framework docs | `investigation_scope_brief.md`, `investigation_objectives.md`, `evidence_intake_register.md` | authoritative investigation boundary and evidence intake plan |
-| `assemble_evidence_pack` | framing artifacts, checklist, and repo evidence | `evidence_source_inventory.md`, `evidence_coverage_matrix.md`, `evidence_findings.md`, `evidence_gap_register.md`, `evidence_pack.md`, `evidence_pack_summary.json` | authoritative evidence pack for downstream assessment or parent-workflow adoption |
-| `publish_evidence_pack` | evidence-pack artifacts and summary | `evidence_pack_receipt.json` | deterministic terminal receipt |
-
-Authoritative precedence:
-
-- `investigation_scope_brief.md` and `investigation_objectives.md` become authoritative after framing.
-- `evidence_pack.md` is the primary human-facing deliverable.
-- `evidence_pack_summary.json` is the machine-readable authority for downstream workflow composition.
-- `evidence_pack_receipt.json` is the immutable workflow receipt.
-
-### Runtime-injected control contract
-
-The runtime injects only:
-
-- `expected_output_schema`
-- `available_routes`
-- step-local `Route.to(...)` metadata
-
-Payload models used by the package:
-
-- `InvestigationFramingPayload`
-- `InvestigationEvidencePackPayload`
-
-### Prompt templates
-
-The package includes explicit step prompts for:
-
-- `prompts/frame_producer.md`
-- `prompts/frame_verifier.md`
-- `prompts/evidence_producer.md`
-- `prompts/evidence_verifier.md`
-
-Each prompt names the role, purpose, current work item, required reads, required writes, legal routes, evidence rules, and forbidden actions.
-
-### Verification and evidence contract
-
-- Workflow discovery must find the package by canonical name and alias.
-- Compilation must expose the typed route metadata as normalized runtime metadata.
-- A scripted-provider runtime test must prove legal route flow and creation of:
-- `invocation_contract.json`
-- `investigation_scope_brief.md`
-- `evidence_pack.md`
-- `evidence_pack_summary.json`
-- `evidence_pack_receipt.json`
-- A targeted composition proof must show helper-based child invocation plus explicit parent-local adoption of selected child artifacts.
-
-### Rework / replan / block / fail policy
-
-- `needs_rework`: local repair inside the current framing or evidence-pack boundary.
-- `needs_replan`: the investigation boundary, consumer need, or evidence plan changed materially.
-- When the workflow explicitly authors `blocked`, use it when required evidence sources or repository prerequisites are missing in a way the current step cannot repair locally.
-- When the workflow explicitly authors `failed`, use it when irreconcilable contradictions make the evidence package non-credible.
-
-### Recursive self-improvement policy
-
-- The building block follows the builder-era package doctrine and exercises the paired composition-helper seam without widening runtime behavior.
-- Promotion remains evidence-gated by workflow-local artifacts and runtime proof.
-- Broader recursive memory updates remain cycle-level closeout work rather than workflow-local semantics.
-
-## Evidence
-
-- Lab implementation: `labs/workflows/investigation_request_to_evidence_pack/`
-- Lab asset: `labs/workflows/investigation_request_to_evidence_pack/assets/evidence_pack_checklist.md`
-- Workflow-specific proof: `tests/runtime/test_investigation_request_to_evidence_pack.py`
-- The scripted exercises prove discovery, compilation, direct execution, helper-based composition, artifact adoption, and deterministic publication of `evidence_pack_receipt.json`.
+`tests/test_labs.py` imports and resolves every labs manifest, stages every package with `FakeProvider`, checks typed accepted outcomes, and verifies that all required artifacts were captured.

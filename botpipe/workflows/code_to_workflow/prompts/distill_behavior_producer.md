@@ -2,10 +2,10 @@ Goal:
 Distill the current workspace into an evidence-backed behavior inventory for recreating it as a Botpipe workflow.
 
 Context:
-- Request: {{ message }}
-- Invocation contract: {{ workflow.folder }}/invocation_contract.json
-- Source manifest: {{ workflow.folder }}/source_manifest.json
-- Trace corpus: {{ workflow.folder }}/trace_corpus.json
+- Request: the supplied request
+- Invocation contract: invocation_contract.json
+- Source manifest: source_manifest.json
+- Trace corpus: trace_corpus.json
 - Botpipe authoring examples may be provided as readable artifacts.
 - If behavior_review.md exists, read it first and address every required correction.
 

@@ -1,3 +1,7 @@
+## Durable producer result
+
+After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+
 # Evaluate Candidate Decomposition Producer
 
 ## Step Contract
@@ -72,16 +76,16 @@
 - Keep the runtime/provider boundary crisp: prompt templates own the operational evaluation guidance, while the runtime injects the compact human-readable step contract and raw provider output never re-enters prompts.
 - Make the outputs specific enough that the publish step can validate them mechanically.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance for the verifier
+### Outcome guidance for the verifier
 - `candidate_decomposition_evaluated`: the verification report, migration guide, promotion record, and rollback plan are publication-ready.
 - `needs_rework`: the same decomposition boundary still holds, but the candidate package needs local repair before publication.
 - `needs_replan`: evaluation showed the accepted decomposition boundary or package set changed materially and planning must be revisited.
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Use `blocked` only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Out Of Scope
 

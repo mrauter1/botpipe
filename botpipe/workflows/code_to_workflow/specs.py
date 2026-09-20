@@ -9,7 +9,6 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
-
 SOURCE_MANIFEST_SCHEMA = "botpipe.code_to_workflow.source_manifest/v1"
 TRACE_CORPUS_SCHEMA = "botpipe.code_to_workflow.trace_corpus/v1"
 PUBLICATION_RECEIPT_SCHEMA = "botpipe.code_to_workflow.publication_receipt/v1"
@@ -49,11 +48,15 @@ def derive_generated_workflow_name(root: Path, requested: str | None) -> str:
     return candidate or "generated_workflow"
 
 
-def capture_source_manifest(root: Path, *, generated_workflow_name: str) -> dict[str, Any]:
+def capture_source_manifest(
+    root: Path, *, generated_workflow_name: str
+) -> dict[str, Any]:
     """Return a bounded source manifest for the workspace."""
 
     workspace = root.resolve()
-    generated_output = (workspace / ".botpipe" / "workflows" / generated_workflow_name).resolve()
+    generated_output = (
+        workspace / ".botpipe" / "workflows" / generated_workflow_name
+    ).resolve()
     entries: list[dict[str, Any]] = []
     skipped = Counter()
 
@@ -114,7 +117,9 @@ def should_exclude_source_path(path: Path, *, root: Path) -> bool:
     return False
 
 
-def collect_trace_corpus(root: Path, *, exclude_run_dir: Path | None = None) -> dict[str, Any]:
+def collect_trace_corpus(
+    root: Path, *, exclude_run_dir: Path | None = None
+) -> dict[str, Any]:
     """Return bounded repository-local trace evidence."""
 
     workspace = root.resolve()
@@ -154,11 +159,15 @@ def validate_publication_inputs(
     }
     missing = [name for name, path in required_paths.items() if not path.exists()]
     if missing:
-        raise FileNotFoundError("missing required publication artifacts: " + ", ".join(sorted(missing)))
+        raise FileNotFoundError(
+            "missing required publication artifacts: " + ", ".join(sorted(missing))
+        )
 
     behavior_inventory = _read_json_object(required_paths["behavior_inventory"])
     coverage_map = _read_json_object(required_paths["coverage_map"])
-    coverage_summary = validate_coverage_map(behavior_inventory=behavior_inventory, coverage_map=coverage_map)
+    coverage_summary = validate_coverage_map(
+        behavior_inventory=behavior_inventory, coverage_map=coverage_map
+    )
     discovery_summary = validate_generated_workflow_discovery(
         root=root,
         generated_workflow_name=generated_workflow_name,
@@ -177,41 +186,46 @@ def validate_publication_inputs(
     }
 
 
-def validate_generated_workflow_discovery(*, root: Path, generated_workflow_name: str) -> dict[str, Any]:
-    """Validate that Botpipe can discover and compile the generated workflow."""
+def validate_generated_workflow_discovery(
+    *, root: Path, generated_workflow_name: str
+) -> dict[str, Any]:
+    """Validate that Botpipe can discover and import the generated workflow."""
 
     try:
-        from botpipe.core.workflow_capabilities import inspect_workflow_reference
+        from botpipe.discovery import resolve_workflow, workflow_contract
 
-        entry = inspect_workflow_reference(root, generated_workflow_name)
+        definition = resolve_workflow(generated_workflow_name, workspace=root)
+        contract = workflow_contract(definition, workspace=root)
     except Exception as exc:
         raise ValueError(
-            f"generated workflow {generated_workflow_name!r} is not discoverable and compilable by Botpipe: {exc}"
+            f"generated workflow {generated_workflow_name!r} is not discoverable and importable by Botpipe: {exc}"
         ) from exc
 
-    if entry.workflow_name != generated_workflow_name:
+    actual_name = getattr(definition, "name", None)
+    if actual_name != generated_workflow_name:
         raise ValueError(
-            f"generated workflow reference {generated_workflow_name!r} resolved to {entry.workflow_name!r}"
+            f"generated workflow reference {generated_workflow_name!r} resolved to {actual_name!r}"
         )
-    if not entry.steps:
-        raise ValueError(f"generated workflow {generated_workflow_name!r} must define at least one step")
 
     return {
-        "workflow_name": entry.workflow_name,
-        "workflow_class": entry.workflow_class,
-        "authoring_shape": str(entry.authoring_shape),
-        "step_count": len(entry.steps),
-        "artifact_count": len(entry.artifacts),
-        "parameter_names": [field.name for field in entry.parameters],
+        "workflow_name": actual_name,
+        "workflow_callable": f"{definition.fn.__module__}:{definition.fn.__qualname__}",
+        "authoring_shape": "durable_function",
+        "parameter_names": [field["name"] for field in contract["parameters"]],
+        "return_contract": contract["return"],
     }
 
 
-def validate_coverage_map(*, behavior_inventory: dict[str, Any], coverage_map: dict[str, Any]) -> dict[str, Any]:
+def validate_coverage_map(
+    *, behavior_inventory: dict[str, Any], coverage_map: dict[str, Any]
+) -> dict[str, Any]:
     """Validate that required behavior ids are handled by the coverage map."""
 
     behaviors = behavior_inventory.get("behaviors")
     if not isinstance(behaviors, list) or not behaviors:
-        raise ValueError("behavior_inventory.json must contain a non-empty behaviors list")
+        raise ValueError(
+            "behavior_inventory.json must contain a non-empty behaviors list"
+        )
     coverage_entries = coverage_map.get("coverage")
     if not isinstance(coverage_entries, list):
         raise ValueError("coverage_map.json must contain a coverage list")
@@ -219,10 +233,14 @@ def validate_coverage_map(*, behavior_inventory: dict[str, Any], coverage_map: d
     required_behavior_ids: list[str] = []
     for behavior in behaviors:
         if not isinstance(behavior, dict):
-            raise ValueError("behavior_inventory.json behaviors entries must be objects")
+            raise ValueError(
+                "behavior_inventory.json behaviors entries must be objects"
+            )
         behavior_id = str(behavior.get("id") or "").strip()
         if not behavior_id:
-            raise ValueError("behavior_inventory.json behavior entries must include non-empty id")
+            raise ValueError(
+                "behavior_inventory.json behavior entries must include non-empty id"
+            )
         if bool(behavior.get("required", True)):
             required_behavior_ids.append(behavior_id)
 
@@ -232,7 +250,9 @@ def validate_coverage_map(*, behavior_inventory: dict[str, Any], coverage_map: d
             raise ValueError("coverage_map.json coverage entries must be objects")
         behavior_id = str(entry.get("behavior_id") or entry.get("id") or "").strip()
         if not behavior_id:
-            raise ValueError("coverage_map.json coverage entries must include behavior_id")
+            raise ValueError(
+                "coverage_map.json coverage entries must include behavior_id"
+            )
         coverage_by_id[behavior_id] = entry
 
     unhandled: list[str] = []
@@ -257,7 +277,10 @@ def validate_coverage_map(*, behavior_inventory: dict[str, Any], coverage_map: d
             unhandled.append(behavior_id)
 
     if unhandled:
-        raise ValueError("coverage_map.json has unhandled required behaviors: " + ", ".join(sorted(unhandled)))
+        raise ValueError(
+            "coverage_map.json has unhandled required behaviors: "
+            + ", ".join(sorted(unhandled))
+        )
     return {
         "required_behavior_count": len(required_behavior_ids),
         "coverage_entry_count": len(coverage_entries),
@@ -265,22 +288,34 @@ def validate_coverage_map(*, behavior_inventory: dict[str, Any], coverage_map: d
     }
 
 
-def _collect_botpipe_runs(workspace: Path, excluded: Path | None) -> list[dict[str, Any]]:
+def _collect_botpipe_runs(
+    workspace: Path, excluded: Path | None
+) -> list[dict[str, Any]]:
     runs_root = workspace / ".botpipe" / "tasks"
-    candidates = sorted(runs_root.glob("*/wf_*/runs/*"), key=_mtime_sort_key, reverse=True)
+    candidates = sorted(
+        runs_root.glob("*/wf_*/runs/*"), key=_mtime_sort_key, reverse=True
+    )
     runs: list[dict[str, Any]] = []
     for run_dir in candidates:
         if len(runs) >= _MAX_TRACE_RUNS:
             break
         if not run_dir.is_dir():
             continue
-        if excluded is not None and (run_dir.resolve() == excluded or _is_relative_to(run_dir.resolve(), excluded)):
+        if excluded is not None and (
+            run_dir.resolve() == excluded
+            or _is_relative_to(run_dir.resolve(), excluded)
+        ):
             continue
         run_json = _try_read_json_object(run_dir / "run.json")
-        trace_records = _read_jsonl_objects(run_dir / "trace.jsonl", limit=_MAX_TRACE_EVENTS_PER_RUN)
+        trace_records = _read_jsonl_objects(
+            run_dir / "trace.jsonl", limit=_MAX_TRACE_EVENTS_PER_RUN
+        )
         if run_json is None and not trace_records:
             continue
-        event_counts = Counter(str(record.get("event") or record.get("type") or "unknown") for record in trace_records)
+        event_counts = Counter(
+            str(record.get("event") or record.get("type") or "unknown")
+            for record in trace_records
+        )
         step_outcomes = [
             {
                 "step": record.get("step") or record.get("step_name"),
@@ -294,7 +329,9 @@ def _collect_botpipe_runs(workspace: Path, excluded: Path | None) -> list[dict[s
         runs.append(
             {
                 "run_dir": _relative_or_absolute(run_dir, workspace),
-                "task_id": run_dir.parents[2].name if len(run_dir.parents) >= 3 else None,
+                "task_id": run_dir.parents[2].name
+                if len(run_dir.parents) >= 3
+                else None,
                 "workflow_name": _workflow_name_from_run_dir(run_dir),
                 "run_id": run_dir.name,
                 "status": _json_field(run_json, "status"),
@@ -308,17 +345,24 @@ def _collect_botpipe_runs(workspace: Path, excluded: Path | None) -> list[dict[s
     return runs
 
 
-def _collect_nested_codex_rollouts(workspace: Path, excluded: Path | None) -> list[dict[str, Any]]:
+def _collect_nested_codex_rollouts(
+    workspace: Path, excluded: Path | None
+) -> list[dict[str, Any]]:
     raw_root = workspace / ".botpipe" / "tasks"
     rollouts: list[dict[str, Any]] = []
-    for path in sorted(raw_root.glob("**/raw/**/rollout-*.jsonl"), key=_mtime_sort_key, reverse=True):
+    for path in sorted(
+        raw_root.glob("**/raw/**/rollout-*.jsonl"), key=_mtime_sort_key, reverse=True
+    ):
         if len(rollouts) >= _MAX_TRACE_RUNS:
             break
         resolved = path.resolve()
         if excluded is not None and _is_relative_to(resolved, excluded):
             continue
         records = _read_jsonl_objects(path, limit=20)
-        event_counts = Counter(str(record.get("type") or record.get("event") or "unknown") for record in records)
+        event_counts = Counter(
+            str(record.get("type") or record.get("event") or "unknown")
+            for record in records
+        )
         rollouts.append(
             {
                 "path": _relative_or_absolute(path, workspace),
@@ -379,7 +423,11 @@ def _outcome_tag(record: dict[str, Any]) -> str | None:
     if isinstance(outcome, dict):
         tag = outcome.get("tag")
         return str(tag) if tag is not None else None
-    tag = record.get("route") or record.get("final_route") or record.get("candidate_route")
+    tag = (
+        record.get("route")
+        or record.get("final_route")
+        or record.get("candidate_route")
+    )
     if isinstance(tag, dict):
         value = tag.get("tag")
         return str(value) if value is not None else None
@@ -394,7 +442,9 @@ def _error_excerpts(records: list[dict[str, Any]]) -> list[str]:
             if not isinstance(value, str) or not value.strip():
                 continue
             lowered = value.lower()
-            if key in {"message", "reason"} and not any(token in lowered for token in ("error", "fail", "exception")):
+            if key in {"message", "reason"} and not any(
+                token in lowered for token in ("error", "fail", "exception")
+            ):
                 continue
             excerpts.append(_truncate(value.strip()))
             break
@@ -434,7 +484,11 @@ def _relative_or_absolute(path: Path, root: Path) -> str:
 
 
 def _truncate(value: str) -> str:
-    return value if len(value) <= _MAX_TEXT_EXCERPT else value[: _MAX_TEXT_EXCERPT - 3] + "..."
+    return (
+        value
+        if len(value) <= _MAX_TEXT_EXCERPT
+        else value[: _MAX_TEXT_EXCERPT - 3] + "..."
+    )
 
 
 def _mtime_sort_key(path: Path) -> float:

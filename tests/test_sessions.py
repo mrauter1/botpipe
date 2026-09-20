@@ -1,0 +1,241 @@
+from __future__ import annotations
+
+from pydantic import BaseModel
+
+from botpipe import Artifact, Botpipe, Session, activity, workflow
+from botpipe.providers import FakeProvider, ProviderInterruptedError, ProviderResponse
+
+
+def test_constructor_sessions_are_independent_and_task_sessions_persist(tmp_path):
+    @workflow
+    def talk():
+        first, second = Session(), Session()
+        first.run("first")
+        second.run("second")
+        first.run("continue first")
+        Session.task("persistent").run("task conversation")
+
+    provider = FakeProvider(
+        [
+            ProviderResponse("ok", "one"),
+            ProviderResponse("ok", "two"),
+            ProviderResponse("ok", "one"),
+            ProviderResponse("ok", "task"),
+            "next-one",
+            "next-two",
+            "next-one-again",
+            "next-task",
+        ]
+    )
+    with Botpipe(tmp_path, provider=provider) as client:
+        assert client.run(talk, task_id="same").ok
+        assert client.run(talk, task_id="same").ok
+    assert [r.session_id for r in provider.calls[:4]] == [None, None, "one", None]
+    assert provider.calls[-1].session_id == "task"
+
+
+def test_explicit_retry_recovers_completed_receipt_before_preparing_new_artifacts(
+    tmp_path,
+):
+    class ReceiptedProvider(FakeProvider):
+        def run(self, request):
+            self.calls.append(request)
+            request.artifacts["report"].write_text("completed before process loss")
+            self.receipt = ProviderResponse("done", "session")
+            raise KeyboardInterrupt()
+
+        def recover(self, request):
+            return self.receipt
+
+    @workflow
+    def report():
+        return Session().run(
+            "report", writes=Artifact.text("report.txt", required=True)
+        )
+
+    provider = ReceiptedProvider([])
+    with Botpipe(tmp_path, provider=provider) as client:
+        interrupted = client.run(report)
+        op = next(
+            r
+            for r in client.inspect(interrupted.run_id)["operations"]
+            if r["kind"] == "provider"
+        )
+        client.resolve(interrupted.run_id, op["id"], retry=True)
+        recovered = client.resume(interrupted.run_id, workflow=report)
+        assert recovered.ok, recovered.error
+        assert (
+            recovered.value.artifacts.report.read_text()
+            == "completed before process loss"
+        )
+        assert len(provider.calls) == 1
+
+
+def test_explicit_retry_does_not_remove_files_from_live_provider(tmp_path):
+    class LiveProvider(FakeProvider):
+        def run(self, request):
+            self.calls.append(request)
+            request.artifacts["report"].write_text("still being produced")
+            raise KeyboardInterrupt()
+
+        def recover(self, request):
+            raise ProviderInterruptedError("still running", process_alive=True)
+
+    @workflow
+    def report():
+        return Session().run(
+            "report", writes=Artifact.text("report.txt", required=True)
+        )
+
+    provider = LiveProvider([])
+    with Botpipe(tmp_path, provider=provider) as client:
+        interrupted = client.run(report)
+        op = next(
+            r
+            for r in client.inspect(interrupted.run_id)["operations"]
+            if r["kind"] == "provider"
+        )
+        client.resolve(interrupted.run_id, op["id"], retry=True)
+        recovered = client.resume(interrupted.run_id, workflow=report)
+        assert recovered.status == "interrupted"
+        assert (
+            provider.calls[0].artifacts["report"].read_text() == "still being produced"
+        )
+        assert len(provider.calls) == 1
+
+
+def test_repair_usage_is_charged_once_in_results_and_run_totals(tmp_path):
+    class Answer(BaseModel):
+        accepted: bool
+
+    @workflow
+    def review():
+        return Session().run("review", returns=Answer)
+
+    provider = FakeProvider(
+        [
+            ProviderResponse("invalid", usage={"input_tokens": 3}),
+            ProviderResponse('{"accepted":true}', usage={"input_tokens": 5}),
+        ]
+    )
+    with Botpipe(tmp_path, provider=provider) as client:
+        result = client.run(review)
+        assert result.ok, result.error
+        assert result.value.usage["input_tokens"] == 8
+        assert result.usage["input_tokens"] == 8
+        replay = client.resume(result.run_id, workflow=review)
+        assert replay.value.usage["input_tokens"] == 8
+        assert replay.usage["input_tokens"] == 8
+        assert len(provider.calls) == 2
+
+
+def test_operation_budget_can_be_extended_without_repeating_effects(tmp_path):
+    effects = []
+
+    @activity
+    def effect(value):
+        effects.append(value)
+        return value
+
+    @workflow
+    def limited():
+        return effect(1) + effect(2)
+
+    with Botpipe(tmp_path, provider=FakeProvider([]), max_operations=1) as client:
+        limited_result = client.run(limited)
+        assert limited_result.status == "budget_exceeded"
+        resumed = client.resume(
+            limited_result.run_id, workflow=limited, max_operations=2
+        )
+        assert resumed.ok, resumed.error
+        assert resumed.value == 3
+        assert effects == [1, 2]
+
+
+def test_inspection_does_not_require_original_result_model_type(tmp_path):
+    from botpipe import codec
+
+    class LocalAnswer(BaseModel):
+        accepted: bool
+
+    @workflow
+    def answer():
+        return Session().run("answer", returns=LocalAnswer)
+
+    with Botpipe(tmp_path, provider=FakeProvider(['{"accepted":true}'])) as client:
+        result = client.run(answer)
+        assert result.ok
+        codec._TYPES.pop(f"{LocalAnswer.__module__}:{LocalAnswer.__qualname__}")
+        details = client.inspect(result.run_id)
+        assert details["run"]["status"] == "completed"
+        assert len(details["operations"]) == 2
+
+
+def test_repeated_retry_authorization_cannot_advance_past_live_attempt(tmp_path):
+    class LiveProvider(FakeProvider):
+        def run(self, request):
+            self.calls.append(request)
+            request.artifacts["report"].write_text("live output")
+            raise KeyboardInterrupt()
+
+        def recover(self, request):
+            raise ProviderInterruptedError("still running", process_alive=True)
+
+    @workflow
+    def report():
+        return Session().run(
+            "report", writes=Artifact.text("report.txt", required=True)
+        )
+
+    with Botpipe(tmp_path, provider=LiveProvider([])) as client:
+        paused = client.run(report)
+        operation = next(
+            row
+            for row in client.inspect(paused.run_id)["operations"]
+            if row["kind"] == "provider"
+        )
+        client.resolve(paused.run_id, operation["id"], retry=True)
+        client.resolve(paused.run_id, operation["id"], retry=True)
+        assert client.journal.get(operation["id"])["response"]["generation"] == 1
+        assert client.resume(paused.run_id, workflow=report).status == "interrupted"
+        assert client.provider.calls[0].artifacts["report"].read_text() == "live output"
+
+
+def test_observed_response_cannot_release_a_known_live_provider(tmp_path):
+    import pytest
+    from botpipe import BotpipeError
+
+    class LiveProvider(FakeProvider):
+        def recover(self, request):
+            raise ProviderInterruptedError("still running", process_alive=True)
+
+    @workflow
+    def report():
+        return Session().run("report")
+
+    with Botpipe(tmp_path, provider=LiveProvider([KeyboardInterrupt()])) as client:
+        paused = client.run(report)
+        operation = next(
+            row
+            for row in client.inspect(paused.run_id)["operations"]
+            if row["kind"] == "provider"
+        )
+        with pytest.raises(BotpipeError, match="still running"):
+            client.resolve(
+                paused.run_id, operation["id"], response=ProviderResponse("done")
+            )
+        assert client.journal.get(operation["id"])["status"] != "completed"
+
+
+def test_pure_library_helper_defaults_are_not_workflow_arguments(tmp_path):
+    from pydantic import Field
+
+    @workflow
+    def schema_metadata():
+        return Field(default=3, gt=0).default
+
+    with Botpipe(tmp_path, provider=FakeProvider([])) as client:
+        result = client.run(schema_metadata)
+        assert result.ok and result.value == 3
+        replay = client.resume(result.run_id, workflow=schema_metadata)
+        assert replay.ok and replay.value == 3

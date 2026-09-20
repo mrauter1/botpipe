@@ -1,3 +1,7 @@
+## Durable verifier outcome
+
+Return a JSON result matching the injected schema. Use `accepted` when the artifacts meet the positive phase condition described below, `needs_rework` when the same phase can be repaired, `needs_replan` when an accepted earlier plan must be revisited, `question` or `blocked` when operator input is required, and `failed` for a terminal domain failure. The phase labels below describe semantic checks; do not return old route labels as the `outcome`. Cite only artifact names supplied by the runtime.
+
 # Implement Refined Workflow Verifier
 
 ## Step Contract
@@ -51,12 +55,12 @@
 - Confirm that the candidate surface is explicit enough for the workflow to derive `candidate_workflow_manifest.json` deterministically after verification.
 - Confirm that the candidate still reflects the accepted plan and has not widened the selected workflow boundary silently.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance
+### Outcome guidance
 - Return `workflow_refinement_applied` only when the candidate surface and build artifacts are explicit enough for evaluation.
 - Return `needs_rework` when the same implementation boundary still holds and the candidate needs local repair.
 - Return `needs_replan` when implementation exposed a material change to the selected workflow boundary or accepted plan.

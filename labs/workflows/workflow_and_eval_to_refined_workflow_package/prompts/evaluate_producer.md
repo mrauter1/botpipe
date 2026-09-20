@@ -1,3 +1,7 @@
+## Durable producer result
+
+After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+
 # Evaluate Refined Workflow Producer
 
 ## Step Contract
@@ -77,16 +81,16 @@
 - Make the overlay validation path explicit by naming the exact command from `invocation_contract`.
 - Keep promotion and rollback guidance concrete enough that publication does not need to infer workflow boundaries or evidence ownership.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance for the verifier
+### Outcome guidance for the verifier
 - `workflow_refinement_evaluated`: the verification package is publication-ready and the workflow can attempt deterministic receipt publication.
 - `needs_rework`: the same refinement boundary still holds, but the candidate needs local repair before publication.
 - `needs_replan`: evaluation showed the accepted refinement boundary or plan changed materially.
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Use `blocked` only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Out Of Scope
 

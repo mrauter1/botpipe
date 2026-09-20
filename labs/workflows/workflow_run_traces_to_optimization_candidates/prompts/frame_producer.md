@@ -1,3 +1,7 @@
+## Durable producer result
+
+After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+
 # Frame Producer
 
 ## Step Contract
@@ -10,9 +14,9 @@
 
 | Artifact | Direction | Notes |
 | --- | --- | --- |
-| `selected_workflow_capability` | Read | Canonical compiled workflow identity. |
+| `selected_workflow_capability` | Read | Canonical callable workflow identity. |
 | `selected_workflow_authoring_surface` | Read | Canonical editable selected-workflow surface. |
-| `selected_workflow_decomposition_surface` | Read | Canonical compiled/decomposition surface. |
+| `selected_workflow_decomposition_surface` | Read | Canonical callable and source-manifest surface. |
 | `selected_workflow_source_manifest` | Read | Deterministic pre-publication source manifest. |
 | `workflow_optimization_scope` | Read | Invocation scope, filters, and boundaries. |
 | `workflow_optimization_trace_corpus` | Read | Deterministic run evidence and step observations. |
@@ -30,15 +34,15 @@
 - Use only the deterministic frame artifacts plus the shared docs/instructions supplied by runtime.
 - Treat `eligible_run_count == 0` as a no-op packaging condition, not a workflow failure.
 
-## Route Guidance
+## Outcome guidance
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
 - Prefer `optimization_scope_framed` when the selected workflow identity, frame artifacts, and eligible trace evidence are coherent.
 - Prefer `no_eligible_trace_evidence` when the corpus shows zero eligible runs after deterministic filtering.
 - Prefer `needs_rework` only for local framing or evidence-interpretation issues.
-- Treat helper routes only when the runtime contract exposes them for this step.
+- Use `blocked` only when a missing prerequisite or irreconcilable contradiction prevents safe progress.
 
 ## Forbidden
 

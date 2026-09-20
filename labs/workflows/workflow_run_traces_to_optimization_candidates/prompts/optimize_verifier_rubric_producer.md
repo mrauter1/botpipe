@@ -1,3 +1,7 @@
+## Durable producer result
+
+After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+
 # Optimize Verifier Rubric Producer
 
 ## Step Contract
@@ -22,7 +26,7 @@
 - Read `workflow_optimization_scope.json`.
 - Apply `optimization_depth`.
 - Treat `max_candidates_per_pass` as a soft candidate budget.
-- Treat verifier prompt, rubric text, feedback specificity, required-output interpretation, and route metadata as one acceptance-function surface.
+- Treat verifier prompt, rubric text, feedback specificity, required-output interpretation, and typed outcome criteria as one acceptance-function surface.
 - Prefer the highest-leverage candidates. Do not pad the list. If you exceed the budget, explain why in the candidate rationale or summary.
 - Keep candidates candidate-only and non-mutating.
 
@@ -31,10 +35,10 @@
 - If the verifier was correct and the producer failed, say that verifier/rubric changes are not applicable.
 - Do not claim proof of improvement without rerun or ablation evidence.
 
-## Route Guidance
+## Outcome guidance
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
 - Use `verifier_rubric_candidates_ready` when grounded acceptance-function candidates exist.
 - Use `verifier_rubric_pass_not_applicable` when acceptance-function changes are not justified.

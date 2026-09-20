@@ -1,3 +1,7 @@
+## Durable producer result
+
+After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+
 # Package Strategy Producer
 
 ## Step Contract
@@ -76,16 +80,16 @@
 - The summary must still show at least three compared candidates and the builder baseline.
 - The next action must be concrete enough that another operator could run it immediately.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance for the verifier
+### Outcome guidance for the verifier
 - `strategy_package_ready`: the package, summary, and next-action artifact are complete and aligned to the selected route.
 - `needs_rework`: the same route still stands, but the package or summary needs local repair.
 - `needs_replan`: packaging revealed that the selected route, recommended workflows, or handoff contract changed materially.
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Use `blocked` only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Out Of Scope
 

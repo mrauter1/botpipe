@@ -1,10 +1,14 @@
+## Durable producer result
+
+After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+
 # Optimize Producer Producer
 
 ## Step Contract
 
 - Role: producer-surface optimizer.
 - Purpose: propose producer-prompt and producer-artifact candidates only.
-- Current boundary: producer surfaces only; do not touch verifier, rubric, route metadata, workflow topology, or runtime behavior.
+- Current boundary: producer surfaces only; do not touch verifier, rubric, typed outcome criteria, workflow topology, or runtime behavior.
 
 ## Artifact Contract
 
@@ -31,10 +35,10 @@
 - Proposals must be tied to mined failures and selected authoring paths.
 - Do not claim improvement proof without rerun or ablation evidence.
 
-## Route Guidance
+## Outcome guidance
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
 - Use `producer_candidates_ready` when at least one defensible producer candidate exists.
 - Use `producer_pass_not_applicable` when evidence suggests producer changes are not the right first move.

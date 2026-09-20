@@ -1,3 +1,7 @@
+## Durable producer result
+
+After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+
 # Plan Verified Remediation Producer
 
 ## Step Contract
@@ -55,16 +59,16 @@
 - Make residual uncertainty explicit instead of hiding it inside a positive recommendation.
 - Treat deployment constraints as real operational limits, not optional notes.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance for the verifier
+### Outcome guidance for the verifier
 - `remediation_planned`: the selected remediation, verification plan, rollout plan, rollback-safety plan, and machine-readable summary are coherent and usable.
 - `needs_rework`: the same remediation-planning boundary still holds, but one or more plan artifacts need local repair.
 - `needs_replan`: the assessment conclusion or fix strategy changed materially and the finding must be reassessed before planning continues.
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only for genuine intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Use `blocked` only for genuine intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Out Of Scope
 
