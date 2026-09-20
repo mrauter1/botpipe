@@ -223,11 +223,79 @@ def test_t05_duplicate_verified_raw_references_are_charged_once(tmp_path):
     assert snap.budget.admitted_bytes == core_bytes + len(data)
 
 
+def test_t05_raw_reference_cannot_escape_through_symlink_ancestor(tmp_path):
+    data = b"outside evidence"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "out.txt").write_bytes(data)
+    ref = {
+        "path": "raw/escape/out.txt",
+        "sha256": hashlib.sha256(data).hexdigest(),
+        "bytes": len(data),
+    }
+    run = _run(
+        tmp_path,
+        "run1",
+        [_step(1, "review", "needs_rework", raw_output_refs={"producer": ref})],
+    )
+    (run / "raw").mkdir()
+    try:
+        (run / "raw" / "escape").symlink_to(outside, target_is_directory=True)
+    except OSError:
+        pytest.skip("symlinks unavailable")
+
+    snap = _capture(tmp_path, [run], explicit_run_refs=True)
+    observation = snap.observations[0]
+
+    assert observation.raw_references[0].verification == "symlink_escape"
+    assert observation.observation_id not in snap.citable_observation_ids(
+        require_raw_content=True
+    )
+    assert snap.shortlist[0].step_id == "review"
+    assert snap.budget.admitted_bytes == sum(
+        (run / name).stat().st_size
+        for name in ("run.json", "trace.jsonl", "static_step_graph.json")
+    )
+
+
 def test_t06_missing_git_and_topology_are_visible_optional_gaps(tmp_path):
     run = _run(tmp_path, "run1", [_step(1, "review", "needs_rework")], graph=False)
     snap = _capture(tmp_path, [run], explicit_run_refs=True)
     assert len(snap.runs) == len(snap.observations) == 1
     assert {i.dimension for i in snap.issues} >= {"git", "topology"}
+
+
+def test_t06_git_absent_empty_and_disabled_preserve_same_trace_observation(tmp_path):
+    records = [_step(1, "review", "needs_rework")]
+    runs = [_run(tmp_path, f"run{i}", records) for i in (1, 2, 3)]
+    (runs[1] / "git_tracking.jsonl").touch()
+    (runs[2] / "git_tracking.jsonl").write_text(
+        json.dumps({"event_type": "git_tracking_disabled", "enabled": False}) + "\n"
+    )
+
+    snap = _capture(tmp_path, runs, explicit_run_refs=True)
+    normalized = [
+        observation.model_dump(
+            exclude={
+                "observation_id",
+                "run_ref",
+                "lane_id",
+                "associated_next_observation_id",
+            }
+        )
+        for observation in snap.observations
+    ]
+
+    assert len(snap.runs) == len(snap.observations) == 3
+    assert normalized == [normalized[0], normalized[0], normalized[0]]
+    assert len(snap.groups) == 1 and len(snap.groups[0].run_refs) == 3
+    assert sum(issue.dimension == "git" for issue in snap.issues) == 2
+    assert all(
+        run.parameter_digest is None
+        and run.configuration_digest is None
+        and run.provider_policy_identity is None
+        for run in snap.runs
+    )
 
 
 def test_t07_independent_rejections_are_recurrence_not_cycles(tmp_path):
@@ -263,6 +331,27 @@ def test_t08_interleaved_lanes_only_form_matched_cycles(tmp_path):
     ]
     snap = _capture(tmp_path, [_run(tmp_path, "run1", records)], explicit_run_refs=True)
     assert snap.step_metrics[0].rework_cycle_count == 3
+
+
+def test_t08_normal_repeated_visits_do_not_create_rework_cycles(tmp_path):
+    records = [
+        _step(
+            sequence,
+            "review",
+            "continue" if sequence < 3 else "done",
+            step_execution_id=f"visit-{sequence}",
+            visit=sequence,
+        )
+        for sequence in (1, 2, 3)
+    ]
+
+    snap = _capture(tmp_path, [_run(tmp_path, "run1", records)], explicit_run_refs=True)
+    metric = snap.step_metrics[0]
+
+    assert all(observation.lineage == "known" for observation in snap.observations)
+    assert all(not observation.rework_cycle for observation in snap.observations)
+    assert metric.rework_rejection_count == 0
+    assert metric.rework_cycle_count == 0
 
 
 def test_t09_attempt_usage_counts_repair_and_distinguishes_unknown_zero_partial(
@@ -411,6 +500,30 @@ def test_t10_nested_start_end_provenance_detects_mixed_source(tmp_path):
     assert snap.next_action == "collect_evidence"
 
 
+def test_t10_runtime_artifact_only_git_commits_do_not_fragment_groups(tmp_path):
+    runs = [
+        _run(tmp_path, f"run{i}", [_step(1, "review", "needs_rework")]) for i in (1, 2)
+    ]
+    for index, run in enumerate(runs, 1):
+        (run / "git_tracking.jsonl").write_text(
+            json.dumps(
+                {
+                    "event_type": "git_commit",
+                    "commit": f"runtime-only-{index}",
+                    "paths": [f".botpipe/tasks/task-run{index}/run.json"],
+                }
+            )
+            + "\n"
+        )
+
+    snap = _capture(tmp_path, runs, explicit_run_refs=True)
+
+    assert len(snap.groups) == 1
+    assert snap.groups[0].run_refs == ("task-run1/run1", "task-run2/run2")
+    assert len({run.structural_group_id for run in snap.runs}) == 1
+    assert snap.step_metrics[0].distinct_run_count == 2
+
+
 def test_t11_names_do_not_infer_provider_or_editable_surface(tmp_path):
     records = [
         _step(
@@ -438,6 +551,34 @@ def test_t11_names_do_not_infer_provider_or_editable_surface(tmp_path):
     assert by_step["model_sounding_python"].complete_usage is True
     assert by_step["model_sounding_python"].attempted_dispatch_count == 0
     assert by_step["publish_model_step"].complete_usage is False
+
+
+def test_t11_failure_only_empty_route_filter_exposes_admitted_denominators(tmp_path):
+    runs = [_run(tmp_path, f"run{i}", [_step(1, "review", "failed")]) for i in (1, 2)]
+
+    snap = _capture(
+        tmp_path,
+        runs,
+        explicit_run_refs=True,
+        route_tags=[],
+    )
+    payload = snap.model_dump(mode="json", by_alias=True)
+
+    assert {run.status for run in snap.runs} == {"failed"}
+    assert snap.selection.route_tags == ()
+    assert snap.selection.denominator == "full_captured_group"
+    assert (
+        snap.selection.selected_run_count,
+        snap.selection.admitted_run_count,
+        snap.selection.focused_observation_count,
+        snap.selection.captured_observation_count,
+    ) == (2, 2, 2, 2)
+    assert snap.shortlist[0].direct_failure_run_count == 2
+    assert not ({"probability", "confidence", "failure_probability"} & payload.keys())
+    assert all(
+        not ({"probability", "confidence", "score"} & metric.keys())
+        for metric in payload["step_metrics"]
+    )
 
 
 def test_t08_unscoped_ambiguous_legacy_lineage_stays_unknown(tmp_path):
@@ -494,6 +635,59 @@ def test_t12_objective_order_and_one_total_top_k(tmp_path, objective, leader):
     assert [r.step_id for r in snap.shortlist] == [leader]
     path = write_evidence_snapshot(snap, tmp_path / "snapshot" / "evidence.json")
     assert read_evidence_snapshot(path) == snap
+
+
+def test_t12_mixed_provider_partial_usage_is_visible_without_cost_claims(tmp_path):
+    records = [
+        {
+            "event_type": "provider_dispatch_finished",
+            "step_execution_id": "exec-1",
+            "dispatch_id": "known",
+            "phase": "producer",
+            "provider": "provider-a",
+            "model": "model-a",
+            "token_usage": {"total_tokens": 10},
+        },
+        {
+            "event_type": "provider_dispatch_finished",
+            "step_execution_id": "exec-1",
+            "dispatch_id": "partial",
+            "phase": "verifier",
+            "provider": "provider-b",
+            "model": "model-b",
+            "token_usage": {"input_tokens": 5},
+        },
+        _step(1, "review", "done"),
+    ]
+
+    snap = _capture(
+        tmp_path,
+        [_run(tmp_path, "run1", records)],
+        explicit_run_refs=True,
+        objective="token_usage",
+    )
+    observation = snap.observations[0]
+    metric = snap.step_metrics[0]
+    rendered = json.dumps(snap.model_dump(mode="json", by_alias=True), sort_keys=True)
+
+    assert observation.usage_availability == "partial"
+    assert [
+        (attempt.provider, attempt.availability) for attempt in observation.attempts
+    ] == [
+        ("provider-a", "known_total"),
+        ("provider-b", "partial"),
+    ]
+    assert {
+        (item.provider, item.model, item.attempted_dispatches, item.known_total_tokens)
+        for item in metric.resource_breakdowns
+    } == {
+        ("provider-a", "model-a", 1, 10),
+        ("provider-b", "model-b", 1, 0),
+    }
+    assert metric.complete_usage is False
+    assert snap.shortlist == ()
+    assert snap.measure_first == (metric.metric_id,)
+    assert all(term not in rendered.lower() for term in ("cost", "price", "efficiency"))
 
 
 def test_t15_byte_admission_skips_large_then_admits_small(tmp_path):

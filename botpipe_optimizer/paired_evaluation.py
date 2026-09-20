@@ -717,7 +717,7 @@ def _validate_budget(result, spec):
     if not isinstance(b, Mapping):
         raise ValueError("botpipe result requires provider_budget")
     maximum, used = b.get("max_turns"), b.get("used_turns")
-    if isinstance(maximum, bool) or maximum != spec.max_provider_turns_per_arm:
+    if isinstance(maximum, bool) or not isinstance(maximum, int) or maximum != spec.max_provider_turns_per_arm:
         raise ValueError("provider budget cap mismatch")
     if isinstance(used, bool) or not isinstance(used, int) or not 0 <= used <= maximum:
         raise ValueError("invalid provider budget usage")

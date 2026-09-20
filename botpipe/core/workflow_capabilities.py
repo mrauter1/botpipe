@@ -194,6 +194,7 @@ class WorkflowCapabilityEntry:
     global_routes: dict[str, str]
     compiled_global_routes: dict[str, WorkflowRouteCapability]
     steps: tuple[WorkflowStepCapability, ...]
+    repo_root: Path | None = None
 
 
 def inspect_workflow_capabilities(root: str | Path) -> tuple[WorkflowCapabilityEntry, ...]:
@@ -218,7 +219,12 @@ def inspect_resolved_workflow(root: str | Path, resolved) -> WorkflowCapabilityE
     root_path = Path(root).resolve()
     catalog_entry = _catalog_entry_for_reference(root_path, resolved.reference)
     compiled = compile_workflow(resolved.workflow_cls)
-    return _capability_entry_from_resolved(resolved, compiled, catalog_entry)
+    return _capability_entry_from_resolved(
+        resolved,
+        compiled,
+        catalog_entry,
+        repo_root=root_path,
+    )
 
 
 def load_workflow_package_contract(root: str | Path, entry: WorkflowCatalogEntry) -> WorkflowLoadedPackage:
@@ -451,7 +457,11 @@ def selected_workflow_capability_payload(entry: WorkflowCapabilityEntry) -> dict
 def selected_workflow_authoring_surface_payload(entry: WorkflowCapabilityEntry) -> dict[str, object]:
     """Return the authoritative editable selected-workflow surface payload."""
 
-    repo_root = _infer_repo_root_from_package_dir(entry.package_dir)
+    repo_root = (
+        entry.repo_root.resolve()
+        if entry.repo_root is not None
+        else _infer_repo_root_from_package_dir(entry.package_dir)
+    )
     runtime_test_path = _runtime_test_path(entry.test_paths)
     asset_paths = [str(path) for path in entry.asset_paths]
     prompt_paths = [str(path) for path in entry.prompt_paths]
@@ -595,10 +605,21 @@ def _inspect_catalog_entry(root_path: Path, entry: WorkflowCatalogEntry) -> Work
     else:
         resolved = _resolve_reference(root_path, str(entry.source_path))
         compiled = compile_workflow(resolved.workflow_cls)
-    return _capability_entry_from_resolved(resolved, compiled, entry)
+    return _capability_entry_from_resolved(
+        resolved,
+        compiled,
+        entry,
+        repo_root=root_path,
+    )
 
 
-def _capability_entry_from_resolved(resolved, compiled: WorkflowPlan, catalog_entry: WorkflowCatalogEntry | None):
+def _capability_entry_from_resolved(
+    resolved,
+    compiled: WorkflowPlan,
+    catalog_entry: WorkflowCatalogEntry | None,
+    *,
+    repo_root: Path | None = None,
+):
     reference = resolved.reference
     source_path = reference.source_path.resolve() if reference.source_path is not None else None
     if source_path is None:
@@ -702,6 +723,7 @@ def _capability_entry_from_resolved(resolved, compiled: WorkflowPlan, catalog_en
             )
             for step in compiled.steps.values()
         ),
+        repo_root=None if repo_root is None else repo_root.resolve(),
     )
 
 
@@ -1399,27 +1421,20 @@ def _selected_workflow_repo_relative(
     if path is None:
         return None
     resolved = Path(path).resolve()
-    canonical_package_root = _canonical_first_party_repo_relative_root(repo_root, entry)
-    if canonical_package_root is not None:
-        try:
-            return str(canonical_package_root / resolved.relative_to(entry.package_dir.resolve()))
-        except ValueError:
-            pass
-    return _repo_relative(repo_root, resolved)
+    try:
+        return resolved.relative_to(repo_root).as_posix()
+    except ValueError:
+        pass
 
-
-def _canonical_first_party_repo_relative_root(
-    repo_root: Path,
-    entry: WorkflowCapabilityEntry,
-) -> Path | None:
-    package_dir_repo_relative = _optional_repo_relative(repo_root, entry.package_dir)
-    if package_dir_repo_relative != str(Path("workflows") / entry.workflow_name):
-        return None
-    doc_path_repo_relative = _optional_repo_relative(repo_root, entry.doc_path)
-    expected_doc_repo_relative = str(Path("workflows") / entry.workflow_name / "README.md")
-    if doc_path_repo_relative != expected_doc_repo_relative:
-        return None
-    return Path("botpipe") / "workflows" / entry.workflow_name
+    # Installed workflow packages live outside the caller's workspace. Preserve
+    # their import-relative identity (for example botpipe/workflows/devloop)
+    # without remapping workspace-owned workflows that happen to use the same
+    # package layout.
+    installed_root = _infer_repo_root_from_package_dir(entry.package_dir)
+    try:
+        return resolved.relative_to(installed_root).as_posix()
+    except ValueError:
+        return str(resolved)
 
 
 def _infer_repo_root_from_package_dir(package_dir: Path) -> Path:

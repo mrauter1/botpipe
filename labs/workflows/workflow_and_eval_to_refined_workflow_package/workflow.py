@@ -22,7 +22,10 @@ from botpipe_optimizer import (
     write_selected_workflow_authoring_surface,
     write_selected_workflow_capability_snapshot,
 )
-from botpipe_optimizer.candidate_validation import ValidationResult, validate_frozen_candidate
+from botpipe_optimizer.candidate_validation import (
+    ValidationResult,
+    validate_frozen_candidate,
+)
 from botpipe_optimizer.execution_trees import (
     ExecutionArm,
     assert_execution_arm_unchanged,
@@ -32,7 +35,13 @@ from botpipe_optimizer.execution_trees import (
     snapshot_execution_arm,
     verify_frozen_execution_tree,
 )
-from botpipe_optimizer.paired_evaluation import PAIRED_EVALUATION_SCHEMA, finalize_paired_evaluation_record, load_evaluation_spec, run_paired_evaluation, validate_paired_evaluation_record
+from botpipe_optimizer.paired_evaluation import (
+    PAIRED_EVALUATION_SCHEMA,
+    finalize_paired_evaluation_record,
+    load_evaluation_spec,
+    run_paired_evaluation,
+    validate_paired_evaluation_record,
+)
 from botpipe_optimizer.candidate_surfaces import derive_surface_manifest
 from botpipe.stdlib import (
     normalize_optional_string,
@@ -45,12 +54,28 @@ from botpipe.stdlib import (
     validate_selected_workflow_artifact_alignment,
     validate_selected_workflow_capability_and_authoring_snapshots,
 )
-from botpipe.stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt, write_workflow_json
+from botpipe.stdlib.lifecycle import (
+    open_workflow_sessions,
+    write_invocation_contract,
+    write_publication_receipt,
+    write_workflow_json,
+)
 
-from botpipe import Event, FINISH, Prompt, Session, Workflow, produce_verify_step, python_step
+from botpipe import (
+    Event,
+    FINISH,
+    Prompt,
+    Session,
+    Workflow,
+    produce_verify_step,
+    python_step,
+)
 from botpipe.core import Artifact
 from botpipe.core.schema_registry import WORKFLOW_REFINEMENT_EVIDENCE_SCHEMA
-from botpipe_optimizer.recommendations import OptimizationCandidateSelection, load_optimization_candidate
+from botpipe_optimizer.recommendations import (
+    OptimizationCandidateSelection,
+    load_optimization_candidate,
+)
 from botpipe_optimizer.records import REFINEMENT_HANDOFF_SCHEMA
 
 from .contracts import (
@@ -63,7 +88,6 @@ from .contracts import (
     WorkflowRefinementEvaluationPayload,
     WorkflowRefinementPlanPayload,
 )
-
 
 _AUTHORITATIVE_EVALUATION_ARTIFACTS = frozenset(
     {
@@ -133,7 +157,9 @@ def _after_implement_refined_workflow(ctx):
         ctx.artifacts.candidate_workflow_manifest.path.parent,
         _read_json(ctx.artifacts.baseline_workflow_manifest.path),
         ctx.state.selected_workflow_name
-        or _require_text(selected_workflow_name, "build payload must define selected_workflow_name"),
+        or _require_text(
+            selected_workflow_name, "build payload must define selected_workflow_name"
+        ),
     )
     actual_candidate_file_count = _require_positive_int(
         candidate_manifest.get("file_count"),
@@ -152,14 +178,19 @@ def _after_implement_refined_workflow(ctx):
         "build verifier payload must define non-empty changed_relative_paths",
     )
     if payload_candidate_file_count != actual_candidate_file_count:
-        raise ValueError("build verifier payload candidate_file_count must match candidate_workflow_manifest.json")
+        raise ValueError(
+            "build verifier payload candidate_file_count must match candidate_workflow_manifest.json"
+        )
     if payload_changed_relative_paths != actual_changed_relative_paths:
-        raise ValueError("build verifier payload changed_relative_paths must match candidate_workflow_manifest.json")
+        raise ValueError(
+            "build verifier payload changed_relative_paths must match candidate_workflow_manifest.json"
+        )
     ctx.state.build_status = outcome.tag
     if isinstance(selected_workflow_name, str):
         ctx.state.selected_workflow_name = selected_workflow_name
     ctx.state.candidate_file_count = actual_candidate_file_count
     ctx.state.candidate_changed_paths = actual_changed_relative_paths
+    ctx.state.candidate_surface_id = candidate_manifest["surface_id"]
     return None
 
 
@@ -181,10 +212,20 @@ def _after_evaluate_refined_workflow(ctx):
         "evaluation verifier payload must define a non-empty next_action",
     )
     ready_for_publication = payload.get("ready_for_publication")
-    if outcome.tag == "workflow_refinement_evaluated" and ready_for_publication is not True:
-        raise ValueError("workflow_refinement_evaluated requires ready_for_publication=true")
-    if ctx.state.candidate_file_count and candidate_file_count != ctx.state.candidate_file_count:
-        raise ValueError("evaluation verifier payload candidate_file_count must match workflow state")
+    if (
+        outcome.tag == "workflow_refinement_evaluated"
+        and ready_for_publication is not True
+    ):
+        raise ValueError(
+            "workflow_refinement_evaluated requires ready_for_publication=true"
+        )
+    if (
+        ctx.state.candidate_file_count
+        and candidate_file_count != ctx.state.candidate_file_count
+    ):
+        raise ValueError(
+            "evaluation verifier payload candidate_file_count must match workflow state"
+        )
     ctx.state.evaluation_status = outcome.tag
     if isinstance(selected_workflow_name, str):
         ctx.state.selected_workflow_name = selected_workflow_name
@@ -214,13 +255,18 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
         desired_outcome: str | None = None
         constraints: list[str] = Field(default_factory=list)
         target_test_command: str | None = None
-        target_test_argv: list[str] | None = Field(default_factory=lambda: ["pytest", "-q"])
+        target_test_argv: list[str] | None = Field(
+            default_factory=lambda: ["pytest", "-q"]
+        )
         framing_status: str | None = None
         planning_status: str | None = None
         build_status: str | None = None
         evaluation_status: str | None = None
         candidate_file_count: int = 0
         candidate_changed_paths: list[str] = Field(default_factory=list)
+        baseline_surface_id: str | None = None
+        baseline_authoritative_sources: dict[str, str] = Field(default_factory=dict)
+        candidate_surface_id: str | None = None
         evaluation_authoritative_artifacts: list[str] = Field(default_factory=list)
         evaluation_next_action: str | None = None
         published: bool = False
@@ -233,34 +279,72 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
     request = Artifact("{{ run.folder }}/request.md")
     framework_architecture_doc = Artifact("{{ root }}/docs/architecture.md")
     framework_authoring_doc = Artifact("{{ root }}/docs/authoring.md")
-    workflow_authoring_guidelines = Artifact("{{ root }}/docs/workflow_authoring_guidelines.md")
-    refinement_package_checklist = Artifact("{{ package.folder }}/assets/refinement_package_checklist.md")
+    workflow_authoring_guidelines = Artifact(
+        "{{ root }}/docs/workflow_authoring_guidelines.md"
+    )
+    refinement_package_checklist = Artifact(
+        "{{ package.folder }}/assets/refinement_package_checklist.md"
+    )
 
     invocation_contract = Artifact("{{ workflow.folder }}/invocation_contract.json")
-    selected_workflow_capability = Artifact("{{ workflow.folder }}/selected_workflow_capability.json")
-    selected_workflow_authoring_surface = Artifact("{{ workflow.folder }}/selected_workflow_authoring_surface.json")
-    baseline_workflow_surface = Artifact("{{ workflow.folder }}/baseline_workflow_surface")
-    baseline_workflow_manifest = Artifact("{{ workflow.folder }}/baseline_workflow_manifest.json")
-    baseline_evaluation_summary = Artifact("{{ workflow.folder }}/baseline_evaluation_summary.json")
-    baseline_evaluation_findings = Artifact("{{ workflow.folder }}/baseline_evaluation_findings.md")
+    selected_workflow_capability = Artifact(
+        "{{ workflow.folder }}/selected_workflow_capability.json"
+    )
+    selected_workflow_authoring_surface = Artifact(
+        "{{ workflow.folder }}/selected_workflow_authoring_surface.json"
+    )
+    baseline_workflow_surface = Artifact(
+        "{{ workflow.folder }}/baseline_workflow_surface"
+    )
+    baseline_workflow_manifest = Artifact(
+        "{{ workflow.folder }}/baseline_workflow_manifest.json"
+    )
+    baseline_evaluation_summary = Artifact(
+        "{{ workflow.folder }}/baseline_evaluation_summary.json"
+    )
+    baseline_evaluation_findings = Artifact(
+        "{{ workflow.folder }}/baseline_evaluation_findings.md"
+    )
     baseline_failure_modes = Artifact("{{ workflow.folder }}/baseline_failure_modes.md")
-    baseline_refinement_evidence = Artifact("{{ workflow.folder }}/baseline_refinement_evidence.json")
-    baseline_refinement_evidence_summary = Artifact("{{ workflow.folder }}/baseline_refinement_evidence.md")
-    refinement_request_brief = Artifact("{{ workflow.folder }}/refinement_request_brief.md")
-    refinement_acceptance_criteria = Artifact("{{ workflow.folder }}/refinement_acceptance_criteria.md")
+    baseline_refinement_evidence = Artifact(
+        "{{ workflow.folder }}/baseline_refinement_evidence.json"
+    )
+    baseline_refinement_evidence_summary = Artifact(
+        "{{ workflow.folder }}/baseline_refinement_evidence.md"
+    )
+    refinement_request_brief = Artifact(
+        "{{ workflow.folder }}/refinement_request_brief.md"
+    )
+    refinement_acceptance_criteria = Artifact(
+        "{{ workflow.folder }}/refinement_acceptance_criteria.md"
+    )
     refinement_strategy = Artifact("{{ workflow.folder }}/refinement_strategy.md")
     workflow_change_plan = Artifact("{{ workflow.folder }}/workflow_change_plan.md")
     regression_guardrails = Artifact("{{ workflow.folder }}/regression_guardrails.md")
-    candidate_workflow_surface = Artifact("{{ workflow.folder }}/candidate_workflow_surface")
-    candidate_workflow_manifest = Artifact("{{ workflow.folder }}/candidate_workflow_manifest.json")
-    refinement_build_report = Artifact("{{ workflow.folder }}/refinement_build_report.md")
+    candidate_workflow_surface = Artifact(
+        "{{ workflow.folder }}/candidate_workflow_surface"
+    )
+    candidate_workflow_manifest = Artifact(
+        "{{ workflow.folder }}/candidate_workflow_manifest.json"
+    )
+    refinement_build_report = Artifact(
+        "{{ workflow.folder }}/refinement_build_report.md"
+    )
     candidate_diff_summary = Artifact("{{ workflow.folder }}/candidate_diff_summary.md")
-    refinement_verification_report = Artifact("{{ workflow.folder }}/refinement_verification_report.md")
-    evaluation_delta_report = Artifact("{{ workflow.folder }}/evaluation_delta_report.md")
+    refinement_verification_report = Artifact(
+        "{{ workflow.folder }}/refinement_verification_report.md"
+    )
+    evaluation_delta_report = Artifact(
+        "{{ workflow.folder }}/evaluation_delta_report.md"
+    )
     promotion_record = Artifact("{{ workflow.folder }}/promotion_record.md")
     rollback_plan = Artifact("{{ workflow.folder }}/rollback_plan.md")
-    paired_evaluation_result = Artifact("{{ workflow.folder }}/paired_evaluation_result.json")
-    workflow_refinement_receipt = Artifact("{{ workflow.folder }}/workflow_refinement_receipt.json")
+    paired_evaluation_result = Artifact(
+        "{{ workflow.folder }}/paired_evaluation_result.json"
+    )
+    workflow_refinement_receipt = Artifact(
+        "{{ workflow.folder }}/workflow_refinement_receipt.json"
+    )
 
     frame_refinement_request = produce_verify_step(
         producer_prompt=Prompt.file("prompts/frame_producer.md"),
@@ -302,7 +386,11 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             refinement_request_brief,
             refinement_acceptance_criteria,
         ],
-        producer_writes=[refinement_strategy, workflow_change_plan, regression_guardrails],
+        producer_writes=[
+            refinement_strategy,
+            workflow_change_plan,
+            regression_guardrails,
+        ],
         control_schema=WorkflowRefinementPlanPayload,
         routes=DESIGN_REFINEMENT_PLAN_ROUTE_CONTRACTS,
         after_verifier=_after_design_refinement_plan,
@@ -369,7 +457,7 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
     @python_step(
         name="bootstrap",
         requires=[request],
-        writes=[invocation_contract],
+        writes=[invocation_contract, workflow_refinement_receipt],
         routes={"inputs_prepared": "capture_refinement_context"},
     )
     def bootstrap(ctx):
@@ -397,12 +485,28 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
                 "evaluation_status": None,
                 "candidate_file_count": 0,
                 "candidate_changed_paths": [],
+                "baseline_surface_id": None,
+                "baseline_authoritative_sources": {},
+                "candidate_surface_id": None,
                 "evaluation_authoritative_artifacts": [],
                 "evaluation_next_action": None,
                 "published": False,
             }
         )
-        open_workflow_sessions(ctx, "frame_session", "design_session", "build_session", "evaluate_session")
+        write_workflow_json(
+            ctx,
+            "workflow_refinement_receipt.json",
+            {
+                "workflow_name": ctx.workflow_name,
+                "run_id": ctx.run_id,
+                "published": False,
+                "status": "incomplete",
+                "stop_reason": "refinement_in_progress",
+            },
+        )
+        open_workflow_sessions(
+            ctx, "frame_session", "design_session", "build_session", "evaluate_session"
+        )
         write_invocation_contract(
             ctx,
             {
@@ -443,15 +547,24 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
     )
     def capture_refinement_context(ctx):
         repo_root = ctx.root.resolve()
-        capability_path = write_selected_workflow_capability_snapshot(ctx, ctx.state.selected_workflow_reference)
-        authoring_surface_path = write_selected_workflow_authoring_surface(ctx, ctx.state.selected_workflow_reference)
+        capability_path = write_selected_workflow_capability_snapshot(
+            ctx, ctx.state.selected_workflow_reference
+        )
+        authoring_surface_path = write_selected_workflow_authoring_surface(
+            ctx, ctx.state.selected_workflow_reference
+        )
 
         capability_snapshot = _read_json(capability_path)
         authoring_snapshot = _read_json(authoring_surface_path)
-        _require_text(ctx.state.selected_workflow_reference, "selected_workflow_reference must stay non-empty")
-        selected_workflow_name, _, authoring_surface = validate_selected_workflow_capability_and_authoring_snapshots(
-            capability_snapshot,
-            authoring_snapshot,
+        _require_text(
+            ctx.state.selected_workflow_reference,
+            "selected_workflow_reference must stay non-empty",
+        )
+        selected_workflow_name, _, authoring_surface = (
+            validate_selected_workflow_capability_and_authoring_snapshots(
+                capability_snapshot,
+                authoring_snapshot,
+            )
         )
         baseline_manifest = _write_baseline_workflow_manifest(
             ctx,
@@ -463,27 +576,63 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
         selection = None
         if ctx.state.optimization_receipt_path is not None:
             selection = load_optimization_candidate(
-                optimization_receipt_path=_resolve_input_path(repo_root, ctx.state.optimization_receipt_path, "optimization_receipt_path"),
-                candidate_id=_require_text(ctx.state.candidate_id, "candidate_id must be non-empty"),
+                optimization_receipt_path=_resolve_input_path(
+                    repo_root,
+                    ctx.state.optimization_receipt_path,
+                    "optimization_receipt_path",
+                ),
+                candidate_id=_require_text(
+                    ctx.state.candidate_id, "candidate_id must be non-empty"
+                ),
                 expected_selected_workflow=selected_workflow_name,
-                allowed_kinds=("producer_prompt", "verifier_rubric", "tokens", "workflow"),
+                allowed_kinds=(
+                    "producer_prompt",
+                    "verifier_rubric",
+                    "tokens",
+                    "workflow",
+                ),
             )
             _assert_optimizer_baseline_matches_capture(selection, baseline_manifest)
             _write_optimization_selection_inputs(ctx, selection, selected_workflow_name)
         else:
-            summary_source = _resolve_input_path(repo_root, _require_text(ctx.state.evaluation_summary_path, "evaluation_summary_path must be non-empty"), "evaluation_summary_path")
-            findings_source = _resolve_input_path(repo_root, _require_text(ctx.state.evaluation_findings_path, "evaluation_findings_path must be non-empty"), "evaluation_findings_path")
+            summary_source = _resolve_input_path(
+                repo_root,
+                _require_text(
+                    ctx.state.evaluation_summary_path,
+                    "evaluation_summary_path must be non-empty",
+                ),
+                "evaluation_summary_path",
+            )
+            findings_source = _resolve_input_path(
+                repo_root,
+                _require_text(
+                    ctx.state.evaluation_findings_path,
+                    "evaluation_findings_path must be non-empty",
+                ),
+                "evaluation_findings_path",
+            )
             summary_payload = _read_json(summary_source)
-            _validate_evaluation_summary_selected_workflow(summary_payload, selected_workflow_name)
-            write_workflow_json(ctx, "baseline_evaluation_summary.json", summary_payload)
-            _write_text(ctx.workflow_folder / "baseline_evaluation_findings.md", findings_source.read_text(encoding="utf-8"))
+            _validate_evaluation_summary_selected_workflow(
+                summary_payload, selected_workflow_name
+            )
+            write_workflow_json(
+                ctx, "baseline_evaluation_summary.json", summary_payload
+            )
+            _write_text(
+                ctx.workflow_folder / "baseline_evaluation_findings.md",
+                findings_source.read_text(encoding="utf-8"),
+            )
 
         if ctx.state.failure_modes_path is None:
             failure_modes_text = _NO_FAILURE_MODES_SUPPLIED_TEXT
         else:
-            failure_modes_source = _resolve_input_path(repo_root, ctx.state.failure_modes_path, "failure_modes_path")
+            failure_modes_source = _resolve_input_path(
+                repo_root, ctx.state.failure_modes_path, "failure_modes_path"
+            )
             failure_modes_text = failure_modes_source.read_text(encoding="utf-8")
-        _write_text(ctx.workflow_folder / "baseline_failure_modes.md", failure_modes_text)
+        _write_text(
+            ctx.workflow_folder / "baseline_failure_modes.md", failure_modes_text
+        )
         if selection is None:
             _write_refinement_evidence_inputs(
                 ctx,
@@ -492,6 +641,11 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
                 refinement_evidence_path=ctx.state.refinement_evidence_path,
             )
         ctx.state.selected_workflow_name = selected_workflow_name
+        ctx.state.baseline_surface_id = baseline_manifest["surface_id"]
+        ctx.state.baseline_authoritative_sources = {
+            entry["relative_path"]: entry["source_path"]
+            for entry in baseline_manifest["files"]
+        }
         return Event("refinement_context_captured")
 
     @python_step(
@@ -517,34 +671,50 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
     def publish_refined_workflow(ctx):
         workflow_folder = ctx.workflow_folder
         required_paths = {
-            "selected_workflow_capability": workflow_folder / "selected_workflow_capability.json",
-            "selected_workflow_authoring_surface": workflow_folder / "selected_workflow_authoring_surface.json",
-            "baseline_workflow_manifest": workflow_folder / "baseline_workflow_manifest.json",
-            "baseline_evaluation_summary": workflow_folder / "baseline_evaluation_summary.json",
-            "baseline_evaluation_findings": workflow_folder / "baseline_evaluation_findings.md",
+            "selected_workflow_capability": workflow_folder
+            / "selected_workflow_capability.json",
+            "selected_workflow_authoring_surface": workflow_folder
+            / "selected_workflow_authoring_surface.json",
+            "baseline_workflow_manifest": workflow_folder
+            / "baseline_workflow_manifest.json",
+            "baseline_evaluation_summary": workflow_folder
+            / "baseline_evaluation_summary.json",
+            "baseline_evaluation_findings": workflow_folder
+            / "baseline_evaluation_findings.md",
             "baseline_failure_modes": workflow_folder / "baseline_failure_modes.md",
-            "baseline_refinement_evidence": workflow_folder / "baseline_refinement_evidence.json",
-            "baseline_refinement_evidence_summary": workflow_folder / "baseline_refinement_evidence.md",
-            "candidate_workflow_manifest": workflow_folder / "candidate_workflow_manifest.json",
-            "refinement_verification_report": workflow_folder / "refinement_verification_report.md",
+            "baseline_refinement_evidence": workflow_folder
+            / "baseline_refinement_evidence.json",
+            "baseline_refinement_evidence_summary": workflow_folder
+            / "baseline_refinement_evidence.md",
+            "candidate_workflow_manifest": workflow_folder
+            / "candidate_workflow_manifest.json",
+            "refinement_verification_report": workflow_folder
+            / "refinement_verification_report.md",
             "evaluation_delta_report": workflow_folder / "evaluation_delta_report.md",
             "promotion_record": workflow_folder / "promotion_record.md",
             "rollback_plan": workflow_folder / "rollback_plan.md",
         }
         required_dirs = {
             "baseline_workflow_surface": workflow_folder / "baseline_workflow_surface",
-            "candidate_workflow_surface": workflow_folder / "candidate_workflow_surface",
+            "candidate_workflow_surface": workflow_folder
+            / "candidate_workflow_surface",
         }
         for artifact_path in required_paths.values():
             if not artifact_path.exists():
-                raise FileNotFoundError(f"missing required publication artifact at {artifact_path}")
+                raise FileNotFoundError(
+                    f"missing required publication artifact at {artifact_path}"
+                )
         for artifact_path in required_dirs.values():
             if not artifact_path.exists():
-                raise FileNotFoundError(f"missing required publication artifact at {artifact_path}")
+                raise FileNotFoundError(
+                    f"missing required publication artifact at {artifact_path}"
+                )
 
         repo_root = ctx.root.resolve()
         capability_snapshot = _read_json(required_paths["selected_workflow_capability"])
-        authoring_snapshot = _read_json(required_paths["selected_workflow_authoring_surface"])
+        authoring_snapshot = _read_json(
+            required_paths["selected_workflow_authoring_surface"]
+        )
         baseline_manifest = _read_json(required_paths["baseline_workflow_manifest"])
         candidate_manifest = _read_json(required_paths["candidate_workflow_manifest"])
         read_required_text(
@@ -555,7 +725,9 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             required_paths["baseline_failure_modes"],
             "baseline_failure_modes.md must be non-empty",
         )
-        baseline_evaluation_summary = _read_json(required_paths["baseline_evaluation_summary"])
+        baseline_evaluation_summary = _read_json(
+            required_paths["baseline_evaluation_summary"]
+        )
         read_required_text(
             required_paths["refinement_verification_report"],
             "refinement_verification_report.md must be non-empty",
@@ -573,22 +745,40 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             "rollback_plan.md must be non-empty",
         )
 
-        _require_text(ctx.state.selected_workflow_reference, "selected_workflow_reference must stay non-empty")
-        selected_workflow_name, _, authoring_surface = validate_selected_workflow_capability_and_authoring_snapshots(
-            capability_snapshot,
-            authoring_snapshot,
+        _require_text(
+            ctx.state.selected_workflow_reference,
+            "selected_workflow_reference must stay non-empty",
         )
-        refinement_evidence_payload = _read_json(required_paths["baseline_refinement_evidence"])
-        _validate_refinement_evidence_payload(refinement_evidence_payload, selected_workflow_name)
-        optimization_selection = _reload_optimization_selection(ctx, repo_root, selected_workflow_name)
+        selected_workflow_name, _, authoring_surface = (
+            validate_selected_workflow_capability_and_authoring_snapshots(
+                capability_snapshot,
+                authoring_snapshot,
+            )
+        )
+        refinement_evidence_payload = _read_json(
+            required_paths["baseline_refinement_evidence"]
+        )
+        _validate_refinement_evidence_payload(
+            refinement_evidence_payload, selected_workflow_name
+        )
+        optimization_selection = _reload_optimization_selection(
+            ctx, repo_root, selected_workflow_name
+        )
         if optimization_selection is not None:
-            _assert_optimizer_baseline_matches_capture(optimization_selection, baseline_manifest)
+            _assert_optimizer_baseline_matches_capture(
+                optimization_selection, baseline_manifest
+            )
         read_required_text(
             required_paths["baseline_refinement_evidence_summary"],
             "baseline_refinement_evidence.md must be non-empty",
         )
-        _validate_evaluation_summary_selected_workflow(baseline_evaluation_summary, selected_workflow_name)
-        if ctx.state.selected_workflow_name is not None and ctx.state.selected_workflow_name != selected_workflow_name:
+        _validate_evaluation_summary_selected_workflow(
+            baseline_evaluation_summary, selected_workflow_name
+        )
+        if (
+            ctx.state.selected_workflow_name is not None
+            and ctx.state.selected_workflow_name != selected_workflow_name
+        ):
             raise ValueError("selected_workflow snapshots must match workflow state")
         expected_boundary = _authoring_surface_boundary(authoring_surface, repo_root)
 
@@ -600,8 +790,16 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             raise ValueError(
                 "baseline_workflow_manifest.json relative_paths must match selected_workflow_authoring_surface.json"
             )
-        _validate_capability_matches_authoring_surface(capability_snapshot, authoring_surface)
-        _validate_baseline_manifest(baseline_manifest, repo_root, expected_boundary)
+        _validate_capability_matches_authoring_surface(
+            capability_snapshot, authoring_surface
+        )
+        _assert_refinement_anchors(ctx, baseline_manifest, candidate_manifest)
+        _validate_baseline_manifest(
+            baseline_manifest,
+            repo_root,
+            expected_boundary,
+            expected_surface_root=required_dirs["baseline_workflow_surface"],
+        )
         validate_authoritative_surface_sources_unchanged(
             baseline_manifest,
             repo_root,
@@ -624,16 +822,30 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             candidate_manifest.get("changed_relative_paths"),
             "candidate_workflow_manifest.json must define non-empty changed_relative_paths",
         )
-        if ctx.state.candidate_file_count and candidate_file_count != ctx.state.candidate_file_count:
-            raise ValueError("candidate_workflow_manifest.json file_count must match workflow state")
-        if ctx.state.candidate_changed_paths and candidate_changed_paths != ctx.state.candidate_changed_paths:
-            raise ValueError("candidate_workflow_manifest.json changed_relative_paths must match workflow state")
-        if not _AUTHORITATIVE_EVALUATION_ARTIFACTS.issubset(ctx.state.evaluation_authoritative_artifacts):
+        if (
+            ctx.state.candidate_file_count
+            and candidate_file_count != ctx.state.candidate_file_count
+        ):
+            raise ValueError(
+                "candidate_workflow_manifest.json file_count must match workflow state"
+            )
+        if (
+            ctx.state.candidate_changed_paths
+            and candidate_changed_paths != ctx.state.candidate_changed_paths
+        ):
+            raise ValueError(
+                "candidate_workflow_manifest.json changed_relative_paths must match workflow state"
+            )
+        if not _AUTHORITATIVE_EVALUATION_ARTIFACTS.issubset(
+            ctx.state.evaluation_authoritative_artifacts
+        ):
             raise ValueError(
                 "workflow state authoritative evaluation artifacts must include refinement_verification_report, evaluation_delta_report, promotion_record, and rollback_plan"
             )
         if ctx.state.evaluation_next_action is None:
-            raise ValueError("workflow state must define evaluation_next_action before publication")
+            raise ValueError(
+                "workflow state must define evaluation_next_action before publication"
+            )
 
         validation_result, paired_evaluation = _validate_and_evaluate_candidate(
             ctx,
@@ -641,6 +853,29 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             selected_workflow_name=selected_workflow_name,
             baseline_manifest=baseline_manifest,
             candidate_manifest=candidate_manifest,
+        )
+        # Recheck the exact published files after all subprocesses have returned.
+        baseline_manifest = _read_json(required_paths["baseline_workflow_manifest"])
+        candidate_manifest = _read_json(required_paths["candidate_workflow_manifest"])
+        _assert_refinement_anchors(ctx, baseline_manifest, candidate_manifest)
+        _validate_baseline_manifest(
+            baseline_manifest,
+            repo_root,
+            expected_boundary,
+            expected_surface_root=required_dirs["baseline_workflow_surface"],
+        )
+        validate_authoritative_surface_sources_unchanged(
+            baseline_manifest,
+            repo_root,
+            baseline_manifest_label="baseline_workflow_manifest.json",
+            drift_error_prefix="authoritative selected workflow file changed during validation",
+        )
+        _validate_candidate_manifest(
+            candidate_manifest,
+            repo_root,
+            expected_boundary,
+            baseline_manifest,
+            expected_surface_root=required_dirs["candidate_workflow_surface"],
         )
         write_workflow_json(ctx, "paired_evaluation_result.json", paired_evaluation)
 
@@ -670,29 +905,70 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
                     "paired_evaluation_result",
                     "workflow_refinement_receipt",
                 ],
-                "selected_workflow_capability": str(required_paths["selected_workflow_capability"]),
-                "selected_workflow_authoring_surface": str(required_paths["selected_workflow_authoring_surface"]),
-                "baseline_workflow_surface": str(required_dirs["baseline_workflow_surface"]),
-                "baseline_workflow_manifest": str(required_paths["baseline_workflow_manifest"]),
-                "baseline_evaluation_summary": str(required_paths["baseline_evaluation_summary"]),
-                "baseline_evaluation_findings": str(required_paths["baseline_evaluation_findings"]),
+                "selected_workflow_capability": str(
+                    required_paths["selected_workflow_capability"]
+                ),
+                "selected_workflow_authoring_surface": str(
+                    required_paths["selected_workflow_authoring_surface"]
+                ),
+                "baseline_workflow_surface": str(
+                    required_dirs["baseline_workflow_surface"]
+                ),
+                "baseline_workflow_manifest": str(
+                    required_paths["baseline_workflow_manifest"]
+                ),
+                "baseline_evaluation_summary": str(
+                    required_paths["baseline_evaluation_summary"]
+                ),
+                "baseline_evaluation_findings": str(
+                    required_paths["baseline_evaluation_findings"]
+                ),
                 "baseline_failure_modes": str(required_paths["baseline_failure_modes"]),
-                "baseline_refinement_evidence": str(required_paths["baseline_refinement_evidence"]),
-                "baseline_refinement_evidence_summary": str(required_paths["baseline_refinement_evidence_summary"]),
-                "candidate_workflow_surface": str(required_dirs["candidate_workflow_surface"]),
-                "candidate_workflow_manifest": str(required_paths["candidate_workflow_manifest"]),
-                "refinement_verification_report": str(required_paths["refinement_verification_report"]),
-                "evaluation_delta_report": str(required_paths["evaluation_delta_report"]),
+                "baseline_refinement_evidence": str(
+                    required_paths["baseline_refinement_evidence"]
+                ),
+                "baseline_refinement_evidence_summary": str(
+                    required_paths["baseline_refinement_evidence_summary"]
+                ),
+                "candidate_workflow_surface": str(
+                    required_dirs["candidate_workflow_surface"]
+                ),
+                "candidate_workflow_manifest": str(
+                    required_paths["candidate_workflow_manifest"]
+                ),
+                "refinement_verification_report": str(
+                    required_paths["refinement_verification_report"]
+                ),
+                "evaluation_delta_report": str(
+                    required_paths["evaluation_delta_report"]
+                ),
                 "promotion_record": str(required_paths["promotion_record"]),
                 "rollback_plan": str(required_paths["rollback_plan"]),
-                "paired_evaluation_result": str(workflow_folder / "paired_evaluation_result.json"),
+                "paired_evaluation_result": str(
+                    workflow_folder / "paired_evaluation_result.json"
+                ),
                 "next_action": ctx.state.evaluation_next_action,
-                "optimization_candidate_id": None if optimization_selection is None else optimization_selection.candidate.candidate_id,
-                "optimization_candidate_set_id": None if optimization_selection is None else optimization_selection.candidate_set.candidate_set_id,
-                "optimization_evidence_snapshot_id": None if optimization_selection is None else optimization_selection.candidate_set.evidence_snapshot_id,
-                "validation_result": validation_result.model_dump(mode="json", by_alias=True),
+                "optimization_candidate_id": (
+                    None
+                    if optimization_selection is None
+                    else optimization_selection.candidate.candidate_id
+                ),
+                "optimization_candidate_set_id": (
+                    None
+                    if optimization_selection is None
+                    else optimization_selection.candidate_set.candidate_set_id
+                ),
+                "optimization_evidence_snapshot_id": (
+                    None
+                    if optimization_selection is None
+                    else optimization_selection.candidate_set.evidence_snapshot_id
+                ),
+                "validation_result": validation_result.model_dump(
+                    mode="json", by_alias=True
+                ),
                 "paired_evaluation": paired_evaluation,
                 "published": True,
+                "status": "accepted",
             },
         )
         ctx.state.selected_workflow_name = selected_workflow_name
@@ -701,6 +977,22 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
 
     entry = bootstrap
 
+
+def _assert_refinement_anchors(ctx, baseline, candidate) -> None:
+    if not ctx.state.baseline_surface_id or not ctx.state.candidate_surface_id:
+        raise ValueError(
+            "refinement checkpoint lacks surface anchors; start a new refinement run"
+        )
+    if baseline.get("surface_id") != ctx.state.baseline_surface_id:
+        raise ValueError("baseline surface changed; start a new refinement run")
+    sources = {
+        entry.get("relative_path"): entry.get("source_path")
+        for entry in baseline.get("files", [])
+    }
+    if sources != ctx.state.baseline_authoritative_sources:
+        raise ValueError("baseline source paths changed; start a new refinement run")
+    if candidate.get("surface_id") != ctx.state.candidate_surface_id:
+        raise ValueError("candidate surface changed after implementation")
 
 
 def _validate_evaluation_summary_selected_workflow(
@@ -737,7 +1029,10 @@ def _write_baseline_workflow_manifest(
         expected_root=Path(surface_manifest["surface_root"]),
         boundary=identity_boundary,
         surface_kind="baseline",
-        authoritative_sources={entry["relative_path"]: Path(entry["source_path"]) for entry in boundary["baseline_source_entries"]},
+        authoritative_sources={
+            entry["relative_path"]: Path(entry["source_path"])
+            for entry in boundary["baseline_source_entries"]
+        },
     )
     manifest = {
         **canonical,
@@ -765,8 +1060,12 @@ def _write_candidate_workflow_manifest(
         baseline_manifest.get("package_root_relative_path"),
         "baseline_workflow_manifest.json must define non-empty package_root_relative_path",
     )
-    doc_relative_path = _normalize_optional_text(baseline_manifest.get("doc_relative_path"))
-    runtime_test_relative_path = _normalize_optional_text(baseline_manifest.get("runtime_test_relative_path"))
+    doc_relative_path = _normalize_optional_text(
+        baseline_manifest.get("doc_relative_path")
+    )
+    runtime_test_relative_path = _normalize_optional_text(
+        baseline_manifest.get("runtime_test_relative_path")
+    )
     legacy_surface = derive_candidate_surface_manifest(
         workflow_folder=workflow_folder,
         baseline_manifest=baseline_manifest,
@@ -789,8 +1088,19 @@ def _write_candidate_workflow_manifest(
         boundary=identity_boundary,
         surface_kind="candidate",
     )
+    legacy_files = {entry["relative_path"]: entry for entry in legacy_surface["files"]}
+    files = [
+        {
+            **entry,
+            "changed_from_baseline": legacy_files[entry["relative_path"]][
+                "changed_from_baseline"
+            ],
+        }
+        for entry in canonical["files"]
+    ]
     manifest = {
         **canonical,
+        "files": files,
         "selected_workflow_name": selected_workflow_name,
         "package_name": package_name,
         "package_root_relative_path": package_root_relative_path,
@@ -802,11 +1112,15 @@ def _write_candidate_workflow_manifest(
         "added_relative_paths": legacy_surface["added_relative_paths"],
     }
     target_path = workflow_folder / "candidate_workflow_manifest.json"
-    target_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    target_path.write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     return manifest
 
 
-def _authoring_surface_boundary(authoring_surface: Mapping[str, Any], repo_root: Path) -> dict[str, Any]:
+def _authoring_surface_boundary(
+    authoring_surface: Mapping[str, Any], repo_root: Path
+) -> dict[str, Any]:
     normalized_boundary = normalize_candidate_surface_boundary(
         repo_root,
         authoring_surface,
@@ -821,7 +1135,9 @@ def _authoring_surface_boundary(authoring_surface: Mapping[str, Any], repo_root:
     }
 
 
-def _surface_identity_boundary(boundary: Mapping[str, Any], selected_workflow_name: str) -> dict[str, Any]:
+def _surface_identity_boundary(
+    boundary: Mapping[str, Any], selected_workflow_name: str
+) -> dict[str, Any]:
     return {
         "workflow_name": selected_workflow_name,
         "package_name": boundary["package_name"],
@@ -847,7 +1163,9 @@ def _validate_capability_matches_authoring_surface(
         authoring_surface.get("package_name"),
         "selected_workflow_authoring_surface.json must define selected_workflow_authoring_surface.package_name",
     ):
-        raise ValueError("selected_workflow_authoring_surface.json package_name must match selected_workflow_capability.json")
+        raise ValueError(
+            "selected_workflow_authoring_surface.json package_name must match selected_workflow_capability.json"
+        )
     if _require_text(
         capability.get("workflow_path"),
         "selected_workflow_capability.json must define selected_workflow_capability.workflow_path",
@@ -855,7 +1173,9 @@ def _validate_capability_matches_authoring_surface(
         authoring_surface.get("workflow_path"),
         "selected_workflow_authoring_surface.json must define selected_workflow_authoring_surface.workflow_path",
     ):
-        raise ValueError("selected_workflow_authoring_surface.json workflow_path must match selected_workflow_capability.json")
+        raise ValueError(
+            "selected_workflow_authoring_surface.json workflow_path must match selected_workflow_capability.json"
+        )
     if _require_text(
         capability.get("manifest_path"),
         "selected_workflow_capability.json must define selected_workflow_capability.manifest_path",
@@ -863,17 +1183,29 @@ def _validate_capability_matches_authoring_surface(
         authoring_surface.get("manifest_path"),
         "selected_workflow_authoring_surface.json must define selected_workflow_authoring_surface.manifest_path",
     ):
-        raise ValueError("selected_workflow_authoring_surface.json manifest_path must match selected_workflow_capability.json")
-    if _normalize_optional_text(capability.get("params_path")) != _normalize_optional_text(authoring_surface.get("params_path")):
-        raise ValueError("selected_workflow_authoring_surface.json params_path must match selected_workflow_capability.json")
-    if _normalize_optional_text(capability.get("doc_path")) != _normalize_optional_text(authoring_surface.get("doc_path")):
-        raise ValueError("selected_workflow_authoring_surface.json doc_path must match selected_workflow_capability.json")
+        raise ValueError(
+            "selected_workflow_authoring_surface.json manifest_path must match selected_workflow_capability.json"
+        )
+    if _normalize_optional_text(
+        capability.get("params_path")
+    ) != _normalize_optional_text(authoring_surface.get("params_path")):
+        raise ValueError(
+            "selected_workflow_authoring_surface.json params_path must match selected_workflow_capability.json"
+        )
+    if _normalize_optional_text(capability.get("doc_path")) != _normalize_optional_text(
+        authoring_surface.get("doc_path")
+    ):
+        raise ValueError(
+            "selected_workflow_authoring_surface.json doc_path must match selected_workflow_capability.json"
+        )
 
 
 def _validate_baseline_manifest(
     baseline_manifest: Mapping[str, Any],
     repo_root: Path,
     expected_boundary: Mapping[str, Any],
+    *,
+    expected_surface_root: Path,
 ) -> None:
     validate_baseline_surface_manifest(
         baseline_manifest,
@@ -881,6 +1213,7 @@ def _validate_baseline_manifest(
         manifest_label="baseline_workflow_manifest.json",
         expected_surface_kind="baseline",
         expected_boundary=expected_boundary,
+        expected_surface_root=expected_surface_root,
         boundary_field_map={
             "package_name": "package_name",
             "package_root_relative_path": "package_root_relative_path",
@@ -917,7 +1250,10 @@ def _validate_candidate_manifest(
                 "doc_relative_path": "doc_relative_path",
                 "runtime_test_relative_path": "runtime_test_relative_path",
             },
-            optional_boundary_fields=("doc_relative_path", "runtime_test_relative_path"),
+            optional_boundary_fields=(
+                "doc_relative_path",
+                "runtime_test_relative_path",
+            ),
             baseline_manifest=baseline_manifest,
             baseline_manifest_label="baseline_workflow_manifest.json",
             allowed_added_path_prefixes=[
@@ -928,12 +1264,19 @@ def _validate_candidate_manifest(
             ],
             allowed_added_exact_paths=[
                 _normalize_optional_text(expected_boundary.get("doc_relative_path")),
-                _normalize_optional_text(expected_boundary.get("runtime_test_relative_path")),
+                _normalize_optional_text(
+                    expected_boundary.get("runtime_test_relative_path")
+                ),
             ],
         )
     except ValueError as exc:
-        if str(exc) == "candidate_workflow_manifest.json must stay within the allowed repo-relative boundary":
-            raise ValueError("candidate_workflow_manifest.json must stay scoped to the selected workflow boundary") from exc
+        if (
+            str(exc)
+            == "candidate_workflow_manifest.json must stay within the allowed repo-relative boundary"
+        ):
+            raise ValueError(
+                "candidate_workflow_manifest.json must stay scoped to the selected workflow boundary"
+            ) from exc
         raise
 
 
@@ -947,45 +1290,69 @@ def _resolve_input_path(repo_root: Path, raw_value: str, field_name: str) -> Pat
     return path
 
 
-def _write_optimization_selection_inputs(ctx, selection: OptimizationCandidateSelection, selected_workflow_name: str) -> None:
-    write_workflow_json(ctx, "baseline_evaluation_summary.json", {
-        "schema": "botpipe.refinement.optimization_candidate_input/v1",
-        "selected_workflow_name": selected_workflow_name,
-        "candidate_id": selection.candidate.candidate_id,
-        "candidate_set_id": selection.candidate_set.candidate_set_id,
-        "evidence_snapshot_id": selection.candidate_set.evidence_snapshot_id,
-        "baseline_surface_manifest_id": selection.candidate_set.baseline_surface_manifest_id,
-        "improvement": "not_evaluated",
-        "candidate": selection.candidate.model_dump(mode="json"),
-    })
-    _write_text(ctx.workflow_folder / "baseline_evaluation_findings.md", "\n".join([
-        "# Selected optimization candidate", "",
-        f"- Candidate ID: `{selection.candidate.candidate_id}`",
-        f"- Kind: `{selection.candidate.kind}`",
-        f"- Proposed change: {selection.candidate.proposed_change}",
-        f"- Expected effect (hypothesis): {selection.candidate.expected_effect}",
-        f"- Validation plan: {selection.candidate.validation_plan.description}",
-        "- Improvement status: `not_evaluated`.", "",
-    ]))
+def _write_optimization_selection_inputs(
+    ctx, selection: OptimizationCandidateSelection, selected_workflow_name: str
+) -> None:
+    write_workflow_json(
+        ctx,
+        "baseline_evaluation_summary.json",
+        {
+            "schema": "botpipe.refinement.optimization_candidate_input/v1",
+            "selected_workflow_name": selected_workflow_name,
+            "candidate_id": selection.candidate.candidate_id,
+            "candidate_set_id": selection.candidate_set.candidate_set_id,
+            "evidence_snapshot_id": selection.candidate_set.evidence_snapshot_id,
+            "baseline_surface_manifest_id": selection.candidate_set.baseline_surface_manifest_id,
+            "improvement": "not_evaluated",
+            "candidate": selection.candidate.model_dump(mode="json"),
+        },
+    )
+    _write_text(
+        ctx.workflow_folder / "baseline_evaluation_findings.md",
+        "\n".join(
+            [
+                "# Selected optimization candidate",
+                "",
+                f"- Candidate ID: `{selection.candidate.candidate_id}`",
+                f"- Kind: `{selection.candidate.kind}`",
+                f"- Proposed change: {selection.candidate.proposed_change}",
+                f"- Expected effect (hypothesis): {selection.candidate.expected_effect}",
+                f"- Validation plan: {selection.candidate.validation_plan.description}",
+                "- Improvement status: `not_evaluated`.",
+                "",
+            ]
+        ),
+    )
     handoff = _read_json(selection.refinement_handoff_path)
     _validate_refinement_evidence_payload(handoff, selected_workflow_name)
     write_workflow_json(ctx, "baseline_refinement_evidence.json", handoff)
-    _write_text(ctx.workflow_folder / "baseline_refinement_evidence.md", _render_refinement_evidence_summary(handoff))
+    _write_text(
+        ctx.workflow_folder / "baseline_refinement_evidence.md",
+        _render_refinement_evidence_summary(handoff),
+    )
 
 
-def _assert_optimizer_baseline_matches_capture(selection: OptimizationCandidateSelection, captured: Mapping[str, Any]) -> None:
+def _assert_optimizer_baseline_matches_capture(
+    selection: OptimizationCandidateSelection, captured: Mapping[str, Any]
+) -> None:
     published = _read_json(selection.baseline_surface_manifest_path)
+
     def files(payload, current=False):
         result = {}
         for entry in payload.get("files", []):
-            if not isinstance(entry, Mapping): raise ValueError("baseline manifest files must be objects")
+            if not isinstance(entry, Mapping):
+                raise ValueError("baseline manifest files must be objects")
             path = entry.get("path", entry.get("relative_path"))
             digest = entry.get("sha256", entry.get("surface_sha256"))
-            if not isinstance(path, str) or not isinstance(digest, str): raise ValueError("baseline file identity missing")
+            if not isinstance(path, str) or not isinstance(digest, str):
+                raise ValueError("baseline file identity missing")
             result[path] = digest
         return result
+
     if not files(published) or files(published) != files(captured, True):
-        raise ValueError("optimizer baseline surface is stale relative to selected workflow")
+        raise ValueError(
+            "optimizer baseline surface is stale relative to selected workflow"
+        )
 
 
 def _validate_and_evaluate_candidate(
@@ -998,27 +1365,68 @@ def _validate_and_evaluate_candidate(
 ) -> tuple[ValidationResult, dict[str, Any]]:
     staging = (ctx.workflow_folder / ".candidate_execution_staging").resolve()
     staging.mkdir(parents=True, exist_ok=True)
-    snapshot = capture_execution_tree(repo_root, staging, excluded_roots=(ctx.workflow_folder,))
+    selected_package = None
+    if not (repo_root / "botpipe" / "__init__.py").is_file():
+        import botpipe
+
+        selected_package = Path(botpipe.__file__).resolve().parent
+    snapshot = capture_execution_tree(
+        repo_root,
+        staging,
+        selected_package_root=selected_package,
+        selected_package_import_path="botpipe" if selected_package else None,
+        excluded_roots=(ctx.workflow_folder,),
+    )
     try:
-        candidate_root = Path(_require_text(candidate_manifest.get("root", candidate_manifest.get("surface_root")), "candidate manifest root required"))
+        candidate_root = Path(
+            _require_text(
+                candidate_manifest.get("root", candidate_manifest.get("surface_root")),
+                "candidate manifest root required",
+            )
+        )
         validation = validate_frozen_candidate(
             snapshot,
             baseline_surface_manifest=baseline_manifest,
             candidate_surface_manifest=candidate_manifest,
-            expected_baseline_root=Path(_require_text(baseline_manifest.get("root", baseline_manifest.get("surface_root")), "baseline manifest root required")),
+            expected_baseline_root=Path(
+                _require_text(
+                    baseline_manifest.get(
+                        "root", baseline_manifest.get("surface_root")
+                    ),
+                    "baseline manifest root required",
+                )
+            ),
             expected_candidate_root=candidate_root,
-            expected_boundary=_require_mapping(baseline_manifest.get("boundary"), "baseline manifest boundary required"),
+            expected_boundary=_require_mapping(
+                baseline_manifest.get("boundary"), "baseline manifest boundary required"
+            ),
             baseline_surface_kind="baseline",
             candidate_surface_kind="candidate",
-            workflow_refs=(selected_workflow_name,),
+            workflow_refs=(
+                ctx.state.selected_workflow_reference or selected_workflow_name,
+            ),
             staging_parent=staging,
-            allowed_added_path_prefixes=(_require_text(baseline_manifest.get("package_root_relative_path"), "baseline package root required"),),
-            allowed_added_exact_paths=tuple(path for path in (baseline_manifest.get("doc_relative_path"), baseline_manifest.get("runtime_test_relative_path")) if isinstance(path, str) and path),
+            allowed_added_path_prefixes=(
+                _require_text(
+                    baseline_manifest.get("package_root_relative_path"),
+                    "baseline package root required",
+                ),
+            ),
+            allowed_added_exact_paths=tuple(
+                path
+                for path in (
+                    baseline_manifest.get("doc_relative_path"),
+                    baseline_manifest.get("runtime_test_relative_path"),
+                )
+                if isinstance(path, str) and path
+            ),
             target_test_command=ctx.state.target_test_command,
             target_test_argv=ctx.state.target_test_argv,
         )
         if not validation.success:
-            raise ValueError(f"candidate validation failed: {'; '.join(validation.errors)}")
+            raise ValueError(
+                f"candidate validation failed: {'; '.join(validation.errors)}"
+            )
         paired = _run_optional_paired_evaluation(
             ctx,
             repo_root=repo_root,
@@ -1029,15 +1437,22 @@ def _validate_and_evaluate_candidate(
         )
         if paired.get("evaluation") != "not_evaluated":
             comparison = paired.get("comparison")
-            if not isinstance(comparison, Mapping): raise ValueError("paired evaluation comparison missing")
+            if not isinstance(comparison, Mapping):
+                raise ValueError("paired evaluation comparison missing")
             validation = validation.with_evaluation(comparison)
         verify_frozen_execution_tree(snapshot)
         return validation, paired
     finally:
         if snapshot.root.exists():
-            cleanup_owned_directory(snapshot.root, owned_parent=snapshot.owned_parent, ownership_token=snapshot.ownership_token)
-        try: staging.rmdir()
-        except OSError: pass
+            cleanup_owned_directory(
+                snapshot.root,
+                owned_parent=snapshot.owned_parent,
+                ownership_token=snapshot.ownership_token,
+            )
+        try:
+            staging.rmdir()
+        except OSError:
+            pass
 
 
 def _run_optional_paired_evaluation(
@@ -1050,8 +1465,16 @@ def _run_optional_paired_evaluation(
     candidate_manifest: Mapping[str, Any],
 ) -> dict[str, Any]:
     if ctx.state.evaluation_spec_path is None:
-        return {"schema": PAIRED_EVALUATION_SCHEMA, "evaluation": "not_evaluated", "execution_state": "not_run", "comparison": {"state": "not_evaluated"}, "automatic_promotion": False}
-    spec_path = _resolve_input_path(repo_root, ctx.state.evaluation_spec_path, "evaluation_spec_path")
+        return {
+            "schema": PAIRED_EVALUATION_SCHEMA,
+            "evaluation": "not_evaluated",
+            "execution_state": "not_run",
+            "comparison": {"state": "not_evaluated"},
+            "automatic_promotion": False,
+        }
+    spec_path = _resolve_input_path(
+        repo_root, ctx.state.evaluation_spec_path, "evaluation_spec_path"
+    )
     baseline_arm = candidate_arm = None
     try:
         raw_baseline = materialize_execution_arm(snapshot, staging)
@@ -1059,72 +1482,136 @@ def _run_optional_paired_evaluation(
             root=raw_baseline.root,
             execution_tree_id=raw_baseline.execution_tree_id,
             manifest=raw_baseline.manifest,
-            surface_id=_require_text(baseline_manifest.get("surface_id"), "baseline manifest surface_id required"),
+            surface_id=_require_text(
+                baseline_manifest.get("surface_id"),
+                "baseline manifest surface_id required",
+            ),
             owned_parent=raw_baseline.owned_parent,
             ownership_token=raw_baseline.ownership_token,
         )
-        candidate_arm = materialize_execution_arm(snapshot, staging, candidate_manifest=candidate_manifest)
+        candidate_arm = materialize_execution_arm(
+            snapshot, staging, candidate_manifest=candidate_manifest
+        )
         spec, spec_id = load_evaluation_spec(spec_path)
         attempt_id = _paired_evaluation_attempt_id(
             invocation_id=ctx.run_id,
             spec_id=spec_id,
             baseline_surface_id=baseline_arm.surface_id,
-            candidate_surface_id=_require_text(candidate_arm.surface_id, "candidate arm surface_id required"),
+            candidate_surface_id=_require_text(
+                candidate_arm.surface_id, "candidate arm surface_id required"
+            ),
             baseline_execution_tree_id=baseline_arm.execution_tree_id,
             candidate_execution_tree_id=candidate_arm.execution_tree_id,
         )
-        suffix = attempt_id.removeprefix("sha256:")
+        # One persistent slot per runtime invocation prevents changed inputs from
+        # turning an interrupted attempt into a second pair of evaluator launches.
+        suffix = sha256(ctx.run_id.encode("utf-8")).hexdigest()
         attempt_path = ctx.workflow_folder / f"paired_evaluation_attempt-{suffix}.json"
         cache_path = ctx.workflow_folder / f"paired_evaluation_cache-{suffix}.json"
         if cache_path.is_file():
-            cached = validate_paired_evaluation_record(
-                _read_json(cache_path),
-                evaluation_spec_path=spec_path,
-                baseline_surface_id=baseline_arm.surface_id,
-                candidate_surface_id=_require_text(candidate_arm.surface_id, "candidate arm surface_id required"),
-                baseline_execution_tree_id=baseline_arm.execution_tree_id,
-                candidate_execution_tree_id=candidate_arm.execution_tree_id,
-                allowed_output_parent=ctx.workflow_folder,
-                expected_invocation_id=ctx.run_id,
-            )
+            try:
+                cached = validate_paired_evaluation_record(
+                    _read_json(cache_path),
+                    evaluation_spec_path=spec_path,
+                    baseline_surface_id=baseline_arm.surface_id,
+                    candidate_surface_id=_require_text(
+                        candidate_arm.surface_id, "candidate arm surface_id required"
+                    ),
+                    baseline_execution_tree_id=baseline_arm.execution_tree_id,
+                    candidate_execution_tree_id=candidate_arm.execution_tree_id,
+                    allowed_output_parent=ctx.workflow_folder,
+                    expected_invocation_id=ctx.run_id,
+                )
+            except (OSError, ValueError) as exc:
+                raise ValueError(
+                    "paired evaluation inputs or saved results changed; start a new refinement run"
+                ) from exc
             if cached.get("evaluation_attempt_id") != attempt_id:
                 raise ValueError("paired evaluation attempt identity is stale")
             return cached
         if attempt_path.is_file():
             attempt = _read_json(attempt_path)
-            if attempt.get("attempt_id") != attempt_id or attempt.get("invocation_id") != ctx.run_id:
-                raise ValueError("paired evaluation attempt marker is stale")
-            return finalize_paired_evaluation_record({
-                "schema": PAIRED_EVALUATION_SCHEMA,
-                "evaluation": "inconclusive",
-                "execution_state": "failed",
-                "stop_reason": "interrupted_paired_evaluation_restart_required",
-                "invocation_id": ctx.run_id,
-                "evaluation_attempt_id": attempt_id,
-                "spec_id": spec_id,
-                "execution_output_root": str(Path(_require_text(attempt.get("execution_output_root"), "paired evaluation attempt output root required")).resolve()),
-                "frozen_inputs": {},
-                "plan": {"case_ids": spec.case_ids, "repetitions": spec.repetitions, "effective_settings": spec.effective_settings, "stochastic": spec.stochastic, "max_elapsed_seconds": spec.max_elapsed_seconds, "per_arm_timeout_seconds": spec.per_arm_timeout_seconds, "max_provider_turns_per_arm": spec.max_provider_turns_per_arm},
-                "arms": {
-                    "baseline": {"arm": "baseline", "execution_state": "failed", "surface_id": baseline_arm.surface_id, "execution_tree_id": baseline_arm.execution_tree_id, "reason": "prior evaluator attempt interrupted", "diagnostics": {}},
-                    "candidate": {"arm": "candidate", "execution_state": "failed", "surface_id": candidate_arm.surface_id, "execution_tree_id": candidate_arm.execution_tree_id, "reason": "prior evaluator attempt interrupted", "diagnostics": {}},
-                },
-                "comparison": {"state": "inconclusive", "primary_metric": spec.primary_metric, "deltas": {}, "regressed_metrics": [], "claim_scope": spec.claim_scope, "limitations": ["a prior paired attempt was interrupted; evaluator arms were not relaunched"]},
-                "automatic_promotion": False,
-            })
+            if (
+                attempt.get("attempt_id") != attempt_id
+                or attempt.get("invocation_id") != ctx.run_id
+            ):
+                raise ValueError(
+                    "paired evaluation inputs changed; start a new refinement run"
+                )
+            return finalize_paired_evaluation_record(
+                {
+                    "schema": PAIRED_EVALUATION_SCHEMA,
+                    "evaluation": "inconclusive",
+                    "execution_state": "failed",
+                    "stop_reason": "interrupted_paired_evaluation_restart_required",
+                    "invocation_id": ctx.run_id,
+                    "evaluation_attempt_id": attempt_id,
+                    "spec_id": spec_id,
+                    "execution_output_root": str(
+                        Path(
+                            _require_text(
+                                attempt.get("execution_output_root"),
+                                "paired evaluation attempt output root required",
+                            )
+                        ).resolve()
+                    ),
+                    "frozen_inputs": {},
+                    "plan": {
+                        "case_ids": spec.case_ids,
+                        "repetitions": spec.repetitions,
+                        "effective_settings": spec.effective_settings,
+                        "stochastic": spec.stochastic,
+                        "max_elapsed_seconds": spec.max_elapsed_seconds,
+                        "per_arm_timeout_seconds": spec.per_arm_timeout_seconds,
+                        "max_provider_turns_per_arm": spec.max_provider_turns_per_arm,
+                    },
+                    "arms": {
+                        "baseline": {
+                            "arm": "baseline",
+                            "execution_state": "failed",
+                            "surface_id": baseline_arm.surface_id,
+                            "execution_tree_id": baseline_arm.execution_tree_id,
+                            "reason": "prior evaluator attempt interrupted",
+                            "diagnostics": {},
+                        },
+                        "candidate": {
+                            "arm": "candidate",
+                            "execution_state": "failed",
+                            "surface_id": candidate_arm.surface_id,
+                            "execution_tree_id": candidate_arm.execution_tree_id,
+                            "reason": "prior evaluator attempt interrupted",
+                            "diagnostics": {},
+                        },
+                    },
+                    "comparison": {
+                        "state": "inconclusive",
+                        "primary_metric": spec.primary_metric,
+                        "deltas": {},
+                        "regressed_metrics": [],
+                        "claim_scope": spec.claim_scope,
+                        "limitations": [
+                            "a prior paired attempt was interrupted; evaluator arms were not relaunched"
+                        ],
+                    },
+                    "automatic_promotion": False,
+                }
+            )
         output_root = ctx.workflow_folder / f"paired_evaluation_execution-{suffix}"
-        _write_json_atomic(attempt_path, {
-            "schema": "botpipe.optimizer.paired_evaluation_attempt/v1",
-            "attempt_id": attempt_id,
-            "invocation_id": ctx.run_id,
-            "spec_id": spec_id,
-            "baseline_surface_id": baseline_arm.surface_id,
-            "candidate_surface_id": candidate_arm.surface_id,
-            "baseline_execution_tree_id": baseline_arm.execution_tree_id,
-            "candidate_execution_tree_id": candidate_arm.execution_tree_id,
-            "execution_output_root": str(output_root.resolve()),
-            "state": "started",
-        })
+        _write_json_atomic(
+            attempt_path,
+            {
+                "schema": "botpipe.optimizer.paired_evaluation_attempt/v1",
+                "attempt_id": attempt_id,
+                "invocation_id": ctx.run_id,
+                "spec_id": spec_id,
+                "baseline_surface_id": baseline_arm.surface_id,
+                "candidate_surface_id": candidate_arm.surface_id,
+                "baseline_execution_tree_id": baseline_arm.execution_tree_id,
+                "candidate_execution_tree_id": candidate_arm.execution_tree_id,
+                "execution_output_root": str(output_root.resolve()),
+                "state": "started",
+            },
+        )
         result = run_paired_evaluation(
             evaluation_spec_path=spec_path,
             baseline_arm=baseline_arm,
@@ -1133,26 +1620,44 @@ def _run_optional_paired_evaluation(
             snapshot_arm=snapshot_execution_arm,
             assert_arm_unchanged=assert_execution_arm_unchanged,
         )
-        result = finalize_paired_evaluation_record({
-            **result,
-            "invocation_id": ctx.run_id,
-            "evaluation_attempt_id": attempt_id,
-        })
+        result = finalize_paired_evaluation_record(
+            {
+                **result,
+                "invocation_id": ctx.run_id,
+                "evaluation_attempt_id": attempt_id,
+            }
+        )
         _write_json_atomic(cache_path, result)
-        _write_json_atomic(attempt_path, {**_read_json(attempt_path), "state": "complete", "paired_evaluation_id": result["paired_evaluation_id"]})
+        _write_json_atomic(
+            attempt_path,
+            {
+                **_read_json(attempt_path),
+                "state": "complete",
+                "paired_evaluation_id": result["paired_evaluation_id"],
+            },
+        )
         verify_frozen_execution_tree(snapshot)
         return result
     finally:
         for arm in (candidate_arm, baseline_arm):
             if arm is not None and arm.root.exists():
-                cleanup_owned_directory(arm.root, owned_parent=arm.owned_parent, ownership_token=arm.ownership_token)
+                cleanup_owned_directory(
+                    arm.root,
+                    owned_parent=arm.owned_parent,
+                    ownership_token=arm.ownership_token,
+                )
 
 
 def _reload_optimization_selection(ctx, repo_root: Path, selected_workflow_name: str):
-    if ctx.state.optimization_receipt_path is None: return None
+    if ctx.state.optimization_receipt_path is None:
+        return None
     return load_optimization_candidate(
-        optimization_receipt_path=_resolve_input_path(repo_root, ctx.state.optimization_receipt_path, "optimization_receipt_path"),
-        candidate_id=_require_text(ctx.state.candidate_id, "candidate_id must be non-empty"),
+        optimization_receipt_path=_resolve_input_path(
+            repo_root, ctx.state.optimization_receipt_path, "optimization_receipt_path"
+        ),
+        candidate_id=_require_text(
+            ctx.state.candidate_id, "candidate_id must be non-empty"
+        ),
         expected_selected_workflow=selected_workflow_name,
         allowed_kinds=("producer_prompt", "verifier_rubric", "tokens", "workflow"),
     )
@@ -1182,7 +1687,9 @@ def _paired_evaluation_attempt_id(
 def _write_json_atomic(path: Path, payload: Mapping[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
-    temporary.write_text(json.dumps(payload, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    temporary.write_text(
+        json.dumps(payload, sort_keys=True, indent=2) + "\n", encoding="utf-8"
+    )
     temporary.replace(path)
 
 
@@ -1201,7 +1708,9 @@ def _write_refinement_evidence_inputs(
             "evidence_entries": [],
         }
     else:
-        source_path = _resolve_input_path(repo_root, refinement_evidence_path, "refinement_evidence_path")
+        source_path = _resolve_input_path(
+            repo_root, refinement_evidence_path, "refinement_evidence_path"
+        )
         payload = _read_json(source_path)
         _validate_refinement_evidence_payload(payload, selected_workflow_name)
         payload = {
@@ -1212,46 +1721,80 @@ def _write_refinement_evidence_inputs(
         }
 
     write_workflow_json(ctx, "baseline_refinement_evidence.json", payload)
-    _write_text(ctx.workflow_folder / "baseline_refinement_evidence.md", _render_refinement_evidence_summary(payload))
+    _write_text(
+        ctx.workflow_folder / "baseline_refinement_evidence.md",
+        _render_refinement_evidence_summary(payload),
+    )
 
 
-def _validate_refinement_evidence_payload(payload: Mapping[str, Any], selected_workflow_name: str) -> None:
+def _validate_refinement_evidence_payload(
+    payload: Mapping[str, Any], selected_workflow_name: str
+) -> None:
     schema = _require_text(
         payload.get("schema"),
         "baseline_refinement_evidence.json must define non-empty schema",
     )
     if schema == REFINEMENT_HANDOFF_SCHEMA:
-        if _require_text(payload.get("target_workflow_id"), "handoff target_workflow_id must be non-empty") != selected_workflow_name:
-            raise ValueError("baseline_refinement_evidence.json target_workflow_id must match selected workflow")
+        if (
+            _require_text(
+                payload.get("target_workflow_id"),
+                "handoff target_workflow_id must be non-empty",
+            )
+            != selected_workflow_name
+        ):
+            raise ValueError(
+                "baseline_refinement_evidence.json target_workflow_id must match selected workflow"
+            )
         candidates = payload.get("candidates")
-        if not isinstance(candidates, list) or not candidates: raise ValueError("optimizer handoff candidates must be non-empty")
+        if not isinstance(candidates, list) or not candidates:
+            raise ValueError("optimizer handoff candidates must be non-empty")
         for entry in candidates:
-            if not isinstance(entry, Mapping): raise ValueError("optimizer handoff candidates must be objects")
-            _require_text(entry.get("candidate_id"), "handoff candidate_id must be non-empty")
-            if entry.get("kind") not in {"producer_prompt", "verifier_rubric", "tokens", "workflow", "evaluation_case"}:
+            if not isinstance(entry, Mapping):
+                raise ValueError("optimizer handoff candidates must be objects")
+            _require_text(
+                entry.get("candidate_id"), "handoff candidate_id must be non-empty"
+            )
+            if entry.get("kind") not in {
+                "producer_prompt",
+                "verifier_rubric",
+                "tokens",
+                "workflow",
+                "evaluation_case",
+            }:
                 raise ValueError("optimizer handoff candidate kind unsupported")
         return
     if schema != _REFINEMENT_EVIDENCE_SCHEMA:
         raise ValueError(
             "baseline_refinement_evidence.json schema must be a supported refinement handoff schema"
         )
-    if _require_text(
-        payload.get("target_workflow_id"),
-        "baseline_refinement_evidence.json must define non-empty target_workflow_id",
-    ) != selected_workflow_name:
-        raise ValueError("baseline_refinement_evidence.json target_workflow_id must match selected workflow")
+    if (
+        _require_text(
+            payload.get("target_workflow_id"),
+            "baseline_refinement_evidence.json must define non-empty target_workflow_id",
+        )
+        != selected_workflow_name
+    ):
+        raise ValueError(
+            "baseline_refinement_evidence.json target_workflow_id must match selected workflow"
+        )
     raw_entries = payload.get("evidence_entries")
     if not isinstance(raw_entries, list):
-        raise ValueError("baseline_refinement_evidence.json must define evidence_entries as a JSON array")
+        raise ValueError(
+            "baseline_refinement_evidence.json must define evidence_entries as a JSON array"
+        )
     for index, raw_entry in enumerate(raw_entries):
         if not isinstance(raw_entry, Mapping):
-            raise ValueError("baseline_refinement_evidence.json evidence_entries must contain JSON objects")
+            raise ValueError(
+                "baseline_refinement_evidence.json evidence_entries must contain JSON objects"
+            )
         kind = _require_text(
             raw_entry.get("kind"),
             f"baseline_refinement_evidence.json evidence_entries[{index}].kind must be non-empty",
         )
         if kind not in _ALLOWED_OPTIMIZATION_EVIDENCE_KINDS:
-            raise ValueError(f"baseline_refinement_evidence.json evidence_entries[{index}].kind is not supported")
+            raise ValueError(
+                f"baseline_refinement_evidence.json evidence_entries[{index}].kind is not supported"
+            )
         _require_text(
             raw_entry.get("path"),
             f"baseline_refinement_evidence.json evidence_entries[{index}].path must be non-empty",
@@ -1268,9 +1811,22 @@ def _validate_refinement_evidence_payload(payload: Mapping[str, Any], selected_w
 
 def _render_refinement_evidence_summary(payload: Mapping[str, Any]) -> str:
     if payload.get("schema") == REFINEMENT_HANDOFF_SCHEMA:
-        lines = ["# Refinement Evidence", "", f"- Target workflow: `{payload['target_workflow_id']}`.", f"- Evidence snapshot: `{payload['evidence_snapshot_id']}`.", f"- Baseline surface: `{payload['baseline_surface_manifest_id']}`.", f"- Candidate set: `{payload['candidate_set_id']}`.", "- Improvement status: `not_evaluated`.", "", "## Reviewed candidates", ""]
+        lines = [
+            "# Refinement Evidence",
+            "",
+            f"- Target workflow: `{payload['target_workflow_id']}`.",
+            f"- Evidence snapshot: `{payload['evidence_snapshot_id']}`.",
+            f"- Baseline surface: `{payload['baseline_surface_manifest_id']}`.",
+            f"- Candidate set: `{payload['candidate_set_id']}`.",
+            "- Improvement status: `not_evaluated`.",
+            "",
+            "## Reviewed candidates",
+            "",
+        ]
         for entry in payload["candidates"]:
-            lines.append(f"- `{entry.get('candidate_id')}` ({entry.get('kind')}): {entry.get('title')}")
+            lines.append(
+                f"- `{entry.get('candidate_id')}` ({entry.get('kind')}): {entry.get('title')}"
+            )
         return "\n".join(lines).rstrip() + "\n"
     entries = payload.get("evidence_entries")
     assert isinstance(entries, list)
@@ -1292,7 +1848,9 @@ def _render_refinement_evidence_summary(payload: Mapping[str, Any]) -> str:
         "## Evidence Entries",
     ]
     if not entries:
-        lines.extend(("", "- No additional refinement evidence entries were supplied.", ""))
+        lines.extend(
+            ("", "- No additional refinement evidence entries were supplied.", "")
+        )
         return "\n".join(lines)
 
     for raw_entry in entries:

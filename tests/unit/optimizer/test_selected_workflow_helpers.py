@@ -418,6 +418,48 @@ class SingleFileReview(Workflow):
             "workflow_level": False,
         }
     ]
+
+
+def test_authoring_surface_preserves_nested_workspace_relative_paths(
+    tmp_path: Path,
+) -> None:
+    workflow_path = _write_single_file_runtime_workflow(
+        tmp_path,
+        relative_dir="examples/target",
+    )
+
+    capability = inspect_workflow_reference(tmp_path, str(workflow_path))
+    surface = selected_workflow_authoring_surface_payload(capability)
+
+    assert capability.repo_root == tmp_path.resolve()
+    assert surface["package_dir_repo_relative"] == "examples/target"
+    assert surface["workflow_path_repo_relative"] == (
+        "examples/target/single_file_review.py"
+    )
+    assert surface["prompt_paths_repo_relative"] == [
+        "examples/target/prompts/ask.md"
+    ]
+    assert set(surface["editable_paths_repo_relative"]) == {
+        "examples/target/single_file_review.py",
+        "examples/target/prompts/ask.md",
+    }
+
+
+def test_authoring_surface_keeps_installed_builtin_import_relative_paths(
+    tmp_path: Path,
+) -> None:
+    capability = inspect_workflow_reference(tmp_path, "devloop")
+
+    surface = selected_workflow_authoring_surface_payload(capability)
+
+    assert capability.repo_root == tmp_path.resolve()
+    assert not capability.package_dir.is_relative_to(tmp_path.resolve())
+    assert surface["package_dir_repo_relative"] == "botpipe/workflows/devloop"
+    assert surface["workflow_path_repo_relative"] == (
+        "botpipe/workflows/devloop/workflow.py"
+    )
+
+
 def test_core_selected_workflow_payload_builders_preserve_authoring_and_decomposition_contract_shapes(
     tmp_path: Path,
 ) -> None:
@@ -491,12 +533,12 @@ def test_core_selected_workflow_payload_builders_preserve_authoring_and_decompos
     assert decomposition_authoring_surface["workflow_py_path"] == str(package_dir / "workflow.py")
     assert (
         decomposition_authoring_surface["workflow_py_path_repo_relative"]
-        == "botpipe/workflows/release_candidate_to_go_no_go/workflow.py"
+        == "workflows/release_candidate_to_go_no_go/workflow.py"
     )
     assert REMOVED_WORKFLOW_PY_FIELD not in decomposition_authoring_surface
     assert (
         decomposition_authoring_surface["workflow_path_repo_relative"]
-        == "botpipe/workflows/release_candidate_to_go_no_go/workflow.py"
+        == "workflows/release_candidate_to_go_no_go/workflow.py"
     )
     assert decomposition_authoring_surface["runtime_test_path_repo_relative"] == (
         "tests/runtime/test_release_candidate_to_go_no_go.py"
@@ -716,38 +758,38 @@ def test_refinement_helper_snapshots_selected_workflow_authoring_surface_via_sha
             "workflow_py_path": str(package_dir / "workflow.py"),
             "workflow_path": str(package_dir / "workflow.py"),
             "asset_paths_repo_relative": [
-                "botpipe/workflows/release_candidate_to_go_no_go/assets/checklist.md",
-                "botpipe/workflows/release_candidate_to_go_no_go/assets/templates/rollback.txt",
+                "workflows/release_candidate_to_go_no_go/assets/checklist.md",
+                "workflows/release_candidate_to_go_no_go/assets/templates/rollback.txt",
             ],
-            "doc_path_repo_relative": "botpipe/workflows/release_candidate_to_go_no_go/README.md",
-            "manifest_path_repo_relative": "botpipe/workflows/release_candidate_to_go_no_go/workflow.toml",
-            "package_dir_repo_relative": "botpipe/workflows/release_candidate_to_go_no_go",
-            "package_init_path_repo_relative": "botpipe/workflows/release_candidate_to_go_no_go/__init__.py",
-            "params_path_repo_relative": "botpipe/workflows/release_candidate_to_go_no_go/params.py",
+            "doc_path_repo_relative": "workflows/release_candidate_to_go_no_go/README.md",
+            "manifest_path_repo_relative": "workflows/release_candidate_to_go_no_go/workflow.toml",
+            "package_dir_repo_relative": "workflows/release_candidate_to_go_no_go",
+            "package_init_path_repo_relative": "workflows/release_candidate_to_go_no_go/__init__.py",
+            "params_path_repo_relative": "workflows/release_candidate_to_go_no_go/params.py",
             "prompt_paths_repo_relative": [
-                "botpipe/workflows/release_candidate_to_go_no_go/prompts/assess_producer.md",
-                "botpipe/workflows/release_candidate_to_go_no_go/prompts/assess_verifier.md",
-                "botpipe/workflows/release_candidate_to_go_no_go/prompts/repair/strategy.md",
+                "workflows/release_candidate_to_go_no_go/prompts/assess_producer.md",
+                "workflows/release_candidate_to_go_no_go/prompts/assess_verifier.md",
+                "workflows/release_candidate_to_go_no_go/prompts/repair/strategy.md",
             ],
             "runtime_test_path_repo_relative": "tests/runtime/test_release_candidate_to_go_no_go.py",
-            "spec_paths_repo_relative": ["botpipe/workflows/release_candidate_to_go_no_go/contracts.py"],
+            "spec_paths_repo_relative": ["workflows/release_candidate_to_go_no_go/contracts.py"],
             "test_paths_repo_relative": ["tests/runtime/test_release_candidate_to_go_no_go.py"],
-            "workflow_py_path_repo_relative": "botpipe/workflows/release_candidate_to_go_no_go/workflow.py",
-            "workflow_path_repo_relative": "botpipe/workflows/release_candidate_to_go_no_go/workflow.py",
+            "workflow_py_path_repo_relative": "workflows/release_candidate_to_go_no_go/workflow.py",
+            "workflow_path_repo_relative": "workflows/release_candidate_to_go_no_go/workflow.py",
         },
     )
     assert set(payload["selected_workflow_authoring_surface"]["editable_paths_repo_relative"]) == {
-        "botpipe/workflows/release_candidate_to_go_no_go/__init__.py",
-        "botpipe/workflows/release_candidate_to_go_no_go/workflow.toml",
-        "botpipe/workflows/release_candidate_to_go_no_go/workflow.py",
-        "botpipe/workflows/release_candidate_to_go_no_go/params.py",
-        "botpipe/workflows/release_candidate_to_go_no_go/contracts.py",
-        "botpipe/workflows/release_candidate_to_go_no_go/prompts/assess_producer.md",
-        "botpipe/workflows/release_candidate_to_go_no_go/prompts/assess_verifier.md",
-        "botpipe/workflows/release_candidate_to_go_no_go/prompts/repair/strategy.md",
-        "botpipe/workflows/release_candidate_to_go_no_go/assets/checklist.md",
-        "botpipe/workflows/release_candidate_to_go_no_go/assets/templates/rollback.txt",
-        "botpipe/workflows/release_candidate_to_go_no_go/README.md",
+        "workflows/release_candidate_to_go_no_go/__init__.py",
+        "workflows/release_candidate_to_go_no_go/workflow.toml",
+        "workflows/release_candidate_to_go_no_go/workflow.py",
+        "workflows/release_candidate_to_go_no_go/params.py",
+        "workflows/release_candidate_to_go_no_go/contracts.py",
+        "workflows/release_candidate_to_go_no_go/prompts/assess_producer.md",
+        "workflows/release_candidate_to_go_no_go/prompts/assess_verifier.md",
+        "workflows/release_candidate_to_go_no_go/prompts/repair/strategy.md",
+        "workflows/release_candidate_to_go_no_go/assets/checklist.md",
+        "workflows/release_candidate_to_go_no_go/assets/templates/rollback.txt",
+        "workflows/release_candidate_to_go_no_go/README.md",
         "tests/runtime/test_release_candidate_to_go_no_go.py",
     }
     assert not selected_workflow_folder.exists()
@@ -861,7 +903,7 @@ def test_refinement_helper_accepts_main_workflow_class_references(tmp_path: Path
             "asset_paths": [],
             "asset_paths_repo_relative": [],
             "doc_path": str(package_dir / "README.md"),
-            "doc_path_repo_relative": "botpipe/workflows/release_candidate_to_go_no_go/README.md",
+            "doc_path_repo_relative": "workflows/release_candidate_to_go_no_go/README.md",
             "editable_paths": sorted(
                 [
                     str(package_dir / "__init__.py"),
@@ -873,11 +915,11 @@ def test_refinement_helper_accepts_main_workflow_class_references(tmp_path: Path
                 ]
             ),
             "manifest_path": str(package_dir / "workflow.toml"),
-            "manifest_path_repo_relative": "botpipe/workflows/release_candidate_to_go_no_go/workflow.toml",
+            "manifest_path_repo_relative": "workflows/release_candidate_to_go_no_go/workflow.toml",
             "package_dir": str(package_dir),
-            "package_dir_repo_relative": "botpipe/workflows/release_candidate_to_go_no_go",
+            "package_dir_repo_relative": "workflows/release_candidate_to_go_no_go",
             "package_init_path": str(package_dir / "__init__.py"),
-            "package_init_path_repo_relative": "botpipe/workflows/release_candidate_to_go_no_go/__init__.py",
+            "package_init_path_repo_relative": "workflows/release_candidate_to_go_no_go/__init__.py",
             "package_name": "release_candidate_to_go_no_go",
             "params_path": None,
             "params_path_repo_relative": None,
@@ -886,8 +928,8 @@ def test_refinement_helper_accepts_main_workflow_class_references(tmp_path: Path
                 str(package_dir / "prompts" / "assess_verifier.md"),
             ],
             "prompt_paths_repo_relative": [
-                "botpipe/workflows/release_candidate_to_go_no_go/prompts/assess_producer.md",
-                "botpipe/workflows/release_candidate_to_go_no_go/prompts/assess_verifier.md",
+                "workflows/release_candidate_to_go_no_go/prompts/assess_producer.md",
+                "workflows/release_candidate_to_go_no_go/prompts/assess_verifier.md",
             ],
             "runtime_test_path": None,
             "runtime_test_path_repo_relative": None,
@@ -897,18 +939,18 @@ def test_refinement_helper_accepts_main_workflow_class_references(tmp_path: Path
             "test_paths_repo_relative": [],
             "workflow_name": "release_candidate_to_go_no_go",
             "workflow_py_path": str(package_dir / "workflow.py"),
-            "workflow_py_path_repo_relative": "botpipe/workflows/release_candidate_to_go_no_go/workflow.py",
+            "workflow_py_path_repo_relative": "workflows/release_candidate_to_go_no_go/workflow.py",
             "workflow_path": str(package_dir / "workflow.py"),
-            "workflow_path_repo_relative": "botpipe/workflows/release_candidate_to_go_no_go/workflow.py",
+            "workflow_path_repo_relative": "workflows/release_candidate_to_go_no_go/workflow.py",
         },
     )
     assert set(payload["selected_workflow_authoring_surface"]["editable_paths_repo_relative"]) == {
-        "botpipe/workflows/release_candidate_to_go_no_go/__init__.py",
-        "botpipe/workflows/release_candidate_to_go_no_go/workflow.toml",
-        "botpipe/workflows/release_candidate_to_go_no_go/workflow.py",
-        "botpipe/workflows/release_candidate_to_go_no_go/prompts/assess_producer.md",
-        "botpipe/workflows/release_candidate_to_go_no_go/prompts/assess_verifier.md",
-        "botpipe/workflows/release_candidate_to_go_no_go/README.md",
+        "workflows/release_candidate_to_go_no_go/__init__.py",
+        "workflows/release_candidate_to_go_no_go/workflow.toml",
+        "workflows/release_candidate_to_go_no_go/workflow.py",
+        "workflows/release_candidate_to_go_no_go/prompts/assess_producer.md",
+        "workflows/release_candidate_to_go_no_go/prompts/assess_verifier.md",
+        "workflows/release_candidate_to_go_no_go/README.md",
     }
 def test_decomposition_helper_writes_selected_workflow_identity_authoring_surface_and_compiled_routes(
     tmp_path: Path,
@@ -991,11 +1033,11 @@ def test_decomposition_helper_writes_selected_workflow_identity_authoring_surfac
                 str(package_dir / "assets" / "templates" / "rollback.txt"),
             ],
             "asset_paths_repo_relative": [
-                "botpipe/workflows/release_candidate_to_go_no_go/assets/checklist.md",
-                "botpipe/workflows/release_candidate_to_go_no_go/assets/templates/rollback.txt",
+                "workflows/release_candidate_to_go_no_go/assets/checklist.md",
+                "workflows/release_candidate_to_go_no_go/assets/templates/rollback.txt",
             ],
             "doc_path": str(package_dir / "README.md"),
-            "doc_path_repo_relative": "botpipe/workflows/release_candidate_to_go_no_go/README.md",
+            "doc_path_repo_relative": "workflows/release_candidate_to_go_no_go/README.md",
             "editable_paths": sorted(
                 [
                     str(package_dir / "__init__.py"),
@@ -1013,47 +1055,47 @@ def test_decomposition_helper_writes_selected_workflow_identity_authoring_surfac
                 ]
             ),
             "manifest_path": str(package_dir / "workflow.toml"),
-            "manifest_path_repo_relative": "botpipe/workflows/release_candidate_to_go_no_go/workflow.toml",
+            "manifest_path_repo_relative": "workflows/release_candidate_to_go_no_go/workflow.toml",
             "package_dir": str(package_dir),
-            "package_dir_repo_relative": "botpipe/workflows/release_candidate_to_go_no_go",
+            "package_dir_repo_relative": "workflows/release_candidate_to_go_no_go",
             "package_init_path": str(package_dir / "__init__.py"),
-            "package_init_path_repo_relative": "botpipe/workflows/release_candidate_to_go_no_go/__init__.py",
+            "package_init_path_repo_relative": "workflows/release_candidate_to_go_no_go/__init__.py",
             "params_path": str(package_dir / "params.py"),
-            "params_path_repo_relative": "botpipe/workflows/release_candidate_to_go_no_go/params.py",
+            "params_path_repo_relative": "workflows/release_candidate_to_go_no_go/params.py",
             "prompt_paths": [
                 str(package_dir / "prompts" / "assess_producer.md"),
                 str(package_dir / "prompts" / "assess_verifier.md"),
                 str(package_dir / "prompts" / "repair" / "strategy.md"),
             ],
             "prompt_paths_repo_relative": [
-                "botpipe/workflows/release_candidate_to_go_no_go/prompts/assess_producer.md",
-                "botpipe/workflows/release_candidate_to_go_no_go/prompts/assess_verifier.md",
-                "botpipe/workflows/release_candidate_to_go_no_go/prompts/repair/strategy.md",
+                "workflows/release_candidate_to_go_no_go/prompts/assess_producer.md",
+                "workflows/release_candidate_to_go_no_go/prompts/assess_verifier.md",
+                "workflows/release_candidate_to_go_no_go/prompts/repair/strategy.md",
             ],
             "runtime_test_path": str(runtime_test),
             "runtime_test_path_repo_relative": "tests/runtime/test_release_candidate_to_go_no_go.py",
             "spec_paths": [str(package_dir / "contracts.py")],
-            "spec_paths_repo_relative": ["botpipe/workflows/release_candidate_to_go_no_go/contracts.py"],
+            "spec_paths_repo_relative": ["workflows/release_candidate_to_go_no_go/contracts.py"],
             "test_paths": [str(runtime_test)],
             "test_paths_repo_relative": ["tests/runtime/test_release_candidate_to_go_no_go.py"],
             "workflow_py_path": str(package_dir / "workflow.py"),
-            "workflow_py_path_repo_relative": "botpipe/workflows/release_candidate_to_go_no_go/workflow.py",
+            "workflow_py_path_repo_relative": "workflows/release_candidate_to_go_no_go/workflow.py",
             "workflow_path": str(package_dir / "workflow.py"),
-            "workflow_path_repo_relative": "botpipe/workflows/release_candidate_to_go_no_go/workflow.py",
+            "workflow_path_repo_relative": "workflows/release_candidate_to_go_no_go/workflow.py",
         },
     )
     assert set(decomposition_surface["selected_workflow_authoring_surface"]["editable_paths_repo_relative"]) == {
-        "botpipe/workflows/release_candidate_to_go_no_go/__init__.py",
-        "botpipe/workflows/release_candidate_to_go_no_go/workflow.toml",
-        "botpipe/workflows/release_candidate_to_go_no_go/workflow.py",
-        "botpipe/workflows/release_candidate_to_go_no_go/params.py",
-        "botpipe/workflows/release_candidate_to_go_no_go/contracts.py",
-        "botpipe/workflows/release_candidate_to_go_no_go/prompts/assess_producer.md",
-        "botpipe/workflows/release_candidate_to_go_no_go/prompts/assess_verifier.md",
-        "botpipe/workflows/release_candidate_to_go_no_go/prompts/repair/strategy.md",
-        "botpipe/workflows/release_candidate_to_go_no_go/assets/checklist.md",
-        "botpipe/workflows/release_candidate_to_go_no_go/assets/templates/rollback.txt",
-        "botpipe/workflows/release_candidate_to_go_no_go/README.md",
+        "workflows/release_candidate_to_go_no_go/__init__.py",
+        "workflows/release_candidate_to_go_no_go/workflow.toml",
+        "workflows/release_candidate_to_go_no_go/workflow.py",
+        "workflows/release_candidate_to_go_no_go/params.py",
+        "workflows/release_candidate_to_go_no_go/contracts.py",
+        "workflows/release_candidate_to_go_no_go/prompts/assess_producer.md",
+        "workflows/release_candidate_to_go_no_go/prompts/assess_verifier.md",
+        "workflows/release_candidate_to_go_no_go/prompts/repair/strategy.md",
+        "workflows/release_candidate_to_go_no_go/assets/checklist.md",
+        "workflows/release_candidate_to_go_no_go/assets/templates/rollback.txt",
+        "workflows/release_candidate_to_go_no_go/README.md",
         "tests/runtime/test_release_candidate_to_go_no_go.py",
     }
     assert decomposition_surface["selected_workflow_identity"] == {
