@@ -27,24 +27,32 @@ _MAX_DEPTH = 100
 _MAX_VALUES = 100_000
 _TYPE_NAME = re.compile(r"^[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*:[^:\x00\r\n]{1,1000}$")
 _SOURCE_BOUNDARY = contextvars.ContextVar("botpipe_source_boundary", default=None)
+_SOURCE_ANCHOR = contextvars.ContextVar("botpipe_source_anchor", default=None)
 _SOURCE_CAPTURE = contextvars.ContextVar("botpipe_source_capture", default=None)
 _DECODE_SOURCES = contextvars.ContextVar("botpipe_decode_sources", default=None)
-_OWNER_SCHEMA = "botpipe.source-owners.v1"
+_OWNER_SCHEMA = "botpipe.source-owners.v2"
+_INFER_SOURCE_ANCHOR = object()
 
 
 @contextmanager
-def source_identity(boundary):
+def source_identity(boundary, *, anchor=_INFER_SOURCE_ANCHOR):
     """Record and verify owned source for durable values in this boundary."""
 
     raw = boundary if isinstance(boundary, (tuple, list, set)) else (boundary,)
     boundaries = tuple(
         dict.fromkeys(str(Path(item).resolve(strict=True)) for item in raw)
     )
-    token = _SOURCE_BOUNDARY.set(boundaries)
+    if anchor is _INFER_SOURCE_ANCHOR:
+        resolved_anchor = boundaries[0] if boundaries else None
+    else:
+        resolved_anchor = str(Path(anchor).resolve(strict=True))
+    boundary_token = _SOURCE_BOUNDARY.set(boundaries)
+    anchor_token = _SOURCE_ANCHOR.set(resolved_anchor)
     try:
         yield
     finally:
-        _SOURCE_BOUNDARY.reset(token)
+        _SOURCE_ANCHOR.reset(anchor_token)
+        _SOURCE_BOUNDARY.reset(boundary_token)
 
 
 def _boundary_kind(path):
@@ -57,20 +65,26 @@ def _boundary_kind(path):
     )
 
 
-def _source_owner_record(boundaries):
-    """Describe operation ownership relative to its first (workflow) boundary."""
+def _source_owner_record(boundaries, anchor):
+    """Describe operation ownership relative to an independent source anchor."""
 
     paths = tuple(Path(item).resolve(strict=True) for item in boundaries)
     if not paths:
         return None
-    root = paths[0]
-    base = root if root.is_dir() else root.parent
-    items = [{"kind": _boundary_kind(root), "root": True}]
-    for path in paths[1:]:
+    if anchor is None:
+        raise TypeError("Source ownership boundaries require a source anchor")
+    anchor = Path(anchor).resolve(strict=True)
+    base = anchor if anchor.is_dir() else anchor.parent
+    items = []
+    for path in paths:
         relative = Path(os.path.relpath(path, base)).as_posix()
         _portable_owner_relative(relative, "source owner")
         items.append({"kind": _boundary_kind(path), "relative": relative})
-    return {"schema": _OWNER_SCHEMA, "boundaries": items}
+    return {
+        "schema": _OWNER_SCHEMA,
+        "anchor_kind": _boundary_kind(anchor),
+        "boundaries": items,
+    }
 
 
 def _portable_owner_relative(relative, path):
@@ -115,11 +129,13 @@ def _resolve_owner_relative(base, relative, path):
 def without_source_identity():
     """Keep non-durable structural hashes independent of runtime context."""
 
-    token = _SOURCE_BOUNDARY.set(None)
+    boundary_token = _SOURCE_BOUNDARY.set(None)
+    anchor_token = _SOURCE_ANCHOR.set(None)
     try:
         yield
     finally:
-        _SOURCE_BOUNDARY.reset(token)
+        _SOURCE_ANCHOR.reset(anchor_token)
+        _SOURCE_BOUNDARY.reset(boundary_token)
 
 
 def _type_source(cls):
@@ -662,7 +678,11 @@ def encode(value, *, record_owners=False):
         encoded = _encode(value, "$.value", 0, _Traversal())
     finally:
         _SOURCE_CAPTURE.reset(token)
-    owners = _source_owner_record(_SOURCE_BOUNDARY.get()) if record_owners else None
+    owners = (
+        _source_owner_record(_SOURCE_BOUNDARY.get(), _SOURCE_ANCHOR.get())
+        if record_owners
+        else None
+    )
     if not sources and not owners:
         return encoded
     capsule = {
@@ -962,16 +982,17 @@ def encoded_body(record):
             if not all(type(owner) is str for owner in owners):
                 raise TypeError("$.owners: legacy source owners must be path strings")
         elif type(owners) is dict:
-            owner_record = _record(owners, "$.owners", {"schema", "boundaries"})
+            owner_record = _record(
+                owners, "$.owners", {"schema", "anchor_kind", "boundaries"}
+            )
             if owner_record["schema"] != _OWNER_SCHEMA:
                 raise TypeError("$.owners: unsupported source owner schema")
+            if owner_record["anchor_kind"] not in {"file", "directory"}:
+                raise TypeError("$.owners: invalid source anchor kind")
             boundaries = owner_record["boundaries"]
             if type(boundaries) is not list or not boundaries:
                 raise TypeError("$.owners.boundaries: expected a nonempty list")
-            first = _record(boundaries[0], "$.owners.boundaries[0]", {"root", "kind"})
-            if first["root"] is not True or first["kind"] not in {"file", "directory"}:
-                raise TypeError("$.owners.boundaries[0]: invalid source root locator")
-            for boundary in boundaries[1:]:
+            for boundary in boundaries:
                 item = _record(boundary, "$.owners.boundaries", {"relative", "kind"})
                 if item["kind"] not in {"file", "directory"}:
                     raise TypeError("$.owners.boundaries: invalid source boundary kind")
@@ -1095,11 +1116,16 @@ def recorded_source_boundaries(value, root_boundary=None):
             raise TypeError("$.owners: legacy source owners must be path strings")
         result = [Path(item).resolve(strict=True) for item in owners]
     elif type(owners) is dict:
-        owner_record = _record(owners, "$.owners", {"schema", "boundaries"})
+        owner_record = _record(
+            owners, "$.owners", {"schema", "anchor_kind", "boundaries"}
+        )
         if owner_record["schema"] != _OWNER_SCHEMA:
             raise TypeError(
                 f"$.owners: unsupported source owner schema {owner_record['schema']!r}"
             )
+        anchor_kind = owner_record["anchor_kind"]
+        if anchor_kind not in {"file", "directory"}:
+            raise TypeError("$.owners: invalid source anchor kind")
         locators = owner_record["boundaries"]
         if type(locators) is not list or not locators:
             raise TypeError(
@@ -1107,17 +1133,14 @@ def recorded_source_boundaries(value, root_boundary=None):
             )
         if root_boundary is None:
             raise TypeError(
-                "$.owners: portable source ownership requires the current workflow boundary"
+                "$.owners: portable source ownership requires the current source anchor"
             )
-        root = Path(root_boundary).resolve(strict=True)
-        first = _record(locators[0], "$.owners.boundaries[0]", {"kind", "root"})
-        if first["root"] is not True or first["kind"] not in {"file", "directory"}:
-            raise TypeError("$.owners.boundaries[0]: invalid source root locator")
-        if _boundary_kind(root) != first["kind"]:
-            raise TypeError("$.owners: current workflow boundary kind changed")
-        result = [root]
-        base = root if root.is_dir() else root.parent
-        for index, locator in enumerate(locators[1:], 1):
+        anchor = Path(root_boundary).resolve(strict=True)
+        if _boundary_kind(anchor) != anchor_kind:
+            raise TypeError("$.owners: current source anchor kind changed")
+        result = []
+        base = anchor if anchor.is_dir() else anchor.parent
+        for index, locator in enumerate(locators):
             item = _record(
                 locator,
                 f"$.owners.boundaries[{index}]",

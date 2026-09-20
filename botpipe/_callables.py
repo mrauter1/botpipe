@@ -8,18 +8,42 @@ node metadata and hash the complete graph once.
 from __future__ import annotations
 
 import inspect
+import os
 from dataclasses import dataclass, field
 from functools import partial
+from pathlib import Path
 from types import CodeType, ModuleType
 from typing import Any
 
-_SDK_MODULES = {
-    "botpipe.runtime",
-    "botpipe.sessions",
-    "botpipe.prompts",
-    "botpipe.artifacts",
-    "botpipe.worklists",
+_SDK_SOURCE_FILES = {
+    os.path.normcase(os.path.abspath(Path(__file__).with_name(name)))
+    for name in (
+        "runtime.py",
+        "sessions.py",
+        "prompts.py",
+        "artifacts.py",
+        "worklists.py",
+    )
 }
+
+
+def _is_sdk_implementation(value: Any) -> bool:
+    """Classify only the SDK's implementation files, using actual code location."""
+    if isinstance(value, (str, Path)):
+        raw = value
+    elif inspect.isfunction(value):
+        raw = value.__code__.co_filename
+    else:
+        try:
+            raw = inspect.getsourcefile(value)
+        except (TypeError, ValueError):
+            return False
+    if raw is None:
+        return False
+    try:
+        return os.path.normcase(os.path.abspath(raw)) in _SDK_SOURCE_FILES
+    except (OSError, TypeError, ValueError):
+        return False
 
 
 @dataclass(frozen=True)
@@ -58,6 +82,36 @@ class CallableGraph:
         return _ordered_targets(self.nodes, "source_targets")
 
     @property
+    def origin_target(self) -> Any | None:
+        """Project the callable used as the workflow's source origin.
+
+        Only implementation edges participate.  Explicit arguments, defaults,
+        globals, helpers, owners, and metaclasses can contribute owned source,
+        but cannot replace the workflow's origin.
+        """
+        ordinal = self.root
+        seen: set[int] = set()
+        target: Any | None = None
+        while ordinal not in seen:
+            seen.add(ordinal)
+            node = self.nodes[ordinal]
+            target = node.value
+            label = {
+                "workflow": "callable",
+                "partial": "callable",
+                "method": "callable",
+                "decorated": "wrapped",
+                "instance": "implementation",
+            }.get(node.kind)
+            if label is None:
+                break
+            edge = next((item for item in node.edges if item.label == label), None)
+            if edge is None or edge.target in seen:
+                break
+            ordinal = edge.target
+        return target
+
+    @property
     def boundary_targets(self) -> tuple[Any, ...]:
         result: list[Any] = []
         seen_targets: set[int] = set()
@@ -81,6 +135,12 @@ class CallableGraph:
                 "decorated": {"wrapped"},
                 "instance": {"implementation"},
             }.get(node.kind, set())
+            if node.kind in {"function", "decorated"}:
+                owned_edges = owned_edges | {
+                    edge.label
+                    for edge in node.edges
+                    if edge.label.startswith(("default:", "kwdefault:"))
+                }
             pending.extend(
                 edge.target
                 for edge in reversed(node.edges)
@@ -237,7 +297,7 @@ def describe_callable(value: Any) -> CallableGraph:
             elif callable(bound):
                 if (
                     inspect.isfunction(bound)
-                    and getattr(bound, "__module__", "") in _SDK_MODULES
+                    and _is_sdk_implementation(bound)
                     and not _is_workflow(bound)
                 ):
                     continue

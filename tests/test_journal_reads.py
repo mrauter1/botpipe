@@ -281,7 +281,7 @@ def test_foreign_provider_reads_portable_owner_capsules(tmp_path, writes):
     )
     with codec.source_identity(tmp_path):
         inputs = codec.encode({"writes": writes}, record_owners=True)
-    assert inputs["owners"]["schema"] == "botpipe.source-owners.v1"
+    assert inputs["owners"]["schema"] == "botpipe.source-owners.v2"
     journal = Journal(path)
     try:
         with journal.transaction() as db:

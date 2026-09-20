@@ -4,17 +4,107 @@ from __future__ import annotations
 
 import inspect
 import os
+from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
 from types import CodeType, ModuleType
 from typing import Any, get_type_hints
 
-from ._callables import describe_callable
+from pydantic.errors import PydanticSchemaGenerationError
+
+from ._callables import CallableGraph, _is_sdk_implementation, describe_callable
 from ._code_identity import code_identity as _code_binding
 from .surface_identity import (
     canonical_workflow_identity,
     derive_workflow_surface_manifest,
 )
+
+
+@dataclass(frozen=True)
+class SourceContext:
+    """The source origin and bounded ownership projected from one callable graph."""
+
+    origin_target: Any | None
+    origin_source: Path | None
+    origin_boundary: Path | None
+    owned_boundaries: tuple[Path, ...]
+    ownership_anchor: Path | None
+
+
+class SourceCaptureError(TypeError):
+    """An owned Python source was identified but could not be captured."""
+
+
+def _identified_source_path(target: Any) -> Path | None:
+    if target is None:
+        return None
+    try:
+        raw = inspect.getsourcefile(target)
+        if raw is None:
+            raw = inspect.getfile(target)
+    except (TypeError, ValueError):
+        return None
+    if raw is None or (raw.startswith("<") and raw.endswith(">")):
+        return None
+    candidate = Path(raw)
+    return candidate if candidate.suffix == ".py" else None
+
+
+def _source_path(target: Any) -> Path | None:
+    candidate = _identified_source_path(target)
+    if candidate is None:
+        return None
+    try:
+        return candidate.resolve(strict=True)
+    except OSError as exc:
+        raise SourceCaptureError(
+            f"Cannot resolve identified Python source {candidate.resolve(strict=False)}"
+        ) from exc
+
+
+def _boundary_for_source(source: Path) -> Path:
+    package = (
+        (source.parent / "__init__.py").is_file()
+        or (source.parent / "workflow.toml").is_file()
+        or source.name in {"workflow.py", "flow.py"}
+    )
+    return source.parent if package else source
+
+
+def source_context(
+    definition: Any, *, graph: CallableGraph | None = None
+) -> SourceContext:
+    """Project source origin and ownership once from a callable graph."""
+
+    descriptor = graph or describe_callable(definition)
+    origin_target = descriptor.origin_target
+    origin_source = _source_path(origin_target)
+    if origin_source is not None and _is_sdk_implementation(origin_source):
+        origin_source = None
+    origin_boundary = (
+        _boundary_for_source(origin_source) if origin_source is not None else None
+    )
+    owned: list[Path] = []
+    for target in descriptor.boundary_targets:
+        source = _source_path(target)
+        if source is None:
+            continue
+        if _is_sdk_implementation(source):
+            continue
+        boundary = _boundary_for_source(source)
+        if boundary not in owned:
+            owned.append(boundary)
+    owned_boundaries = tuple(owned)
+    ownership_anchor = origin_boundary or (
+        owned_boundaries[0] if owned_boundaries else None
+    )
+    return SourceContext(
+        origin_target=origin_target,
+        origin_source=origin_source,
+        origin_boundary=origin_boundary,
+        owned_boundaries=owned_boundaries,
+        ownership_anchor=ownership_anchor,
+    )
 
 
 def _active_module_code(source: Path) -> CodeType | None:
@@ -35,30 +125,26 @@ def _active_module_code(source: Path) -> CodeType | None:
 
 
 def capture_definition_sources(
-    definition: Any, *, graph: Any | None = None
+    definition: Any,
+    *,
+    graph: CallableGraph | None = None,
+    context: SourceContext | None = None,
 ) -> dict[str, Any] | None:
     """Remember source bytes at definition time without importing or walking packages."""
-    try:
-        targets = (
-            (definition,)
-            if graph is None
-            and (inspect.isfunction(definition) or isinstance(definition, type))
-            else (graph or describe_callable(definition)).source_targets
-        )
-        if not targets:
-            return None
-        target = targets[0]
-        source = inspect.getsourcefile(target)
-        if source is None:
-            return None
-        path = Path(source).resolve(strict=True)
-        return {
-            "path": str(path),
-            "sha256": sha256(path.read_bytes()).hexdigest(),
-            "module_code": _active_module_code(path),
-        }
-    except (OSError, TypeError, ValueError):
+    descriptor = graph or describe_callable(definition)
+    projected = context or source_context(definition, graph=descriptor)
+    path = projected.origin_source
+    if path is None:
         return None
+    try:
+        content = path.read_bytes()
+    except OSError as exc:
+        raise SourceCaptureError(f"Cannot read owned Python source {path}") from exc
+    return {
+        "path": str(path),
+        "sha256": sha256(content).hexdigest(),
+        "module_code": _active_module_code(path),
+    }
 
 
 def _referenced_names(code: CodeType) -> set[str]:
@@ -104,214 +190,200 @@ def _value_binding(value: Any) -> Any:
     return methods
 
 
-def source_boundary(definition: Any, *, graph: Any | None = None) -> Path | None:
+def source_boundary(
+    definition: Any,
+    *,
+    graph: CallableGraph | None = None,
+    context: SourceContext | None = None,
+) -> Path | None:
     """Return the bounded ownership root without making it source identity."""
-
-    try:
-        targets = (
-            (definition,)
-            if graph is None
-            and (inspect.isfunction(definition) or isinstance(definition, type))
-            else (graph or describe_callable(definition)).source_targets
-        )
-        if not targets:
-            return None
-        target = targets[0]
-        raw = inspect.getsourcefile(target)
-        if raw is None:
-            return None
-        source = Path(raw).resolve(strict=True)
-        package = (
-            (source.parent / "__init__.py").is_file()
-            or (source.parent / "workflow.toml").is_file()
-            or source.name in {"workflow.py", "flow.py"}
-        )
-        return source.parent if package else source
-    except (OSError, TypeError, ValueError):
-        return None
+    descriptor = graph or describe_callable(definition)
+    projected = context or source_context(definition, graph=descriptor)
+    return projected.origin_boundary
 
 
 def capture_orchestration_sources(
     definition: Any,
     *,
     boundary: str | Path | None = None,
-    graph: Any | None = None,
+    graph: CallableGraph | None = None,
+    context: SourceContext | None = None,
 ) -> dict[str, Any] | None:
     """Capture complete, bounded modules that define owned orchestration values."""
+    descriptor = graph or describe_callable(definition)
+    projected = context or source_context(definition, graph=descriptor)
+    descriptor_targets = descriptor.source_targets
+    if not descriptor_targets:
+        return None
+    union_boundary = boundary is None or isinstance(boundary, (tuple, list))
+    raw_boundaries = (
+        projected.owned_boundaries
+        if boundary is None
+        else (boundary if isinstance(boundary, (tuple, list)) else (boundary,))
+    )
     try:
-        descriptor = graph or describe_callable(definition)
-        descriptor_targets = descriptor.source_targets
-        if not descriptor_targets:
-            return None
-        target = descriptor_targets[0]
-        raw = inspect.getsourcefile(target)
-        if raw is None:
-            return None
-        union_boundary = isinstance(boundary, (tuple, list))
-        if boundary is None:
-            boundary_path = source_boundary(target)
-            if boundary_path is None:
-                return None
-            boundary_paths = (boundary_path,)
+        boundary_paths = tuple(
+            Path(item).resolve(strict=True) for item in raw_boundaries
+        )
+    except (OSError, ValueError) as exc:
+        raise SourceCaptureError("Cannot resolve owned source boundary") from exc
+    if not boundary_paths:
+        return None
+    boundary_path = boundary_paths[0]
+    anchor = Path(
+        os.path.commonpath(
+            [str(item if item.is_dir() else item.parent) for item in boundary_paths]
+        )
+    )
+    values: list[tuple[str, Any, Path]] = []
+    seen_values: set[int] = set()
+    callable_targets: dict[int, tuple[Any, tuple[Any, ...]]] = {
+        id(node.value): (node.value, node.source_targets) for node in descriptor.nodes
+    }
+
+    def is_owned(path: Path) -> bool:
+        return any(
+            path == item if item.is_file() else path.is_relative_to(item)
+            for item in boundary_paths
+        )
+
+    def enqueue(label: str, value: Any) -> None:
+        if isinstance(value, (ModuleType, type)) or inspect.isfunction(value):
+            candidates = (value,)
+        elif callable(value):
+            cached = callable_targets.get(id(value))
+            candidates = cached[1] if cached is not None and cached[0] is value else ()
         else:
-            raw_boundaries = boundary if union_boundary else (boundary,)
-            boundary_paths = tuple(
-                Path(item).resolve(strict=True) for item in raw_boundaries
+            return
+        for target_index, candidate in enumerate(candidates):
+            if not (
+                inspect.isfunction(candidate)
+                or isinstance(candidate, (type, ModuleType))
+            ):
+                continue
+            source_candidate = _identified_source_path(candidate)
+            if source_candidate is None:
+                continue
+            try:
+                path = source_candidate.resolve(strict=True)
+            except OSError as exc:
+                unresolved = source_candidate.resolve(strict=False)
+                if unresolved.suffix == ".py" and is_owned(unresolved):
+                    raise SourceCaptureError(
+                        f"Cannot resolve owned Python source {unresolved}"
+                    ) from exc
+                continue
+            if not is_owned(path) or path.suffix != ".py" or path.is_symlink():
+                continue
+            identity = id(candidate)
+            if identity in seen_values:
+                continue
+            seen_values.add(identity)
+            target_label = (
+                label if len(candidates) == 1 else f"{label}.callable:{target_index}"
             )
-            if not boundary_paths:
-                return None
-            boundary_path = boundary_paths[0]
-        anchor = Path(
-            os.path.commonpath(
-                [str(item if item.is_dir() else item.parent) for item in boundary_paths]
+            values.append((target_label, candidate, path))
+
+    def enqueue_contracts(annotation: Any, label: str) -> None:
+        from .codec import preflight_types
+
+        try:
+            contracts = preflight_types(annotation, path=f"$.source.{label}")
+        except (
+            AttributeError,
+            NameError,
+            PydanticSchemaGenerationError,
+            TypeError,
+            ValueError,
+        ):
+            return
+        for index, contract in enumerate(contracts):
+            enqueue(f"{label}[{index}]", contract)
+
+    ordered_targets: list[Any] = []
+    if projected.origin_target is not None:
+        ordered_targets.append(projected.origin_target)
+    ordered_targets.extend(
+        target for target in descriptor_targets if target is not projected.origin_target
+    )
+    for target_index, callable_target in enumerate(ordered_targets):
+        label = (
+            "<workflow>" if target_index == 0 else f"<workflow>.callable:{target_index}"
+        )
+        enqueue(label, callable_target)
+    index = 0
+    while index < len(values):
+        label, value, _ = values[index]
+        index += 1
+        if inspect.isfunction(value):
+            namespace = value.__globals__
+            for name in sorted(_referenced_names(value.__code__)):
+                enqueue(f"{label}.{name}", namespace.get(name))
+            try:
+                annotations = get_type_hints(value, globalns=namespace)
+            except (NameError, TypeError, ValueError):
+                annotations = value.__annotations__
+            for name, annotation in annotations.items():
+                enqueue_contracts(annotation, f"{label}.annotation:{name}")
+        elif isinstance(value, ModuleType):
+            for name, member in vars(value).items():
+                if (
+                    inspect.isfunction(member)
+                    or isinstance(member, (type, ModuleType))
+                    or callable(member)
+                ):
+                    enqueue(f"{label}.{name}", member)
+        else:
+            enqueue_contracts(value, f"{label}.contract")
+            for mro_index, base in enumerate(value.__mro__[1:]):
+                if base is not object:
+                    enqueue(f"{label}.mro:{mro_index}", base)
+            for name, member in vars(value).items():
+                methods = ()
+                if inspect.isfunction(member):
+                    methods = (member,)
+                elif isinstance(member, (staticmethod, classmethod)):
+                    methods = (member.__func__,)
+                elif isinstance(member, property):
+                    methods = tuple(
+                        method
+                        for method in (member.fget, member.fset, member.fdel)
+                        if method is not None
+                    )
+                for method_index, method in enumerate(methods):
+                    enqueue(f"{label}.{name}:{method_index}", method)
+    files: dict[str, str] = {}
+    bindings: dict[str, Any] = {}
+    digests: dict[Path, str] = {}
+    for name, value, path in values:
+        relative = (
+            path.relative_to(anchor).as_posix()
+            if union_boundary
+            else (
+                path.name
+                if boundary_path.is_file()
+                else path.relative_to(boundary_path).as_posix()
             )
         )
-        values = []
-        seen_values = set()
-        # Every source target in the supplied graph is enqueued below. Keep its
-        # callable objects alive and marked so overlapping partials/receivers do
-        # not normalize the same graph suffix again during source discovery.
-        callable_targets: dict[int, tuple[Any, tuple[Any, ...]]] = {
-            id(node.value): (node.value, ()) for node in descriptor.nodes
-        }
-
-        def enqueue(label: str, value: Any) -> None:
-            if isinstance(value, (ModuleType, type)) or inspect.isfunction(value):
-                candidates = (value,)
-            elif callable(value):
-                try:
-                    marker = id(value)
-                    cached = callable_targets.get(marker)
-                    if cached is not None and cached[0] is value:
-                        candidates = cached[1]
-                    else:
-                        discovered = describe_callable(value)
-                        candidates = discovered.source_targets
-                        for node in discovered.nodes:
-                            callable_targets.setdefault(
-                                id(node.value), (node.value, ())
-                            )
-                        callable_targets[marker] = (value, candidates)
-                except TypeError:
-                    return
-            else:
-                return
-            for target_index, candidate in enumerate(candidates):
-                if not (
-                    inspect.isfunction(candidate)
-                    or isinstance(candidate, (type, ModuleType))
-                ):
-                    continue
-                try:
-                    raw_path = inspect.getsourcefile(candidate)
-                    if raw_path is None:
-                        continue
-                    path = Path(raw_path).resolve(strict=True)
-                except (OSError, TypeError, ValueError):
-                    continue
-                owned = any(
-                    path == item if item.is_file() else path.is_relative_to(item)
-                    for item in boundary_paths
-                )
-                if not owned or path.suffix != ".py" or path.is_symlink():
-                    continue
-                identity = id(candidate)
-                if identity in seen_values:
-                    continue
-                seen_values.add(identity)
-                target_label = (
-                    label
-                    if len(candidates) == 1
-                    else f"{label}.callable:{target_index}"
-                )
-                values.append((target_label, candidate, path))
-
-        def enqueue_contracts(annotation: Any, label: str) -> None:
-            from .codec import preflight_types
-
+        if path not in digests:
             try:
-                contracts = preflight_types(annotation, path=f"$.source.{label}")
-            except (AttributeError, NameError, TypeError, ValueError):
-                return
-            for index, contract in enumerate(contracts):
-                enqueue(f"{label}[{index}]", contract)
-
-        for target_index, callable_target in enumerate(descriptor_targets):
-            label = (
-                "<workflow>"
-                if len(descriptor_targets) == 1
-                else f"<workflow>.callable:{target_index}"
-            )
-            enqueue(label, callable_target)
-        index = 0
-        while index < len(values):
-            label, value, _ = values[index]
-            index += 1
-            if inspect.isfunction(value):
-                namespace = value.__globals__
-                for name in sorted(_referenced_names(value.__code__)):
-                    enqueue(f"{label}.{name}", namespace.get(name))
-                try:
-                    # Resolve this node only. typing's implicit namespace lookup
-                    # follows __wrapped__ repeatedly and can loop on cycles.
-                    annotations = get_type_hints(value, globalns=namespace)
-                except (NameError, TypeError, ValueError):
-                    annotations = value.__annotations__
-                for name, annotation in annotations.items():
-                    enqueue_contracts(annotation, f"{label}.annotation:{name}")
-            elif isinstance(value, ModuleType):
-                for name, member in vars(value).items():
-                    if (
-                        inspect.isfunction(member)
-                        or isinstance(member, (type, ModuleType))
-                        or callable(member)
-                    ):
-                        enqueue(f"{label}.{name}", member)
-            else:
-                enqueue_contracts(value, f"{label}.contract")
-                for mro_index, base in enumerate(value.__mro__[1:]):
-                    if base is not object:
-                        enqueue(f"{label}.mro:{mro_index}", base)
-                for name, member in vars(value).items():
-                    methods = ()
-                    if inspect.isfunction(member):
-                        methods = (member,)
-                    elif isinstance(member, (staticmethod, classmethod)):
-                        methods = (member.__func__,)
-                    elif isinstance(member, property):
-                        methods = tuple(
-                            method
-                            for method in (member.fget, member.fset, member.fdel)
-                            if method is not None
-                        )
-                    for method_index, method in enumerate(methods):
-                        enqueue(f"{label}.{name}:{method_index}", method)
-        files = {}
-        bindings = {}
-        for name, value, path in values:
-            relative = (
-                path.relative_to(anchor).as_posix()
-                if union_boundary
-                else (
-                    path.name
-                    if boundary_path.is_file()
-                    else path.relative_to(boundary_path).as_posix()
-                )
-            )
-            if relative not in files:
-                files[relative] = sha256(path.read_bytes()).hexdigest()
-            binding = _value_binding(value)
-            if binding is not None:
-                bindings[name] = binding
-        if not files:
-            return None
-        return {
-            "schema": "botpipe.orchestration-sources.v1",
-            "files": dict(sorted(files.items())),
-            "bindings": dict(sorted(bindings.items())),
-        }
-    except (AttributeError, OSError, TypeError, ValueError):
+                content = path.read_bytes()
+            except OSError as exc:
+                raise SourceCaptureError(
+                    f"Cannot read owned Python source {path}"
+                ) from exc
+            digests[path] = sha256(content).hexdigest()
+        files.setdefault(relative, digests[path])
+        binding = _value_binding(value)
+        if binding is not None:
+            bindings[name] = binding
+    if not files:
         return None
+    return {
+        "schema": "botpipe.orchestration-sources.v1",
+        "files": dict(sorted(files.items())),
+        "bindings": dict(sorted(bindings.items())),
+    }
 
 
 def capture_type_source(
@@ -323,10 +395,19 @@ def capture_type_source(
         raise TypeError("durable source identity requires a type")
     name = f"{cls.__module__}:{cls.__qualname__}"
     boundary_paths = tuple(Path(item).resolve(strict=True) for item in boundaries)
+    candidate = _identified_source_path(cls)
     try:
-        raw = inspect.getsourcefile(cls)
-        path = Path(raw).resolve(strict=True) if raw is not None else None
-    except (OSError, TypeError, ValueError):
+        path = candidate.resolve(strict=True) if candidate is not None else None
+    except OSError as exc:
+        unresolved = candidate.resolve(strict=False)
+        identified_owned = any(
+            unresolved == item if item.is_file() else unresolved.is_relative_to(item)
+            for item in boundary_paths
+        )
+        if candidate.suffix == ".py" and identified_owned:
+            raise SourceCaptureError(
+                f"Cannot resolve identified owned Python source {unresolved}"
+            ) from exc
         path = None
     owned = path is not None and any(
         path == item if item.is_file() else path.is_relative_to(item)
@@ -436,14 +517,18 @@ def type_source_boundary(cls: type, identity: Any) -> tuple[Path, ...]:
 
 def _verify_loaded_source(definition: Any) -> None:
     captured = getattr(definition, "_source_identity_at_definition", None)
-    current = capture_definition_sources(definition)
+    descriptor = describe_callable(definition)
+    context = source_context(definition, graph=descriptor)
+    current = capture_definition_sources(definition, graph=descriptor, context=context)
     if (
         captured is None
         or current is None
         or any(captured[key] != current[key] for key in ("path", "sha256"))
     ):
         raise ValueError("workflow source changed after its definition was loaded")
-    target = inspect.unwrap(definition.fn)
+    target = context.origin_target
+    if not inspect.isfunction(target):
+        raise ValueError("workflow source origin is not a Python function")
     source = Path(current["path"])
     compiled = compile(source.read_bytes(), str(source), "exec", dont_inherit=True)
     # A valid timestamp-based pyc can contain stale module constants even when
@@ -497,11 +582,14 @@ def capture_workflow_provenance(
 
 
 __all__ = [
+    "SourceCaptureError",
+    "SourceContext",
     "capture_definition_sources",
     "capture_orchestration_sources",
     "capture_type_source",
     "capture_workflow_provenance",
     "source_boundary",
+    "source_context",
     "type_source_boundary",
     "verify_type_source",
 ]

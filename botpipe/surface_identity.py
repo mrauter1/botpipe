@@ -246,8 +246,15 @@ def workflow_surface_location(
             definition.get("function"),
         )
     else:
-        target = inspect.unwrap(getattr(definition, "fn", definition))
-        raw = inspect.getsourcefile(target)
+        context = getattr(definition, "_source_context", None)
+        if context is None:
+            target = inspect.unwrap(getattr(definition, "fn", definition))
+            raw = inspect.getsourcefile(target)
+        else:
+            target = context.origin_target
+            raw = context.origin_source
+        if target is None or raw is None:
+            raise ValueError("workflow has no inspectable application source file")
         name = getattr(definition, "name", target.__name__)
         module, function = target.__module__, target.__qualname__
     if not raw:

@@ -120,6 +120,24 @@ addresses never enter the fingerprint. Sharing is observable Python behavior:
 binding one callback twice differs from binding two independently created callbacks.
 Fingerprinting and source capture use the same executable dependency description.
 
+Each workflow projects one source context from that graph. Its application origin
+follows the implementation through partials, bound methods, and decorators to the
+wrapped application body. That origin selects prompt files and definition
+evidence. Executable callable bindings in arguments and positional or keyword
+defaults add owned source boundaries without changing the origin; type-valued
+defaults retain their compact type/schema contract. Source capture visits every
+eligible target, skips native and synthetic callables without Python source, and
+fails explicitly if an identified owned Python source cannot be read.
+
+Source ownership and relocation use separate values. The root's application
+boundary anchors portable owner records; a root without an application origin
+uses its first owned boundary, or its workspace when it owns no source. Child
+operations inherit that anchor and record their actual owners relative to it.
+An anchor never grants ownership by itself. Initial inputs, operation records,
+replay, and manual reconciliation use the complete applicable ownership set.
+Portable owner records use `botpipe.source-owners.v2`; earlier versioned owner
+records require a new run.
+
 Graph expansion scales with distinct callables and dependency edges, rather than
 the number of paths through shared helpers. Caches belong to one calculation so
 later changes to code and bindings remain visible. The repeatable benchmark in

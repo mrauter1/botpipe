@@ -38,7 +38,7 @@ from .journal import Journal, now, workspace_lock
 from .limits import RunLimits
 from .models import RunResult
 from .policy import Policy
-from .provenance import capture_workflow_provenance, source_boundary
+from .provenance import capture_workflow_provenance, source_context
 from .provider_checkpoints import (
     NotDispatchedCheckpoint,
     ProviderCheckpoint,
@@ -114,23 +114,25 @@ def _operation_encoded_values(record):
             yield response[field]
 
 
-def _recorded_boundaries(data, operations, root_boundary):
+def _recorded_boundaries(data, operations, source_anchor, owned_boundaries=()):
     values = [data.get(field) for field in ("args", "kwargs", "value")]
     for record in operations:
         values.extend(_operation_encoded_values(record))
-    boundaries = [root_boundary] if root_boundary is not None else []
+    boundaries = list(owned_boundaries)
     for value in values:
         if value is not None:
             boundaries.extend(
-                codec.recorded_source_boundaries(value, root_boundary=root_boundary)
+                codec.recorded_source_boundaries(value, root_boundary=source_anchor)
             )
     return tuple(dict.fromkeys(boundaries)), values
 
 
-def _preflight_recorded_sources(data, operations, root_boundary):
+def _preflight_recorded_sources(data, operations, source_anchor, owned_boundaries=()):
     try:
-        boundaries, values = _recorded_boundaries(data, operations, root_boundary)
-        with codec.source_identity(boundaries):
+        boundaries, values = _recorded_boundaries(
+            data, operations, source_anchor, owned_boundaries
+        )
+        with codec.source_identity(boundaries, anchor=source_anchor):
             for value in values:
                 if value is not None:
                     codec.verify_sources(value)
@@ -559,38 +561,21 @@ class Workflow:
         )
 
         descriptor = describe_callable(self)
-        sdk_modules = {
-            "botpipe.runtime",
-            "botpipe.sessions",
-            "botpipe.prompts",
-            "botpipe.artifacts",
-            "botpipe.worklists",
-        }
-        source_targets = tuple(
-            target
-            for target in descriptor.boundary_targets
-            if getattr(target, "__module__", "") not in sdk_modules
-        )
-        self._source_boundaries = tuple(
-            dict.fromkeys(
-                boundary
-                for target in source_targets
-                if (boundary := source_boundary(target)) is not None
-            )
-        )
-        self._source_boundary = (
-            self._source_boundaries[0] if self._source_boundaries else None
-        )
+        self._source_context = source_context(self, graph=descriptor)
         self._source_identity_at_definition = capture_definition_sources(
-            self, graph=descriptor
+            self, graph=descriptor, context=self._source_context
         )
         self._orchestration_sources_at_definition = (
             capture_orchestration_sources(
-                self, boundary=self._source_boundaries, graph=descriptor
+                self, graph=descriptor, context=self._source_context
             )
             if self._source_boundaries
             else None
         )
+
+    @property
+    def _source_boundaries(self):
+        return self._source_context.owned_boundaries
 
     def __call__(self, *args, **kwargs):
         ctx = current_run()
@@ -728,7 +713,7 @@ class RunContext:
                 / hashlib.sha256(scope.encode()).hexdigest()[:16]
             )
         self.folder.mkdir(parents=True, exist_ok=True)
-        boundary = definition._source_boundary
+        boundary = definition._source_context.origin_boundary
         self.source_dir = (
             (boundary if boundary and boundary.is_dir() else boundary.parent)
             if boundary
@@ -754,6 +739,11 @@ class RunContext:
         inherited = parent.source_boundaries if parent is not None else ()
         own_boundaries = definition._source_boundaries
         self.source_boundaries = tuple(dict.fromkeys((*inherited, *own_boundaries)))
+        self.source_anchor = (
+            parent.source_anchor
+            if parent is not None
+            else definition._source_context.ownership_anchor or self.workspace
+        )
 
     def take_input_candidate(self, operation_id):
         """Consume a submitted answer only from the input operation it targets."""
@@ -787,8 +777,12 @@ class RunContext:
                 "Concurrent operations require parallel() with independent branch scopes"
             )
         try:
-            boundaries = source_boundaries or self.source_boundaries
-            with codec.source_identity(boundaries):
+            boundaries = (
+                self.source_boundaries
+                if source_boundaries is None
+                else source_boundaries
+            )
+            with codec.source_identity(boundaries, anchor=self.source_anchor):
                 return self._operation(
                     kind,
                     inputs,
@@ -1252,9 +1246,9 @@ class Botpipe:
     def run(self, definition, *args, task_id=None, run_id=None, **kwargs):
         definition = self._definition(definition)
         args, kwargs = _validate_args(definition.fn, args, kwargs)
-        boundaries = (
-            (definition._source_boundary,) if definition._source_boundary else ()
-        )
+        context = definition._source_context
+        boundaries = context.owned_boundaries
+        anchor = context.ownership_anchor or self.workspace
         limits = self.limits
         task_id = task_id or uuid.uuid4().hex[:12]
         run_id = run_id or uuid.uuid4().hex
@@ -1264,7 +1258,7 @@ class Botpipe:
             ):
                 raise ValueError(f"{label} must be a safe identifier")
         folder = self.state_dir / "tasks" / task_id / "runs" / run_id
-        with codec.source_identity(boundaries):
+        with codec.source_identity(boundaries, anchor=anchor):
             encoded_args = codec.encode(args)
             encoded_kwargs = codec.encode(kwargs)
         data = {
@@ -1273,7 +1267,10 @@ class Botpipe:
             "workflow": definition.name,
             "module": definition.fn.__module__,
             "function": definition.fn.__qualname__,
-            "source_file": inspect.getsourcefile(definition.fn),
+            "source_file": str(context.origin_source)
+            if context.origin_source
+            else None,
+            "source_anchor": str(anchor),
             "version": definition.fingerprint,
             "args": encoded_args,
             "kwargs": encoded_kwargs,
@@ -1330,8 +1327,10 @@ class Botpipe:
                 )
             self._check_run_configuration(data)
             operations = self.journal.operations(run_id)
+            context = definition._source_context
+            source_anchor = context.ownership_anchor or self.workspace
             source_boundaries = _preflight_recorded_sources(
-                data, operations, definition._source_boundary
+                data, operations, source_anchor, context.owned_boundaries
             )
             changes = {}
             limits = RunLimits(
@@ -1372,7 +1371,7 @@ class Botpipe:
                 ):
                     raise ValueError("Run is no longer waiting for that answer")
                 input_candidate = {"operation_id": operation_id, "raw": answer}
-            with codec.source_identity(source_boundaries):
+            with codec.source_identity(source_boundaries, anchor=source_anchor):
                 decoded_args = codec.decode(data["args"])
                 decoded_kwargs = codec.decode(data["kwargs"])
             return self._execute(
@@ -1395,7 +1394,7 @@ class Botpipe:
         pending = data.get("pending_input")
         self.journal.update_run(ctx.run_id, status="running", error=None)
         try:
-            with codec.source_identity(ctx.source_boundaries):
+            with codec.source_identity(ctx.source_boundaries, anchor=ctx.source_anchor):
                 value = _invoke(definition.fn, args, kwargs)
                 ctx.assert_consumed()
                 encoded = codec.encode(value)
@@ -1490,16 +1489,22 @@ class Botpipe:
             data = self.journal.run(run_id)
             self._check_run_configuration(data)
             operations = self.journal.operations(run_id)
-            definition_boundary = None
+            source_anchor = None
+            owned_boundaries = ()
             try:
                 reference = f"{data['module']}:{data['function']}"
-                definition_boundary = self._definition(reference)._source_boundary
+                context = self._definition(reference)._source_context
+                source_anchor = context.ownership_anchor or self.workspace
+                owned_boundaries = context.owned_boundaries
             except (ImportError, AttributeError, LookupError, ValueError, BotpipeError):
                 # A local/non-importable workflow can reconcile only while its
                 # recorded source remains at the original location. Portable
                 # relocation requires an importable root to anchor ownership.
+                recorded_anchor = data.get("source_anchor")
                 source_file = data.get("source_file")
-                if source_file:
+                if recorded_anchor:
+                    source_anchor = Path(recorded_anchor).resolve(strict=True)
+                elif source_file:
                     try:
                         source = Path(source_file).resolve(strict=True)
                     except OSError:
@@ -1510,9 +1515,11 @@ class Botpipe:
                             or (source.parent / "workflow.toml").is_file()
                             or source.name in {"workflow.py", "flow.py"}
                         )
-                        definition_boundary = source.parent if package else source
+                        source_anchor = source.parent if package else source
+                else:
+                    source_anchor = self.workspace
             source_boundaries = _preflight_recorded_sources(
-                data, operations, definition_boundary
+                data, operations, source_anchor, owned_boundaries
             )
             record = self.journal.get(operation_id)
             if record is None or record["run_id"] != run_id:
@@ -1536,7 +1543,7 @@ class Botpipe:
                         "Budget exhausted before dispatch; no effects need reconciliation. "
                         "Start a new run to use different provider budget limits"
                     )
-                with codec.source_identity(source_boundaries):
+                with codec.source_identity(source_boundaries, anchor=source_anchor):
                     inputs = codec.decode(record["inputs"])
                 request_data = checkpoint.request_data or {}
                 # A retry marker names the *next* generation; reconcile the
@@ -1654,7 +1661,7 @@ class Botpipe:
                         session_key=inputs.get("session"),
                     )
             elif response is not _UNSET:
-                with codec.source_identity(source_boundaries):
+                with codec.source_identity(source_boundaries, anchor=source_anchor):
                     result = codec.encode(response)
                 _commit_or_confirm(
                     self.journal,

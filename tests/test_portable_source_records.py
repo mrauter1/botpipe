@@ -151,8 +151,9 @@ def test_owner_locator_requires_current_root_and_legacy_is_same_location_only(tm
     root.write_text("# workflow\n")
     with codec.source_identity(root):
         encoded = codec.encode({"plain": 1}, record_owners=True)
-    assert encoded["owners"]["schema"] == "botpipe.source-owners.v1"
-    with pytest.raises(TypeError, match="requires the current workflow boundary"):
+    assert encoded["owners"]["schema"] == "botpipe.source-owners.v2"
+    assert codec.semantic_encoding(encoded) == codec.encode({"plain": 1})
+    with pytest.raises(TypeError, match="requires the current source anchor"):
         codec.recorded_source_boundaries(encoded)
     assert codec.recorded_source_boundaries(encoded, root_boundary=root) == (root,)
 
@@ -171,13 +172,14 @@ def test_malformed_owner_locator_fails_closed(tmp_path):
         "version": 1,
         "sources": {},
         "owners": {
-            "schema": "botpipe.source-owners.v1",
+            "schema": "botpipe.source-owners.v2",
+            "anchor_kind": "file",
             "boundaries": [{"kind": "file", "relative": "workflow.py"}],
         },
         "value": {"$botpipe": "dict", "value": {"$botpipe": "still user data"}},
     }
-    with pytest.raises(TypeError, match="missing.*root"):
-        codec.recorded_source_boundaries(malformed, root_boundary=root)
+    with pytest.raises(TypeError, match="current source anchor"):
+        codec.recorded_source_boundaries(malformed)
 
     # Source-free mappings that resemble codec tags remain ordinary user data.
     assert codec.decode(codec.encode({"$botpipe": "type", "type": "not-a-type"})) == {
@@ -202,9 +204,9 @@ def test_nonportable_or_noncanonical_owner_paths_are_rejected(tmp_path, relative
         "version": 1,
         "sources": {},
         "owners": {
-            "schema": "botpipe.source-owners.v1",
+            "schema": "botpipe.source-owners.v2",
+            "anchor_kind": "file",
             "boundaries": [
-                {"kind": "file", "root": True},
                 {"kind": "file", "relative": relative},
             ],
         },
