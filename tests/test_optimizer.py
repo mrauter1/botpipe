@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import json
-from dataclasses import replace
+from dataclasses import asdict, replace
+from pathlib import Path
 
 import pytest
 from pydantic import BaseModel
 
-from botpipe import Botpipe, Session, current_run, workflow
+from botpipe import Botpipe, Policy, Session, current_run, workflow
 from botpipe.providers import FakeProvider, ProviderResponse
 from botpipe_optimizer import (
     capture_evidence_snapshot,
@@ -125,6 +126,23 @@ def test_optimizer_ranks_only_observed_operations_and_preserves_evidence():
     assert report.candidates[0].evidence_operation_ids == ("op-1",)
 
 
+def test_legacy_report_labels_counts_and_generic_duration_without_cost_or_latency_claims():
+    usage_run = load_run_observation(
+        inspected_run(operations=[operation("usage", name="usage step", tokens=20)])
+    )
+    usage_candidate = optimize_observations("example", [usage_run]).candidates[0]
+    assert usage_candidate.category == "token_usage"
+    assert "cost" not in usage_candidate.rationale.lower()
+
+    duration_operation = operation("duration", name="duration step", tokens=0)
+    duration_operation["usage"] = {}
+    duration_run = load_run_observation(inspected_run(operations=[duration_operation]))
+    duration_candidate = optimize_observations("example", [duration_run]).candidates[0]
+    assert duration_candidate.category == "recorded_duration"
+    assert "latency" not in duration_candidate.rationale.lower()
+    assert "recorded operation duration" in duration_candidate.rationale.lower()
+
+
 def test_source_manifest_marks_unvisited_dynamic_paths_without_scoring_them():
     def example(flag: bool):
         if flag:
@@ -167,7 +185,12 @@ def test_optimizer_consumes_real_journaled_typed_outcome_and_usage(tmp_path):
     @workflow(name="observed")
     def observed():
         session = Session()
-        return session.run("decide", returns=Decision, name="decide").value
+        return session.run(
+            "decide",
+            returns=Decision,
+            name="decide",
+            policy=Policy(model="profile-model", effort="high"),
+        ).value
 
     provider = FakeProvider(
         [
@@ -188,6 +211,11 @@ def test_optimizer_consumes_real_journaled_typed_outcome_and_usage(tmp_path):
     assert decision.outcome == "accepted"
     assert len(decision.dispatches) == 1
     assert decision.dispatches[0].usage_availability == "known_total"
+    assert decision.dispatches[0].provider == "fake"
+    assert decision.dispatches[0].model == "profile-model"
+    assert decision.dispatches[0].effort == "high"
+    assert decision.dispatches[0].effort_present is True
+    assert decision.dispatches[0].policy_fingerprint
     assert decision.usage["total_tokens"] == 12
     assert (
         next(
@@ -499,7 +527,7 @@ def test_v2_evidence_and_candidate_bytes_are_bounded_and_identities_are_verified
         evidence_snapshot=snapshot,
         candidate_set=candidate_set,
         review=review,
-        baseline_manifest={"surface_id": snapshot.baseline_surface_manifest_id},
+        baseline_manifest=asdict(manifest),
         max_output_bytes=100_000,
     )
     selection = load_optimization_candidate(
@@ -512,7 +540,7 @@ def test_v2_evidence_and_candidate_bytes_are_bounded_and_identities_are_verified
     )
     assert selection.receipt == receipt
     assert selection.candidate == candidate_set.candidates[0]
-    (output / "workflow_optimization_candidates.json").write_text("{}")
+    Path(receipt.candidate_set_path).write_text("{}")
     with pytest.raises(ValueError, match="changed after publication"):
         load_optimization_candidate(
             optimization_receipt_path=output / "optimization_publication_receipt.json",

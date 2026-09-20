@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import tempfile
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
@@ -12,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from botpipe.storage import sync_directory
+from botpipe.surface_identity import SURFACE_MANIFEST_SCHEMA, canonical_surface_id
 
 from .evidence import EvidenceSnapshot, baseline_surface_id
 from .records import (
@@ -97,9 +99,27 @@ def validate_candidate_set(
     expected_selected_workflow: str,
     max_output_bytes: int,
 ) -> CandidateSet:
-    candidate_set.verify_identity()
+    _validate_candidate_semantics(candidate_set, evidence_snapshot)
     if candidate_set.selected_workflow != expected_selected_workflow:
         raise ValueError("CandidateSet selected_workflow does not match invocation")
+    if len(candidate_set.candidates) > max_candidates:
+        raise ValueError("CandidateSet exceeds max_candidates")
+    forbidden = sorted(
+        {item.kind for item in candidate_set.candidates} - set(allowed_kinds)
+    )
+    if forbidden:
+        raise ValueError(f"disabled candidate kinds: {', '.join(forbidden)}")
+    _bounded_record(candidate_set, max_output_bytes, "CandidateSet")
+    return candidate_set
+
+
+def _validate_candidate_semantics(
+    candidate_set: CandidateSet, evidence_snapshot: EvidenceSnapshot
+) -> None:
+    """Validate evidence-linked semantics independent of invocation policy."""
+    candidate_set.verify_identity()
+    if candidate_set.selected_workflow != evidence_snapshot.selected_workflow:
+        raise ValueError("CandidateSet selected workflow does not match evidence")
     if candidate_set.evidence_snapshot_id != evidence_snapshot.snapshot_id:
         raise ValueError("CandidateSet evidence snapshot mismatch")
     if (
@@ -107,32 +127,50 @@ def validate_candidate_set(
         != evidence_snapshot.baseline_surface_manifest_id
     ):
         raise ValueError("CandidateSet baseline mismatch")
-    if len(candidate_set.candidates) > max_candidates:
-        raise ValueError("CandidateSet exceeds max_candidates")
     candidate_ids = [item.candidate_id for item in candidate_set.candidates]
     if len(candidate_ids) != len(set(candidate_ids)):
         raise ValueError("candidate IDs must be unique across kinds")
-    forbidden = sorted(
-        {item.kind for item in candidate_set.candidates} - set(allowed_kinds)
-    )
-    if forbidden:
-        raise ValueError(f"disabled candidate kinds: {', '.join(forbidden)}")
     citable = evidence_snapshot.citable_observation_ids()
     for candidate in candidate_set.candidates:
+        if not candidate.cited_observation_ids:
+            raise ValueError("candidate must cite at least one observation")
         unknown = sorted(set(candidate.cited_observation_ids) - citable)
         if unknown:
             raise ValueError(
                 f"candidate cites unknown observations: {', '.join(unknown)}"
             )
-    if candidate_set.candidates and candidate_set.next_action != "implement_candidate":
-        raise ValueError("non-empty CandidateSet must request implementation")
+    if candidate_set.candidates and (
+        candidate_set.next_action != "implement_candidate"
+        or candidate_set.no_candidate_reason is not None
+    ):
+        raise ValueError(
+            "non-empty CandidateSet must request implementation without a no-candidate reason"
+        )
     if not candidate_set.candidates and (
         candidate_set.next_action == "implement_candidate"
         or not candidate_set.no_candidate_reason
     ):
         raise ValueError("empty CandidateSet needs an evidence/no-change reason")
-    _bounded_record(candidate_set, max_output_bytes, "CandidateSet")
-    return candidate_set
+
+
+def _baseline_manifest_identity(baseline_manifest: Mapping[str, Any]) -> str:
+    """Derive the baseline identity instead of trusting an asserted surface ID."""
+    recorded = baseline_manifest.get("surface_id")
+    if recorded is None:
+        return baseline_surface_id(baseline_manifest)
+    if baseline_manifest.get("schema") != SURFACE_MANIFEST_SCHEMA:
+        raise ValueError("asserted baseline surface_id requires a canonical manifest")
+    try:
+        derived = canonical_surface_id(
+            boundary=baseline_manifest["boundary"],
+            files=baseline_manifest["files"],
+            mode_semantics=baseline_manifest["mode_semantics"],
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("invalid canonical baseline surface manifest") from exc
+    if recorded != derived:
+        raise ValueError("baseline surface_id does not match manifest content")
+    return derived
 
 
 def validate_candidate_review(
@@ -175,7 +213,25 @@ def publish_recommendation(
     max_output_bytes: int,
     supporting_content: bytes | None = None,
 ) -> PublicationReceipt:
-    """Atomically publish canonical records after all identities and byte limits pass."""
+    """Publish one immutable generation, then atomically select its receipt.
+
+    The root receipt is the sole mutable name.  Every path recorded in it points
+    into a content-addressed generation directory, so a later publication cannot
+    invalidate a receipt that a caller has already copied or journaled.
+    """
+    # Re-parse the snapshot to catch identity-breaking ``model_copy(update=...)``
+    # values before touching the publication directory.
+    evidence_snapshot = EvidenceSnapshot.model_validate(
+        evidence_snapshot.model_dump(mode="python", by_alias=True), strict=True
+    )
+    candidate_set = CandidateSet.model_validate(
+        candidate_set.model_dump(mode="python", by_alias=True), strict=True
+    )
+    if review is not None:
+        review = CandidateReview.model_validate(
+            review.model_dump(mode="python", by_alias=True), strict=True
+        )
+    _validate_candidate_semantics(candidate_set, evidence_snapshot)
     if candidate_set.candidates:
         if review is None or not review.accepted:
             raise ValueError(
@@ -184,34 +240,49 @@ def publish_recommendation(
         validate_candidate_review(
             review, candidate_set=candidate_set, max_output_bytes=max_output_bytes
         )
-    recorded_surface = baseline_manifest.get("surface_id")
+    elif review is not None:
+        validate_candidate_review(
+            review, candidate_set=candidate_set, max_output_bytes=max_output_bytes
+        )
     if (
-        str(recorded_surface)
-        if recorded_surface
-        else baseline_surface_id(baseline_manifest)
-    ) != candidate_set.baseline_surface_manifest_id:
+        _baseline_manifest_identity(baseline_manifest)
+        != candidate_set.baseline_surface_manifest_id
+    ):
         raise ValueError("baseline manifest identity does not match CandidateSet")
-    root = Path(output_dir)
-    root.mkdir(parents=True, exist_ok=True)
-    candidate_path = root / "workflow_optimization_candidates.json"
-    review_path = root / "workflow_optimization_candidate_review.json"
-    evidence_path = root / "workflow_optimization_evidence.json"
-    baseline_path = root / "baseline_surface_manifest.json"
-    report_path = root / "workflow_optimization_report.md"
-    handoff_path = root / "workflow_refinement_evidence.json"
-    receipt_path = root / "optimization_publication_receipt.json"
-    supporting_path = root / "workflow_optimization_supporting.md"
-    _atomic_json(
-        evidence_path, evidence_snapshot.model_dump(mode="json", by_alias=True)
+    evidence_content = _json_bytes(
+        evidence_snapshot.model_dump(mode="json", by_alias=True)
     )
-    _atomic_json(baseline_path, dict(baseline_manifest))
-    _atomic_json(candidate_path, candidate_set.model_dump(mode="json", by_alias=True))
-    if review is not None:
-        _atomic_json(review_path, review.model_dump(mode="json", by_alias=True))
+    baseline_content = _json_bytes(dict(baseline_manifest))
+    candidate_content = _json_bytes(
+        candidate_set.model_dump(mode="json", by_alias=True)
+    )
+    review_content = (
+        None
+        if review is None
+        else _json_bytes(review.model_dump(mode="json", by_alias=True))
+    )
     report = render_recommendation_report(evidence_snapshot, candidate_set, review)
-    _atomic_bytes(report_path, report.encode())
-    if supporting_content is not None:
-        _atomic_bytes(supporting_path, supporting_content)
+    report_content = report.encode()
+
+    generation_id = _publication_generation_id(
+        {
+            "workflow_optimization_evidence.json": evidence_content,
+            "baseline_surface_manifest.json": baseline_content,
+            "workflow_optimization_candidates.json": candidate_content,
+            "workflow_optimization_candidate_review.json": review_content,
+            "workflow_optimization_report.md": report_content,
+            "workflow_optimization_supporting.md": supporting_content,
+        }
+    )
+    root = Path(output_dir).resolve()
+    generation_path = root / "optimization_publications" / generation_id
+    candidate_path = generation_path / "workflow_optimization_candidates.json"
+    review_path = generation_path / "workflow_optimization_candidate_review.json"
+    evidence_path = generation_path / "workflow_optimization_evidence.json"
+    baseline_path = generation_path / "baseline_surface_manifest.json"
+    report_path = generation_path / "workflow_optimization_report.md"
+    handoff_path = generation_path / "workflow_refinement_evidence.json"
+    supporting_path = generation_path / "workflow_optimization_supporting.md"
     handoff = RefinementHandoff(
         target_workflow_id=candidate_set.selected_workflow,
         evidence_snapshot_id=evidence_snapshot.snapshot_id,
@@ -227,23 +298,34 @@ def publish_recommendation(
             for item in candidate_set.candidates
         ],
     )
-    _atomic_json(handoff_path, handoff.model_dump(mode="json", by_alias=True))
-    recommendation_output = [candidate_path, report_path, handoff_path]
-    if review is not None:
-        recommendation_output.append(review_path)
+    handoff_content = _json_bytes(handoff.model_dump(mode="json", by_alias=True))
+    recommendation_output = [candidate_content, report_content, handoff_content]
+    if review_content is not None:
+        recommendation_output.append(review_content)
     if supporting_content is not None:
-        recommendation_output.append(supporting_path)
-    total = sum(path.stat().st_size for path in recommendation_output)
+        recommendation_output.append(supporting_content)
+    total = sum(len(content) for content in recommendation_output)
     if total > max_output_bytes:
         raise ValueError("published recommendation exceeds max_output_bytes")
-    published = [evidence_path, baseline_path, *recommendation_output]
+
+    published = [
+        (evidence_path, evidence_content),
+        (baseline_path, baseline_content),
+        (candidate_path, candidate_content),
+        (report_path, report_content),
+        (handoff_path, handoff_content),
+    ]
+    if review_content is not None:
+        published.append((review_path, review_content))
+    if supporting_content is not None:
+        published.append((supporting_path, supporting_content))
     supporting = [
         SupportingArtifact(
             path=str(path.resolve()),
-            sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
-            bytes=path.stat().st_size,
+            sha256=hashlib.sha256(content).hexdigest(),
+            bytes=len(content),
         )
-        for path in published
+        for path, content in published
     ]
     receipt = PublicationReceipt(
         status="accepted",
@@ -263,7 +345,17 @@ def publish_recommendation(
         supporting_artifacts=supporting,
         stop_reason=None,
     )
-    _atomic_json(receipt_path, receipt.model_dump(mode="json", by_alias=True))
+    receipt_content = _json_bytes(receipt.model_dump(mode="json", by_alias=True))
+    if len(receipt_content) > max_output_bytes:
+        raise ValueError("publication receipt exceeds max_output_bytes")
+    generation_files = {path.name: content for path, content in published} | {
+        "optimization_publication_receipt.json": receipt_content
+    }
+    _install_publication_generation(generation_path, generation_files)
+
+    # This replace is the commit point.  Failures before it leave the previous
+    # canonical receipt and all files it references byte-for-byte untouched.
+    _atomic_bytes(root / "optimization_publication_receipt.json", receipt_content)
     return receipt
 
 
@@ -411,12 +503,6 @@ def load_optimization_candidate(
         receipt.selected_workflow,
     ):
         raise ValueError("receipt and CandidateSet anchors do not match")
-    matches = [
-        item for item in candidate_set.candidates if item.candidate_id == candidate_id
-    ]
-    if len(matches) != 1 or matches[0].kind not in set(allowed_kinds):
-        raise ValueError("candidate is absent, duplicated, or has a disallowed kind")
-
     evidence = EvidenceSnapshot.model_validate_json(
         _read_bounded(evidence_path, max_evidence_bytes, "evidence snapshot"),
         strict=True,
@@ -427,12 +513,18 @@ def load_optimization_candidate(
         or evidence.baseline_surface_manifest_id != receipt.baseline_surface_manifest_id
     ):
         raise ValueError("evidence anchors do not match receipt")
+    _validate_candidate_semantics(candidate_set, evidence)
+
+    matches = [
+        item for item in candidate_set.candidates if item.candidate_id == candidate_id
+    ]
+    if len(matches) != 1 or matches[0].kind not in set(allowed_kinds):
+        raise ValueError("candidate is absent, duplicated, or has a disallowed kind")
     baseline = json.loads(
         _read_bounded(baseline_path, max_evidence_bytes, "baseline surface manifest")
     )
-    if (
-        not isinstance(baseline, dict)
-        or baseline.get("surface_id") != receipt.baseline_surface_manifest_id
+    if not isinstance(baseline, dict) or (
+        _baseline_manifest_identity(baseline) != receipt.baseline_surface_manifest_id
     ):
         raise ValueError("baseline surface identity does not match receipt")
 
@@ -570,8 +662,78 @@ def _verified_receipt_artifacts(
     return paths
 
 
+def _json_bytes(value: Any) -> bytes:
+    return (json.dumps(value, indent=2, sort_keys=True) + "\n").encode()
+
+
+def _publication_generation_id(contents: Mapping[str, bytes | None]) -> str:
+    """Return a stable ID for the complete caller-supplied publication input."""
+    manifest = [
+        {
+            "name": name,
+            "sha256": None if content is None else hashlib.sha256(content).hexdigest(),
+            "bytes": None if content is None else len(content),
+        }
+        for name, content in sorted(contents.items())
+    ]
+    digest = hashlib.sha256(
+        json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    return f"publication_{digest}"
+
+
+def _install_publication_generation(
+    generation_path: Path, contents: Mapping[str, bytes]
+) -> None:
+    """Durably install a new directory, or verify an identical prior install."""
+    parent = generation_path.parent
+    parent.mkdir(parents=True, exist_ok=True)
+    if parent.is_symlink() or not parent.is_dir() or parent.resolve() != parent:
+        raise ValueError("publication directory must be a real in-root directory")
+    temporary = Path(tempfile.mkdtemp(prefix=".publication-", dir=parent))
+    try:
+        for name, content in contents.items():
+            _write_new_file(temporary / name, content)
+        sync_directory(temporary)
+        try:
+            os.rename(temporary, generation_path)
+        except OSError:
+            if generation_path.is_symlink() or not generation_path.is_dir():
+                raise
+            _verify_generation(generation_path, contents)
+        else:
+            sync_directory(parent)
+            return
+    finally:
+        if temporary.exists():
+            shutil.rmtree(temporary)
+
+
+def _verify_generation(path: Path, contents: Mapping[str, bytes]) -> None:
+    if path.is_symlink() or not path.is_dir():
+        raise ValueError("publication generation must be a real directory")
+    expected = set(contents)
+    entries = list(path.iterdir())
+    actual = {item.name for item in entries}
+    if actual != expected or any(
+        item.is_symlink() or not item.is_file() for item in entries
+    ):
+        raise ValueError("publication generation conflicts with existing contents")
+    for name, content in contents.items():
+        candidate = path / name
+        if not candidate.is_file() or candidate.read_bytes() != content:
+            raise ValueError("publication generation conflicts with existing contents")
+
+
+def _write_new_file(path: Path, content: bytes) -> None:
+    with path.open("xb") as stream:
+        stream.write(content)
+        stream.flush()
+        os.fsync(stream.fileno())
+
+
 def _atomic_json(path: Path, value: Any) -> None:
-    _atomic_bytes(path, (json.dumps(value, indent=2, sort_keys=True) + "\n").encode())
+    _atomic_bytes(path, _json_bytes(value))
 
 
 def _atomic_bytes(path: Path, content: bytes) -> None:

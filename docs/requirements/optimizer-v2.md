@@ -99,6 +99,13 @@ Capture preserves run/task/workflow identity, operation ID and scope, kind,
 name, status, outcome, timing, provider usage, and start/end provenance. An
 observation ID binds run and operation identity. Missing provenance, usage, or
 timing remains explicit and cannot be replaced by zero or current metadata.
+Provider observations also retain each physical dispatch ID, attempt and
+generation, outcome, usage availability and reported usage, elapsed seconds,
+provider, effective model, effort, and full policy fingerprint. The full policy
+fingerprint is audit evidence; it is not a profile grouping key.
+These dispatch/profile additions and the physical-dispatch latency semantics are
+published as `botpipe.workflow_optimization.evidence/v3`; candidate, review, and
+workflow protocol versions do not change.
 
 Evidence admission operates on complete records. Check byte limits before
 parsing or copying; never parse truncated JSON. An oversized run may be excluded
@@ -112,16 +119,37 @@ stable current baseline. Historical observations remain individually useful,
 but they cannot be relabeled with the current source hash or pooled into a
 current rate.
 
+Provider profiles are a separate stratum inside an unchanged structural group.
+The small profile key is the recorded provider, effective model, and effort.
+Recorded effort explicitly set to null (known unset) differs from an absent
+effort fact. A dispatch missing any profile component has no stable comparable
+profile and does not compare equal to another unknown dispatch. Mixed-profile
+retries and steps using different profiles retain separate per-step/profile
+breakdowns. Reliability still deduplicates by affected run and step, so those
+breakdowns do not count one failure more than once.
+
 Objectives order observed burden only:
 
 - `reliability`: distinct runs with direct failed/interrupted operations, then
   distinct runs with recorded rework/replan outcomes;
-- `token_usage`: complete positive provider-token totals; incomplete operations
-  go to `measure_first`;
-- `latency`: complete positive provider-dispatch time; it is not predicted workflow
-  speedup.
+- `token_usage`: complete positive provider-token totals for every contributing
+  dispatch; incomplete operations go to `measure_first`;
+- `latency`: complete positive physical provider-dispatch time for every
+  contributing dispatch; generic operation/activity duration is ineligible and
+  incomplete dispatch timing goes to `measure_first`.
+
+Token ranking uses `selection_basis=sum_of_reported_token_counts`. Reported
+counts from different provider/model profiles can use different tokenizers, so
+the profile strata remain visible and `profile_comparison=none`. Latency ranking
+uses `selection_basis=sum_of_provider_dispatch_seconds`. Dispatch seconds are
+additive observed provider burden, not end-to-end wall latency: ten parallel
+one-second dispatches sum to ten provider-dispatch seconds even though wall time
+may be close to one second. A step with complete objective facts and unknown
+profile identity may rank by its absolute observed burden, but it cannot support
+profile-relative claims.
 
 `top_k_steps` is one total shortlist cap for the selected evidence group. No
+per-profile quota or fairness allocation modifies that global ordering. No
 eligible evidence produces zero model calls and a deterministic empty set.
 Reports must not invent probability, confidence, monetary cost, causality, or
 full-corpus claims.
@@ -264,7 +292,7 @@ has passed.
 | T07 | Separate runs have similar failures | They remain recurrence, not one causal/rework loop |
 | T08 | Nested/parallel scopes interleave | No cross-scope parentage or blame is invented |
 | T09 | Usage is complete, partial, unknown, zero, repaired, or retried | Availability and dispatch totals remain distinct and exact |
-| T10 | Source/model/provider identities differ | Meaningful groups/strata remain separate; unknown stays unknown |
+| T10 | Source/model/provider identities differ | Structural groups remain unchanged; per-step provider/model/effort strata remain separate; unknown stays noncomparable; one literal-burden top-K applies globally |
 | T11 | Failure-only or outcome-filtered sample | Actual denominators are visible; no probability claim |
 | T12 | Reliability, usage, and latency leaders differ | Objective ordering is reproducible with one total shortlist cap |
 | T13 | Model invents citations, counts, IDs, metrics, or disabled kinds | Strict records and deterministic anchors reject publication |

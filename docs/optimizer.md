@@ -24,15 +24,24 @@ The three objectives rank observed burden:
 
 | Objective | Eligible observations | Ordering |
 | --- | --- | --- |
-| `reliability` | Explicit operation/dispatch failures or typed rework/replan outcomes | Distinct affected runs, then deterministic ties |
-| `token_usage` | Complete, positive provider usage | Recorded token total |
-| `latency` | Complete, positive provider-dispatch elapsed time | Recorded elapsed seconds |
+| `reliability` | Explicit failed/interrupted operations or typed rework/replan outcomes | Distinct affected runs, then deterministic ties |
+| `token_usage` | Complete, positive provider usage | Sum of reported token counts |
+| `latency` | Complete, positive physical provider-dispatch timing | Sum of provider-dispatch seconds |
 
 These rankings do not estimate causality, probability, price, reducibility, or
-future benefit. Python has dynamic topology: declared source describes what may
-run, while only journaled operations prove what did run. Runs are grouped only
-when recorded workflow identity and exact surface provenance permit it. Missing
+future benefit. Provider-dispatch seconds are additive observed provider burden,
+not end-to-end wall latency. Token counts remain literal reported counts even
+when provider/model profiles differ; neither measure is normalized across
+profiles. Python has dynamic topology: declared source describes what may run,
+while only journaled operations prove what did run. Runs are grouped only when
+recorded workflow identity and exact surface provenance permit it. Missing
 historical provenance stays unknown.
+
+Failed provider attempts remain visible in per-dispatch profile evidence. When
+a later attempt completes the operation, the earlier attempt is not promoted to
+a direct operation failure for reliability ranking. A missing provider, effective
+model, or effort fact makes that exact dispatch noncomparable; separate unknown
+dispatches never form a shared profile.
 
 If no observation is eligible, the workflow makes zero provider calls and
 publishes a typed empty `CandidateSet` whose next action is `collect_evidence`
@@ -68,15 +77,22 @@ not add fixed specialist stages.
 
 The workflow returns `OptimizationWorkflowResult`, containing the
 `EvidenceSnapshot`, `CandidateSet`, optional `CandidateReview`, accepted
-`PublicationReceipt`, and final provider-budget snapshot. Canonical
-published files in the run folder are:
+`PublicationReceipt`, and final provider-budget snapshot. The run folder has
+one canonical commit marker:
+
+- `optimization_publication_receipt.json`
+
+It selects an immutable, content-addressed directory under
+`optimization_publications/publication_<sha256>/`. That generation contains:
 
 - `workflow_optimization_evidence.json`
+- `baseline_surface_manifest.json`
 - `workflow_optimization_candidates.json`
 - `workflow_optimization_candidate_review.json` when a proposal was reviewed
 - `workflow_optimization_report.md`
 - `workflow_refinement_evidence.json`
-- `optimization_publication_receipt.json`
+- `workflow_optimization_supporting.md` when the producer supplied it
+- an immutable copy of `optimization_publication_receipt.json`
 
 `CandidateSet` is strict and content-addressed. Each candidate names one kind
 (`producer_prompt`, `verifier_rubric`, `tokens`, `workflow`, or
@@ -86,10 +102,19 @@ owns evidence grouping, metrics, identities, byte counts, and publication. The
 producer cannot author those facts, and the independent reviewer cannot alter
 them.
 
-The final receipt commits the optimizer's multi-file handoff. Ordinary workflow
-artifacts otherwise use the durable journal and immutable `ArtifactHandle`s;
-Botpipe does not create duplicate generic receipt files for every operation.
-Every recommendation receipt reports `improvement = not_evaluated`.
+Publication serializes and validates the complete generation, including its
+aggregate recommendation byte budget, before writing it. It durably installs
+the generation and then atomically replaces the root receipt as the commit
+point. A failed or interrupted attempt can leave an unreferenced generation,
+but it cannot change the previously accepted receipt or any file that receipt
+names. Retrying identical input reuses the same generation. Concurrent
+publishers may race to select the latest root receipt, while each accepted
+generation and its own receipt remain complete and loadable.
+
+Ordinary workflow artifacts otherwise use the durable journal and immutable
+`ArtifactHandle`s; Botpipe does not create duplicate generic receipt files for
+every operation. Every recommendation receipt reports
+`improvement = not_evaluated`.
 Downstream code uses `load_optimization_candidate(...)`, which verifies the
 same-directory receipt and referenced byte counts, hashes, evidence, baseline,
 candidate set, review, and handoff identities before returning a selection.

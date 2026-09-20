@@ -74,6 +74,11 @@ class ProviderDispatchObservation:
     usage_availability: str
     usage: dict[str, float]
     elapsed_seconds: float | None
+    provider: str | None = None
+    model: str | None = None
+    effort: str | None = None
+    effort_present: bool = False
+    policy_fingerprint: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,6 +95,15 @@ class RunObservation:
     status: str
     operations: tuple[OperationObservation, ...]
     artifacts: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        dispatch_ids = [
+            dispatch.dispatch_id
+            for operation in self.operations
+            for dispatch in operation.dispatches
+        ]
+        if len(dispatch_ids) != len(set(dispatch_ids)):
+            raise ValueError("run contains duplicate provider dispatch ids")
 
 
 @dataclass(frozen=True, slots=True)
@@ -363,11 +377,11 @@ def rank_optimization_candidates(
             category = "reliability"
             change = "Tighten the typed result contract and validation feedback; test the observed failure outcomes."
         elif metric.total_tokens:
-            category = "token_cost"
+            category = "token_usage"
             change = "Reduce repeated context and prompt surface, then compare typed-output quality and token use."
         elif metric.mean_duration_ms is not None:
-            category = "latency"
-            change = "Measure the slow work and evaluate a smaller or independently cached operation boundary."
+            category = "recorded_duration"
+            change = "Separate provider-dispatch timing from other recorded operation time before evaluating a smaller or independently cached boundary."
         else:
             category = "evidence_gap"
             change = "Capture outcome, timing, and usage evidence before proposing an implementation change."
@@ -384,11 +398,11 @@ def rank_optimization_candidates(
                 rationale=(
                     f"Observed {metric.observation_count} operation(s): {metric.failure_count} failures, "
                     f"{metric.retry_count} retries, {metric.total_tokens} tokens, "
-                    f"mean duration {metric.mean_duration_ms!r} ms."
+                    f"mean recorded operation duration {metric.mean_duration_ms!r} ms."
                 ),
                 proposed_change=change,
                 evidence_operation_ids=metric.evidence_operation_ids,
-                requires_ablation=category in {"token_cost", "latency"},
+                requires_ablation=category in {"token_usage", "recorded_duration"},
             )
         )
     candidates.sort(key=lambda item: (-item.score, item.target_name, item.target_kind))
@@ -562,6 +576,11 @@ def _load_dispatch(raw: Any) -> ProviderDispatchObservation:
         usage_availability=str(item.get("usage_availability") or "unknown").lower(),
         usage=_number_mapping(item.get("usage") or item),
         elapsed_seconds=None if elapsed is None else float(elapsed),
+        provider=_optional_text(item.get("provider")),
+        model=_optional_text(item.get("model")),
+        effort=_optional_text(item.get("effort")),
+        effort_present="effort" in item,
+        policy_fingerprint=_optional_text(item.get("policy_fingerprint")),
     )
 
 
@@ -572,6 +591,10 @@ def _optional_integer(value: Any) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _optional_text(value: Any) -> str | None:
+    return value if isinstance(value, str) and value else None
 
 
 def _source_call_identity(call: ast.Call) -> tuple[str | None, str]:

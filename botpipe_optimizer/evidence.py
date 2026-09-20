@@ -15,6 +15,12 @@ from .optimization import RunObservation, SourceManifest, load_run_observation
 
 type Objective = Literal["reliability", "token_usage", "latency"]
 type Availability = Literal["known_total", "partial", "unknown", "not_attempted"]
+type EffortState = Literal["known_value", "known_unset", "absent"]
+type SelectionBasis = Literal[
+    "distinct_affected_runs",
+    "sum_of_reported_token_counts",
+    "sum_of_provider_dispatch_seconds",
+]
 
 
 class EvidenceRecord(BaseModel):
@@ -48,6 +54,24 @@ class ExcludedRun(EvidenceRecord):
     bytes: int = Field(ge=0)
 
 
+class ProviderDispatchEvidence(EvidenceRecord):
+    dispatch_id: str
+    attempt: int | None = None
+    generation: int | None = None
+    outcome: str
+    usage_availability: Availability
+    usage: dict[str, float]
+    known_total_tokens: int | None = Field(default=None, ge=0)
+    elapsed_seconds: float | None = Field(default=None, ge=0)
+    provider: str | None = None
+    model: str | None = None
+    effort: str | None = None
+    effort_state: EffortState
+    profile_id: str
+    profile_comparable: bool
+    policy_fingerprint: str | None = None
+
+
 class Observation(EvidenceRecord):
     observation_id: str = Field(pattern=r"^observation_[0-9a-f]{64}$")
     operation_id: str
@@ -66,6 +90,7 @@ class Observation(EvidenceRecord):
     known_total_tokens: int | None = Field(default=None, ge=0)
     elapsed_available: bool
     elapsed_seconds: float | None = Field(default=None, ge=0)
+    dispatches: tuple[ProviderDispatchEvidence, ...] = ()
 
 
 class RunEvidence(EvidenceRecord):
@@ -90,6 +115,22 @@ class EvidenceGroup(EvidenceRecord):
     current_match: bool
 
 
+class StepProfileMetric(EvidenceRecord):
+    profile_id: str
+    profile_comparable: bool
+    provider: str | None = None
+    model: str | None = None
+    effort: str | None = None
+    effort_state: EffortState
+    dispatch_count: int = Field(ge=0)
+    distinct_run_count: int = Field(ge=0)
+    failed_dispatch_count: int = Field(ge=0)
+    complete_usage: bool
+    known_total_tokens: int | None = Field(default=None, ge=0)
+    complete_elapsed: bool
+    total_elapsed_seconds: float | None = Field(default=None, ge=0)
+
+
 class StepMetric(EvidenceRecord):
     metric_id: str
     group_id: str
@@ -106,6 +147,10 @@ class StepMetric(EvidenceRecord):
     known_total_tokens: int | None = Field(default=None, ge=0)
     complete_elapsed: bool
     total_elapsed_seconds: float | None = Field(default=None, ge=0)
+    profile_breakdowns: tuple[StepProfileMetric, ...] = ()
+    profile_comparison: Literal["none"] = "none"
+    heterogeneous_profiles: bool = False
+    incomplete_profile_identity: bool = False
 
 
 class StepRanking(EvidenceRecord):
@@ -120,6 +165,10 @@ class StepRanking(EvidenceRecord):
     observation_count: int = Field(ge=0)
     known_total_tokens: int | None = Field(default=None, ge=0)
     total_elapsed_seconds: float | None = Field(default=None, ge=0)
+    selection_basis: SelectionBasis
+    profile_comparison: Literal["none"] = "none"
+    heterogeneous_profiles: bool = False
+    incomplete_profile_identity: bool = False
 
 
 class EvidenceBudget(EvidenceRecord):
@@ -130,14 +179,16 @@ class EvidenceBudget(EvidenceRecord):
 
 
 class EvidenceSnapshot(EvidenceRecord):
-    schema_version: Literal["botpipe.workflow_optimization.evidence/v2"] = Field(
-        default="botpipe.workflow_optimization.evidence/v2",
+    schema_version: Literal["botpipe.workflow_optimization.evidence/v3"] = Field(
+        default="botpipe.workflow_optimization.evidence/v3",
         alias="schema",
     )
     snapshot_id: str = Field(pattern=r"^evidence_[0-9a-f]{64}$")
     selected_workflow: str
     baseline_surface_manifest_id: str
     objective: Objective
+    selection_basis: SelectionBasis
+    profile_comparison: Literal["none"] = "none"
     selection: SelectionPolicy
     runs: tuple[RunEvidence, ...]
     excluded_runs: tuple[ExcludedRun, ...] = ()
@@ -265,15 +316,20 @@ def capture_evidence_snapshot(
                 operation.attempts,
             )
             elapsed_available, elapsed_seconds = _elapsed(operation)
+            dispatch_evidence = tuple(
+                _dispatch_evidence(
+                    dispatch,
+                    observation_id=observation_id,
+                    dispatch_ordinal=dispatch_ordinal,
+                )
+                for dispatch_ordinal, dispatch in enumerate(operation.dispatches)
+            )
             direct_failure = operation.status in {
                 "failed",
                 "interrupted",
                 "budget_exceeded",
                 "cancelled",
-            } or any(
-                dispatch.outcome in {"failed", "timed_out", "interrupted", "cancelled"}
-                for dispatch in operation.dispatches
-            )
+            }
             observation = Observation(
                 observation_id=observation_id,
                 operation_id=operation.operation_id,
@@ -293,6 +349,7 @@ def capture_evidence_snapshot(
                 known_total_tokens=tokens,
                 elapsed_available=elapsed_available,
                 elapsed_seconds=elapsed_seconds,
+                dispatches=dispatch_evidence,
             )
             observations.append(observation)
             if run.provenance_state != "known":
@@ -387,11 +444,13 @@ def capture_evidence_snapshot(
     )
     baseline_id = baseline_surface_manifest_id or baseline_surface_id(source_manifest)
     payload = {
-        "schema": "botpipe.workflow_optimization.evidence/v2",
+        "schema": "botpipe.workflow_optimization.evidence/v3",
         "snapshot_id": "evidence_" + "0" * 64,
         "selected_workflow": selected_workflow,
         "baseline_surface_manifest_id": baseline_id,
         "objective": objective,
+        "selection_basis": _selection_basis(objective),
+        "profile_comparison": "none",
         "selection": SelectionPolicy(
             explicit_run_refs=explicit_run_refs,
             route_tags=routes,
@@ -430,10 +489,21 @@ def _metrics(observations: list[Observation]) -> tuple[StepMetric, ...]:
     result = []
     for (group_id, step_id, kind), values in sorted(grouped.items()):
         dispatches = [item for item in values if item.step_kind == "provider"]
+        dispatch_facts = [
+            (item, dispatch) for item in dispatches for dispatch in item.dispatches
+        ]
         complete_usage = bool(dispatches) and all(
             item.usage_availability == "known_total" for item in dispatches
         )
-        complete_elapsed = all(item.elapsed_available for item in values)
+        complete_elapsed = bool(dispatches) and all(
+            item.elapsed_available for item in dispatches
+        )
+        direct_failure_runs = {item.run_ref for item in values if item.direct_failure}
+        rework_runs = {item.run_ref for item in values if item.rework_rejection}
+        profile_breakdowns = _profile_metrics(dispatch_facts)
+        incomplete_profile_identity = (bool(dispatches) and not dispatch_facts) or any(
+            not item.profile_comparable for item in profile_breakdowns
+        )
         result.append(
             StepMetric(
                 metric_id="metric_"
@@ -443,14 +513,10 @@ def _metrics(observations: list[Observation]) -> tuple[StepMetric, ...]:
                 step_kind=kind,
                 observation_count=len(values),
                 distinct_run_count=len({item.run_ref for item in values}),
-                direct_failure_count=sum(item.direct_failure for item in values),
-                direct_failure_run_count=len(
-                    {item.run_ref for item in values if item.direct_failure}
-                ),
-                rework_rejection_count=sum(item.rework_rejection for item in values),
-                rework_run_count=len(
-                    {item.run_ref for item in values if item.rework_rejection}
-                ),
+                direct_failure_count=len(direct_failure_runs),
+                direct_failure_run_count=len(direct_failure_runs),
+                rework_rejection_count=len(rework_runs),
+                rework_run_count=len(rework_runs),
                 attempted_dispatch_count=sum(
                     item.attempted_dispatch_count for item in dispatches
                 ),
@@ -462,7 +528,60 @@ def _metrics(observations: list[Observation]) -> tuple[StepMetric, ...]:
                 ),
                 complete_elapsed=complete_elapsed,
                 total_elapsed_seconds=(
-                    sum(item.elapsed_seconds or 0 for item in values)
+                    sum(item.elapsed_seconds or 0 for item in dispatches)
+                    if complete_elapsed
+                    else None
+                ),
+                profile_breakdowns=profile_breakdowns,
+                profile_comparison="none",
+                heterogeneous_profiles=len(profile_breakdowns) > 1,
+                incomplete_profile_identity=incomplete_profile_identity,
+            )
+        )
+    return tuple(result)
+
+
+def _profile_metrics(
+    dispatches: list[tuple[Observation, ProviderDispatchEvidence]],
+) -> tuple[StepProfileMetric, ...]:
+    grouped: dict[str, list[tuple[Observation, ProviderDispatchEvidence]]] = (
+        defaultdict(list)
+    )
+    for observation, dispatch in dispatches:
+        grouped[dispatch.profile_id].append((observation, dispatch))
+    result = []
+    for profile_id, values in sorted(grouped.items()):
+        first = values[0][1]
+        complete_usage = all(
+            item.usage_availability == "known_total"
+            and item.known_total_tokens is not None
+            for _, item in values
+        )
+        complete_elapsed = all(item.elapsed_seconds is not None for _, item in values)
+        result.append(
+            StepProfileMetric(
+                profile_id=profile_id,
+                profile_comparable=first.profile_comparable,
+                provider=first.provider,
+                model=first.model,
+                effort=first.effort,
+                effort_state=first.effort_state,
+                dispatch_count=len(values),
+                distinct_run_count=len({item.run_ref for item, _ in values}),
+                failed_dispatch_count=sum(
+                    dispatch.outcome
+                    in {"failed", "timed_out", "interrupted", "cancelled"}
+                    for _, dispatch in values
+                ),
+                complete_usage=complete_usage,
+                known_total_tokens=(
+                    sum(item.known_total_tokens or 0 for _, item in values)
+                    if complete_usage
+                    else None
+                ),
+                complete_elapsed=complete_elapsed,
+                total_elapsed_seconds=(
+                    sum(item.elapsed_seconds or 0 for _, item in values)
                     if complete_elapsed
                     else None
                 ),
@@ -528,10 +647,67 @@ def _rank(metrics: tuple[StepMetric, ...], objective: Objective, top_k: int):
             observation_count=item.observation_count,
             known_total_tokens=item.known_total_tokens,
             total_elapsed_seconds=item.total_elapsed_seconds,
+            selection_basis=_selection_basis(objective),
+            profile_comparison="none",
+            heterogeneous_profiles=item.heterogeneous_profiles,
+            incomplete_profile_identity=item.incomplete_profile_identity,
         )
         for index, item in enumerate(eligible[:top_k], 1)
     )
     return rankings, tuple(sorted(measure))
+
+
+def _selection_basis(objective: Objective) -> SelectionBasis:
+    if objective == "reliability":
+        return "distinct_affected_runs"
+    if objective == "token_usage":
+        return "sum_of_reported_token_counts"
+    return "sum_of_provider_dispatch_seconds"
+
+
+def _dispatch_evidence(
+    dispatch: Any, *, observation_id: str, dispatch_ordinal: int
+) -> ProviderDispatchEvidence:
+    effort_state: EffortState = (
+        "absent"
+        if not dispatch.effort_present
+        else "known_unset"
+        if dispatch.effort is None
+        else "known_value"
+    )
+    comparable = bool(dispatch.provider and dispatch.model and dispatch.effort_present)
+    profile_key = (
+        [dispatch.provider, dispatch.model, effort_state, dispatch.effort]
+        if comparable
+        # Dispatch IDs are only physical identities inside their source run.  Scope
+        # an incomplete profile to this exact captured dispatch so two old or
+        # partially recorded runs cannot accidentally form an "unknown" cohort.
+        else ["unknown", observation_id, dispatch_ordinal, dispatch.dispatch_id]
+    )
+    profile_id = "profile_" + sha256(_canonical(profile_key)).hexdigest()
+    token_total = _known_token_total(dispatch.usage)
+    availability = dispatch.usage_availability
+    if availability not in {"known_total", "partial", "unknown", "not_attempted"}:
+        availability = "unknown"
+    if availability == "known_total" and token_total is None:
+        availability = "partial" if dispatch.usage else "unknown"
+    return ProviderDispatchEvidence(
+        dispatch_id=dispatch.dispatch_id,
+        attempt=dispatch.attempt,
+        generation=dispatch.generation,
+        outcome=dispatch.outcome,
+        usage_availability=availability,
+        usage=dict(dispatch.usage),
+        known_total_tokens=token_total if availability == "known_total" else None,
+        elapsed_seconds=dispatch.elapsed_seconds,
+        provider=dispatch.provider,
+        model=dispatch.model,
+        effort=dispatch.effort,
+        effort_state=effort_state,
+        profile_id=profile_id,
+        profile_comparable=comparable,
+        policy_fingerprint=dispatch.policy_fingerprint,
+    )
 
 
 def _usage(
@@ -585,11 +761,7 @@ def _elapsed(operation: Any) -> tuple[bool, float | None]:
         if all(item.elapsed_seconds is not None for item in operation.dispatches):
             return True, sum(item.elapsed_seconds for item in operation.dispatches)
         return False, None
-    if operation.kind == "provider" and operation.attempts != 1:
-        return False, None
-    duration = operation.duration_ms
-    available = duration is not None and math.isfinite(duration) and duration >= 0
-    return available, duration / 1000 if available else None
+    return False, None
 
 
 def _canonical(value: Any) -> bytes:
@@ -626,9 +798,11 @@ __all__ = [
     "ExcludedRun",
     "Objective",
     "Observation",
+    "ProviderDispatchEvidence",
     "RunEvidence",
     "SelectionPolicy",
     "StepMetric",
+    "StepProfileMetric",
     "StepRanking",
     "baseline_surface_id",
     "capture_evidence_snapshot",
