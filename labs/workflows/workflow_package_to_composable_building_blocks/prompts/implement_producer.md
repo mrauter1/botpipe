@@ -15,49 +15,29 @@ After writing every declared artifact, return a JSON result matching the injecte
 ### Current work item
 - This work item owns candidate implementation only.
 - Use the copied baseline parent workflow surface as the source for the candidate overlay.
-- Publish the parent rewrite and extracted building blocks into `candidate_decomposition_surface/`.
-- Do not publish the receipt or promotion the candidate in this step.
+- Materialize the parent rewrite and extracted building blocks only in the runtime-provided candidate workspace and its allowed paths.
+- Write `candidate_decomposition_manifest` as the provider-authored documentary index of that work; after this phase, the runtime independently derives `candidate_manifest` from the workspace.
+- Do not publish a receipt or promote the candidate in this step.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `selected_workflow_decomposition_surface` | Read | Required input. |
-| `baseline_parent_workflow_surface` | Read | Required input. |
-| `baseline_parent_manifest` | Read | Required input. |
-| `decomposition_evidence_manifest` | Read | Required input. |
-| `decomposition_request_brief` | Read | Required input. |
-| `decomposition_acceptance_criteria` | Read | Required input. |
-| `extraction_strategy` | Read | Required input. |
-| `building_block_interface_contracts` | Read | Required input. |
-| `parent_rewrite_plan` | Read | Required input. |
-| `regression_guardrails` | Read | Required input. |
-| `candidate_decomposition_surface` | Write | Overwrite. |
-| `candidate_building_block_index.json` | Write | Overwrite. |
-| `decomposition_build_report` | Write | Overwrite. |
-| `candidate_diff_summary` | Write | Overwrite. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not hand-write `candidate_decomposition_manifest.json`; the workflow derives it deterministically after verification.
-- Do not create `decomposition_verification_report`, `composition_migration_guide`, `promotion_record`, `rollback_plan`, or `workflow_decomposition_receipt.json` in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
 ### Artifact handling
-- `candidate_decomposition_surface/` must contain:
-- the rewritten parent workflow surface,
-- at least one extracted lab workflow package under `labs/workflows/`,
-- the associated docs and runtime-test footprint for each extracted building block.
-- `candidate_building_block_index.json` must be valid JSON and define:
+- Materialize the rewritten parent workflow, at least one extracted lab workflow package, and its documentation and runtime-test footprint inside the runtime-provided candidate workspace and the allowed candidate paths in the runtime input.
+- `candidate_decomposition_manifest` must be valid JSON and define:
 - `selected_workflow_name`,
 - `publication_mode` set to `candidate_only`,
 - `promotion_required` set to `true`,
-- `building_blocks` with one entry per candidate building block and explicit package, doc, and runtime-test paths.
-- `decomposition_build_report` must state what changed, what stayed unchanged in the authoritative repo, and how the candidate overlay should be validated later.
-- `candidate_diff_summary` must summarize the parent rewrite and each extracted building block.
+- `building_blocks` with one entry per candidate building block and explicit package, doc, and runtime-test paths,
+- every claimed candidate file with its repo-relative path and baseline-change status,
+- the parent rewrite and building-block inventory formerly carried by the separate candidate surface, building-block index, build report, and diff summary.
+- Treat file counts, hashes, and changed paths in `candidate_decomposition_manifest` as implementation claims. Do not present them as runtime-verified facts.
+- `candidate_decomposition_notes` must state what changed, what stayed unchanged in the authoritative repo, and how the candidate overlay should be validated later.
+- `candidate_decomposition_notes` must summarize the parent rewrite and each extracted building block.
 
 ### Expected outcome
 - Leave the workflow with an explicit candidate decomposition overlay that another step can evaluate and publish without guessing package identity, file boundaries, or hidden execution policy.
@@ -66,7 +46,7 @@ After writing every declared artifact, return a JSON result matching the injecte
 
 - Keep every baseline parent workflow file present in the candidate overlay.
 - Keep the candidate package candidate-only: no in-place promotion, no hidden mutation of the authoritative selected workflow package, and no undeclared building blocks.
-- Make the declared building-block index consistent with the candidate overlay so deterministic manifest derivation can succeed.
+- Make the building-block index explicit enough for later comparison with runtime-derived `candidate_manifest` and `candidate_evaluation`.
 
 ## Phase decision criteria
 
@@ -81,18 +61,18 @@ After writing every declared artifact, return a JSON result matching the injecte
 
 ## Out Of Scope
 
-- Publishing the deterministic manifest yourself.
+- Producing or replacing the runtime-derived `candidate_manifest` or `candidate_evaluation`.
 - Publishing the evaluation artifacts or receipt.
 - Mutating the authoritative selected workflow package.
 
 ## Forbidden
 
-- Do not write outside `candidate_decomposition_surface/` except for the named build artifacts.
-- Do not create undeclared workflow packages, docs, or tests that are missing from `candidate_building_block_index.json`.
+- Do not edit source files outside the runtime-provided allowed candidate paths, and do not write durable artifacts outside their declared destinations.
+- Do not create undeclared workflow packages, docs, or tests that are missing from `candidate_decomposition_manifest`.
 - Do not hide publication policy or promotion behavior in provider prose only; durable outputs must capture it explicitly.
 
 ## Isolated candidate validation
 
 - The candidate is materialized only in the bounded candidate workspace. `candidate_evaluation` comes from frozen execution-tree compilation and the configured argv validation under its timeout.
-- Use derived changed paths and validation results; do not trust model-authored file counts, hashes, or success claims.
+- Record candidate paths, counts, and hashes as implementation claims for the later deterministic workspace scan; do not describe them as independently validated in this phase.
 - Publication may recommend a later promotion review, but this workflow must not copy candidate files into authoritative source or auto-promote them.

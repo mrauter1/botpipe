@@ -12,20 +12,10 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 ### Purpose
 - Decide whether the selected workflow fit, expected downstream artifacts, and step-level adaptation notes are explicit enough for terminal packaging.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `selected_workflow_capability` | Read | Required input. |
-| `adaptation_request_brief` | Read | Required input. |
-| `adaptation_success_criteria` | Read | Required input. |
-| `workflow_fit_assessment` | Read | Required input. |
-| `step_adaptation_matrix` | Read | Required input. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -40,6 +30,10 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 - `expected_downstream_artifacts`: the durable artifacts the adapted downstream run should produce.
 - `proposed_parameter_keys`: the workflow parameter keys the packaging step should populate, or an empty list when no workflow parameters are needed.
 - `replan_reason`: required only when the route is `needs_replan`.
+
+## Evidence
+
+- Verify the declared phase artifacts—`workflow_fit_assessment`, `step_adaptation_matrix`—against the phase requirements and require their claims to be internally consistent.
 
 ## Phase decision criteria
 

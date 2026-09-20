@@ -12,18 +12,10 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 ### Purpose
 - Judge whether the release framing artifacts support a credible evidence-gated release review.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `release_scope_brief` | Read | Required input. |
-| `decision_criteria` | Read | Required input. |
-| `evidence_intake_register` | Read | Required input. |
-| `framework_architecture_doc` | Read | Required input. |
-| `framework_authoring_doc` | Read | Required input. |
-| `workflow_authoring_guidelines` | Read | Required input. |
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -42,6 +34,7 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 
 ## Evidence
 
+- Verify the declared phase artifacts—`release_scope_brief`, `decision_criteria`, `evidence_intake_register`—against the phase requirements and require their claims to be internally consistent.
 - Base the decision on the durable framing artifacts, not on unwritten assumptions.
 - Treat missing blocker criteria, rollback expectations, or evidence-source expectations as real framing defects.
 - Keep the runtime/provider boundary crisp: the runtime injects the compact human-readable step contract, while prompt templates own the operational guidance and raw provider output never re-enters prompts.

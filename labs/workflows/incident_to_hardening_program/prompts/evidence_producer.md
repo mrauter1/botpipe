@@ -16,23 +16,10 @@ After writing every declared artifact, return a JSON result matching the injecte
 - This work item owns evidence assembly only.
 - Keep the work-item boundary at the evidence artifacts. Do not rank hypotheses or write the final hardening package in this step.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `incident_scope_brief` | Read | Required input. |
-| `response_objectives` | Read | Required input. |
-| `evidence_intake_register` | Read | Required input. |
-| `incident_timeline` | Write | Overwrite. |
-| `affected_surface` | Write | Overwrite. |
-| `blast_radius` | Write | Overwrite. |
-| `observability_gaps` | Write | Overwrite. |
-| `evidence_gap_register` | Write | Overwrite. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request.
-- Inspect the repository for incident notes, logs, timelines, dashboards, code paths, alerts, or other evidence sources that satisfy the intake register.
-- Do not create analysis or publication artifacts in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 

@@ -23,6 +23,11 @@ jobs:
       - name: Run tests
         run: python -m pytest -q
 
+      - name: Check minimum supported Pydantic
+        run: |
+          python -m pip install pydantic==2.12.0
+          python -m pytest -q tests/test_codec_state.py tests/test_ingress_and_limits.py tests/test_runtime_acceptance.py tests/test_artifact_attempts.py
+
       - name: Build distributions
         run: python -m build
 
@@ -47,6 +52,14 @@ jobs:
           python -m pytest -q
           tests/test_artifacts.py
           tests/test_artifact_integration.py
+          tests/test_artifact_attempts.py
+          tests/test_artifact_rollback.py
+          tests/test_codec_state.py
+          tests/test_ingress_and_limits.py
+          tests/test_recovery_integration.py
+          tests/test_recovery_outcomes.py
+          tests/test_publication_generations.py
+          tests/test_evidence_profiles.py
           tests/test_storage.py
           tests/test_budgets.py
           tests/test_dispatches.py

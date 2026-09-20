@@ -16,25 +16,10 @@ After writing every declared artifact, return a JSON result matching the injecte
 - This work item owns evidence assembly only.
 - Keep the work-item boundary at the evidence artifacts. Do not write the final recommendation package in this step.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `release_scope_brief` | Read | Required input. |
-| `decision_criteria` | Read | Required input. |
-| `evidence_intake_register` | Read | Required input. |
-| `release_inventory` | Write | Overwrite. |
-| `test_evidence_pack` | Write | Overwrite. |
-| `operational_readiness` | Write | Overwrite. |
-| `rollback_readiness` | Write | Overwrite. |
-| `blocking_issues` | Write | Overwrite. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request.
-- Inspect the repository for release notes, tests, rollout docs, dashboards, or other evidence sources that satisfy the intake register.
-- Do not create assessment or publication artifacts in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 

@@ -12,26 +12,10 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 ### Purpose
 - Decide whether the terminal strategy package is explicit, durable, and ready for deterministic publication.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `workflow_portfolio_snapshot` | Read | Required input. |
-| `strategy_package_checklist` | Read | Required input. |
-| `task_strategy_brief` | Read | Required input. |
-| `workflow_selection_criteria` | Read | Required input. |
-| `workflow_candidate_matrix` | Read | Required input. |
-| `workflow_gap_analysis` | Read | Required input. |
-| `candidate_route_posture` | Read | Required input. |
-| `candidate_workflow_set` | Read | Required input. |
-| `candidate_workflow_set_summary` | Read | Required input. |
-| `candidate_next_action` | Read | Required input. |
-| `strategy_decision` | Read | Required input. |
-| `workflow_strategy_package` | Read | Required input. |
-| `strategy_summary` | Read | Required input. |
-| `strategy_next_action` | Read | Required input. |
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -49,13 +33,17 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 - `ready_for_handoff`
 - `replan_reason` when you choose `needs_replan`
 
+## Evidence
+
+- Verify the declared phase artifacts—`workflow_strategy_package`, `strategy_summary`, `strategy_next_action`—against the phase requirements and require their claims to be internally consistent.
+
 ## Phase decision criteria
 
 - Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
 - Treat question, blocked, and failure guidance as semantic validation criteria.
 
 ### Outcome selection rules
-- Choose `strategy_package_ready` only if the human-facing package, machine-readable summary, and next-action artifact all agree on the selected route, stay consistent with `candidate_workflow_set_summary`, and keep downstream execution explicit rather than hidden.
+- Choose `strategy_package_ready` only if the human-facing package, machine-readable summary, and next-action artifact all agree on the selected route and candidate-set evidence, and keep downstream execution explicit rather than hidden.
 - Choose `needs_rework` when the same route still stands and the packaging artifacts can be corrected locally.
 - Choose `needs_replan` when packaging reveals that the selected route or recommended workflows changed materially enough that the selection step must run again.
 - Use `question` only for genuine missing prerequisites or irrecoverable contradictions.

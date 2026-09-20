@@ -16,36 +16,24 @@ After writing every declared artifact, return a JSON result matching the injecte
 - This work item owns investigation framing only.
 - Keep the work-item boundary at the scope brief, investigation objectives, and evidence intake register. Do not assemble the full evidence pack or perform downstream diagnosis, remediation, or go/no-go assessment yet.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `framework_architecture_doc` | Read | Required input. |
-| `framework_authoring_doc` | Read | Required input. |
-| `workflow_authoring_guidelines` | Read | Required input. |
-| `investigation_scope_brief` | Write | Overwrite. |
-| `investigation_objectives` | Write | Overwrite. |
-| `evidence_intake_register` | Write | Overwrite. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request.
-- Do not create evidence-pack or publication artifacts in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
 ### Artifact handling
 - `investigation_scope_brief` must define the investigation trigger, sponsor or downstream consumer, investigation kind, explicit in-scope surfaces, explicit out-of-scope surfaces, evidence hints already known, and any source constraints that bound this run.
-- `investigation_objectives` must define why the evidence pack is being assembled, what downstream questions it must support, what proof must be explicit, and what useful terminal evidence package should let the next workflow or human do without guessing.
-- `evidence_intake_register` must list the evidence sources to inspect, include any `evidence_paths` and `source_constraints` from the invocation contract, and name missing or weak sources explicitly.
+- `investigation_scope_brief` must define why the evidence pack is being assembled, what downstream questions it must support, what proof must be explicit, and what useful terminal evidence package should let the next workflow or human do without guessing.
+- `evidence_intake_plan` must list the evidence sources to inspect, include any `evidence_paths` and `source_constraints` from the runtime input, and name missing or weak sources explicitly.
 
 ### Expected outcome
 - Leave the workflow with an authoritative framing package that downstream evidence work can use without guessing the investigation boundary, consumer need, or evidence surface.
 
 ## Evidence
 
-- Use the current repository layout and current framework docs; do not rely on retired pre-greenfield source-tree paths.
+- Use the current repository layout and runtime input; do not rely on retired source-tree paths.
 - Make missing evidence explicit instead of inventing it.
 - Keep the framing concrete enough that another operator could gather evidence from the brief, objectives, and intake register alone.
 

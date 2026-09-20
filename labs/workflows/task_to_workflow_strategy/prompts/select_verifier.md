@@ -12,22 +12,10 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 ### Purpose
 - Decide whether the child candidate-workflow-set package and the final route-selection artifact support a credible, inspectable strategy decision.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `workflow_portfolio_snapshot` | Read | Required input. |
-| `task_strategy_brief` | Read | Required input. |
-| `workflow_selection_criteria` | Read | Required input. |
-| `workflow_candidate_matrix` | Read | Required input. |
-| `workflow_gap_analysis` | Read | Required input. |
-| `candidate_route_posture` | Read | Required input. |
-| `candidate_workflow_set` | Read | Required input. |
-| `candidate_workflow_set_summary` | Read | Required input. |
-| `candidate_next_action` | Read | Required input. |
-| `strategy_decision` | Read | Required input. |
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -45,6 +33,10 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 - `rejected_routes`
 - `replan_reason` when you choose `needs_replan`
 
+## Evidence
+
+- Verify the declared phase artifacts—`strategy_decision`—against the phase requirements and require their claims to be internally consistent.
+
 ## Phase decision criteria
 
 - Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
@@ -56,7 +48,7 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 - the workflow-builder baseline was explicitly considered when present in the child package,
 - the selected route aligns with the child portfolio posture,
 - the selected route is one of `run_existing`, `compose`, `adapt`, or `create_new`,
-- the recommended workflows are named explicitly and drawn from `candidate_workflow_set_summary`,
+- the recommended workflows are named explicitly and their candidate-set evidence is reproduced in `strategy_decision`,
 - the decision explains why the route is being packaged instead of auto-executed here.
 - Choose `needs_rework` when the same selection boundary still holds and the artifacts can be corrected locally.
 - Choose `needs_replan` when the framing or comparison boundary changed materially enough that the task must be reframed.
@@ -65,6 +57,6 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 ## Forbidden
 
 - Do not accept a child candidate package that omits the builder baseline when it exists in the child summary.
-- Do not approve a selected route that disagrees with `candidate_workflow_set_summary`.
+- Do not approve a selected route whose stated candidate-set evidence contradicts its selection rationale.
 - Do not approve `create_new` without a material fit-gap argument.
 - Do not rewrite the artifacts yourself.

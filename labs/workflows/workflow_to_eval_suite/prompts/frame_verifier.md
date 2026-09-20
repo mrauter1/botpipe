@@ -12,27 +12,17 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 ### Purpose
 - Decide whether the selected workflow, evaluation objective, and acceptance dimensions are explicit enough to support bounded case and rubric design.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `selected_workflow_capability` | Read | Required input. |
-| `evaluation_request_brief` | Read | Required input. |
-| `evaluation_dimensions` | Read | Required input. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not overwrite `evaluation_request_brief` or `evaluation_dimensions` during verification.
-- Return verifier control metadata only through the step payload and selected route.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
 ### Artifact checks
 - `evaluation_request_brief` must name the canonical selected workflow, the evaluation trigger, sponsor, terminal outcome, and why suite publication is the terminal boundary for this building block.
 - `evaluation_dimensions` must define the quality dimensions, required case families, expected artifact surface, and the difference between local repair and material replan.
-- The framing must stay consistent with `selected_workflow_capability`; do not accept a renamed or implicitly swapped workflow.
+- The framing must stay consistent with `selected_workflow_contract`; do not accept a renamed or implicitly swapped workflow.
 
 ### Payload requirements
 - `summary`: concise validation summary.
@@ -43,6 +33,7 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 
 ## Evidence
 
+- Verify the declared phase artifacts—`evaluation_request_brief`, `evaluation_dimensions`—against the phase requirements and require their claims to be internally consistent.
 - Base the verdict on the framing artifacts plus the selected-workflow capability snapshot instead of provider inference.
 - Confirm that the artifacts make the evaluation boundary explicit enough for deterministic case design without widening the selected workflow or publication boundary.
 

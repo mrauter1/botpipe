@@ -10,54 +10,30 @@ After writing every declared artifact, return a JSON result matching the injecte
 - You are the evaluator producer for the `evaluate_package` step.
 
 ### Purpose
-- Gather verification evidence for the built workflow and produce explicit promotion and rollback artifacts.
+- Evaluate the self-contained workflow package representation and produce explicit materialization, promotion, and rollback evidence.
 
 ### Current work item
 - This work item owns evaluation evidence only.
 - Do not silently repair workflow files in this step. If the build needs changes, capture the evidence and let the verifier choose the correct route.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `workflow_package_spec` | Read | Required input. |
-| `step_contracts` | Read | Required input. |
-| `prompt_contract_matrix` | Read | Required input. |
-| `verification_plan` | Read | Required input. |
-| `build_report` | Read | Required input. |
-| `generated_layout` | Read | Required input. |
-| `generated_init` | Read | Required input. |
-| `generated_single_file` | Read | Required input. |
-| `generated_flow` | Read | Required input. |
-| `generated_specs` | Read | Required input. |
-| `generated_manifest` | Read | Required input. |
-| `generated_prompts_dir` | Read | Required input. |
-| `generated_assets_dir` | Read | Required input. |
-| `generated_prompt_index` | Read | Required input. |
-| `generated_doc` | Read | Required input. |
-| `generated_test` | Read | Required input. |
-| `verification_report` | Write | Overwrite. |
-| `promotion_record` | Write | Overwrite. |
-| `rollback_plan` | Write | Overwrite. |
-
-### Artifact Notes
-- Do not edit workflow code, prompts, docs, or tests here.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
 ### Artifact handling
-- `verification_report` must summarize the checks you ran or inspected, the evidence you gathered, and any residual risks.
-- `promotion_record` must explain why the workflow is promotable now and what artifacts justify that decision.
-- `rollback_plan` must list the generated paths and support files that would need removal or reversion if promotion is reversed.
+- `workflow_evaluation` must summarize the checks you ran against or inspected for the manifest contents, the evidence you gathered, and any residual risks. Distinguish executed checks from commands that remain to be run after materialization.
+- `workflow_package_summary` must explain why the represented workflow is ready or not ready for materialization and later promotion, and what artifacts justify that decision.
+- `workflow_next_action` must list the generated paths and support files that would need removal or reversion if promotion is reversed.
 
 ### Expected outcome
 - Leave the workflow with an evidence pack strong enough for a publish gate to act deterministically.
 
 ## Evidence
 
-- Use the accepted `verification_plan`.
+- Use the accepted `workflow_design`, `workflow_contract`, and complete `workflow_package_manifest`.
 - Name concrete validation commands or compile checks, even if they fail or are deferred.
 - Call out missing proof explicitly instead of hiding it.
 

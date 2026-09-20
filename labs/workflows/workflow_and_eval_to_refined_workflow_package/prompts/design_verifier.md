@@ -12,36 +12,17 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 ### Purpose
 - Decide whether the refinement strategy, file-level plan, and regression guardrails are explicit enough for bounded candidate implementation.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `selected_workflow_capability` | Read | Required input. |
-| `selected_workflow_authoring_surface` | Read | Required input. |
-| `baseline_workflow_manifest` | Read | Required input. |
-| `baseline_evaluation_summary` | Read | Required input. |
-| `baseline_evaluation_findings` | Read | Required input. |
-| `baseline_failure_modes` | Read | Required input. |
-| `baseline_refinement_evidence_summary` | Read | Optional optimization evidence summary rendered as workflow-local guidance. |
-| `refinement_request_brief` | Read | Required input. |
-| `refinement_acceptance_criteria` | Read | Required input. |
-| `refinement_strategy` | Read | Required input. |
-| `workflow_change_plan` | Read | Required input. |
-| `regression_guardrails` | Read | Required input. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not overwrite `refinement_strategy`, `workflow_change_plan`, or `regression_guardrails` during verification.
-- Return verifier control metadata only through the step payload and selected route.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
 ### Artifact checks
-- `refinement_strategy` must make the selected workflow and baseline evidence interpretation explicit.
-- `workflow_change_plan` must name concrete repo-relative files and must not widen the selected workflow boundary silently.
-- `regression_guardrails` must define what must stay unchanged, what proof must be produced later, and when evaluation should trigger `needs_replan`.
+- `workflow_refinement_plan` must make the selected workflow and baseline evidence interpretation explicit.
+- `workflow_refinement_plan` must name concrete repo-relative files and must not widen the selected workflow boundary silently.
+- `candidate_change_manifest` must define what must stay unchanged, what proof must be produced later, and when evaluation should trigger `needs_replan`.
 
 ### Payload requirements
 - `summary`: concise validation summary.
@@ -52,6 +33,7 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 
 ## Evidence
 
+- Verify the declared phase artifacts—`workflow_refinement_plan`, `candidate_change_manifest`—against the phase requirements and require their claims to be internally consistent.
 - Base the verdict on the planning artifacts plus the selected-workflow and baseline-evidence artifacts instead of provider inference.
 - If optimization evidence is present, confirm the plan keeps candidate-only estimates unproven and does not auto-materialize adversarial cases.
 - Confirm that the planning package is concrete enough for implementation and explicit enough to detect drift later.

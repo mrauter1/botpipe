@@ -16,24 +16,16 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 - This work item owns framing validation only.
 - Judge the existing framing artifacts. Do not rank candidates or package the final candidate set in this step.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `workflow_capability_snapshot` | Read | Required input. |
-| `candidate_request_brief` | Read | Required input. |
-| `candidate_selection_criteria` | Read | Required input. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
 ### Artifact checks
 - `candidate_request_brief` must make the task trigger, sponsor, terminal outcome, and downstream handoff surface explicit.
-- `candidate_selection_criteria` must make direct fit, composition need, adaptation pressure, material gaps, and evidence expectations explicit enough for the analysis step to compare current workflows.
+- `workflow_fit_criteria` must make direct fit, composition need, adaptation pressure, material gaps, and evidence expectations explicit enough for the analysis step to compare current workflows.
 - When the portfolio size permits, the criteria must support comparison of at least three candidate workflows and must leave room for the builder baseline to be considered explicitly.
 
 ### Payload requirements
@@ -41,6 +33,10 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 - `authoritative_artifacts`: the framing artifacts that should govern the next step.
 - `decision_axes`: the strongest axes the next step should use for comparison.
 - `replan_reason`: required only when the route is `needs_replan`.
+
+## Evidence
+
+- Verify the declared phase artifacts—`candidate_request_brief`, `workflow_fit_criteria`—against the phase requirements and require their claims to be internally consistent.
 
 ## Phase decision criteria
 

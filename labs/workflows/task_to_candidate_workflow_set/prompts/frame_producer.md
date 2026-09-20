@@ -16,23 +16,10 @@ After writing every declared artifact, return a JSON result matching the injecte
 - This work item owns candidate-request framing only.
 - Keep the boundary at problem framing, sponsor intent, terminal outcome, and candidate-selection criteria. Do not rank workflows or package the final candidate set in this step.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `workflow_capability_snapshot` | Read | Required input. |
-| `framework_architecture_doc` | Read | Required input. |
-| `framework_authoring_doc` | Read | Required input. |
-| `workflow_authoring_guidelines` | Read | Required input. |
-| `candidate_request_brief` | Write | Overwrite. |
-| `candidate_selection_criteria` | Write | Overwrite. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- You may inspect linked workflow docs or source files named inside `workflow_capability_snapshot` when they are directly relevant, but the snapshot remains the authoritative workflow inventory.
-- Do not create `workflow_candidate_matrix`, `workflow_gap_analysis`, `candidate_route_posture`, `candidate_workflow_set`, `candidate_workflow_set_summary`, or `candidate_next_action` in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -43,7 +30,7 @@ After writing every declared artifact, return a JSON result matching the injecte
 - what terminal outcome the task needs,
 - why multi-turn orchestration is or is not needed,
 - what kind of downstream handoff the strategy layer should receive.
-- `candidate_selection_criteria` must define how the next step should judge:
+- `workflow_fit_criteria` must define how the next step should judge:
 - fit to the terminal outcome,
 - whether reuse is direct or requires composition,
 - whether adaptation is likely,
@@ -55,7 +42,7 @@ After writing every declared artifact, return a JSON result matching the injecte
 
 ## Evidence
 
-- Anchor the framing in the current workflow capability snapshot and the run-local invocation contract.
+- Anchor the framing in the current workflow capability snapshot and the runtime input.
 - Keep the runtime/provider boundary crisp: the runtime injects the compact human-readable step contract, while prompt templates own the operational guidance and raw provider output never re-enters prompts.
 - Make the criteria specific enough that at least three candidate workflows can be compared when the portfolio size permits.
 

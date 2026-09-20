@@ -16,26 +16,10 @@ After writing every declared artifact, return a JSON result matching the injecte
 - This work item owns terminal packaging only.
 - Keep the boundary at packaging the selected workflow for downstream execution. Do not execute the selected workflow or mutate its package.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `selected_workflow_capability` | Read | Required input. |
-| `adapted_execution_plan_checklist` | Read | Required input. |
-| `adaptation_request_brief` | Read | Required input. |
-| `adaptation_success_criteria` | Read | Required input. |
-| `workflow_fit_assessment` | Read | Required input. |
-| `step_adaptation_matrix` | Read | Required input. |
-| `adapted_execution_plan` | Write | Overwrite. |
-| `proposed_workflow_parameters` | Write | Overwrite. |
-| `adapted_execution_summary` | Write | Overwrite. |
-| `adapted_execution_next_action` | Write | Overwrite. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not modify the earlier framing or analysis artifacts in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -73,7 +57,7 @@ After writing every declared artifact, return a JSON result matching the injecte
 
 ## Evidence
 
-- Keep the selected workflow name and entry step aligned with `selected_workflow_capability`.
+- Keep the selected workflow name and entry step aligned with `selected_workflow_contract`.
 - Keep `proposed_parameter_keys` aligned with the JSON keys written into `proposed_workflow_parameters`.
 - Make the next action concrete enough that another operator could continue immediately without re-deriving the adaptation logic.
 

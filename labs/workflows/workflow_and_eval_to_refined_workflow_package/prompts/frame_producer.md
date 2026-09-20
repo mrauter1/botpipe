@@ -17,28 +17,10 @@ After writing every declared artifact, return a JSON result matching the injecte
 - Keep the boundary at the selected workflow, the copied baseline evidence, the accepted refinement objective, and the candidate-only publication boundary for this building block.
 - Do not design file-level edits or create the candidate workflow surface in this step.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `selected_workflow_capability` | Read | Required input. |
-| `selected_workflow_authoring_surface` | Read | Required input. |
-| `baseline_workflow_manifest` | Read | Required input. |
-| `baseline_evaluation_summary` | Read | Required input. |
-| `baseline_evaluation_findings` | Read | Required input. |
-| `baseline_failure_modes` | Read | Required input. |
-| `baseline_refinement_evidence_summary` | Read | Optional optimization evidence summary rendered as workflow-local guidance. |
-| `framework_architecture_doc` | Read | Required input. |
-| `framework_authoring_doc` | Read | Required input. |
-| `workflow_authoring_guidelines` | Read | Required input. |
-| `refinement_request_brief` | Write | Overwrite. |
-| `refinement_acceptance_criteria` | Write | Overwrite. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not create `refinement_strategy`, `workflow_change_plan`, `regression_guardrails`, `candidate_workflow_surface`, `candidate_workflow_manifest.json`, `refinement_build_report`, `candidate_diff_summary`, `refinement_verification_report`, `evaluation_delta_report`, `promotion_record`, `rollback_plan`, or `workflow_refinement_receipt.json` in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -50,7 +32,7 @@ After writing every declared artifact, return a JSON result matching the injecte
 - the candidate-only publication boundary for this building block,
 - why the workflow must stop before promotion or baseline mutation,
 - which selected-workflow files or surfaces are likely in scope.
-- `refinement_acceptance_criteria` must define:
+- `refinement_success_criteria` must define:
 - the baseline weaknesses the refinement must address,
 - the selected workflow boundary that must remain fixed,
 - the minimum evidence expected from planning, implementation, and evaluation,
@@ -62,8 +44,8 @@ After writing every declared artifact, return a JSON result matching the injecte
 
 ## Evidence
 
-- Anchor the request in `selected_workflow_capability`, `selected_workflow_authoring_surface`, `baseline_workflow_manifest`, and the copied baseline evidence artifacts.
-- If `baseline_refinement_evidence_summary` contains optimization candidates, treat them as candidate-only input rather than proof of measured improvement.
+- Anchor the request in `selected_workflow_contract`, `candidate_surface`, `frozen_candidate`, and the copied baseline evidence artifacts.
+- If `optimizer_handoff or legacy_evaluation` contains optimization candidates, treat them as candidate-only input rather than proof of measured improvement.
 - Treat `optimization_ablation_results`, when present, as stronger evidence than candidate estimates.
 - Keep the runtime/provider boundary crisp: the runtime injects the compact human-readable step contract, while prompt templates own the operational guidance and raw provider output never re-enters prompts.
 - Make the acceptance surface specific enough that the next step can choose file-level changes and regression guardrails without widening the selected workflow boundary.

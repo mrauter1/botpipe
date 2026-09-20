@@ -16,40 +16,21 @@ After writing every declared artifact, return a JSON result matching the injecte
 - This work item owns security assessment only.
 - Keep the work-item boundary at exploit analysis, affected surface, root-cause reasoning, and remediation-option framing. Do not choose the final remediation plan, define rollout steps, or package stakeholder communications yet.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `finding_scope_brief` | Read | Required input. |
-| `security_evidence_pack` | Read | Required input. |
-| `security_evidence_pack_summary` | Read | Required input. |
-| `security_evidence_gap_register` | Read | Required input. |
-| `security_evidence_pack_receipt` | Read | Required input. |
-| `exploit_summary` | Write | Overwrite. |
-| `affected_surface` | Write | Overwrite. |
-| `root_cause_analysis` | Write | Overwrite. |
-| `remediation_options` | Write | Overwrite. |
-| `assessment_summary` | Write | Overwrite. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request.
-- Inspect additional repository files only when they directly strengthen or challenge the adopted evidence-pack story.
-- Do not create remediation-plan, closure-package, or publication artifacts in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
 ### Artifact handling
-- `exploit_summary` must bound the exploit or finding, state how credible or confirmed it is, explain what proof supports that judgment, and name any remaining uncertainty.
-- `affected_surface` must identify the user, system, data, or control surfaces affected by the finding and distinguish confirmed impact from plausible-but-unconfirmed spread.
-- `root_cause_analysis` must explain the likely technical causes using evidence from the adopted evidence pack and any directly relevant repository inspection performed in this step.
-- `remediation_options` must compare credible fix options, including trade-offs, delivery risk, verification burden, and why one option is likely preferable.
-- `assessment_summary` must be valid JSON with at least:
-- `authoritative_artifacts`
-- `preferred_remediation_option`
-- `exploitability`
-- `summary`
+- `security_assessment` must bound the exploit or finding, state how credible or confirmed it is, explain what proof supports that judgment, and name any remaining uncertainty.
+- `security_assessment` must identify the user, system, data, or control surfaces affected by the finding and distinguish confirmed impact from plausible-but-unconfirmed spread.
+- `security_assessment` must explain the likely technical causes using evidence from the adopted evidence pack and any directly relevant repository inspection performed in this step.
+- `security_assessment` must compare credible fix options, including trade-offs, delivery risk, verification burden, and why one option is likely preferable.
+- `security_assessment` must be markdown with explicit sections for exploitability, affected surfaces, technical-cause analysis, remediation options, evidence, and uncertainty.
+- `threat_scenario` must describe a concrete threat path, prerequisites, likely impact, and the evidence that confirms or weakens each step.
+- `remediation_acceptance_criteria` must give testable security, regression, rollout, and rollback conditions that remediation planning can adopt directly.
 
 ### Expected outcome
 - Leave the workflow with a security assessment package another planner can use to choose and verify a remediation approach without guessing what is confirmed, what is still uncertain, or which fix path currently looks strongest.
@@ -58,7 +39,7 @@ After writing every declared artifact, return a JSON result matching the injecte
 
 - Tie claims back to the adopted evidence pack or clearly identified repository inspection.
 - Keep unresolved evidence gaps visible; missing proof is still part of the security story.
-- Use the workflow parameters and constraints from `invocation_contract` when judging rollout or remediation feasibility, but do not author the rollout plan yet.
+- Use the workflow parameters and constraints from the runtime input when judging rollout or remediation feasibility, but do not author the rollout plan yet.
 
 ## Phase decision criteria
 

@@ -16,24 +16,10 @@ After writing every declared artifact, return a JSON result matching the injecte
 - This work item owns the readiness assessment only.
 - Keep the work-item boundary at assessment artifacts. Do not publish the final stakeholder package in this step.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `release_scope_brief` | Read | Required input. |
-| `decision_criteria` | Read | Required input. |
-| `evidence_intake_register` | Read | Required input. |
-| `release_inventory` | Read | Required input. |
-| `test_evidence_pack` | Read | Required input. |
-| `operational_readiness` | Read | Required input. |
-| `rollback_readiness` | Read | Required input. |
-| `blocking_issues` | Read | Required input. |
-| `go_no_go_assessment` | Write | Overwrite. |
-| `risk_register` | Write | Overwrite. |
-| `decision_summary` | Write | Overwrite. |
-
-### Artifact Notes
-- Do not write the final stakeholder package or receipt in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 

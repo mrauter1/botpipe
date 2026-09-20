@@ -16,30 +16,10 @@ After writing every declared artifact, return a JSON result matching the injecte
 - This work item owns strategy packaging only.
 - Keep the boundary at packaging the selected route and next action. Do not reopen the candidate comparison unless the correct route is `needs_replan`.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `workflow_portfolio_snapshot` | Read | Required input. |
-| `strategy_package_checklist` | Read | Required input. |
-| `task_strategy_brief` | Read | Required input. |
-| `workflow_selection_criteria` | Read | Required input. |
-| `workflow_candidate_matrix` | Read | Required input. |
-| `workflow_gap_analysis` | Read | Required input. |
-| `candidate_route_posture` | Read | Required input. |
-| `candidate_workflow_set` | Read | Required input. |
-| `candidate_workflow_set_summary` | Read | Required input. |
-| `candidate_next_action` | Read | Required input. |
-| `strategy_decision` | Read | Required input. |
-| `workflow_strategy_package` | Write | Overwrite. |
-| `strategy_summary` | Write | Overwrite. |
-| `strategy_next_action` | Write | Overwrite. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not modify earlier framing or selection artifacts in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 

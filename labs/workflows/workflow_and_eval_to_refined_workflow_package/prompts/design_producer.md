@@ -16,43 +16,25 @@ After writing every declared artifact, return a JSON result matching the injecte
 - This work item owns refinement planning only.
 - Keep the boundary at planning the candidate refinement package. Do not build the candidate workflow surface or publish evaluation artifacts in this step.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `selected_workflow_capability` | Read | Required input. |
-| `selected_workflow_authoring_surface` | Read | Required input. |
-| `baseline_workflow_manifest` | Read | Required input. |
-| `baseline_evaluation_summary` | Read | Required input. |
-| `baseline_evaluation_findings` | Read | Required input. |
-| `baseline_failure_modes` | Read | Required input. |
-| `baseline_refinement_evidence_summary` | Read | Optional optimization evidence summary rendered as workflow-local guidance. |
-| `refinement_request_brief` | Read | Required input. |
-| `refinement_acceptance_criteria` | Read | Required input. |
-| `refinement_strategy` | Write | Overwrite. |
-| `workflow_change_plan` | Write | Overwrite. |
-| `regression_guardrails` | Write | Overwrite. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not create `candidate_workflow_surface`, `candidate_workflow_manifest.json`, `refinement_build_report`, `candidate_diff_summary`, `refinement_verification_report`, `evaluation_delta_report`, `promotion_record`, `rollback_plan`, or `workflow_refinement_receipt.json` in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
 ### Artifact handling
-- `refinement_strategy` must define:
+- `workflow_refinement_plan` must define:
 - the baseline weakness ranking,
 - the chosen refinement approach,
 - why the selected workflow boundary still holds,
 - how the candidate package should improve the workflow without mutating the authoritative package.
-- `workflow_change_plan` must define:
+- `workflow_refinement_plan` must define:
 - the exact repo-relative files the candidate surface should modify or add,
 - what each file change is intended to accomplish,
 - how the candidate surface should stay aligned with the baseline manifest,
 - any prompt, contract, doc, or runtime-test updates needed.
-- `regression_guardrails` must define:
+- `candidate_change_manifest` must define:
 - what must stay unchanged from the baseline package,
 - what compile or test proof the evaluation step must produce,
 - what evidence would force `needs_replan`,

@@ -12,20 +12,10 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 ### Purpose
 - Judge whether the framing artifacts support a credible candidate selection for the current cycle.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `candidate_comparison` | Read | Required input. |
-| `selected_workflow_brief` | Read | Required input. |
-| `framework_architecture_doc` | Read | Required input. |
-| `framework_authoring_doc` | Read | Required input. |
-| `workflow_authoring_guidelines` | Read | Required input. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -41,6 +31,10 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 - `evidence_artifacts`
 - `selected_candidate` and `selected_kind` when you choose `candidate_selected`
 - `replan_reason` when you choose `needs_replan`
+
+## Evidence
+
+- Verify the declared phase artifacts—`workflow_idea_brief`, `candidate_selection_criteria`—against the phase requirements and require their claims to be internally consistent.
 
 ## Phase decision criteria
 

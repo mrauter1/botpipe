@@ -17,35 +17,10 @@ After writing every declared artifact, return a JSON result matching the injecte
 - Use the candidate overlay, deterministic manifest, and declared building-block index as the publication boundary.
 - Do not publish the receipt in this step.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `selected_workflow_decomposition_surface` | Read | Required input. |
-| `baseline_parent_workflow_surface` | Read | Required input. |
-| `baseline_parent_manifest` | Read | Required input. |
-| `decomposition_evidence_manifest` | Read | Required input. |
-| `decomposition_request_brief` | Read | Required input. |
-| `decomposition_acceptance_criteria` | Read | Required input. |
-| `extraction_strategy` | Read | Required input. |
-| `building_block_interface_contracts` | Read | Required input. |
-| `parent_rewrite_plan` | Read | Required input. |
-| `regression_guardrails` | Read | Required input. |
-| `candidate_decomposition_surface` | Read | Required input. |
-| `candidate_decomposition_manifest` | Read | Required input. |
-| `candidate_building_block_index` | Read | Required input. |
-| `decomposition_build_report` | Read | Required input. |
-| `candidate_diff_summary` | Read | Required input. |
-| `decomposition_verification_report` | Write | Overwrite. |
-| `composition_migration_guide` | Write | Overwrite. |
-| `promotion_record` | Write | Overwrite. |
-| `rollback_plan` | Write | Overwrite. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not create `workflow_decomposition_receipt.json` in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -54,15 +29,15 @@ After writing every declared artifact, return a JSON result matching the injecte
 - why the candidate overlay is or is not publication-ready,
 - what overlay-validation evidence is required,
 - how the declared building-block boundary stays explicit.
-- `composition_migration_guide` must define:
+- `decomposition_summary` must define:
 - how to move from the baseline parent workflow to the decomposed candidate,
 - how the extracted building blocks should be adopted,
 - what operators must verify before promotion.
-- `promotion_record` must define:
+- `decomposition_summary` must define:
 - what artifacts are authoritative for promotion,
 - what must stay true before promotion,
 - why promotion remains explicit rather than automatic.
-- `rollback_plan` must define:
+- `decomposition_next_action` must define:
 - the authoritative rollback baseline,
 - how to discard or quarantine the candidate overlay if it proves unsafe,
 - how to preserve evidence when promotion is deferred or rejected.
@@ -72,7 +47,8 @@ After writing every declared artifact, return a JSON result matching the injecte
 
 ## Evidence
 
-- Treat `candidate_decomposition_manifest.json` and `candidate_building_block_index.json` as the authoritative candidate boundary.
+- Treat the earlier `candidate_decomposition_manifest` artifact as the provider-authored building-block index and implementation claim.
+- Treat runtime input `candidate_manifest` as the authority for actual changed, added, and removed paths, and `candidate_evaluation` as the authority for overlay validation. Report any conflict with the documentary index instead of accepting its claims.
 - Keep the runtime/provider boundary crisp: prompt templates own the operational evaluation guidance, while the runtime injects the compact human-readable step contract and raw provider output never re-enters prompts.
 - Make the outputs specific enough that the publish step can validate them mechanically.
 

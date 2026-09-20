@@ -16,24 +16,10 @@ After writing every declared artifact, return a JSON result matching the injecte
 - This work item owns recursive-improvement analysis only.
 - Keep the boundary at evidence-backed priority analysis. Do not publish the final cycle package or execute downstream workflows in this step.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `workflow_capability_snapshot` | Read | Required input. |
-| `workflow_portfolio_health_snapshot` | Read | Required input. |
-| `company_operation_snapshot` | Read | Required input. |
-| `company_operation_brief` | Read | Required input. |
-| `recursive_improvement_criteria` | Read | Required input. |
-| `company_pressure_map` | Write | Overwrite. |
-| `recursive_improvement_priority_matrix` | Write | Overwrite. |
-| `recursive_improvement_candidates` | Write | Overwrite. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not create `recursive_improvement_cycle`, `recursive_improvement_summary`, `recursive_improvement_next_actions`, or `recursive_improvement_cycle_receipt.json` in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -56,7 +42,7 @@ After writing every declared artifact, return a JSON result matching the injecte
 
 ## Evidence
 
-- Anchor every candidate in `workflow_portfolio_health_snapshot` and `company_operation_snapshot`, and use `workflow_capability_snapshot` when you discuss package-level or composition-level implications.
+- Anchor every candidate in `observed_company_runs` and `runtime input`, and use `workflow_catalog` when you discuss package-level or composition-level implications.
 - Keep scoped task ids and workflow names explicit.
 - Keep the package boundary explicit: this workflow analyzes and prioritizes, but it does not auto-run follow-on work.
 

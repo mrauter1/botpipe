@@ -12,19 +12,10 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 ### Purpose
 - Decide whether the design artifacts are explicit enough, doctrine-compliant enough, and concrete enough to authorize direct workflow authoring.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `workflow_package_spec` | Read | Required input. |
-| `step_contracts` | Read | Required input. |
-| `prompt_contract_matrix` | Read | Required input. |
-| `verification_plan` | Read | Required input. |
-| `selected_workflow_brief` | Read | Required input. |
-| `framework_architecture_doc` | Read | Required input. |
-| `framework_authoring_doc` | Read | Required input. |
-| `workflow_authoring_guidelines` | Read | Required input. |
-| `builder_checklist` | Read | Required input. |
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -39,6 +30,10 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 - `prompt_files`
 - `next_action`
 - `replan_reason` when you choose `needs_replan`
+
+## Evidence
+
+- Verify the declared phase artifacts—`workflow_design`, `workflow_contract`—against the phase requirements and require their claims to be internally consistent.
 
 ## Phase decision criteria
 

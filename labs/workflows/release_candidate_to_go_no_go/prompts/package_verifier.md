@@ -12,21 +12,10 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 ### Purpose
 - Decide whether the final release decision package is complete, aligned, and ready for deterministic publication.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `decision_package_checklist` | Read | Required input. |
-| `release_inventory` | Read | Required input. |
-| `test_evidence_pack` | Read | Required input. |
-| `operational_readiness` | Read | Required input. |
-| `rollback_readiness` | Read | Required input. |
-| `blocking_issues` | Read | Required input. |
-| `go_no_go_assessment` | Read | Required input. |
-| `risk_register` | Read | Required input. |
-| `decision_summary` | Read | Required input. |
-| `release_decision_package` | Read | Required input. |
-| `release_communications_draft` | Read | Required input. |
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -44,8 +33,9 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 
 ## Evidence
 
+- Verify the declared phase artifacts—`release_decision_package`, `release_communications_draft`—against the phase requirements and require their claims to be internally consistent.
 - Verify that the package and communication draft cite the assessed recommendation rather than softening it.
-- Treat package drift from `decision_summary` or the risk and blocker artifacts as real failure conditions.
+- Treat drift between the package's stated decision, cited risks or blockers, and communication draft as a real failure condition.
 - Keep the decision anchored to durable artifacts, not presentation polish alone.
 
 ## Phase decision criteria

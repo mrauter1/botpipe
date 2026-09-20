@@ -12,18 +12,10 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 ### Purpose
 - Decide whether the incident evidence pack is complete and credible enough for cause ranking and hardening analysis.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `incident_scope_brief` | Read | Required input. |
-| `response_objectives` | Read | Required input. |
-| `evidence_intake_register` | Read | Required input. |
-| `incident_timeline` | Read | Required input. |
-| `affected_surface` | Read | Required input. |
-| `blast_radius` | Read | Required input. |
-| `observability_gaps` | Read | Required input. |
-| `evidence_gap_register` | Read | Required input. |
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -41,6 +33,7 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 
 ## Evidence
 
+- Verify the declared phase artifacts—`incident_timeline`, `affected_surface`, `blast_radius`, `observability_gaps`, `evidence_gap_register`—against the phase requirements and require their claims to be internally consistent.
 - Judge the pack against the declared response objectives and the explicit incident boundary.
 - Treat hand-wavy timelines, blast-radius claims, or missing observability gaps as real defects in the durable evidence story.
 - Keep the route decision anchored to the artifact set rather than to plausible but unwritten operator intuition.

@@ -16,22 +16,10 @@ After writing every declared artifact, return a JSON result matching the injecte
 - This work item owns fit analysis, parameterization reasoning, and execution-surface notes only.
 - Keep the boundary at assessing the selected workflow and its steps. Do not package the terminal execution plan or write the proposed parameter artifact yet.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `selected_workflow_capability` | Read | Required input. |
-| `adaptation_request_brief` | Read | Required input. |
-| `adaptation_success_criteria` | Read | Required input. |
-| `workflow_fit_assessment` | Write | Overwrite. |
-| `step_adaptation_matrix` | Write | Overwrite. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Inspect the selected workflow's linked doc or source file when doing so materially strengthens or challenges the fit analysis.
-- Do not create `adapted_execution_plan`, `proposed_workflow_parameters`, `adapted_execution_summary`, or `adapted_execution_next_action` in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 

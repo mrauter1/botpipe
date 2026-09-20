@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from botpipe import (
     Artifact,
@@ -103,13 +103,6 @@ class LabWorkflowResult(BaseModel):
             else ArtifactHandle.from_record(handle)
             for name, handle in value.items()
         }
-
-    @field_serializer("artifacts")
-    def serialize_artifact_handles(
-        self,
-        value: dict[str, ArtifactHandle],
-    ) -> dict[str, dict[str, Any]]:
-        return {name: handle.to_record() for name, handle in value.items()}
 
 
 class LabPhaseRejected(RuntimeError):
@@ -410,16 +403,16 @@ def finish(
     candidates: list[str] = []
     evidences = [phase.evidence for phase in phases]
     for phase in evidences:
-        for name in phase.artifact_names:
-            if name not in artifacts:
-                artifacts.append(name)
         for candidate in phase.candidate_ids:
             if candidate not in candidates:
                 candidates.append(candidate)
     for phase in phases:
         for handle in phase.handles:
-            artifact_handles[str(handle.name)] = handle
-            artifact_paths[str(handle.name)] = str(handle.path)
+            name = str(handle.name)
+            if name not in artifacts:
+                artifacts.append(name)
+            artifact_handles[name] = handle
+            artifact_paths[name] = str(handle.path)
     for name in additional_artifacts:
         if name not in artifacts:
             artifacts.append(name)

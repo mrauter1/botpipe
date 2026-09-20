@@ -37,11 +37,6 @@ class Params(SelectedWorkflowTaskFramingParameters):
     max_evidence_bytes: int = Field(default=50 * 1024 * 1024, gt=0)
     max_output_bytes: int = Field(default=10 * 1024 * 1024, gt=0)
     focus: str | None = None
-    max_candidates_per_pass: int | None = Field(default=None, exclude=True)
-    optimization_depth: Literal["cheap", "standard", "ablation"] | None = Field(
-        default=None,
-        exclude=True,
-    )
 
     @model_validator(mode="before")
     @classmethod
@@ -49,28 +44,34 @@ class Params(SelectedWorkflowTaskFramingParameters):
         if not isinstance(value, dict):
             return value
         result = dict(value)
-        if result.get("max_candidates_per_pass") is not None:
+        max_candidates_per_pass = result.pop("max_candidates_per_pass", None)
+        if max_candidates_per_pass is not None:
             if (
                 "max_candidates" in result
-                and result["max_candidates"] != result["max_candidates_per_pass"]
+                and result["max_candidates"] != max_candidates_per_pass
             ):
                 raise ValueError(
                     "max_candidates conflicts with deprecated max_candidates_per_pass"
                 )
-            result["max_candidates"] = result["max_candidates_per_pass"]
+            result["max_candidates"] = max_candidates_per_pass
             warnings.warn(
                 "max_candidates_per_pass is deprecated; use max_candidates",
                 FutureWarning,
                 stacklevel=2,
             )
-        if result.get("optimization_depth") is not None:
+        optimization_depth = result.pop("optimization_depth", None)
+        if optimization_depth is not None:
+            if optimization_depth not in ("cheap", "standard", "ablation"):
+                raise ValueError(
+                    "optimization_depth must be 'cheap', 'standard', or 'ablation'"
+                )
             warnings.warn(
                 "optimization_depth is deprecated; ablation is planning-only",
                 FutureWarning,
                 stacklevel=2,
             )
             turns, seconds = (
-                (12, 3600) if result["optimization_depth"] == "standard" else (6, 1800)
+                (12, 3600) if optimization_depth == "standard" else (6, 1800)
             )
             result.setdefault("max_provider_turns", turns)
             result.setdefault("max_analysis_seconds", seconds)

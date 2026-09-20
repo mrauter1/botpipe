@@ -16,28 +16,17 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 - This work item owns analysis validation only.
 - Judge the existing candidate-analysis artifacts. Do not choose the final strategy route or package the terminal handoff in this step.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `workflow_capability_snapshot` | Read | Required input. |
-| `candidate_request_brief` | Read | Required input. |
-| `candidate_selection_criteria` | Read | Required input. |
-| `workflow_candidate_matrix` | Read | Required input. |
-| `workflow_gap_analysis` | Read | Required input. |
-| `candidate_route_posture` | Read | Required input. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
 ### Artifact checks
-- `workflow_candidate_matrix` must compare current portfolio candidates explicitly and should compare at least three workflows when the portfolio size permits.
-- `workflow_gap_analysis` must make the fit-gap reasoning explicit enough that a downstream strategy selector does not need to rerun candidate retrieval.
-- `candidate_route_posture` must identify a legal portfolio posture and explain why that posture follows from the comparison.
+- `workflow_comparison_matrix` must compare current portfolio candidates explicitly and should compare at least three workflows when the portfolio size permits.
+- `fit_gap_analysis` must make the fit-gap reasoning explicit enough that a downstream strategy selector does not need to rerun candidate retrieval.
+- `fit_gap_analysis` must identify a legal portfolio posture and explain why that posture follows from the comparison.
 - If the builder baseline exists in the capability snapshot, it must be part of the comparison and handled explicitly.
 
 ### Payload requirements
@@ -47,6 +36,10 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 - `portfolio_posture`: one of `direct_fit`, `compose_needed`, `adapt_needed`, or `material_gap`.
 - `builder_considered`: whether the builder baseline was considered explicitly.
 - `replan_reason`: required only when the route is `needs_replan`.
+
+## Evidence
+
+- Verify the declared phase artifacts—`workflow_comparison_matrix`, `fit_gap_analysis`—against the phase requirements and require their claims to be internally consistent.
 
 ## Phase decision criteria
 

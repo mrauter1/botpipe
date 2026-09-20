@@ -17,30 +17,15 @@ After writing every declared artifact, return a JSON result matching the injecte
 - Keep the boundary at case coverage, manifest structure, expected artifacts, and scoring guidance.
 - Do not package the terminal suite in this step and do not execute the selected workflow.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `selected_workflow_capability` | Read | Required input. |
-| `evaluation_request_brief` | Read | Required input. |
-| `evaluation_dimensions` | Read | Required input. |
-| `benchmark_case_matrix` | Write | Overwrite. |
-| `edge_case_matrix` | Write | Overwrite. |
-| `adversarial_case_matrix` | Write | Overwrite. |
-| `eval_case_manifest` | Write | Overwrite. |
-| `eval_rubric` | Write | Overwrite. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not modify the framing artifacts in this step.
-- Do not create `workflow_eval_suite`, `workflow_eval_suite_summary`, or `workflow_eval_next_action` in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
 ### Artifact handling
-- Each case-matrix artifact must contain at least one explicit case row for its category and must make the case id, pressure or scenario, expected artifacts, and why the case matters explicit.
+- `benchmark_case_matrix`, `edge_case_matrix`, and `adversarial_case_matrix` must each contain at least one explicit case row for its category and make the case id, pressure or scenario, expected artifacts, and why the case matters explicit.
 - `eval_case_manifest` must be valid JSON with a top-level `cases` array.
 - Each case in `eval_case_manifest` must define:
 - `case_id`
@@ -49,7 +34,7 @@ After writing every declared artifact, return a JSON result matching the injecte
 - `expected_artifacts`
 - optional `workflow_parameters`
 - The manifest must include all three legal case kinds: `benchmark`, `edge`, and `adversarial`.
-- `expected_artifacts` must come from the selected workflow's declared artifact surface in `selected_workflow_capability`.
+- `expected_artifacts` must come from the selected workflow's declared artifact surface in `selected_workflow_contract`.
 - Any `workflow_parameters` must only use supported parameter names for the selected workflow.
 - `eval_rubric` must define how to judge artifact completeness, quality, and failure severity for the selected workflow.
 

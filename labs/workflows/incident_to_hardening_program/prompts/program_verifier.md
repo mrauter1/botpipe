@@ -12,20 +12,10 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 ### Purpose
 - Decide whether the final incident hardening package is complete, aligned, and ready for deterministic publication.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `incident_package_checklist` | Read | Required input. |
-| `cause_hypothesis_ranking` | Read | Required input. |
-| `immediate_mitigation_plan` | Read | Required input. |
-| `validation_plan` | Read | Required input. |
-| `incident_summary` | Read | Required input. |
-| `hardening_program` | Read | Required input. |
-| `hardening_backlog` | Read | Required input. |
-| `follow_up_owners` | Read | Required input. |
-| `stakeholder_communications_draft` | Read | Required input. |
-| `incident_resolution_package` | Read | Required input. |
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -43,8 +33,9 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 
 ## Evidence
 
+- Verify the declared phase artifacts—`hardening_program`, `hardening_backlog`, `follow_up_owners`, `stakeholder_communications_draft`, `incident_resolution_package`—against the phase requirements and require their claims to be internally consistent.
 - Verify that the final package cites the assessed posture rather than softening or shifting it.
-- Treat contradictions among the package artifacts, `incident_summary`, and the evidence-backed analysis as real defects.
+- Treat contradictions among the package artifacts, their stated incident posture, and their cited evidence as real defects.
 - Keep the decision anchored to the durable package artifacts, not to presentation quality alone.
 
 ## Phase decision criteria

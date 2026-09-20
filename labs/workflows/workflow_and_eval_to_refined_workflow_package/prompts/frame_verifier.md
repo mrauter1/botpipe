@@ -12,33 +12,17 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 ### Purpose
 - Decide whether the selected workflow, baseline evidence, and accepted refinement boundary are explicit enough to support concrete planning.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `selected_workflow_capability` | Read | Required input. |
-| `selected_workflow_authoring_surface` | Read | Required input. |
-| `baseline_workflow_manifest` | Read | Required input. |
-| `baseline_evaluation_summary` | Read | Required input. |
-| `baseline_evaluation_findings` | Read | Required input. |
-| `baseline_failure_modes` | Read | Required input. |
-| `baseline_refinement_evidence_summary` | Read | Optional optimization evidence summary rendered as workflow-local guidance. |
-| `refinement_request_brief` | Read | Required input. |
-| `refinement_acceptance_criteria` | Read | Required input. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not overwrite `refinement_request_brief` or `refinement_acceptance_criteria` during verification.
-- Return verifier control metadata only through the step payload and selected route.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
 ### Artifact checks
 - `refinement_request_brief` must keep the selected workflow fixed, cite the copied baseline evidence, and explain why this building block stops at candidate publication instead of promotion.
-- `refinement_acceptance_criteria` must define the accepted refinement boundary, the minimum evidence expected from later steps, and the difference between local repair and material replan.
-- The framing must stay consistent with `selected_workflow_capability`, `selected_workflow_authoring_surface`, and `baseline_workflow_manifest`; do not accept a renamed or implicitly swapped workflow.
+- `refinement_success_criteria` must define the accepted refinement boundary, the minimum evidence expected from later steps, and the difference between local repair and material replan.
+- The framing must stay consistent with `selected_workflow_contract`, `candidate_surface`, and `frozen_candidate`; do not accept a renamed or implicitly swapped workflow.
 
 ### Payload requirements
 - `summary`: concise validation summary.
@@ -49,6 +33,7 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 
 ## Evidence
 
+- Verify the declared phase artifacts—`refinement_request_brief`, `refinement_success_criteria`—against the phase requirements and require their claims to be internally consistent.
 - Base the verdict on the framing artifacts plus the captured selected-workflow and baseline-evidence artifacts instead of provider inference.
 - If optimization evidence is present, confirm the framing treats candidate-only entries as unproven unless separate ablation or rerun evidence exists.
 - Confirm that the artifacts make the refinement boundary explicit enough for deterministic planning without widening the selected workflow surface.

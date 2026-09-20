@@ -16,28 +16,10 @@ After writing every declared artifact, return a JSON result matching the injecte
 - This work item owns recursive-improvement packaging only.
 - Keep the boundary at publication-ready cycle artifacts and explicit next actions. Do not execute downstream workflows in this step.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `workflow_capability_snapshot` | Read | Required input. |
-| `workflow_portfolio_health_snapshot` | Read | Required input. |
-| `company_operation_snapshot` | Read | Required input. |
-| `recursive_improvement_cycle_checklist` | Read | Required input. |
-| `company_operation_brief` | Read | Required input. |
-| `recursive_improvement_criteria` | Read | Required input. |
-| `company_pressure_map` | Read | Required input. |
-| `recursive_improvement_priority_matrix` | Read | Required input. |
-| `recursive_improvement_candidates` | Read | Required input. |
-| `recursive_improvement_cycle` | Write | Overwrite. |
-| `recursive_improvement_summary` | Write | Overwrite. |
-| `recursive_improvement_next_actions` | Write | Overwrite. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not create `recursive_improvement_cycle_receipt.json` in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 

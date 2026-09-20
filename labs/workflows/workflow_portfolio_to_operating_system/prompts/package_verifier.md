@@ -16,28 +16,10 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 - This work item owns packaging validation only.
 - Judge the existing package artifacts. Do not execute the next workflow or mutate workflow packages in this step.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `workflow_capability_snapshot` | Read | Required input. |
-| `workflow_portfolio_health_snapshot` | Read | Required input. |
-| `portfolio_governance_brief` | Read | Required input. |
-| `portfolio_decision_criteria` | Read | Required input. |
-| `workflow_lifecycle_matrix` | Read | Required input. |
-| `portfolio_gap_analysis` | Read | Required input. |
-| `portfolio_change_candidates` | Read | Required input. |
-| `workflow_portfolio_operating_system` | Read | Required input. |
-| `portfolio_operating_summary` | Read | Required input. |
-| `portfolio_next_actions` | Read | Required input. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not overwrite `workflow_portfolio_operating_system`, `portfolio_operating_summary`, or `portfolio_next_actions` during verification.
-- Do not create `portfolio_operating_system_receipt.json` in this step.
-- Return verifier control metadata only through the step payload and selected route.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -61,6 +43,7 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 
 ## Evidence
 
+- Verify the declared phase artifacts—`workflow_portfolio_operating_system`, `portfolio_operating_summary`, `portfolio_next_actions`—against the phase requirements and require their claims to be internally consistent.
 - Base the verdict on the packaging artifacts plus the analyzed lifecycle matrix and change candidates instead of provider inference.
 - Confirm that the package is explicit enough for later refinement, governance, or decomposition work to consume later without rerunning this workflow first.
 

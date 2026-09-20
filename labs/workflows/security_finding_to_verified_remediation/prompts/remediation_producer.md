@@ -16,34 +16,19 @@ After writing every declared artifact, return a JSON result matching the injecte
 - This work item owns remediation planning only.
 - Keep the work-item boundary at the chosen remediation, verification strategy, rollout sequencing, and rollback safety. Do not package stakeholder communications or closure evidence for publication yet.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `invocation_contract` | Read | Required input. |
-| `security_evidence_pack_summary` | Read | Required input. |
-| `exploit_summary` | Read | Required input. |
-| `affected_surface` | Read | Required input. |
-| `root_cause_analysis` | Read | Required input. |
-| `remediation_options` | Read | Required input. |
-| `assessment_summary` | Read | Required input. |
-| `selected_remediation_plan` | Write | Overwrite. |
-| `verification_plan` | Write | Overwrite. |
-| `rollout_plan` | Write | Overwrite. |
-| `rollback_safety_plan` | Write | Overwrite. |
-| `remediation_summary` | Write | Overwrite. |
-
-### Artifact Notes
-- Do not create closure-package or publication artifacts in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
 ### Artifact handling
-- `selected_remediation_plan` must name the chosen fix path, explain why it was selected over the alternatives, and define the implementation shape another engineering team can execute.
-- `verification_plan` must define concrete evidence that the fix closes the finding and guards against regression, including tests, inspections, or operational validation.
-- `rollout_plan` must define rollout sequencing, dependencies, guardrails, and how deployment constraints from `invocation_contract` affect the rollout.
-- `rollback_safety_plan` must define what rollback means for this remediation and what proof indicates rollback safety or limits.
-- `remediation_summary` must be valid JSON with at least:
+- `remediation_plan` must name the chosen fix path, explain why it was selected over the alternatives, and define the implementation shape another engineering team can execute.
+- `verification_evidence` must define concrete evidence that the fix closes the finding and guards against regression, including tests, inspections, or operational validation.
+- `remediation_plan` must define rollout sequencing, dependencies, guardrails, and how deployment constraints from the runtime input affect the rollout.
+- `remediation_plan` must define what rollback means for this remediation and what proof indicates rollback safety or limits.
+- `residual_risk` must be valid JSON with at least:
 - `authoritative_artifacts`
 - `selected_remediation`
 - `verification_ready`

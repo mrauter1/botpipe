@@ -16,25 +16,10 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 - This work item verifies recursive-improvement analysis only.
 - Keep the boundary at checking the analysis artifacts against the scoped company evidence. Do not publish the cycle package in this step.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `workflow_capability_snapshot` | Read | Required input. |
-| `workflow_portfolio_health_snapshot` | Read | Required input. |
-| `company_operation_snapshot` | Read | Required input. |
-| `company_operation_brief` | Read | Required input. |
-| `recursive_improvement_criteria` | Read | Required input. |
-| `company_pressure_map` | Read | Required input. |
-| `recursive_improvement_priority_matrix` | Read | Required input. |
-| `recursive_improvement_candidates` | Read | Required input. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Write verifier control metadata only through the selected route and payload.
-- Do not overwrite `company_pressure_map`, `recursive_improvement_priority_matrix`, or `recursive_improvement_candidates` during verification.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -50,6 +35,7 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 
 ## Evidence
 
+- Verify the declared phase artifacts—`company_pressure_map`, `recursive_improvement_priority_matrix`, `recursive_improvement_candidates`—against the phase requirements and require their claims to be internally consistent.
 - Reject analysis that invents runtime-owned prioritization or external business systems.
 - Reject duplicate candidate ids, unsupported categories, unsupported priorities, or category drift between the matrix and manifest.
 

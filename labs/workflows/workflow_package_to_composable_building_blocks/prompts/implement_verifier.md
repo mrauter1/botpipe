@@ -10,53 +10,34 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 - You are the decomposition-build verifier for the `implement_candidate_decomposition` step.
 
 ### Purpose
-- Decide whether the candidate decomposition surface, declared building-block index, and build artifacts are explicit enough for deterministic manifest derivation and evaluation.
+- Decide whether the provider-authored decomposition manifest and notes document the claimed candidate work well enough for later runtime derivation and evaluation.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `selected_workflow_decomposition_surface` | Read | Required input. |
-| `baseline_parent_workflow_surface` | Read | Required input. |
-| `baseline_parent_manifest` | Read | Required input. |
-| `decomposition_evidence_manifest` | Read | Required input. |
-| `extraction_strategy` | Read | Required input. |
-| `building_block_interface_contracts` | Read | Required input. |
-| `parent_rewrite_plan` | Read | Required input. |
-| `regression_guardrails` | Read | Required input. |
-| `candidate_decomposition_surface` | Read | Required input. |
-| `candidate_building_block_index` | Read | Required input. |
-| `decomposition_build_report` | Read | Required input. |
-| `candidate_diff_summary` | Read | Required input. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not overwrite `candidate_decomposition_surface`, `candidate_building_block_index`, `decomposition_build_report`, or `candidate_diff_summary` during verification.
-- Do not hand-write `candidate_decomposition_manifest.json` during verification.
-- Return verifier control metadata only through the step payload and selected route.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
 ### Artifact checks
-- `candidate_decomposition_surface/` must preserve every baseline parent file while adding or changing only the declared parent rewrite and extracted building blocks.
-- `candidate_building_block_index.json` must be valid JSON, candidate-only, and explicit enough for publication-side boundary validation.
-- `decomposition_build_report` must state how the candidate overlay should be validated and what remained unchanged in the authoritative selected workflow package.
-- `candidate_diff_summary` must summarize both the parent rewrite and the extracted building-block surfaces.
+- `candidate_decomposition_manifest` must be valid JSON, candidate-only, and list the claimed parent rewrite, extracted building blocks, and their repo-relative package, documentation, and test paths.
+- `candidate_decomposition_notes` must state how the candidate overlay should be validated and what remained unchanged in the authoritative selected workflow package.
+- `candidate_decomposition_notes` must summarize both the parent rewrite and the extracted building-block surfaces.
 
 ### Payload requirements
 - `summary`: concise validation summary.
 - `selected_workflow_name`: the canonical workflow name that remains selected.
-- `candidate_file_count`: the number of files in `candidate_decomposition_surface/`.
+- `candidate_file_count`: the number of candidate file entries declared in `candidate_decomposition_manifest`; this remains a producer claim until runtime validation follows this phase.
 - `changed_relative_paths`: the repo-relative files changed or added by the candidate overlay.
 - `building_block_names`: the building blocks that are now present in the candidate overlay.
 - `replan_reason`: required only when the route is `needs_replan`.
 
 ## Evidence
 
-- Base the verdict on the candidate artifacts and the accepted plan instead of provider inference.
-- Confirm that the candidate surface is explicit enough for deterministic manifest derivation and later boundary validation.
+- Verify the declared phase artifacts—`candidate_decomposition_manifest`, `candidate_decomposition_notes`—against the phase requirements and require their claims to be internally consistent.
+- Base the verdict on the two declared implementation artifacts and the accepted plan instead of inventing unseen candidate-workspace state.
+- Confirm that the documentary index is explicit enough for comparison with the independently derived `candidate_manifest` after this phase.
+- Do not claim that accepting this phase verifies actual file counts, hashes, paths, or overlay validity; those facts come from `candidate_manifest` and `candidate_evaluation` later.
 
 ## Phase decision criteria
 
@@ -77,6 +58,6 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 
 ## Isolated candidate validation
 
-- The candidate is materialized only in the bounded candidate workspace. `candidate_evaluation` comes from frozen execution-tree compilation and the configured argv validation under its timeout.
-- Use derived changed paths and validation results; do not trust model-authored file counts, hashes, or success claims.
+- The candidate is materialized only in the bounded candidate workspace. A later deterministic workspace scan and isolated validation run produce `candidate_evaluation` after this phase.
+- Treat the manifest's paths, counts, and hashes as claims to check for completeness and internal consistency here, rather than as independently derived validation results.
 - Publication may recommend a later promotion review, but this workflow must not copy candidate files into authoritative source or auto-promote them.

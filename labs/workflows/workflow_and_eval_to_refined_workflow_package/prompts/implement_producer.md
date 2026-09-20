@@ -14,56 +14,36 @@ After writing every declared artifact, return a JSON result matching the injecte
 
 ### Current work item
 - This work item owns candidate implementation only.
-- Keep the boundary at `candidate_workflow_surface`, `refinement_build_report`, and `candidate_diff_summary`.
-- The workflow will derive `candidate_workflow_manifest.json` deterministically from the candidate surface after verification; do not hand-write that manifest in this step.
+- Edit only the bounded candidate workspace, then write both declared artifacts: `candidate_workflow_manifest` and `candidate_implementation_notes`.
+- `candidate_workflow_manifest` is the provider-authored implementation record. After this phase, the runtime independently derives `candidate_manifest` from the candidate workspace and validates the actual overlay.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `selected_workflow_capability` | Read | Required input. |
-| `selected_workflow_authoring_surface` | Read | Required input. |
-| `baseline_workflow_surface` | Read | Required input. |
-| `baseline_workflow_manifest` | Read | Required input. |
-| `refinement_strategy` | Read | Required input. |
-| `workflow_change_plan` | Read | Required input. |
-| `regression_guardrails` | Read | Required input. |
-| `candidate_workflow_surface` | Write | Overwrite. |
-| `refinement_build_report` | Write | Overwrite. |
-| `candidate_diff_summary` | Write | Overwrite. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not hand-write `candidate_workflow_manifest.json` in this step; the workflow derives it from `candidate_workflow_surface` after verification.
-- Do not modify `baseline_workflow_surface` or the authoritative selected workflow package in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
 ### Artifact handling
-- `candidate_workflow_surface` must be a filesystem copy of the selected workflow boundary under workflow-local storage.
-- Preserve every baseline file captured in `baseline_workflow_manifest`.
-- Any added candidate files must stay inside the selected workflow package boundary; do not add unrelated docs, tests, or workflow files outside that boundary.
-- Apply the planned refinement only inside `candidate_workflow_surface`.
-- `refinement_build_report` must define:
+- Apply the accepted refinement only inside the runtime-provided candidate workspace and the allowed candidate paths in the runtime input.
+- Preserve every baseline file outside the accepted change set and do not add unrelated docs, tests, or workflow files outside the selected package boundary.
+- `candidate_workflow_manifest` must be valid JSON that records every candidate file claimed by this implementation, its repo-relative path, whether it is changed or added, and the accepted plan item it implements.
+- Treat hashes, file counts, and changed paths in `candidate_workflow_manifest` as implementation claims. Do not present them as runtime-verified facts; the deterministic `candidate_manifest` and `candidate_evaluation` are created only after this phase.
+- `candidate_implementation_notes` must define:
 - what was changed in the candidate surface,
 - how the candidate stays within the selected workflow boundary,
 - what remains intentionally unchanged from baseline,
 - what compile or test work still belongs to the evaluation step.
-- `candidate_diff_summary` must define:
-- the repo-relative files changed or added in the candidate surface,
-- why each change was made,
-- how the change ties back to the baseline evidence and the accepted plan.
+- It must also name the changed or added repo-relative files, why each change was made, and how each change ties back to the baseline evidence and accepted plan.
 
 ### Expected outcome
 - Leave the workflow with an explicit candidate workflow surface and build evidence that the evaluation step can verify against the baseline package.
 
 ## Evidence
 
-- Build the candidate from `baseline_workflow_surface`, not from the authoritative selected workflow package.
-- Keep the candidate surface aligned with `workflow_change_plan` and `regression_guardrails`.
-- Make the changed file list explicit enough that the verifier and publish step can detect drift.
+- Build from the runtime-declared immutable baseline read, never by editing the authoritative selected workflow package.
+- Keep the candidate surface aligned with `workflow_refinement_plan` and `candidate_change_manifest`.
+- Make the changed file list explicit enough for the verifier to assess the implementation record and for the later runtime comparison to detect drift.
 
 ## Phase decision criteria
 
@@ -84,7 +64,7 @@ After writing every declared artifact, return a JSON result matching the injecte
 
 ## Forbidden
 
-- Do not edit files outside `candidate_workflow_surface`.
+- Do not edit source files outside the runtime-provided allowed candidate paths, and do not write durable artifacts outside their declared destinations.
 - Do not mutate the baseline snapshot or the authoritative selected workflow package.
 - Do not leave changed file paths implicit.
 - Do not claim verification that has not been produced.

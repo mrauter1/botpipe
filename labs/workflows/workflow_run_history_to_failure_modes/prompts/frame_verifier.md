@@ -12,28 +12,17 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 ### Purpose
 - Decide whether the selected workflow, filtered run-history window, and diagnostic acceptance boundary are explicit enough to support bounded failure-mode clustering.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `selected_workflow_capability` | Read | Required input. |
-| `selected_workflow_run_history` | Read | Required input. |
-| `diagnostic_scope_brief` | Read | Required input. |
-| `run_history_scope` | Read | Required input. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not overwrite `diagnostic_scope_brief` or `run_history_scope` during verification.
-- Return verifier control metadata only through the step payload and selected route.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
 ### Artifact checks
 - `diagnostic_scope_brief` must name the canonical selected workflow, diagnostic trigger, sponsor, terminal outcome, and why diagnostic publication is the terminal boundary for this building block.
 - `run_history_scope` must name the filtered run IDs, the evidence signals to weight, and the difference between local repair and material replan.
-- The framing must stay consistent with `selected_workflow_capability` and `selected_workflow_run_history`; do not accept a renamed workflow or silently changed evidence window.
+- The framing must stay consistent with `selected_workflow_contract` and `observed_run_history`; do not accept a renamed workflow or silently changed evidence window.
 
 ### Payload requirements
 - `summary`: concise validation summary.
@@ -45,6 +34,7 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 
 ## Evidence
 
+- Verify the declared phase artifacts—`diagnostic_scope_brief`, `run_history_scope`—against the phase requirements and require their claims to be internally consistent.
 - Base the verdict on the framing artifacts plus the selected-workflow capability snapshot and run-history snapshot instead of provider inference.
 - Confirm that the artifacts make the diagnostic boundary explicit enough for deterministic failure-mode clustering without widening the selected workflow or publication boundary.
 

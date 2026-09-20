@@ -12,19 +12,10 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 ### Purpose
 - Decide whether the readiness assessment supports package assembly or whether the workflow must stay local or replan.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `decision_criteria` | Read | Required input. |
-| `release_inventory` | Read | Required input. |
-| `test_evidence_pack` | Read | Required input. |
-| `operational_readiness` | Read | Required input. |
-| `rollback_readiness` | Read | Required input. |
-| `blocking_issues` | Read | Required input. |
-| `go_no_go_assessment` | Read | Required input. |
-| `risk_register` | Read | Required input. |
-| `decision_summary` | Read | Required input. |
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -42,6 +33,7 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 
 ## Evidence
 
+- Verify the declared phase artifacts—`go_no_go_assessment`, `risk_register`, `decision_summary`—against the phase requirements and require their claims to be internally consistent.
 - Check that the recommendation, blocker handling, and ranked risks are all supported by the durable evidence artifacts.
 - Treat invalid or contradictory `decision_summary` JSON as a hard defect.
 - Keep the route decision aligned to the current work-item boundary rather than silently re-framing the release.

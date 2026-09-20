@@ -16,29 +16,16 @@ After writing every declared artifact, return a JSON result matching the injecte
 - This work item owns lifecycle analysis only.
 - Keep the boundary at evidence-backed lifecycle recommendations and change candidates. Do not publish the final governance package in this step.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `workflow_capability_snapshot` | Read | Required input. |
-| `workflow_portfolio_health_snapshot` | Read | Required input. |
-| `portfolio_governance_brief` | Read | Required input. |
-| `portfolio_decision_criteria` | Read | Required input. |
-| `workflow_lifecycle_matrix` | Write | Overwrite. |
-| `portfolio_gap_analysis` | Write | Overwrite. |
-| `portfolio_change_candidates` | Write | Overwrite. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not create `workflow_portfolio_operating_system`, `portfolio_operating_summary`, or `portfolio_next_actions` in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
 ### Artifact handling
-- `workflow_lifecycle_matrix` must give every analyzed current workflow an explicit lifecycle posture chosen from `keep`, `refine`, `decompose`, `merge`, or `retire`, plus evidence-backed priority and rationale.
-- `portfolio_gap_analysis` must explain coverage gaps, overlap, fragility, and why create-next recommendations are or are not justified this cycle.
+- `lifecycle_recommendations` must give every analyzed current workflow an explicit lifecycle posture chosen from `keep`, `refine`, `decompose`, `merge`, or `retire`, plus evidence-backed priority and rationale.
+- `portfolio_health_analysis` must explain coverage gaps, overlap, fragility, and why create-next recommendations are or are not justified this cycle.
 - `portfolio_change_candidates` must be valid JSON and define `change_candidates` with objects that include:
 - `candidate_id`,
 - `action`,

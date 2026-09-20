@@ -16,35 +16,17 @@ After writing every declared artifact, return a JSON result matching the injecte
 - This work item owns final package assembly only.
 - Keep the work-item boundary at the final decision packet and communications draft. Do not change the release criteria or invent new evidence.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `decision_package_checklist` | Read | Required input. |
-| `release_scope_brief` | Read | Required input. |
-| `decision_criteria` | Read | Required input. |
-| `release_inventory` | Read | Required input. |
-| `test_evidence_pack` | Read | Required input. |
-| `operational_readiness` | Read | Required input. |
-| `rollback_readiness` | Read | Required input. |
-| `blocking_issues` | Read | Required input. |
-| `go_no_go_assessment` | Read | Required input. |
-| `risk_register` | Read | Required input. |
-| `decision_summary` | Read | Required input. |
-| `release_decision_package` | Write | Overwrite. |
-| `release_communications_draft` | Write | Overwrite. |
-
-### Artifact Notes
-- Do not modify `decision_summary` or create the publication receipt in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
 ### Artifact handling
 - `release_decision_package` must assemble the final recommendation, scope summary, decision criteria, evidence highlights, blockers, rollback posture, ranked risks, and next actions into one operator-facing package.
 - `release_communications_draft` must be stakeholder-ready, consistent with `decision_summary`, and explicit about the recommendation, key caveats, and immediate next steps.
-- Use the bundled checklist to confirm the final package covers the required sections.
+- Confirm that the final package covers every required section named below.
 
 ### Expected outcome
 - Produce a final decision package that another team can act on immediately and that the publish step can reference mechanically.

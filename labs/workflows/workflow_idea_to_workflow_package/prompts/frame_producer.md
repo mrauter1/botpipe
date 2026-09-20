@@ -16,29 +16,18 @@ After writing every declared artifact, return a JSON result matching the injecte
 - This work item decides what Botpipe should build in this cycle before any package design starts.
 - Keep the work at the candidate-comparison boundary. Do not design package files yet.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | authoritative run request snapshot. |
-| `invocation_contract` | Read | authoritative workflow parameters and requested target package identity. |
-| `framework_architecture_doc` | Read | , `framework_authoring_doc`, `workflow_authoring_guidelines`: current framework doctrine and authoring rules. |
-| `existing_workflow_manifest` | Read | , `existing_workflow_definition`, `existing_workflow_prompts`: current package conventions from `devloop`. |
-| `candidate_comparison` | Write | Overwrite. |
-| `selected_workflow_brief` | Write | Overwrite. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Inspect the current installed workflow package inventory in the repository if you need broader context, but treat the listed artifacts as the minimum required read set.
-- Do not create package files, tests, docs, or prompt files in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
 ### Artifact handling
-- `candidate_comparison` must compare at least three strong candidates.
+- `workflow_idea_brief` must compare at least three strong candidates.
 - One candidate must be `workflow_idea_to_workflow_package` unless the repository already has a strong workflow-builder.
 - For each candidate, record: problem solved, likely sponsor/user, why multi-turn helps, terminal outcome, why Botpipe fits, and key framework pressure revealed.
-- `selected_workflow_brief` must name the chosen addition, state whether it is end-to-end or a reusable building block, and explain why the other candidates were deferred or rejected.
+- `candidate_selection_criteria` must name the chosen addition, state whether it is end-to-end or a reusable building block, and explain why the other candidates were deferred or rejected.
 
 ### Expected outcome
 - Leave the repository with a clear, evidence-backed selection package that downstream design can treat as authoritative.

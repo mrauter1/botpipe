@@ -17,24 +17,10 @@ After writing every declared artifact, return a JSON result matching the injecte
 - Keep the boundary at the selected workflow, the copied baseline parent workflow surface, the copied evidence manifest, and the candidate-only publication boundary for this building block.
 - Do not design file-level edits, new package contents, or the candidate decomposition surface in this step.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `selected_workflow_decomposition_surface` | Read | Required input. |
-| `baseline_parent_manifest` | Read | Required input. |
-| `decomposition_evidence_manifest` | Read | Required input. |
-| `framework_architecture_doc` | Read | Required input. |
-| `framework_authoring_doc` | Read | Required input. |
-| `workflow_authoring_guidelines` | Read | Required input. |
-| `decomposition_request_brief` | Write | Overwrite. |
-| `decomposition_acceptance_criteria` | Write | Overwrite. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not create `extraction_strategy`, `building_block_interface_contracts`, `parent_rewrite_plan`, `regression_guardrails`, `candidate_decomposition_surface`, `candidate_building_block_index.json`, `candidate_decomposition_manifest.json`, `decomposition_build_report`, `candidate_diff_summary`, `decomposition_verification_report`, `composition_migration_guide`, `promotion_record`, `rollback_plan`, or `workflow_decomposition_receipt.json` in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -46,7 +32,7 @@ After writing every declared artifact, return a JSON result matching the injecte
 - the candidate-only publication boundary for this building block,
 - why the workflow must stop before promotion or baseline mutation,
 - which reusable extraction opportunities appear strongest.
-- `decomposition_acceptance_criteria` must define:
+- `decomposition_success_criteria` must define:
 - the selected workflow boundary that must remain fixed,
 - the expected parent rewrite scope,
 - the expected building-block package surface,
@@ -59,7 +45,7 @@ After writing every declared artifact, return a JSON result matching the injecte
 
 ## Evidence
 
-- Anchor the request in `selected_workflow_decomposition_surface`, `baseline_parent_manifest`, and `decomposition_evidence_manifest`.
+- Anchor the request in `selected_workflow_contract`, `candidate_surface`, and `runtime input`.
 - Keep the runtime/provider boundary crisp: the runtime injects the compact human-readable step contract, while prompt templates own the operational guidance and raw provider output never re-enters prompts.
 - Make the acceptance surface specific enough that the next step can choose extraction boundaries, interface contracts, and parent rewrite changes without widening the selected workflow boundary.
 

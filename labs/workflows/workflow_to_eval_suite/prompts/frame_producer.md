@@ -17,23 +17,10 @@ After writing every declared artifact, return a JSON result matching the injecte
 - Keep the boundary at the selected workflow, the evaluation objective, the evaluation dimensions, and the publication boundary for this building block.
 - Do not design concrete cases or package the terminal suite in this step.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `selected_workflow_capability` | Read | Required input. |
-| `framework_architecture_doc` | Read | Required input. |
-| `framework_authoring_doc` | Read | Required input. |
-| `workflow_authoring_guidelines` | Read | Required input. |
-| `evaluation_request_brief` | Write | Overwrite. |
-| `evaluation_dimensions` | Write | Overwrite. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- You may inspect the selected workflow's linked doc or source file when the capability snapshot says they exist, but `selected_workflow_capability` remains the authoritative selected-workflow contract.
-- Do not create `benchmark_case_matrix`, `edge_case_matrix`, `adversarial_case_matrix`, `eval_case_manifest`, `eval_rubric`, `workflow_eval_suite`, `workflow_eval_suite_summary`, or `workflow_eval_next_action` in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -57,7 +44,7 @@ After writing every declared artifact, return a JSON result matching the injecte
 
 ## Evidence
 
-- Anchor the framing in the selected-workflow capability snapshot and the run-local invocation contract.
+- Anchor the framing in the selected-workflow capability snapshot and the runtime input.
 - Keep the runtime/provider boundary crisp: the runtime injects the compact human-readable step contract, while prompt templates own the operational guidance and raw provider output never re-enters prompts.
 - Make the acceptance surface specific enough that the next step can design cases and a rubric without silently widening the selected workflow boundary.
 

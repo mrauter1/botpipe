@@ -16,25 +16,10 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 - This work item verifies company framing only.
 - Keep the boundary at checking the framing artifacts against the scoped company evidence. Do not rank candidates or publish the cycle package in this step.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `workflow_capability_snapshot` | Read | Required input. |
-| `workflow_portfolio_health_snapshot` | Read | Required input. |
-| `company_operation_snapshot` | Read | Required input. |
-| `framework_architecture_doc` | Read | Required input. |
-| `framework_authoring_doc` | Read | Required input. |
-| `workflow_authoring_guidelines` | Read | Required input. |
-| `company_operation_brief` | Read | Required input. |
-| `recursive_improvement_criteria` | Read | Required input. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Write verifier control metadata only through the selected route and payload.
-- Do not overwrite `company_operation_brief` or `recursive_improvement_criteria` during verification.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -50,6 +35,7 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 
 ## Evidence
 
+- Verify the declared phase artifacts—`company_operation_brief`, `recursive_improvement_criteria`—against the phase requirements and require their claims to be internally consistent.
 - Reject framing that ignores the company snapshot, invents external business systems, or hides the publication boundary.
 - Reject framing that assumes runtime-owned prioritization or hidden downstream execution.
 

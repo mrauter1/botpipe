@@ -17,23 +17,10 @@ After writing every declared artifact, return a JSON result matching the injecte
 - Keep the boundary at explicit failure modes, recurring weak points, and the machine-readable manifest for this selected workflow and filtered evidence set.
 - Do not rank implementation opportunities or publish terminal next actions in this step.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `selected_workflow_capability` | Read | Required input. |
-| `selected_workflow_run_history` | Read | Required input. |
-| `diagnostic_scope_brief` | Read | Required input. |
-| `run_history_scope` | Read | Required input. |
-| `failure_mode_map` | Write | Overwrite. |
-| `failure_mode_manifest` | Write | Overwrite. |
-| `recurring_weak_points` | Write | Overwrite. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not create `improvement_opportunities`, `improvement_opportunities_summary`, `diagnostic_next_actions`, or `failure_mode_diagnostic_receipt.json` in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -76,6 +63,6 @@ After writing every declared artifact, return a JSON result matching the injecte
 
 ## Forbidden
 
-- Do not mutate `selected_workflow_run_history`.
+- Do not mutate `observed_run_history`.
 - Do not hide the machine-readable failure surface only in prose; `failure_mode_manifest` is required.
 - Do not invent hidden runtime-owned failure-mode policy.

@@ -16,24 +16,10 @@ After writing every declared artifact, return a JSON result matching the injecte
 - This work item owns portfolio-governance framing only.
 - Keep the boundary at scope, sponsor pressure, lifecycle decision axes, and publication expectations. Do not recommend lifecycle actions or publish the final governance package in this step.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `workflow_capability_snapshot` | Read | Required input. |
-| `workflow_portfolio_health_snapshot` | Read | Required input. |
-| `framework_architecture_doc` | Read | Required input. |
-| `framework_authoring_doc` | Read | Required input. |
-| `workflow_authoring_guidelines` | Read | Required input. |
-| `portfolio_governance_brief` | Write | Overwrite. |
-| `portfolio_decision_criteria` | Write | Overwrite. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- You may inspect linked workflow docs or source files named inside the capability snapshot when they are directly relevant, but the snapshots remain the authoritative evidence bundle for this step.
-- Do not create `workflow_lifecycle_matrix`, `portfolio_gap_analysis`, `portfolio_change_candidates`, `workflow_portfolio_operating_system`, `portfolio_operating_summary`, or `portfolio_next_actions` in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -44,7 +30,7 @@ After writing every declared artifact, return a JSON result matching the injecte
 - why this portfolio review matters now,
 - what terminal governance package the later steps must publish,
 - why the workflow stops at governance publication rather than hidden downstream execution.
-- `portfolio_decision_criteria` must define how the next step should judge:
+- `lifecycle_criteria` must define how the next step should judge:
 - keep versus refine versus decompose versus merge versus retire on current workflows,
 - what counts as a create-next recommendation,
 - how run-health pressure and capability coverage should affect priority,
@@ -55,7 +41,7 @@ After writing every declared artifact, return a JSON result matching the injecte
 
 ## Evidence
 
-- Anchor the framing in `workflow_capability_snapshot` and `workflow_portfolio_health_snapshot`.
+- Anchor the framing in `workflow_catalog` and `observed_run_health`.
 - Keep the runtime/provider boundary crisp: the runtime injects the compact human-readable step contract, while prompt templates own the operational guidance and raw provider output never re-enters prompts.
 - Keep the focus workflows explicit and consistent across the framing artifacts.
 

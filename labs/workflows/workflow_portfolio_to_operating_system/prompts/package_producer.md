@@ -16,27 +16,10 @@ After writing every declared artifact, return a JSON result matching the injecte
 - This work item owns governance packaging only.
 - Keep the boundary at publication-ready governance artifacts and explicit next actions. Do not execute downstream workflows in this step.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `workflow_capability_snapshot` | Read | Required input. |
-| `workflow_portfolio_health_snapshot` | Read | Required input. |
-| `portfolio_operating_system_checklist` | Read | Required input. |
-| `portfolio_governance_brief` | Read | Required input. |
-| `portfolio_decision_criteria` | Read | Required input. |
-| `workflow_lifecycle_matrix` | Read | Required input. |
-| `portfolio_gap_analysis` | Read | Required input. |
-| `portfolio_change_candidates` | Read | Required input. |
-| `workflow_portfolio_operating_system` | Write | Overwrite. |
-| `portfolio_operating_summary` | Write | Overwrite. |
-| `portfolio_next_actions` | Write | Overwrite. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not create `portfolio_operating_system_receipt.json` in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -68,7 +51,7 @@ After writing every declared artifact, return a JSON result matching the injecte
 
 ## Evidence
 
-- Keep the package aligned with `workflow_lifecycle_matrix` and `portfolio_change_candidates`.
+- Keep the package aligned with `lifecycle_recommendations` and `portfolio_change_candidates`.
 - Make create-next, merge, and retire decisions explicit even when the answer is "none this cycle".
 - Keep the boundary explicit: this workflow publishes governance and next actions only.
 

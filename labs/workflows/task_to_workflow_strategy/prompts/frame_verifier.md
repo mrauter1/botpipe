@@ -12,18 +12,10 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 ### Purpose
 - Decide whether the framing artifacts make the task and selection criteria explicit enough to support a credible portfolio decision.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `workflow_portfolio_snapshot` | Read | Required input. |
-| `task_strategy_brief` | Read | Required input. |
-| `workflow_selection_criteria` | Read | Required input. |
-| `framework_architecture_doc` | Read | Required input. |
-| `framework_authoring_doc` | Read | Required input. |
-| `workflow_authoring_guidelines` | Read | Required input. |
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -37,6 +29,10 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 - `authoritative_artifacts`
 - `decision_axes`
 - `replan_reason` when you choose `needs_replan`
+
+## Evidence
+
+- Verify the declared phase artifacts—`task_strategy_brief`, `workflow_selection_criteria`—against the phase requirements and require their claims to be internally consistent.
 
 ## Phase decision criteria
 

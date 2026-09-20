@@ -16,26 +16,10 @@ After writing every declared artifact, return a JSON result matching the injecte
 - This work item owns candidate-set packaging only.
 - Keep the boundary at packaging the ranked candidate set and strategy-ready handoff. Do not choose the final front-door route or execute any downstream workflow.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `workflow_capability_snapshot` | Read | Required input. |
-| `candidate_set_checklist` | Read | Required input. |
-| `candidate_request_brief` | Read | Required input. |
-| `candidate_selection_criteria` | Read | Required input. |
-| `workflow_candidate_matrix` | Read | Required input. |
-| `workflow_gap_analysis` | Read | Required input. |
-| `candidate_route_posture` | Read | Required input. |
-| `candidate_workflow_set` | Write | Overwrite. |
-| `candidate_workflow_set_summary` | Write | Overwrite. |
-| `candidate_next_action` | Write | Overwrite. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not modify earlier framing or analysis artifacts in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -58,7 +42,7 @@ After writing every declared artifact, return a JSON result matching the injecte
 - `authoritative_artifacts`
 - `next_action`
 - `ready_for_strategy_selection`
-- `candidate_next_action` must state exactly what the downstream strategy layer should decide next, which candidate workflows deserve immediate consideration, and which task-specific facts should be carried forward.
+- `candidate_workflow_next_action` must state exactly what the downstream strategy layer should decide next, which candidate workflows deserve immediate consideration, and which task-specific facts should be carried forward.
 
 ### Expected outcome
 - Leave the workflow with a terminal candidate-workflow-set package that is inspectable, machine-readable, and ready for downstream strategy selection without auto-running or auto-selecting the final route.

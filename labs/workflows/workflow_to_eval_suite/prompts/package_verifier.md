@@ -12,30 +12,10 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 ### Purpose
 - Decide whether the terminal eval-suite package is complete, machine-readable, and ready for deterministic publication of the validated manifest and receipt.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `selected_workflow_capability` | Read | Required input. |
-| `eval_suite_checklist` | Read | Required input. |
-| `evaluation_request_brief` | Read | Required input. |
-| `evaluation_dimensions` | Read | Required input. |
-| `benchmark_case_matrix` | Read | Required input. |
-| `edge_case_matrix` | Read | Required input. |
-| `adversarial_case_matrix` | Read | Required input. |
-| `eval_case_manifest` | Read | Required input. |
-| `eval_rubric` | Read | Required input. |
-| `workflow_eval_suite` | Read | Required input. |
-| `workflow_eval_suite_summary` | Read | Required input. |
-| `workflow_eval_next_action` | Read | Required input. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not overwrite `workflow_eval_suite`, `workflow_eval_suite_summary`, or `workflow_eval_next_action` during verification.
-- Do not create `validated_eval_case_manifest.json` or `workflow_eval_suite_receipt.json` in this step.
-- Return verifier control metadata only through the step payload and selected route.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -61,6 +41,7 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 
 ## Evidence
 
+- Verify the declared phase artifacts—`workflow_eval_suite`, `workflow_eval_suite_summary`, `workflow_eval_next_action`—against the phase requirements and require their claims to be internally consistent.
 - Base the verdict on the package artifacts, upstream design artifacts, and selected-workflow capability snapshot instead of implied workflow behavior.
 - Confirm that the suite package is publication-safe, machine-readable, and still leaves manifest validation and receipt publication to the next deterministic step.
 

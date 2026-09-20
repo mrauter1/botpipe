@@ -16,28 +16,10 @@ After writing every declared artifact, return a JSON result matching the injecte
 - This work item owns terminal packaging only.
 - Keep the boundary at packaging the suite for later evaluation execution. Do not execute the selected workflow and do not write the validated manifest or receipt in this step.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `selected_workflow_capability` | Read | Required input. |
-| `eval_suite_checklist` | Read | Required input. |
-| `evaluation_request_brief` | Read | Required input. |
-| `evaluation_dimensions` | Read | Required input. |
-| `benchmark_case_matrix` | Read | Required input. |
-| `edge_case_matrix` | Read | Required input. |
-| `adversarial_case_matrix` | Read | Required input. |
-| `eval_case_manifest` | Read | Required input. |
-| `eval_rubric` | Read | Required input. |
-| `workflow_eval_suite` | Write | Overwrite. |
-| `workflow_eval_suite_summary` | Write | Overwrite. |
-| `workflow_eval_next_action` | Write | Overwrite. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not modify the framing, case-design, or rubric artifacts in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -73,7 +55,7 @@ After writing every declared artifact, return a JSON result matching the injecte
 
 ## Evidence
 
-- Keep the selected workflow name and entry step aligned with `selected_workflow_capability`.
+- Keep the selected workflow name and entry step aligned with `selected_workflow_contract`.
 - Keep `case_count`, `case_ids`, `case_kinds`, and `covered_expected_artifacts` aligned with the designed manifest.
 - Make the next action concrete enough that another operator could continue without re-deriving the suite.
 

@@ -16,36 +16,24 @@ After writing every declared artifact, return a JSON result matching the injecte
 - This work item owns incident framing only.
 - Keep the work-item boundary at the incident brief, response objectives, and evidence intake register. Do not assemble the evidence pack or hardening program yet.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `framework_architecture_doc` | Read | Required input. |
-| `framework_authoring_doc` | Read | Required input. |
-| `workflow_authoring_guidelines` | Read | Required input. |
-| `incident_scope_brief` | Write | Overwrite. |
-| `response_objectives` | Write | Overwrite. |
-| `evidence_intake_register` | Write | Overwrite. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request.
-- Do not create evidence, analysis, or final-package artifacts in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
 ### Artifact handling
 - `incident_scope_brief` must define the incident trigger, current known timeline, affected system, severity, sponsor concern, explicit out-of-scope areas, and the decision boundary for this workflow run.
 - `response_objectives` must define the concrete response goals, operator needs, communication needs, and what a useful terminal hardening package must include.
-- `evidence_intake_register` must list the evidence sources you expect to inspect, include any `evidence_paths` hints from the invocation contract, and name missing or weak evidence sources explicitly.
+- `evidence_intake_register` must list the evidence sources you expect to inspect, include any `evidence_paths` hints from the runtime input, and name missing or weak evidence sources explicitly.
 
 ### Expected outcome
 - Leave the workflow with an authoritative framing package that downstream evidence and analysis work can use without guessing the incident boundary or response goals.
 
 ## Evidence
 
-- Use the current repository layout and current framework docs; do not rely on retired pre-greenfield source-tree paths.
+- Use the current repository layout and runtime input; do not rely on retired source-tree paths.
 - Make missing evidence explicit instead of inventing it.
 - Keep framing concrete enough that another operator could gather evidence from the brief and objectives alone.
 

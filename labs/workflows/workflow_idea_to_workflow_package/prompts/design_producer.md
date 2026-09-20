@@ -16,36 +16,15 @@ After writing every declared artifact, return a JSON result matching the injecte
 - This work item owns workflow design only.
 - Keep the work-item boundary at design artifacts. Do not author repository workflow files yet.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `candidate_comparison` | Read | Required input. |
-| `selected_workflow_brief` | Read | Required input. |
-| `framework_architecture_doc` | Read | Required input. |
-| `framework_authoring_doc` | Read | Required input. |
-| `workflow_authoring_guidelines` | Read | Required input. |
-| `core_steps_module` | Read | Required input. |
-| `core_validation_module` | Read | Required input. |
-| `core_compiler_module` | Read | Required input. |
-| `core_engine_module` | Read | Required input. |
-| `runtime_cli_module` | Read | Required input. |
-| `builder_checklist` | Read | Required input. |
-| `workflow_package_spec` | Write | Overwrite. |
-| `step_contracts` | Write | Overwrite. |
-| `prompt_contract_matrix` | Write | Overwrite. |
-| `verification_plan` | Write | Overwrite. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not create workflow code, docs, or tests in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
 ### Artifact handling
-- `workflow_package_spec` must define:
+- `workflow_design` must define:
 - objective,
 - selected authoring shape (`single`, `flow_specs`, or `package`),
 - deterministic workflow responsibilities,
@@ -59,9 +38,9 @@ After writing every declared artifact, return a JSON result matching the injecte
 - verification and evidence contract,
 - rework / replan / block / fail policy,
 - recursive self-improvement policy.
-- `step_contracts` must be machine-readable and list each step’s legal application routes plus required evidence.
-- `prompt_contract_matrix` must name only the prompt files the generated workflow should contain and what each one must do.
-- `verification_plan` must name the validation commands, compile checks, and evidence artifacts required before promotion.
+- `workflow_contract` must be machine-readable and list each step’s legal application routes plus required evidence.
+- `workflow_contract` must name only the prompt files the generated workflow should contain and what each one must do.
+- `workflow_design` must name the validation commands, compile checks, and evidence artifacts required before promotion.
 
 ### Expected outcome
 - Produce a design package that is specific enough for the build step to create files directly without inventing hidden runtime behavior.
@@ -69,7 +48,7 @@ After writing every declared artifact, return a JSON result matching the injecte
 ## Evidence
 
 - Keep the runtime/provider boundary crisp: the runtime injects the compact human-readable step contract, while prompt templates own the operational guidance and raw provider output never re-enters prompts.
-- Reuse the existing scaffold contract from `runtime_cli_module`; do not invent a hidden generator layer.
+- Follow current repository workflow patterns; do not invent a hidden generator layer.
 - Make rework vs replan rules explicit and tied to role, artifact, and acceptance boundaries.
 
 ## Phase decision criteria

@@ -16,24 +16,10 @@ After writing every declared artifact, return a JSON result matching the injecte
 - This work item owns incident analysis only.
 - Keep the work-item boundary at ranked hypotheses, mitigation guidance, validation logic, and the machine-readable summary. Do not assemble the final hardening package yet.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `incident_scope_brief` | Read | Required input. |
-| `response_objectives` | Read | Required input. |
-| `incident_timeline` | Read | Required input. |
-| `affected_surface` | Read | Required input. |
-| `blast_radius` | Read | Required input. |
-| `observability_gaps` | Read | Required input. |
-| `evidence_gap_register` | Read | Required input. |
-| `cause_hypothesis_ranking` | Write | Overwrite. |
-| `immediate_mitigation_plan` | Write | Overwrite. |
-| `validation_plan` | Write | Overwrite. |
-| `incident_summary` | Write | Overwrite. |
-
-### Artifact Notes
-- Do not write the final hardening package or receipt in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 

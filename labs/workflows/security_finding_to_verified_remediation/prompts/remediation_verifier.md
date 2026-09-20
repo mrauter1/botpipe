@@ -12,22 +12,10 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 ### Purpose
 - Judge whether the workflow now has a credible selected remediation, verification plan, rollout plan, and rollback-safety plan.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `invocation_contract` | Read | Required input. |
-| `security_evidence_pack_summary` | Read | Required input. |
-| `exploit_summary` | Read | Required input. |
-| `affected_surface` | Read | Required input. |
-| `root_cause_analysis` | Read | Required input. |
-| `remediation_options` | Read | Required input. |
-| `assessment_summary` | Read | Required input. |
-| `selected_remediation_plan` | Read | Required input. |
-| `verification_plan` | Read | Required input. |
-| `rollout_plan` | Read | Required input. |
-| `rollback_safety_plan` | Read | Required input. |
-| `remediation_summary` | Read | Required input. |
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -46,8 +34,9 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 
 ## Evidence
 
+- Verify the declared phase artifacts—`remediation_plan`, `verification_evidence`, `residual_risk`—against the phase requirements and require their claims to be internally consistent.
 - Verify that the chosen remediation is justified against the compared options and the assessed exploit boundary.
-- Treat drift between `remediation_summary` and the durable plan artifacts as a real defect.
+- Treat drift between `residual_risk` and the durable plan artifacts as a real defect.
 - Check declared deployment constraints and rollback safety as first-class proof obligations.
 
 ## Phase decision criteria
@@ -56,7 +45,7 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 - Treat question, blocked, and failure guidance as semantic validation criteria.
 
 ### Outcome selection rules
-- Choose `remediation_planned` only if the chosen remediation is justified against the options, verification is explicit, rollout constraints are handled concretely, and rollback safety is not hand-waved.
+- Choose `remediation_planned` only if `remediation_plan` justifies the choice and covers implementation, rollout, and rollback, `verification_evidence` defines concrete proof, and `residual_risk` reports a consistent selected remediation and readiness posture.
 - Choose `needs_rework` when the same remediation-planning boundary still holds and the artifacts can be repaired locally.
 - Choose `needs_replan` when the assessment conclusion or fix strategy changed materially enough that the security finding must be reassessed.
 - Use `question` only for genuine missing prerequisites or irrecoverable contradictions.

@@ -12,25 +12,17 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 ### Purpose
 - Decide whether the selected workflow, current task, and adaptation acceptance surface are explicit enough to support bounded fit analysis.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `selected_workflow_capability` | Read | Required input. |
-| `adaptation_request_brief` | Read | Required input. |
-| `adaptation_success_criteria` | Read | Required input. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
 ### Artifact checks
 - `adaptation_request_brief` must name the canonical selected workflow, the task trigger, sponsor, terminal outcome, and why adaptation planning is the current work item.
 - `adaptation_success_criteria` must define what stays fixed, what may be parameterized, which downstream artifacts matter, and when `needs_replan` is required instead of local repair.
-- The framing must stay consistent with `selected_workflow_capability`; do not accept a renamed or implicitly swapped workflow.
+- The framing must stay consistent with `selected_workflow_contract`; do not accept a renamed or implicitly swapped workflow.
 
 ### Payload requirements
 - `summary`: concise validation summary.
@@ -38,6 +30,10 @@ Return a JSON result matching the injected schema. Use `accepted` when the artif
 - `selected_workflow_name`: the canonical workflow name from the selected-workflow capability snapshot.
 - `decision_axes`: the major framing axes that now govern fit analysis.
 - `replan_reason`: required only when the route is `needs_replan`.
+
+## Evidence
+
+- Verify the declared phase artifacts—`adaptation_request_brief`, `adaptation_success_criteria`—against the phase requirements and require their claims to be internally consistent.
 
 ## Phase decision criteria
 
