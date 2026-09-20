@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -1540,6 +1541,7 @@ def test_codex_transport_wraps_stdout_read_failures_as_retryable_transport_error
     assert seen_inputs == [b"prompt"]
 
 
+@pytest.mark.skipif(os.name != "posix", reason="SIGTERM marker is POSIX-specific")
 def test_owned_async_provider_process_terminates_descendant_tree(tmp_path: Path) -> None:
     marker = tmp_path / "descendant-terminated"
     child_code = """

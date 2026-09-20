@@ -3,7 +3,7 @@
 This candidate-only workflow captures bounded run evidence and the selected workflow's exact baseline surface, runs one producer turn plus one independent verifier turn, and deterministically publishes recommendations. It never executes, refines, evaluates, or promotes the selected workflow. If no objective-eligible evidence exists it makes zero provider calls and publishes a `collect_evidence` or `no_change` result.
 
 ```bash
-botpipe run labs/workflows/workflow_run_traces_to_optimization_candidates review-1 \
+botpipe run labs/workflows/workflow_run_traces_to_optimization_candidates "Diagnose devloop" --task review-1 \
   -wf selected_workflow devloop -wf task_title "Diagnose devloop" \
   -wf objective reliability
 ```
