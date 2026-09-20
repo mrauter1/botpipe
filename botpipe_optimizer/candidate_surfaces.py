@@ -23,41 +23,150 @@ from botpipe.stdlib.validation import (
     require_string_list,
 )
 
-def derive_surface_manifest(root:Path,*,expected_root:Path,boundary:Mapping[str,Any],surface_kind:str,authoritative_sources:Mapping[str,Path]|None=None)->dict[str,Any]:
-    """Derive one canonical manifest bound to a runtime-provided root."""
-    derived=_derive_core_surface_manifest(root,expected_root=expected_root,boundary=boundary,surface_kind=surface_kind)
-    files=[dict(x) for x in derived["files"]];by_path={x["relative_path"]:x for x in files}
-    for relative,source_value in (authoritative_sources or {}).items():
-        safe=_require_repo_relative_path(relative,"authoritative source paths must stay relative");raw=Path(source_value)
-        if _has_symlink_component(raw):raise ValueError(f"authoritative source must not be a symlink: {safe}")
-        source=raw.resolve(strict=True)
-        if safe not in by_path or not source.is_file():raise ValueError(f"invalid authoritative source: {safe}")
-        by_path[safe].update(source_path=str(source),authoritative_source_sha256=_sha256_file(source),authoritative_source_executable=_is_executable(source))
-    derived["files"]=files;return derived
 
-def validate_surface_manifest(manifest:Mapping[str,Any],*,expected_root:Path,expected_boundary:Mapping[str,Any],expected_surface_kind:str,baseline_manifest:Mapping[str,Any]|None=None,allowed_added_path_prefixes:Sequence[str]=(),allowed_added_exact_paths:Sequence[str]=())->dict[str,Any]:
-    """Recompute all factual fields and reject submitted drift or forgery."""
-    raw=Path(_require_text(manifest.get("root",manifest.get("surface_root")),"manifest root required"))
-    if raw.is_symlink() or raw.resolve(strict=True)!=Path(expected_root).resolve(strict=True):raise ValueError("manifest root must match runtime expected root")
-    identity_boundary = {key: value for key, value in expected_boundary.items() if key != "surface_kind"}
-    derived=derive_surface_manifest(raw,expected_root=expected_root,boundary=identity_boundary,surface_kind=expected_surface_kind)
-    for field in ("schema","surface_kind","root","surface_root","boundary","mode_semantics","surface_id","relative_paths","file_count","size_bytes"):
-        if manifest.get(field)!=derived[field]:raise ValueError(f"manifest {field} must match derived surface")
-    submitted=manifest.get("files")
-    if not isinstance(submitted,list) or len(submitted)!=len(derived["files"]):raise ValueError("manifest files must match derived surface")
-    factual=("relative_path","surface_path","surface_sha256","size_bytes","executable")
-    for left,right in zip(submitted,derived["files"],strict=True):
-        if not isinstance(left,Mapping) or any(left.get(x)!=right[x] for x in factual):raise ValueError("manifest files must match derived surface")
-    if baseline_manifest is not None:
-        baseline=set(_require_string_list(baseline_manifest.get("relative_paths"),"baseline relative_paths required"));candidate=set(derived["relative_paths"]);missing=baseline-candidate
-        if missing:raise ValueError("candidate must preserve every baseline path")
-        prefixes=tuple(_require_repo_relative_path(x,"allowed prefixes must stay relative") for x in allowed_added_path_prefixes);exact={_require_repo_relative_path(x,"allowed paths must stay relative") for x in allowed_added_exact_paths}
-        for path in candidate-baseline:
-            if path not in exact and not any(path.startswith(x+"/") for x in prefixes):raise ValueError(f"candidate added path outside boundary: {path}")
+def derive_surface_manifest(
+    root: Path,
+    *,
+    expected_root: Path,
+    boundary: Mapping[str, Any],
+    surface_kind: str,
+    authoritative_sources: Mapping[str, Path] | None = None,
+    relative_paths: Sequence[str] | None = None,
+) -> dict[str, Any]:
+    """Derive one canonical manifest bound to a runtime-provided root."""
+    derived = _derive_core_surface_manifest(
+        root,
+        expected_root=expected_root,
+        boundary=boundary,
+        surface_kind=surface_kind,
+        relative_paths=relative_paths,
+    )
+    files = [dict(x) for x in derived["files"]]
+    by_path = {x["relative_path"]: x for x in files}
+    for relative, source_value in (authoritative_sources or {}).items():
+        safe = _require_repo_relative_path(
+            relative, "authoritative source paths must stay relative"
+        )
+        raw = Path(source_value)
+        if _has_symlink_component(raw):
+            raise ValueError(f"authoritative source must not be a symlink: {safe}")
+        source = raw.resolve(strict=True)
+        if safe not in by_path or not source.is_file():
+            raise ValueError(f"invalid authoritative source: {safe}")
+        by_path[safe].update(
+            source_path=str(source),
+            authoritative_source_sha256=_sha256_file(source),
+            authoritative_source_executable=_is_executable(source),
+        )
+    derived["files"] = files
     return derived
 
-def verify_surface_anchor(manifest:Mapping[str,Any],*,expected_root:Path,expected_boundary:Mapping[str,Any],expected_surface_kind:str)->str:
-    return str(validate_surface_manifest(manifest,expected_root=expected_root,expected_boundary=expected_boundary,expected_surface_kind=expected_surface_kind)["surface_id"])
+
+def validate_surface_manifest(
+    manifest: Mapping[str, Any],
+    *,
+    expected_root: Path,
+    expected_boundary: Mapping[str, Any],
+    expected_surface_kind: str,
+    baseline_manifest: Mapping[str, Any] | None = None,
+    allowed_added_path_prefixes: Sequence[str] = (),
+    allowed_added_exact_paths: Sequence[str] = (),
+) -> dict[str, Any]:
+    """Recompute all factual fields and reject submitted drift or forgery."""
+    raw = Path(
+        _require_text(
+            manifest.get("root", manifest.get("surface_root")), "manifest root required"
+        )
+    )
+    if raw.is_symlink() or raw.resolve(strict=True) != Path(expected_root).resolve(
+        strict=True
+    ):
+        raise ValueError("manifest root must match runtime expected root")
+    identity_boundary = {
+        key: value for key, value in expected_boundary.items() if key != "surface_kind"
+    }
+    derived = derive_surface_manifest(
+        raw,
+        expected_root=expected_root,
+        boundary=identity_boundary,
+        surface_kind=expected_surface_kind,
+        relative_paths=(
+            manifest.get("relative_paths")
+            if expected_surface_kind == "workflow"
+            else None
+        ),
+    )
+    for field in (
+        "schema",
+        "surface_kind",
+        "root",
+        "surface_root",
+        "boundary",
+        "mode_semantics",
+        "surface_id",
+        "relative_paths",
+        "file_count",
+        "size_bytes",
+    ):
+        if manifest.get(field) != derived[field]:
+            raise ValueError(f"manifest {field} must match derived surface")
+    submitted = manifest.get("files")
+    if not isinstance(submitted, list) or len(submitted) != len(derived["files"]):
+        raise ValueError("manifest files must match derived surface")
+    factual = (
+        "relative_path",
+        "surface_path",
+        "surface_sha256",
+        "size_bytes",
+        "executable",
+    )
+    for left, right in zip(submitted, derived["files"], strict=True):
+        if not isinstance(left, Mapping) or any(
+            left.get(x) != right[x] for x in factual
+        ):
+            raise ValueError("manifest files must match derived surface")
+    if baseline_manifest is not None:
+        baseline = set(
+            _require_string_list(
+                baseline_manifest.get("relative_paths"),
+                "baseline relative_paths required",
+            )
+        )
+        candidate = set(derived["relative_paths"])
+        missing = baseline - candidate
+        if missing:
+            raise ValueError("candidate must preserve every baseline path")
+        prefixes = tuple(
+            _require_repo_relative_path(x, "allowed prefixes must stay relative")
+            for x in allowed_added_path_prefixes
+        )
+        exact = {
+            _require_repo_relative_path(x, "allowed paths must stay relative")
+            for x in allowed_added_exact_paths
+        }
+        for path in candidate - baseline:
+            if path not in exact and not any(
+                path.startswith(x + "/") for x in prefixes
+            ):
+                raise ValueError(f"candidate added path outside boundary: {path}")
+    return derived
+
+
+def verify_surface_anchor(
+    manifest: Mapping[str, Any],
+    *,
+    expected_root: Path,
+    expected_boundary: Mapping[str, Any],
+    expected_surface_kind: str,
+) -> str:
+    return str(
+        validate_surface_manifest(
+            manifest,
+            expected_root=expected_root,
+            expected_boundary=expected_boundary,
+            expected_surface_kind=expected_surface_kind,
+        )["surface_id"]
+    )
 
 
 def normalize_candidate_surface_boundary(
@@ -380,6 +489,7 @@ def validate_candidate_surface_manifest(
     manifest_label: str,
     expected_surface_kind: str,
     expected_boundary: Mapping[str, Any],
+    expected_surface_root: Path,
     boundary_field_map: Mapping[str, str] | None = None,
     optional_boundary_fields: Sequence[str] = (),
     baseline_manifest: Mapping[str, Any],
@@ -430,15 +540,16 @@ def validate_candidate_surface_manifest(
             f"{manifest_label} must define non-empty surface_root",
         )
     )
+    if candidate_root.resolve(strict=True) != Path(expected_surface_root).resolve(strict=True):
+        raise ValueError(f"{manifest_label} surface_root must match the runtime expected root")
     candidate_relative_paths = _require_string_list(
         candidate_manifest.get("relative_paths"),
         f"{manifest_label} must define non-empty relative_paths",
     )
-    if require_surface_listing_matches_disk:
-        actual_relative_paths = _surface_relative_paths(candidate_root)
-        if candidate_relative_paths != actual_relative_paths:
-            raise ValueError(f"{manifest_label} relative_paths must match {candidate_root.name}")
-    if require_file_count_matches_relative_paths and _require_positive_int(
+    actual_relative_paths = _surface_relative_paths(candidate_root)
+    if candidate_relative_paths != actual_relative_paths:
+        raise ValueError(f"{manifest_label} relative_paths must match {candidate_root.name}")
+    if _require_positive_int(
         candidate_manifest.get("file_count"),
         f"{manifest_label} must define positive integer file_count",
     ) != len(candidate_relative_paths):
@@ -475,6 +586,12 @@ def validate_candidate_surface_manifest(
     )
     if sorted(file_entries) != candidate_relative_paths:
         raise ValueError(f"{manifest_label} files must match relative_paths")
+    baseline_files = _manifest_file_map(
+        baseline_manifest,
+        f"{baseline_manifest_label} must define files as a JSON array of objects with relative_path",
+    )
+    derived_changed: list[str] = []
+    derived_added: list[str] = []
     for relative_path, entry in file_entries.items():
         surface_path = Path(
             _require_text(
@@ -492,6 +609,20 @@ def validate_candidate_surface_manifest(
         )
         if _sha256_file(surface_path) != expected_digest:
             raise ValueError(f"{manifest_label} surface_sha256 must match {candidate_root.name}")
+        if entry.get("size_bytes") != surface_path.stat().st_size:
+            raise ValueError(f"{manifest_label} size_bytes must match {candidate_root.name}")
+        baseline_entry = baseline_files.get(relative_path)
+        changed = baseline_entry is None or baseline_entry.get("surface_sha256") != expected_digest
+        if entry.get("changed_from_baseline") is not changed:
+            raise ValueError(f"{manifest_label} changed_from_baseline must match the derived diff")
+        if changed:
+            derived_changed.append(relative_path)
+        if baseline_entry is None:
+            derived_added.append(relative_path)
+    if candidate_manifest.get("changed_relative_paths") != derived_changed:
+        raise ValueError(f"{manifest_label} changed_relative_paths must match the derived diff")
+    if candidate_manifest.get("added_relative_paths") != derived_added:
+        raise ValueError(f"{manifest_label} added_relative_paths must match the derived diff")
 
     return {
         "surface_root": candidate_root,
@@ -563,32 +694,74 @@ def validate_candidate_surface_overlay(
     """Strict compatibility wrapper over frozen-tree subprocess validation."""
     from .candidate_validation import validate_frozen_candidate
     from .execution_trees import capture_execution_tree, cleanup_owned_directory
-    if expected_candidate_root is None:raise ValueError("expected_candidate_root is required")
-    if expected_baseline_root is None:raise ValueError("expected_baseline_root is required")
-    if expected_boundary is None:raise ValueError("expected_boundary is required")
+
+    if expected_candidate_root is None:
+        raise ValueError("expected_candidate_root is required")
+    if expected_baseline_root is None:
+        raise ValueError("expected_baseline_root is required")
+    if expected_boundary is None:
+        raise ValueError("expected_boundary is required")
     if baseline_surface_kind is None or candidate_surface_kind is None:
-        raise ValueError("baseline_surface_kind and candidate_surface_kind are required")
-    if baseline_manifest is None:raise ValueError("baseline_manifest is required")
+        raise ValueError(
+            "baseline_surface_kind and candidate_surface_kind are required"
+        )
+    if baseline_manifest is None:
+        raise ValueError("baseline_manifest is required")
     workflow_name_list = _require_string_list(
         workflow_names,
         "workflow_names must define at least one workflow name",
         allow_scalar=True,
     )
-    temporary=None;snapshot=execution_snapshot
+    temporary = None
+    snapshot = execution_snapshot
     try:
-        if staging_parent is None:temporary=tempfile.TemporaryDirectory(prefix=overlay_temp_prefix);staging_parent=Path(temporary.name)
+        if staging_parent is None:
+            temporary = tempfile.TemporaryDirectory(prefix=overlay_temp_prefix)
+            staging_parent = Path(temporary.name)
         if snapshot is None:
-            selected=None
-            if not (Path(repo_root)/"botpipe"/"__init__.py").is_file():
+            selected = None
+            if not (Path(repo_root) / "botpipe" / "__init__.py").is_file():
                 import botpipe
-                selected=Path(botpipe.__file__).resolve().parent
-            snapshot=capture_execution_tree(repo_root,staging_parent,selected_package_root=selected,selected_package_import_path="botpipe" if selected else None)
-        result=validate_frozen_candidate(snapshot,baseline_surface_manifest=baseline_manifest,candidate_surface_manifest=candidate_manifest,expected_baseline_root=expected_baseline_root,expected_candidate_root=expected_candidate_root,expected_boundary=expected_boundary,baseline_surface_kind=baseline_surface_kind,candidate_surface_kind=candidate_surface_kind,workflow_refs=workflow_name_list,staging_parent=staging_parent,target_test_argv=target_test_argv,target_test_command=target_test_command,compile_timeout_seconds=compile_timeout_seconds,test_timeout_seconds=test_timeout_seconds)
-        if not result.success:raise ValueError(f"{overlay_failure_prefix}: {'; '.join(result.errors)}")
+
+                selected = Path(botpipe.__file__).resolve().parent
+            snapshot = capture_execution_tree(
+                repo_root,
+                staging_parent,
+                selected_package_root=selected,
+                selected_package_import_path="botpipe" if selected else None,
+            )
+        result = validate_frozen_candidate(
+            snapshot,
+            baseline_surface_manifest=baseline_manifest,
+            candidate_surface_manifest=candidate_manifest,
+            expected_baseline_root=expected_baseline_root,
+            expected_candidate_root=expected_candidate_root,
+            expected_boundary=expected_boundary,
+            baseline_surface_kind=baseline_surface_kind,
+            candidate_surface_kind=candidate_surface_kind,
+            workflow_refs=workflow_name_list,
+            staging_parent=staging_parent,
+            target_test_argv=target_test_argv,
+            target_test_command=target_test_command,
+            compile_timeout_seconds=compile_timeout_seconds,
+            test_timeout_seconds=test_timeout_seconds,
+        )
+        if not result.success:
+            raise ValueError(f"{overlay_failure_prefix}: {'; '.join(result.errors)}")
         return result.model_dump(mode="json", by_alias=True)
     finally:
-        if execution_snapshot is None and snapshot is not None and snapshot.root.exists():cleanup_owned_directory(snapshot.root,owned_parent=snapshot.owned_parent,ownership_token=snapshot.ownership_token)
-        if temporary is not None:temporary.cleanup()
+        if (
+            execution_snapshot is None
+            and snapshot is not None
+            and snapshot.root.exists()
+        ):
+            cleanup_owned_directory(
+                snapshot.root,
+                owned_parent=snapshot.owned_parent,
+                ownership_token=snapshot.ownership_token,
+            )
+        if temporary is not None:
+            temporary.cleanup()
 
 
 def normalize_candidate_surface_overlay_result(
@@ -605,7 +778,9 @@ def normalize_candidate_surface_overlay_result(
     )
     test_returncode = overlay_validation.get("test_returncode")
     if not isinstance(test_returncode, int) or test_returncode < 0:
-        raise ValueError(f"{overlay_result_label} must define non-negative integer test_returncode")
+        raise ValueError(
+            f"{overlay_result_label} must define non-negative integer test_returncode"
+        )
 
     normalized = {
         "test_command": _require_text(
@@ -616,7 +791,9 @@ def normalize_candidate_surface_overlay_result(
     }
     if expect_single_compiled_workflow:
         if len(compiled_workflow_names) != 1:
-            raise ValueError(f"{overlay_result_label} must compile exactly one selected workflow")
+            raise ValueError(
+                f"{overlay_result_label} must compile exactly one selected workflow"
+            )
         normalized["compiled_workflow_name"] = compiled_workflow_names[0]
         return normalized
 
@@ -710,6 +887,8 @@ def _manifest_file_map(manifest: Mapping[str, Any], error_message: str) -> dict[
             mapping.get("relative_path"),
             f"{error_message}; offending index {index}",
         )
+        if relative_path in result:
+            raise ValueError(f"duplicate manifest relative_path: {relative_path}")
         result[relative_path] = dict(mapping)
     return result
 
@@ -744,14 +923,26 @@ def _surface_relative_paths(root: Path) -> list[str]:
         raise FileNotFoundError(f"candidate surface is missing: {root}")
     return sorted(path.relative_to(root).as_posix() for path in root.rglob("*") if path.is_file())
 
-def _is_executable(path:Path)->bool:return bool(path.stat(follow_symlinks=False).st_mode&0o111) if os.name=="posix" else False
-def _has_symlink_component(path:Path,*,stop:Path|None=None)->bool:
-    current=path.absolute();boundary=None if stop is None else stop.absolute()
+
+def _is_executable(path: Path) -> bool:
+    return (
+        bool(path.stat(follow_symlinks=False).st_mode & 0o111)
+        if os.name == "posix"
+        else False
+    )
+
+
+def _has_symlink_component(path: Path, *, stop: Path | None = None) -> bool:
+    current = path.absolute()
+    boundary = None if stop is None else stop.absolute()
     while True:
-        if current.is_symlink():return True
-        if boundary is not None and current==boundary:return False
-        if current.parent==current:return False
-        current=current.parent
+        if current.is_symlink():
+            return True
+        if boundary is not None and current == boundary:
+            return False
+        if current.parent == current:
+            return False
+        current = current.parent
 
 
 def _require_repo_relative_path(value: Any, error_message: str) -> str:

@@ -336,6 +336,7 @@ def test_candidate_surface_helpers_validate_candidate_manifest_checks_boundary_a
         manifest_label="candidate_workflow_manifest.json",
         expected_surface_kind="candidate",
         expected_boundary=expected_boundary,
+        expected_surface_root=candidate_root,
         boundary_field_map={
             "package_name": "package_name",
             "package_root_relative_path": "package_root_relative_path",
@@ -353,6 +354,47 @@ def test_candidate_surface_helpers_validate_candidate_manifest_checks_boundary_a
 
     assert validated["baseline_relative_paths"] == expected_relative_paths
     assert "workflows/demo_workflow/prompts/extra.md" in validated["relative_paths"]
+
+    forged_changes = dict(base_candidate_manifest)
+    forged_changes["changed_relative_paths"] = []
+    with pytest.raises(ValueError, match="changed_relative_paths"):
+        validate_candidate_surface_manifest(
+            forged_changes,
+            repo_root=tmp_path,
+            manifest_label="candidate_workflow_manifest.json",
+            expected_surface_kind="candidate",
+            expected_boundary=expected_boundary,
+            expected_surface_root=candidate_root,
+            boundary_field_map={
+                "package_name": "package_name",
+                "package_root_relative_path": "package_root_relative_path",
+                "doc_relative_path": "doc_relative_path",
+                "runtime_test_relative_path": "runtime_test_relative_path",
+            },
+            optional_boundary_fields=("doc_relative_path", "runtime_test_relative_path"),
+            baseline_manifest=baseline_manifest,
+            baseline_manifest_label="baseline_workflow_manifest.json",
+            allowed_added_path_prefixes=[boundary["package_root_relative_path"]],
+            allowed_added_exact_paths=[boundary["doc_relative_path"], boundary["runtime_test_relative_path"]],
+        )
+
+    forged_flags = dict(base_candidate_manifest)
+    forged_flags["files"] = [dict(entry) for entry in base_candidate_manifest["files"]]
+    forged_flags["files"][0]["changed_from_baseline"] = not forged_flags["files"][0]["changed_from_baseline"]
+    with pytest.raises(ValueError, match="changed_from_baseline"):
+        validate_candidate_surface_manifest(
+            forged_flags,
+            repo_root=tmp_path,
+            manifest_label="candidate_workflow_manifest.json",
+            expected_surface_kind="candidate",
+            expected_boundary=expected_boundary,
+            expected_surface_root=candidate_root,
+            boundary_field_map={"package_name": "package_name", "package_root_relative_path": "package_root_relative_path"},
+            baseline_manifest=baseline_manifest,
+            baseline_manifest_label="baseline_workflow_manifest.json",
+            allowed_added_path_prefixes=[boundary["package_root_relative_path"]],
+            allowed_added_exact_paths=[boundary["doc_relative_path"], boundary["runtime_test_relative_path"]],
+        )
 
     outside_path = candidate_root / "README.md"
     outside_path.write_text("outside boundary\n", encoding="utf-8")
@@ -381,6 +423,7 @@ def test_candidate_surface_helpers_validate_candidate_manifest_checks_boundary_a
             manifest_label="candidate_workflow_manifest.json",
             expected_surface_kind="candidate",
             expected_boundary=expected_boundary,
+            expected_surface_root=candidate_root,
             boundary_field_map={
                 "package_name": "package_name",
                 "package_root_relative_path": "package_root_relative_path",
@@ -426,6 +469,7 @@ def test_candidate_surface_helpers_validate_candidate_manifest_checks_boundary_a
             manifest_label="candidate_workflow_manifest.json",
             expected_surface_kind="candidate",
             expected_boundary=expected_boundary,
+            expected_surface_root=candidate_root,
             boundary_field_map={
                 "package_name": "package_name",
                 "package_root_relative_path": "package_root_relative_path",

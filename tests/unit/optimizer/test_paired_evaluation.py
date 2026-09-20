@@ -126,6 +126,20 @@ def _runner_factory(
             cases[-1] = dict(cases[0])
         if malformed == "nan":
             cases[0]["metrics"]["quality"] = float("nan")
+        if malformed == "unknown_case":
+            cases[0]["case_id"] = "unplanned-case"
+        if malformed == "missing_case":
+            cases.pop()
+        if malformed == "missing_metric":
+            cases[0]["metrics"].pop("quality")
+        if malformed == "declared_failure" and is_candidate:
+            for case in cases:
+                case["outcome"] = "failed"
+                case["metrics"]["quality"] = 0.0
+        if malformed == "escaping_evidence":
+            outside = Path(kwargs["cwd"]).parent / "outside.txt"
+            outside.write_text("outside the allowed output directory")
+            cases[0]["evidence_paths"] = [str(outside)]
         payload = {
             "schema": "botpipe.optimizer.eval_result/v1",
             "execution_id": request["execution_id"],
@@ -133,7 +147,15 @@ def _runner_factory(
             "spec_id": request["spec_id"],
             "cases": cases,
         }
-        Path(kwargs["env"]["BOTPIPE_EVAL_RESULT"]).write_text(json.dumps(payload))
+        result_path = Path(kwargs["env"]["BOTPIPE_EVAL_RESULT"])
+        if malformed == "stale_result":
+            payload["execution_id"] = "a-different-execution"
+        if malformed == "different_environment" and is_candidate:
+            payload["environment_id"] = "a-different-environment"
+        if malformed != "missing_result":
+            result_path.write_text(json.dumps(payload))
+        if malformed == "oversized_output":
+            (result_path.parent / "oversized.bin").write_bytes(b"x" * 4097)
         code = 9 if malformed == "crash" else 0
         return SimpleNamespace(
             argv=tuple(argv),
@@ -173,11 +195,29 @@ def test_paired_runner_runs_one_process_per_bound_disjoint_arm(tmp_path: Path) -
     ]
 
 
-@pytest.mark.parametrize("malformed", ["duplicate", "nan", "crash"])
+@pytest.mark.parametrize(
+    "malformed",
+    [
+        "duplicate",
+        "nan",
+        "crash",
+        "unknown_case",
+        "missing_case",
+        "missing_metric",
+        "escaping_evidence",
+        "stale_result",
+        "missing_result",
+        "oversized_output",
+    ],
+)
 def test_protocol_failure_cannot_produce_improvement(
     tmp_path: Path, malformed: str
 ) -> None:
     spec = _spec(tmp_path)
+    if malformed == "oversized_output":
+        payload = json.loads(spec.read_text())
+        payload["max_evaluation_output_bytes"] = 4096
+        spec.write_text(json.dumps(payload))
     baseline, candidate = _arms(tmp_path)
     runner, calls = _runner_factory(candidate_quality=100.0, malformed=malformed)
     result = run_paired_evaluation(
@@ -228,7 +268,6 @@ def test_same_or_unbound_arms_are_rejected(tmp_path: Path) -> None:
             assert_arm_unchanged=_unchanged,
         )
     baseline.surface_id = None
-    _, candidate = _arms(tmp_path / "other") if False else (None, None)
     with pytest.raises(ValueError, match="lacks root/tree/surface identity"):
         run_paired_evaluation(
             evaluation_spec_path=spec,
@@ -276,8 +315,44 @@ def test_comparison_regression_tie_guardrail_and_stochastic_scope(
         comparable=False,
     )
     assert inconclusive["state"] == "inconclusive"
-    # This spec has two repetitions; single-repetition warnings are tested by the model contract itself.
     assert inconclusive["claim_scope"] == "development_cases"
+
+
+def test_single_stochastic_repetition_discloses_its_limit(tmp_path: Path) -> None:
+    payload = json.loads(_spec(tmp_path, stochastic=True).read_text())
+    payload["repetitions"] = 1
+    result = compare_evaluation_aggregates(
+        payload, {"quality": 1.0, "latency": 4.0}, {"quality": 2.0, "latency": 4.0}
+    )
+    assert result["state"] == "improved"
+    assert any(
+        "one stochastic repetition" in limitation
+        for limitation in result["limitations"]
+    )
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected"),
+    [("declared_failure", "regressed"), ("different_environment", "inconclusive")],
+)
+def test_complete_failed_cases_and_noncomparable_environments_remain_distinct(
+    tmp_path: Path, mode: str, expected: str
+) -> None:
+    spec = _spec(tmp_path)
+    baseline, candidate = _arms(tmp_path)
+    runner, calls = _runner_factory(malformed=mode)
+    result = run_paired_evaluation(
+        evaluation_spec_path=spec,
+        baseline_arm=baseline,
+        candidate_arm=candidate,
+        output_root=tmp_path / "out",
+        process_runner=runner,
+        snapshot_arm=_snapshot,
+        assert_arm_unchanged=_unchanged,
+    )
+    assert len(calls) == 2
+    assert all(arm["execution_state"] == "complete" for arm in result["arms"].values())
+    assert result["comparison"]["state"] == expected
 
 
 def test_refinement_accepts_exactly_one_legacy_or_optimizer_input_path() -> None:
