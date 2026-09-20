@@ -209,6 +209,13 @@ def inspect_workflow_reference(root: str | Path, reference: str | type[Any]) -> 
 
     root_path = Path(root).resolve()
     resolved = _resolve_reference(root_path, reference)
+    return inspect_resolved_workflow(root_path, resolved)
+
+
+def inspect_resolved_workflow(root: str | Path, resolved) -> WorkflowCapabilityEntry:
+    """Compile and inspect an already resolved workflow without resolving it again."""
+
+    root_path = Path(root).resolve()
     catalog_entry = _catalog_entry_for_reference(root_path, resolved.reference)
     compiled = compile_workflow(resolved.workflow_cls)
     return _capability_entry_from_resolved(resolved, compiled, catalog_entry)
@@ -1764,6 +1771,7 @@ __all__ = [
     "annotation_display_name",
     "inspect_workflow_capabilities",
     "inspect_workflow_reference",
+    "inspect_resolved_workflow",
     "json_safe_parameter_mapping",
     "json_safe_parameter_value",
     "load_workflow_package_contract",

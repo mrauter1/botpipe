@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -18,8 +20,17 @@ def write_workflow_json(ctx, relative_path: str | Path, payload: Mapping[str, An
     """Write one JSON artifact under ``ctx.workflow_folder`` and return its path."""
 
     target_path = _workflow_json_path(ctx, relative_path)
+    content = json.dumps(dict(payload), indent=2, sort_keys=True, allow_nan=False) + "\n"
     target_path.parent.mkdir(parents=True, exist_ok=True)
-    target_path.write_text(json.dumps(dict(payload), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    fd, temporary = tempfile.mkstemp(prefix=f".{target_path.name}.", dir=target_path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, target_path)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
     return target_path
 
 
@@ -62,7 +73,11 @@ def _workflow_json_path(ctx, relative_path: str | Path) -> Path:
         raise ValueError("workflow-local JSON paths must stay under ctx.workflow_folder")
     if path.suffix != ".json":
         raise ValueError("workflow-local JSON helper paths must end in .json")
-    return ctx.workflow_folder / path
+    root = ctx.workflow_folder.resolve()
+    target = ctx.workflow_folder / path
+    if not target.resolve().is_relative_to(root):
+        raise ValueError("workflow-local JSON paths must stay under ctx.workflow_folder")
+    return target
 
 
 __all__ = [

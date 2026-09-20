@@ -6,17 +6,15 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from botpipe.runtime.inspection import resolve_workflow_reference
+from botpipe.runtime.inspection import selected_workflow_capability_payload
 from botpipe.runtime.loader import coerce_workflow_parameter_mapping
 
-from .adaptation import write_selected_workflow_capability_snapshot
-from botpipe.stdlib.lifecycle import write_workflow_json
+from ._selected_workflow import inspect_selected_workflow, write_selected_workflow_artifact
+from botpipe.stdlib.lifecycle import _workflow_json_path, write_workflow_json
 from botpipe.stdlib.validation import (
-    read_json_object,
     require_mapping,
     require_non_empty_string,
     require_string_list,
-    validate_selected_workflow_capability_snapshot,
 )
 
 _CASE_KIND_ORDER = {"benchmark": 0, "edge": 1, "adversarial": 2}
@@ -30,28 +28,32 @@ def write_validated_eval_case_manifest(
 ) -> Path:
     """Validate and canonicalize one workflow-local eval-case manifest."""
 
-    repo_root = ctx.root.resolve()
-    resolved = resolve_workflow_reference(repo_root, workflow)
-    snapshot_path = write_selected_workflow_capability_snapshot(ctx, workflow)
-    snapshot = read_json_object(snapshot_path)
-    selected_workflow_name, capability = validate_selected_workflow_capability_snapshot(
-        snapshot,
-        expected_selected_workflow_name=resolved.reference.workflow_name,
-        expected_label="the resolved workflow",
-    )
+    # Validate every input before changing any previously published artifact.
+    _workflow_json_path(ctx, relative_path)
+    _workflow_json_path(ctx, "selected_workflow_capability.json")
+    inspection = inspect_selected_workflow(ctx, workflow)
+    capture = inspection.capture
+    capability = selected_workflow_capability_payload(inspection.capability)
 
     validated_cases = _validate_cases(
         case_manifest,
-        parameters_cls=resolved.parameters_cls,
+        parameters_cls=capture.resolved.parameters_cls,
         known_artifacts=_workflow_artifact_surface(capability),
+    )
+    write_selected_workflow_artifact(
+        ctx,
+        capture=capture,
+        relative_path="selected_workflow_capability.json",
+        artifact_name="selected_workflow_capability",
+        artifact_payload=capability,
     )
     return write_workflow_json(
         ctx,
         relative_path,
         {
-            "repo_root": str(repo_root),
+            "repo_root": str(capture.repo_root),
             "run_id": ctx.run_id,
-            "selected_workflow_name": selected_workflow_name,
+            "selected_workflow_name": capture.selected_workflow_name,
             "task_id": ctx.task_id,
             "workflow_name": ctx.workflow_name,
             "case_count": len(validated_cases),
