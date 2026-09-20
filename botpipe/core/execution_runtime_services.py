@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Mapping, Sequence
 from contextlib import contextmanager
 from copy import deepcopy
@@ -7,6 +8,7 @@ from dataclasses import asdict, replace
 from datetime import datetime, timezone
 import json
 from pathlib import Path
+import time
 from typing import Any, Callable
 from uuid import uuid4
 
@@ -33,7 +35,9 @@ from .primitives import AWAIT_INPUT, FAIL, FINISH, Checkpoint, Event, Goto, Outc
 from .prompt_templates import render_inline_prompt_template, render_prompt_template
 from .prompts import Prompt, PromptRegistry, ResolvedPrompt
 from .providers.models import LLMRequest, OutcomeResponse, ProducerResponse
+from .providers.budget import ProviderDispatchReservation, current_provider_dispatch_budget, provider_dispatch_reservation_scope
 from .providers.protocols import LLMProvider
+from .providers.rendered import RenderedLLMProvider
 from .providers.retries import ProviderRetryPolicy, build_retry_feedback
 from .route_contracts import compiled_route_tags, provider_visible_route_tags
 from .route_required_writes import effective_route_required_writes
@@ -145,6 +149,20 @@ def serialize_token_usage(token_usage: Any) -> dict[str, Any]:
     if isinstance(token_usage, Mapping):
         return {str(key): value for key, value in token_usage.items()}
     return {"value": token_usage}
+
+
+def _dispatch_token_usage(token_usage: Any) -> dict[str, Any]:
+    raw = asdict(token_usage) if hasattr(token_usage, "__dataclass_fields__") else dict(token_usage) if isinstance(token_usage, Mapping) else {}
+    return {
+        key: raw.get(key)
+        for key in (
+            "input_tokens",
+            "output_tokens",
+            "total_tokens",
+            "cached_input_tokens",
+            "reasoning_tokens",
+        )
+    } | {"source": raw.get("source") or "unavailable"}
 
 
 class EventRuntimeService:
@@ -1555,13 +1573,100 @@ class ProviderRuntimeService:
         self._interaction_policy = interaction_policy
 
     async def run_llm(self, request: LLMRequest) -> OutcomeResponse:
-        return await self._provider.run_llm(request)
+        return await self._run_dispatch(self._provider.run_llm, request, phase=request.turn_kind)
 
     async def run_producer(self, request: Any) -> ProducerResponse:
-        return await self._provider.run_producer(request)
+        return await self._run_dispatch(self._provider.run_producer, request, phase="producer")
 
     async def run_verifier(self, request: Any) -> OutcomeResponse:
-        return await self._provider.run_verifier(request)
+        return await self._run_dispatch(self._provider.run_verifier, request, phase="verifier")
+
+    async def _run_dispatch(self, method: Any, request: Any, *, phase: str) -> Any:
+        budget = current_provider_dispatch_budget()
+        if budget is None or isinstance(self._provider, RenderedLLMProvider):
+            return await method(request)
+        if getattr(self._provider, "supports_cancellation", False) is not True:
+            raise WorkflowExecutionError("configured provider dispatch guarantees require a cancellable provider")
+
+        reservation = budget.reserve()
+        started = datetime.now(timezone.utc)
+        clock = time.monotonic()
+        payload = self._generic_dispatch_payload(request, phase=phase, reservation=reservation)
+        self._emit_generic_dispatch(request, "provider_dispatch_reserved", {**payload, "started_at": started.isoformat()})
+        self._emit_generic_dispatch(request, "provider_dispatch_started", {**payload, "started_at": started.isoformat()})
+        result: Any | None = None
+        outcome = "failed"
+        error: dict[str, str] | None = None
+        try:
+            with provider_dispatch_reservation_scope():
+                call = method(request)
+                result = await call if reservation.timeout_seconds is None else await asyncio.wait_for(call, reservation.timeout_seconds)
+            outcome = "succeeded"
+            return result
+        except asyncio.CancelledError:
+            outcome = "interrupted"
+            raise
+        except asyncio.TimeoutError as exc:
+            message = f"provider dispatch exceeded {reservation.timeout_seconds:.3f} seconds"
+            error = {"error_type": "ProviderDispatchTimeout", "error": message}
+            raise WorkflowExecutionError(
+                message,
+                failure_context=FailureContext(
+                    kind="provider_dispatch_timeout",
+                    step_name=request.step_name,
+                    provider_attributable=True,
+                    details=error,
+                ),
+            ) from exc
+        except Exception as exc:
+            error = {"error_type": type(exc).__name__, "error": str(exc)}
+            raise
+        finally:
+            final = {
+                **payload,
+                "started_at": started.isoformat(),
+                "ended_at": datetime.now(timezone.utc).isoformat(),
+                "elapsed_seconds": max(0.0, time.monotonic() - clock),
+                "outcome": outcome,
+                "token_usage": _dispatch_token_usage(None if result is None else getattr(result, "usage", None)),
+            }
+            if error is not None:
+                final["error"] = error
+            self._emit_generic_dispatch(request, "provider_dispatch_finished", final)
+
+    def _generic_dispatch_payload(
+        self,
+        request: Any,
+        *,
+        phase: str,
+        reservation: ProviderDispatchReservation,
+    ) -> dict[str, Any]:
+        normalized_phase = "direct_llm" if phase == "step" else "repair" if phase == "outcome_repair" else phase
+        policy = getattr(request, "policy", None)
+        model_policy = getattr(policy, "model", None)
+        payload: dict[str, Any] = {
+            "dispatch_id": reservation.dispatch_id,
+            "dispatch_sequence": reservation.sequence,
+            "step_name": request.step_name,
+            "phase": normalized_phase,
+            "turn_kind": phase,
+            "attempt": getattr(request, "attempt", 1),
+            "provider": getattr(self._provider, "provider_name", type(self._provider).__name__),
+            "model": getattr(model_policy, "default", None),
+            "effort": getattr(model_policy, "effort", None),
+        }
+        step = self._compiled.steps.get(request.step_name)
+        if step is not None:
+            payload.update(step_runtime_event_payload(step=step, context=request.context))
+        if reservation.timeout_seconds is not None:
+            payload["timeout_seconds"] = reservation.timeout_seconds
+        return payload
+
+    @staticmethod
+    def _emit_generic_dispatch(request: Any, event_type: str, payload: Mapping[str, Any]) -> None:
+        sink = getattr(request.context, "_runtime_event_sink", None)
+        if callable(sink):
+            sink(event_type, payload)
 
     def resolve_prompt(self, prompt: str | Prompt | None, *, context: Any) -> ResolvedPrompt:
         if prompt is None:

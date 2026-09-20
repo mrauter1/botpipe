@@ -341,14 +341,11 @@ semantics.
 
 Workflows do not declare `GitTracking` or `Tracing`; runtime observability is configured only through `botpipe.runtime.config`.
 
-`workflow_run_traces_to_optimization_candidates` consumes runtime-owned `run.json`, `events.jsonl`, `trace.jsonl`, `git_tracking.jsonl`, `static_step_graph.json`, and `raw/` evidence.
+`workflow_run_traces_to_optimization_candidates` consumes bounded, verified runtime evidence and publishes a versioned evidence snapshot, reviewed candidate set, deterministic report, refinement handoff, and publication receipt. Runtime provenance binds runs to the recorded workflow surface and normalized topology; provider-dispatch records bind usage and elapsed time to the execution identity and effective provider settings.
 
-The optimizer is a bundled authoring-only workflow:
+The optimizer remains a bundled authoring-only workflow. It captures one frozen baseline, uses at most one producer/verifier pair in the normal path, and never edits, executes, or promotes the selected workflow. Missing or noncomparable evidence remains visible and can yield a zero-model-call evidence action.
 
-- it emits candidate-only optimization artifacts plus `workflow_refinement_evidence.json`
-- it does not mutate the selected workflow source
-- it does not run the selected workflow by default
-- it does not execute ablations by default
+Concrete work crosses an explicit boundary. Refinement selects one candidate, creates isolated execution trees from the frozen source, overlays allowed candidate files, and derives compilation and test results. Optional paired evaluation freezes an evaluator and case plan, then runs exactly one subprocess per arm. Recommendation, validation, comparison, and promotion are separate claims. See [Optimizer](optimizer.md) for the user workflow and evaluator protocol.
 
 ## Recursive Operation
 

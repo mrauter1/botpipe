@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from botpipe.runtime.inspection import WorkflowCapabilityEntry, ResolvedWorkflow, inspect_workflow_reference, resolve_workflow_reference
+from botpipe.runtime.inspection import WorkflowCapabilityEntry, ResolvedWorkflow, inspect_resolved_workflow, resolve_workflow_reference
 from botpipe.stdlib.lifecycle import write_workflow_json
 
 
@@ -51,7 +51,7 @@ def inspect_selected_workflow(ctx, workflow: str | type[Any]) -> SelectedWorkflo
     """Resolve and inspect one selected workflow through the shared capture seam."""
 
     capture = capture_selected_workflow(ctx, workflow)
-    capability = inspect_workflow_reference(capture.repo_root, capture.resolved.workflow_cls)
+    capability = inspect_resolved_workflow(capture.repo_root, capture.resolved)
     return SelectedWorkflowInspection(capture=capture, capability=capability)
 
 

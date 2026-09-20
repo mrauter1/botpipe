@@ -23,3 +23,29 @@ jobs:
 
       - name: Run tests
         run: python -m pytest -q
+
+      - name: Build distributable
+        run: |
+          python -m pip install build
+          python -m build
+
+  optimizer-windows:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install package and tests
+        run: python -m pip install -e . pytest
+
+      - name: Check optimizer containment and portable contracts
+        run: >-
+          python -m pytest -q
+          tests/unit/optimizer/test_candidate_validation_v2.py
+          tests/unit/optimizer/test_paired_evaluation.py
+          tests/unit/optimizer/test_publication_safety.py
+          tests/unit/test_provider_dispatch_budget.py

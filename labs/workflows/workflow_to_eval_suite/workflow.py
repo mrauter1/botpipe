@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from typing import Any
+from hashlib import sha256
+import json
 
 from pydantic import BaseModel, Field
 
 from botpipe_optimizer import (
-    capture_selected_workflow,
-    write_selected_workflow_capability_snapshot,
+    inspect_selected_workflow,
+    write_selected_workflow_artifact,
     write_validated_eval_case_manifest,
 )
 from botpipe.stdlib import (
@@ -23,6 +25,8 @@ from botpipe.stdlib.lifecycle import open_workflow_sessions, write_invocation_co
 
 from botpipe import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
 from botpipe.core import Artifact
+from botpipe.core.surface_identity import derive_workflow_surface_manifest
+from botpipe.runtime.inspection import selected_workflow_capability_payload
 
 from .contracts import (
     DESIGN_EVAL_CASES_ROUTE_CONTRACTS,
@@ -234,6 +238,26 @@ class WorkflowToEvalSuite(Workflow):
     )
     def bootstrap(ctx):
         params = ctx.params
+        optimizer_selection = None
+        if params.optimization_receipt_path:
+            from botpipe_optimizer.recommendations import load_optimization_candidate
+
+            inspection = inspect_selected_workflow(ctx, params.selected_workflow)
+            selection = load_optimization_candidate(
+                optimization_receipt_path=ctx.root / params.optimization_receipt_path,
+                candidate_id=params.candidate_id,
+                expected_selected_workflow=inspection.capture.selected_workflow_name,
+                allowed_kinds={"evaluation_case"},
+            )
+            current_surface = derive_workflow_surface_manifest(ctx.root, inspection.capability)
+            if current_surface["surface_id"] != selection.receipt.baseline_surface_manifest_id:
+                raise ValueError("baseline/evidence changed; start a new analysis")
+            optimizer_selection = {
+                "candidate": selection.candidate.model_dump(mode="json"),
+                "evidence_snapshot_path": str(selection.evidence_snapshot_path),
+                "baseline_surface_manifest_path": str(selection.baseline_surface_manifest_path),
+                "claim_scope": "development_cases",
+            }
         next_state = ctx.state.model_copy(
             update={
                 "selected_workflow_reference": params.selected_workflow,
@@ -262,6 +286,7 @@ class WorkflowToEvalSuite(Workflow):
                 "desired_outcome": next_state.desired_outcome,
                 "constraints": next_state.constraints,
                 "evidence_expectations": next_state.evidence_expectations,
+                "optimization_selection": optimizer_selection,
             },
         )
         ctx.state = next_state
@@ -274,11 +299,15 @@ class WorkflowToEvalSuite(Workflow):
         routes={"selected_workflow_contract_captured": "frame_evaluation_target"},
     )
     def capture_selected_workflow_contract(ctx):
-        capture = capture_selected_workflow(ctx, ctx.state.selected_workflow_reference)
-        snapshot_path = write_selected_workflow_capability_snapshot(ctx, ctx.state.selected_workflow_reference)
-        if not snapshot_path.exists():
-            raise FileNotFoundError(f"selected workflow capability snapshot was not written at {snapshot_path}")
-        ctx.state.selected_workflow_name = capture.selected_workflow_name
+        inspection = inspect_selected_workflow(ctx, ctx.state.selected_workflow_reference)
+        write_selected_workflow_artifact(
+            ctx,
+            capture=inspection.capture,
+            relative_path="selected_workflow_capability.json",
+            artifact_name="selected_workflow_capability",
+            artifact_payload=selected_workflow_capability_payload(inspection.capability),
+        )
+        ctx.state.selected_workflow_name = inspection.capture.selected_workflow_name
         return Event("selected_workflow_contract_captured")
 
     @python_step(
@@ -471,6 +500,13 @@ class WorkflowToEvalSuite(Workflow):
             "workflow_eval_suite_receipt.json",
             {
                 "workflow_name": ctx.workflow_name,
+                "suite_id": sha256(json.dumps({
+                    "schema": "botpipe.optimizer.evaluation_suite/v2",
+                    "selected_workflow_name": summary_selected_workflow_name,
+                    "cases": [case.model_dump(mode="json") for case in validated_manifest.validated_cases],
+                    "rubric_sha256": sha256(required_paths["eval_rubric"].read_bytes()).hexdigest(),
+                }, sort_keys=True, separators=(",", ":")).encode()).hexdigest(),
+                "claim_scope": "development_cases",
                 "task_title": ctx.state.task_title,
                 "sponsor_role": ctx.state.sponsor_role,
                 "desired_outcome": ctx.state.desired_outcome,

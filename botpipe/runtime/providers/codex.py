@@ -23,9 +23,12 @@ from ...core.providers.rendered import RenderedLLMProvider
 from ...core.providers.turns import ProviderTurnResult, RenderedProviderTurn
 from ..config import ConfigError, ResolvedRuntimeConfig
 from ._common import (
+    _cleanup_provider_subprocess_descendants,
+    _wait_for_process_leader,
     build_policy_step_key,
     build_session_binding,
     communicate_text_subprocess,
+    create_provider_subprocess_exec,
     emit_turn_policy,
     ensure_session_provider_match,
     extract_token_usage,
@@ -41,6 +44,7 @@ from .codex_policy import CodexPolicyEmitter
 
 
 _CODEX_STDOUT_CHUNK_SIZE = 64 * 1024
+_CODEX_MAX_STREAM_BYTES = 1024 * 1024
 
 
 class _CodexCommunicationError(Exception):
@@ -230,6 +234,15 @@ class CodexTransport(ProviderTransport):
         self._emitter = CodexPolicyEmitter()
         self._validation = validation or ProviderPolicyValidationConfig()
 
+    provider_name = "codex"
+    supports_cancellation = True
+
+    def effective_dispatch_identity(self, turn: RenderedProviderTurn) -> dict[str, str | None]:
+        model, effort = self._model, self._model_effort
+        if turn.policy is not None:
+            model, effort = turn.policy.model.default or model, turn.policy.model.effort or effort
+        return {"provider": "codex", "model": model, "effort": effort}
+
     async def run_turn(self, turn: RenderedProviderTurn) -> ProviderTurnResult:
         ensure_session_provider_match("codex", turn.session)
         prompt_fingerprint = _prompt_fingerprint(turn.prompt_text)
@@ -256,7 +269,7 @@ class CodexTransport(ProviderTransport):
                     session_id=native_resume_session_id,
                     prompt_fingerprint=prompt_fingerprint,
                 )
-                process = await asyncio.create_subprocess_exec(
+                process = await create_provider_subprocess_exec(
                     *command,
                     stdin=asyncio.subprocess.PIPE,
                     stdout=asyncio.subprocess.PIPE,
@@ -327,7 +340,7 @@ class CodexTransport(ProviderTransport):
             else:
                 command = [*base_command, resume_session_id, "-"]
 
-            process = await asyncio.create_subprocess_exec(
+            process = await create_provider_subprocess_exec(
                 *command,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
@@ -384,7 +397,7 @@ class CodexTransport(ProviderTransport):
             force_start=True,
         )
         try:
-            process = await asyncio.create_subprocess_exec(
+            process = await create_provider_subprocess_exec(
                 *base_command,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
@@ -687,10 +700,15 @@ async def _communicate_codex_process(
 
     stdout_parts: list[bytes] = []
     stderr_parts: list[bytes] = []
+    stdout_size = 0
     seen_session_ids: set[str] = set()
 
     def handle_stdout_line(line: bytes) -> None:
+        nonlocal stdout_size
         stdout_parts.append(line)
+        stdout_size += len(line)
+        while stdout_size > _CODEX_MAX_STREAM_BYTES and len(stdout_parts) > 1:
+            stdout_size -= len(stdout_parts.pop(0))
         text = line.decode("utf-8", errors="replace")
         session_id = _session_id_from_jsonl_line(text)
         if session_id is not None and session_id not in seen_session_ids:
@@ -728,6 +746,8 @@ async def _communicate_codex_process(
                     handle_stdout_line(bytes(pending_line))
                 return
             pending_line.extend(chunk)
+            if len(pending_line) > _CODEX_MAX_STREAM_BYTES:
+                del pending_line[: len(pending_line) - _CODEX_MAX_STREAM_BYTES]
             while True:
                 newline_index = pending_line.find(b"\n")
                 if newline_index < 0:
@@ -740,11 +760,18 @@ async def _communicate_codex_process(
         if process.stderr is None:
             return
         try:
-            raw = await process.stderr.read()
+            while True:
+                raw = await process.stderr.read(_CODEX_STDOUT_CHUNK_SIZE)
+                if not raw:
+                    break
+                stderr_parts.append(raw)
+                total = sum(len(part) for part in stderr_parts)
+                while total > _CODEX_MAX_STREAM_BYTES and len(stderr_parts) > 1:
+                    total -= len(stderr_parts.pop(0))
+                if total > _CODEX_MAX_STREAM_BYTES:
+                    stderr_parts[0] = stderr_parts[0][-_CODEX_MAX_STREAM_BYTES:]
         except Exception as exc:
             raise _CodexCommunicationError(f"reading stderr failed: {type(exc).__name__}: {exc}") from exc
-        if raw:
-            stderr_parts.append(raw)
 
     tasks = [
         asyncio.create_task(write_stdin()),
@@ -753,11 +780,9 @@ async def _communicate_codex_process(
     ]
 
     try:
+        await _wait_for_process_leader(process, tasks)
+        await _cleanup_provider_subprocess_descendants(process)
         await asyncio.gather(*tasks)
-        try:
-            await process.wait()
-        except Exception as exc:
-            raise _CodexCommunicationError(f"waiting for process failed: {type(exc).__name__}: {exc}") from exc
     except asyncio.CancelledError:
         for task in tasks:
             task.cancel()

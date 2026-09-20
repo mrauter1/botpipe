@@ -66,3 +66,7 @@
 - Do not collapse category coverage into generic prose.
 - Do not ask for a replan when local repair is sufficient.
 - Do not approve a manifest that still hides case ids, case kinds, expected artifacts, or workflow-parameter assumptions.
+
+## Optimizer handoff
+
+When `invocation_contract.optimization_selection` is present, implement its selected `evaluation_case` proposal using the cited evidence and captured baseline. Keep the proposal's scope and validation plan visible. These are development cases because their failure evidence was exposed during authoring. Publish a new suite; never edit the evaluator or cases of an existing frozen comparison.

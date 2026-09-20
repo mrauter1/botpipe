@@ -34,6 +34,8 @@ def write_company_operation_snapshot(
         resolve_reference=resolve_workflow_reference,
     )
     normalized_statuses = _normalized_text_filters(statuses, field_name="statuses")
+    if normalized_statuses is not None:
+        normalized_statuses = sorted({normalize_run_status(status) for status in normalized_statuses})
     task_summaries = list_task_operation_summaries(
         repo_root,
         task_ids=selected_task_ids,
@@ -75,12 +77,10 @@ def _normalized_text_filters(values: str | Iterable[str] | None, *, field_name: 
         raw_values = values
     normalized = sorted(
         {
-            normalize_run_status(
-                require_non_empty_string(
-                    value,
-                    error_message=f"{field_name} entries must be non-empty strings",
-                    coerce=False,
-                )
+            require_non_empty_string(
+                value,
+                error_message=f"{field_name} entries must be non-empty strings",
+                coerce=False,
             )
             for value in raw_values
         }

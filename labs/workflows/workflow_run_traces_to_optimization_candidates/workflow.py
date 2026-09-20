@@ -1,1089 +1,709 @@
-"""Optimization-candidate workflow shell built on runtime-owned run observability."""
+"""Optimizer v2: deterministic capture, one producer/verifier pair, deterministic publication."""
 
 from __future__ import annotations
-
-import json
+import hashlib, json, os, shutil, stat, tempfile
 from pathlib import Path
 from typing import Any
-
 from pydantic import BaseModel, Field
-
-from botpipe_optimizer import (
-    EXCLUDED_RUN_REPORT_SCHEMA,
-    FAILURE_SCENARIOS_SCHEMA,
-    OptimizationArtifactSpec,
-    capture_optimization_frame_context,
-    collect_optimization_publication_surface,
-    finalize_optional_optimization_artifact,
-    read_optimization_artifact_payload,
-    resolve_selected_workflow_name,
-    validate_optimization_scorecard_publication,
-    validate_optimization_selected_workflow_field,
-    validate_selected_workflow_source_unchanged,
-    write_optimization_refinement_evidence,
+from botpipe import (
+    FINISH,
+    Prompt,
+    Route,
+    Session,
+    Workflow,
+    produce_verify_step,
+    python_step,
+)
+from botpipe.core import Artifact
+from botpipe.core.compiler import compile_workflow
+from botpipe.core.providers import current_provider_dispatch_budget
+from botpipe.core.surface_identity import (
+    canonical_workflow_identity,
+    derive_workflow_surface_manifest,
+)
+from botpipe.runtime.inspection import (
+    inspect_resolved_workflow,
+    resolve_workflow_reference,
+    selected_workflow_authoring_surface_payload,
 )
 from botpipe.stdlib import (
     open_workflow_sessions,
-    read_json_object,
-    read_required_text,
-    require_existing_artifact_paths,
-    require_non_empty_string,
-    validate_no_hidden_execution_signal,
-    validate_selected_workflow_authoring_surface_snapshot,
-    validate_selected_workflow_capability_snapshot,
-    validate_selected_workflow_decomposition_surface_snapshot,
     write_invocation_contract,
-    write_publication_receipt,
     write_workflow_json,
 )
-from botpipe import Event, FINISH, Outcome, Prompt, Route, Session, Workflow, produce_verify_step, python_step
-from botpipe.core import Artifact
-
-from .contracts import (
-    ADVERSARIAL_CASES_ROUTE_CONTRACTS,
-    ADVERSARIAL_CASE_CANDIDATES_ARTIFACT,
-    AdversarialCasesPayload,
-    CandidatePassPayload,
-    EXCLUDED_RUN_REPORT_ARTIFACT,
-    FRAME_ROUTE_CONTRACTS,
-    FrameOptimizationPayload,
-    MINE_FAILURES_ROUTE_CONTRACTS,
-    FailureScenarioPayload,
-    OPTIMIZE_PRODUCER_ROUTE_CONTRACTS,
-    OPTIMIZE_TOKENS_ROUTE_CONTRACTS,
-    OPTIMIZE_VERIFIER_RUBRIC_ROUTE_CONTRACTS,
-    OptimizationPackagePayload,
-    PACKAGE_ROUTE_CONTRACTS,
-    PRODUCER_PROMPT_OPTIMIZATION_CANDIDATES_ARTIFACT,
-    RANK_TARGETS_ROUTE_CONTRACTS,
-    SELECTED_WORKFLOW_SOURCE_MANIFEST_ARTIFACT,
-    WORKFLOW_FAILURE_SCENARIO_SEEDS_ARTIFACT,
-    WORKFLOW_LEVEL_ROUTE_CONTRACTS,
-    WORKFLOW_LEVEL_OPTIMIZATION_CANDIDATES_ARTIFACT,
-    WORKFLOW_OPTIMIZATION_SCOPE_ARTIFACT,
-    WORKFLOW_OPTIMIZATION_SCORECARD_ARTIFACT,
-    WORKFLOW_OPTIMIZATION_TRACE_CORPUS_ARTIFACT,
-    RankTargetsPayload,
-    STEP_OPTIMIZATION_PRIORITY_REPORT_ARTIFACT,
-    STEP_TRACE_METRICS_ARTIFACT,
-    TOKEN_OPTIMIZATION_CANDIDATES_ARTIFACT,
-    VERIFIER_RUBRIC_OPTIMIZATION_CANDIDATES_ARTIFACT,
-    WORKFLOW_FAILURE_SCENARIOS_ARTIFACT,
+from botpipe_optimizer.candidate_surfaces import (
+    derive_surface_manifest,
+    verify_surface_anchor,
 )
-
-
-_FRAME_ARTIFACT_NAMES = (
-    "selected_workflow_capability",
-    "selected_workflow_authoring_surface",
-    "selected_workflow_decomposition_surface",
-    "selected_workflow_source_manifest",
-    "workflow_optimization_scope",
-    "workflow_optimization_trace_corpus",
-    "excluded_run_report",
-    "workflow_failure_scenario_seeds",
+from botpipe_optimizer.evidence import (
+    EvidenceSnapshot,
+    capture_evidence_snapshot,
+    read_evidence_snapshot,
+    write_evidence_snapshot,
 )
-_PACKAGE_EVIDENCE_FILES = {
-    "step_optimization_priority_report.json": "step_optimization_priority_report",
-    "workflow_failure_scenarios.json": "workflow_failure_scenarios",
-    "producer_prompt_optimization_candidates.json": "producer_prompt_optimization_candidates",
-    "verifier_rubric_optimization_candidates.json": "verifier_rubric_optimization_candidates",
-    "token_optimization_candidates.json": "token_optimization_candidates",
-    "adversarial_case_candidates.json": "adversarial_case_candidates",
-    "workflow_level_optimization_candidates.json": "workflow_level_optimization_candidates",
-    "workflow_optimization_scorecard.json": "workflow_optimization_scorecard",
-}
-_PRODUCER_CANDIDATES_SCHEMA = "botpipe.workflow_optimization.producer_candidates/v1"
-_VERIFIER_RUBRIC_CANDIDATES_SCHEMA = "botpipe.workflow_optimization.verifier_rubric_candidates/v1"
-_TOKEN_CANDIDATES_SCHEMA = "botpipe.workflow_optimization.token_candidates/v1"
-_ADVERSARIAL_CASE_CANDIDATES_SCHEMA = "botpipe.workflow_optimization.adversarial_case_candidates/v1"
-_WORKFLOW_LEVEL_CANDIDATES_SCHEMA = "botpipe.workflow_optimization.workflow_level_candidates/v1"
+from botpipe_optimizer.optimization import list_selected_workflow_runs
+from botpipe_optimizer.recommendations import (
+    build_empty_candidate_set,
+    publish_recommendation,
+    read_candidate_review,
+    read_candidate_set,
+    validate_candidate_review,
+    validate_candidate_set,
+    write_incomplete_receipt,
+)
+from botpipe_optimizer.records import CandidateReview, CandidateSet
+from .contracts import RECOMMENDATION_ROUTES, RecommendationControl
+
+KIND = "workflow"
+MAX_FILES = 100000
+MAX_BYTES = 512 * 1024 * 1024
 
 
-def _after_frame(ctx):
-    outcome = ctx.outcome
-    assert outcome is not None
-    payload = outcome.payload
-    selected_workflow_name = payload.get("selected_workflow_name")
-    ctx.state.frame_status = outcome.tag
-    if isinstance(selected_workflow_name, str):
-        ctx.state.selected_workflow_name = selected_workflow_name
-    ctx.state.candidate_run_count = int(payload.get("candidate_run_count") or ctx.state.candidate_run_count)
-    ctx.state.eligible_run_count = int(payload.get("eligible_run_count") or ctx.state.eligible_run_count)
-    ctx.state.excluded_run_count = int(payload.get("excluded_run_count") or ctx.state.excluded_run_count)
-    ctx.state.no_eligible_trace_evidence = outcome.tag == "no_eligible_trace_evidence"
-    return None
+def _read_bounded(path, limit, label):
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as exc:
+        raise ValueError(f"{label} must be a regular non-symlink file") from exc
+    try:
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > limit:
+            raise ValueError(f"{label} exceeds its regular-file byte limit")
+        chunks = []
+        remaining = limit + 1
+        while remaining:
+            chunk = os.read(descriptor, min(1024 * 1024, remaining))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        content = b"".join(chunks)
+        if len(content) > limit:
+            raise ValueError(f"{label} exceeds its byte limit")
+        return content
+    finally:
+        os.close(descriptor)
 
 
-def _after_rank_targets(ctx):
-    outcome = ctx.outcome
-    assert outcome is not None
-    ctx.state.ranking_status = outcome.tag
-    return None
+def _json(path, limit=MAX_BYTES):
+    v = json.loads(_read_bounded(path, limit, path.name))
+    if not isinstance(v, dict):
+        raise ValueError(f"{path.name} must contain an object")
+    return v
 
 
-def _after_mine_failures(ctx):
-    outcome = ctx.outcome
-    assert outcome is not None
-    selected_workflow_name = _selected_workflow_name_from_state(ctx.state)
-    if outcome.tag == "failure_scenarios_mined":
-        read_optimization_artifact_payload(
-            ctx.artifacts.workflow_failure_scenarios.path,
-            spec=_FAILURE_SCENARIOS_SPEC,
-            selected_workflow_name=selected_workflow_name,
+def _runtime_surface(capability, root):
+    manifest = derive_workflow_surface_manifest(root, capability)
+    sources = [
+        {"relative_path": e["relative_path"], "source_path": e["surface_path"]}
+        for e in manifest["files"]
+    ]
+    return dict(manifest["boundary"]), sources, manifest
+
+
+def _copy_baseline(folder, boundary, sources):
+    parent = folder / "baseline_snapshots"
+    parent.mkdir(parents=True, exist_ok=True)
+    root = Path(tempfile.mkdtemp(prefix="surface-", dir=parent))
+    if len(sources) > MAX_FILES:
+        raise ValueError("baseline exceeds file limit")
+    total = 0
+    source_map = {}
+    for e in sources:
+        rel = e["relative_path"]
+        src = Path(e["source_path"]).resolve(strict=True)
+        if src.is_symlink() or not src.is_file():
+            raise ValueError(f"baseline source is not a regular file: {rel}")
+        total += src.stat().st_size
+        if total > MAX_BYTES:
+            raise ValueError("baseline exceeds byte limit before copy")
+        dst = root / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dst, follow_symlinks=False)
+        source_map[rel] = src
+    return derive_surface_manifest(
+        root,
+        expected_root=root,
+        boundary=boundary,
+        surface_kind=KIND,
+        authoritative_sources=source_map,
+    )
+
+
+def _source_anchor(sources):
+    out = {}
+    remaining = MAX_BYTES
+    for e in sources:
+        p = Path(e["source_path"]).resolve(strict=True)
+        content = _read_bounded(
+            p, remaining, f"authoritative source {e['relative_path']}"
         )
-    elif outcome.tag == "no_failure_scenarios":
-        if ctx.artifacts.workflow_failure_scenarios.path.is_file():
-            read_optimization_artifact_payload(
-                ctx.artifacts.workflow_failure_scenarios.path,
-                spec=_FAILURE_SCENARIOS_SPEC,
-                selected_workflow_name=selected_workflow_name,
-            )
-        else:
-            ctx.artifacts.workflow_failure_scenarios.path.write_text(
-                json.dumps(
-                    _empty_failure_scenarios_payload(selected_workflow=selected_workflow_name),
-                    indent=2,
-                    sort_keys=True,
+        remaining -= len(content)
+        out[e["relative_path"]] = {
+            "source_path": str(p),
+            "sha256": hashlib.sha256(content).hexdigest(),
+            "executable": (
+                bool(p.stat().st_mode & 0o111) if os.name == "posix" else False
+            ),
+        }
+    return out
+
+
+def _checkpoint(inv, evidence, surface, sources):
+    stable = {
+        relative: {"sha256": entry["sha256"], "executable": entry["executable"]}
+        for relative, entry in sources.items()
+    }
+    return hashlib.sha256(
+        json.dumps(
+            {
+                "invocation": inv,
+                "evidence": evidence,
+                "surface": surface,
+                "sources": stable,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+
+
+def _invocation_id(params, request_path, selected_workflow):
+    request_sha = hashlib.sha256(
+        _read_bounded(Path(request_path), MAX_BYTES, "optimizer request")
+    ).hexdigest()
+    payload = {
+        "selected_workflow": selected_workflow,
+        "params": params.model_dump(
+            mode="json", exclude={"optimization_depth", "max_candidates_per_pass"}
+        ),
+        "request_sha256": request_sha,
+    }
+    return (
+        "invocation-"
+        + hashlib.sha256(
+            json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+    )
+
+
+def _allowed(params):
+    kinds = {"producer_prompt", "verifier_rubric"}
+    if params.include_token_optimization:
+        kinds.add("tokens")
+    if params.include_workflow_level_candidates:
+        kinds.add("workflow")
+    if params.include_adversarial_generation:
+        kinds.add("evaluation_case")
+    return kinds
+
+
+def _admit_model_outputs(ctx, *, include_review: bool) -> None:
+    paths = [ctx.artifacts.workflow_optimization_candidates.path]
+    supporting = ctx.artifacts.workflow_optimization_supporting.path
+    review = ctx.artifacts.workflow_optimization_candidate_review.path
+    if supporting.exists():
+        paths.append(supporting)
+    if include_review and review.exists():
+        paths.append(review)
+    total = 0
+    for path in paths:
+        if path.is_symlink() or not path.is_file():
+            raise ValueError(f"model output must be a regular file: {path.name}")
+        total += path.stat().st_size
+        if total > ctx.params.max_output_bytes:
+            raise ValueError("model outputs exceed max_output_bytes")
+
+
+def _verify(ctx):
+    evidence = read_evidence_snapshot(ctx.artifacts.workflow_optimization_evidence.path)
+    manifest = _json(ctx.artifacts.baseline_surface_manifest.path)
+    current_invocation = _invocation_id(
+        ctx.params, ctx.artifacts.request.path, ctx.state.selected_workflow_name
+    )
+    invocation_contract = _json(ctx.artifacts.invocation_contract.path)
+    if (
+        current_invocation != ctx.state.invocation_identity
+        or invocation_contract.get("invocation_identity") != current_invocation
+    ):
+        raise ValueError("incompatible optimizer invocation; start a new analysis")
+    if evidence.snapshot_id != ctx.state.evidence_snapshot_id:
+        raise ValueError("baseline/evidence changed; start a new analysis")
+    sid = verify_surface_anchor(
+        manifest,
+        expected_root=Path(ctx.state.baseline_root),
+        expected_boundary=ctx.state.baseline_boundary,
+        expected_surface_kind=KIND,
+    )
+    if (
+        sid != ctx.state.baseline_surface_manifest_id
+        or evidence.baseline_surface_manifest_id != sid
+    ):
+        raise ValueError("baseline/evidence changed; start a new analysis")
+    resolved = resolve_workflow_reference(ctx.root, ctx.params.selected_workflow)
+    capability = inspect_resolved_workflow(ctx.root, resolved)
+    boundary, sources, current = _runtime_surface(capability, ctx.root.resolve())
+    current_paths = {
+        e["relative_path"]: str(Path(e["source_path"]).resolve()) for e in sources
+    }
+    if (
+        boundary != ctx.state.baseline_boundary
+        or current["surface_id"] != sid
+        or current_paths
+        != {k: v["source_path"] for k, v in ctx.state.authoritative_sources.items()}
+    ):
+        raise ValueError("baseline/evidence changed; start a new analysis")
+    remaining_source_bytes = MAX_BYTES
+    for relative_path, e in ctx.state.authoritative_sources.items():
+        p = Path(e["source_path"])
+        content = _read_bounded(
+            p, remaining_source_bytes, f"authoritative source {relative_path}"
+        )
+        remaining_source_bytes -= len(content)
+        if hashlib.sha256(content).hexdigest() != e["sha256"] or (
+            (bool(p.stat().st_mode & 0o111) if os.name == "posix" else False)
+            != e["executable"]
+        ):
+            raise ValueError("baseline/evidence changed; start a new analysis")
+    cp = _json(ctx.artifacts.optimizer_checkpoint.path)
+    expected = _checkpoint(
+        ctx.state.invocation_identity,
+        evidence.snapshot_id,
+        sid,
+        ctx.state.authoritative_sources,
+    )
+    if (
+        cp.get("checkpoint_id") != expected
+        or cp.get("invocation_identity") != current_invocation
+        or cp.get("baseline_root") != ctx.state.baseline_root
+        or cp.get("authoritative_sources") != ctx.state.authoritative_sources
+    ):
+        raise ValueError("incompatible checkpoint; start a new analysis")
+    return evidence, manifest
+
+
+def _validate(ctx, candidate_set, evidence, manifest, cap):
+    return validate_candidate_set(
+        candidate_set,
+        evidence_snapshot=evidence,
+        max_candidates=cap,
+        allowed_kinds=_allowed(ctx.params),
+        expected_selected_workflow=ctx.state.selected_workflow_name,
+        allowed_target_paths=manifest["relative_paths"],
+        allowed_target_prefixes=(
+            ctx.state.baseline_boundary["package_root_relative_path"],
+        ),
+    )
+
+
+def _after_review(ctx):
+    try:
+        evidence, manifest = _verify(ctx)
+        _admit_model_outputs(ctx, include_review=True)
+        cs = read_candidate_set(
+            ctx.artifacts.workflow_optimization_candidates.path,
+            max_output_bytes=ctx.params.max_output_bytes,
+        )
+        review = read_candidate_review(
+            ctx.artifacts.workflow_optimization_candidate_review.path,
+            max_output_bytes=ctx.params.max_output_bytes,
+        )
+        cap = (
+            ctx.params.max_candidates
+            if ctx.outcome.tag == "recommendations_reviewed"
+            else max(ctx.params.max_candidates, len(cs.candidates))
+        )
+        _validate(ctx, cs, evidence, manifest, cap)
+        validate_candidate_review(review, candidate_set=cs)
+        if (ctx.outcome.tag == "recommendations_reviewed") != review.accepted:
+            raise ValueError("review decision and route disagree")
+        if review.accepted:
+            ctx.state.review_id = review.review_id
+            ctx.state.reviewed_candidate_ids = review.reviewed_candidate_ids
+    except Exception as exc:
+        write_incomplete_receipt(
+            output_dir=ctx.workflow_folder,
+            selected_workflow=ctx.state.selected_workflow_name or "unknown",
+            evidence_snapshot_id=ctx.state.evidence_snapshot_id,
+            stop_reason=str(exc),
+        )
+        raise
+
+
+class _FailureReceiptExtension:
+    def bind(self, binding):
+        class Bound:
+            def before_step(self, event):
+                return None
+
+            def after_step(self, event):
+                return None
+
+            def on_terminal(self, event):
+                return None
+
+            def on_fatal(self, event, error):
+                state = event.state
+                selected = getattr(state, "selected_workflow_name", None) or "unknown"
+                evidence = getattr(state, "evidence_snapshot_id", None)
+                kind = (
+                    getattr(getattr(error, "failure_context", None), "kind", None)
+                    or type(error).__name__
                 )
-                + "\n",
-                encoding="utf-8",
-            )
-    ctx.state.failure_status = outcome.tag
-    return None
+                write_incomplete_receipt(
+                    output_dir=binding.workflow_folder,
+                    selected_workflow=selected,
+                    evidence_snapshot_id=evidence,
+                    stop_reason=f"{kind}: {error}",
+                )
 
-
-def _after_optimize_producer(ctx):
-    outcome = ctx.outcome
-    assert outcome is not None
-    finalize_optional_optimization_artifact(
-        route=outcome.tag,
-        path=ctx.artifacts.producer_prompt_optimization_candidates.path,
-        selected_workflow_name=_selected_workflow_name_from_state(ctx.state),
-        spec=_PRODUCER_CANDIDATES_SPEC,
-    )
-    ctx.state.producer_status = outcome.tag
-    return None
-
-
-def _after_optimize_verifier_rubric(ctx):
-    outcome = ctx.outcome
-    assert outcome is not None
-    finalize_optional_optimization_artifact(
-        route=outcome.tag,
-        path=ctx.artifacts.verifier_rubric_optimization_candidates.path,
-        selected_workflow_name=_selected_workflow_name_from_state(ctx.state),
-        spec=_VERIFIER_RUBRIC_CANDIDATES_SPEC,
-    )
-    ctx.state.verifier_rubric_status = outcome.tag
-    return None
-
-
-def _after_optimize_tokens(ctx):
-    outcome = ctx.outcome
-    assert outcome is not None
-    finalize_optional_optimization_artifact(
-        route=outcome.tag,
-        path=ctx.artifacts.token_optimization_candidates.path,
-        selected_workflow_name=_selected_workflow_name_from_state(ctx.state),
-        spec=_TOKEN_CANDIDATES_SPEC,
-    )
-    ctx.state.token_status = outcome.tag
-    return None
-
-
-def _after_adversarial_cases(ctx):
-    outcome = ctx.outcome
-    assert outcome is not None
-    finalize_optional_optimization_artifact(
-        route=outcome.tag,
-        path=ctx.artifacts.adversarial_case_candidates.path,
-        selected_workflow_name=_selected_workflow_name_from_state(ctx.state),
-        spec=_ADVERSARIAL_CASES_SPEC,
-    )
-    ctx.state.adversarial_status = outcome.tag
-    return None
-
-
-def _after_workflow_level(ctx):
-    outcome = ctx.outcome
-    assert outcome is not None
-    finalize_optional_optimization_artifact(
-        route=outcome.tag,
-        path=ctx.artifacts.workflow_level_optimization_candidates.path,
-        selected_workflow_name=_selected_workflow_name_from_state(ctx.state),
-        spec=_WORKFLOW_LEVEL_CANDIDATES_SPEC,
-    )
-    ctx.state.workflow_level_status = outcome.tag
-    return None
-
-
-def _after_package(ctx):
-    outcome = ctx.outcome
-    assert outcome is not None
-    ctx.state.packaging_status = outcome.tag
-    return None
+        return Bound()
 
 
 class WorkflowRunTracesToOptimizationCandidates(Workflow):
-    """Turn one selected workflow's runtime traces into candidate-only optimization evidence."""
-
     name = "workflow_run_traces_to_optimization_candidates"
 
     class State(BaseModel):
-        selected_workflow_reference: str = ""
         selected_workflow_name: str | None = None
-        task_title: str = ""
-        run_refs: list[str] = Field(default_factory=list)
-        run_statuses: list[str] = Field(default_factory=list)
-        route_tags: list[str] = Field(default_factory=list)
-        history_limit: int = 25
-        top_k_steps: int = 1
-        optimization_depth: str = "cheap"
-        include_adversarial_generation: bool = True
-        include_token_optimization: bool = True
-        include_workflow_level_candidates: bool = True
-        max_failure_scenarios: int = 25
-        max_candidates_per_pass: int = 3
-        focus: str | None = None
-        sponsor_role: str | None = None
-        desired_outcome: str | None = None
-        constraints: list[str] = Field(default_factory=list)
-        frame_status: str | None = None
-        ranking_status: str | None = None
-        failure_status: str | None = None
-        producer_status: str | None = None
-        verifier_rubric_status: str | None = None
-        token_status: str | None = None
-        adversarial_status: str | None = None
-        workflow_level_status: str | None = None
-        packaging_status: str | None = None
-        candidate_run_count: int = 0
-        eligible_run_count: int = 0
-        excluded_run_count: int = 0
-        no_eligible_trace_evidence: bool = False
+        invocation_identity: str | None = None
+        evidence_snapshot_id: str | None = None
+        baseline_surface_manifest_id: str | None = None
+        baseline_root: str = ""
+        baseline_boundary: dict[str, Any] = Field(default_factory=dict)
+        authoritative_sources: dict[str, dict[str, Any]] = Field(default_factory=dict)
+        review_id: str | None = None
+        reviewed_candidate_ids: list[str] = Field(default_factory=list)
         published: bool = False
 
-    frame_session = Session()
-    rank_targets_session = Session()
-    mine_failures_session = Session()
-    optimize_producer_session = Session()
-    optimize_verifier_rubric_session = Session()
-    optimize_tokens_session = Session()
-    adversarial_cases_session = Session()
-    workflow_level_session = Session()
-    package_session = Session()
-
+    recommendation_session = Session()
+    verifier_session = Session.fresh()
+    extensions = (_FailureReceiptExtension(),)
     request = Artifact("{{ run.folder }}/request.md")
-    framework_architecture_doc = Artifact("{{ root }}/docs/architecture.md")
-    framework_authoring_doc = Artifact("{{ root }}/docs/authoring.md")
-    workflow_authoring_guidelines = Artifact("{{ root }}/docs/workflow_authoring_guidelines.md")
-    optimization_package_checklist = Artifact("{{ package.folder }}/assets/optimization_package_checklist.md")
-
-    invocation_contract = Artifact("{{ workflow.folder }}/invocation_contract.json")
-    selected_workflow_capability = Artifact("{{ workflow.folder }}/selected_workflow_capability.json")
-    selected_workflow_authoring_surface = Artifact("{{ workflow.folder }}/selected_workflow_authoring_surface.json")
-    selected_workflow_decomposition_surface = Artifact("{{ workflow.folder }}/selected_workflow_decomposition_surface.json")
-    selected_workflow_source_manifest = Artifact.json(
-        "{{ workflow.folder }}/selected_workflow_source_manifest.json",
-        schema=SELECTED_WORKFLOW_SOURCE_MANIFEST_ARTIFACT.model_cls,
+    invocation_contract = Artifact.json(
+        "{{ workflow.folder }}/invocation_contract.json"
     )
-    workflow_optimization_scope = Artifact.json(
-        "{{ workflow.folder }}/workflow_optimization_scope.json",
-        schema=WORKFLOW_OPTIMIZATION_SCOPE_ARTIFACT.model_cls,
+    selected_workflow_authoring_surface = Artifact.json(
+        "{{ workflow.folder }}/selected_workflow_authoring_surface.json"
     )
-    excluded_run_report = Artifact.json(
-        "{{ workflow.folder }}/excluded_run_report.json",
-        schema=EXCLUDED_RUN_REPORT_ARTIFACT.model_cls,
+    baseline_surface_manifest = Artifact.json(
+        "{{ workflow.folder }}/baseline_surface_manifest.json"
     )
-    workflow_optimization_trace_corpus = Artifact.json(
-        "{{ workflow.folder }}/workflow_optimization_trace_corpus.json",
-        schema=WORKFLOW_OPTIMIZATION_TRACE_CORPUS_ARTIFACT.model_cls,
+    workflow_optimization_evidence = Artifact.json(
+        "{{ workflow.folder }}/workflow_optimization_evidence.json"
     )
-    workflow_optimization_internal_trace_corpus = Artifact.json(
-        "{{ workflow.folder }}/_workflow_optimization_internal_trace_corpus.json",
+    optimizer_checkpoint = Artifact.json(
+        "{{ workflow.folder }}/optimizer_checkpoint.json"
     )
-    step_trace_metrics = Artifact.json(
-        "{{ workflow.folder }}/step_trace_metrics.json",
-        schema=STEP_TRACE_METRICS_ARTIFACT.model_cls,
+    workflow_optimization_candidates = Artifact.json(
+        "{{ workflow.folder }}/workflow_optimization_candidates.json",
+        schema=CandidateSet,
     )
-    step_optimization_priority_report = Artifact.json(
-        "{{ workflow.folder }}/step_optimization_priority_report.json",
-        schema=STEP_OPTIMIZATION_PRIORITY_REPORT_ARTIFACT.model_cls,
+    workflow_optimization_supporting = Artifact.md(
+        "{{ workflow.folder }}/workflow_optimization_supporting.md"
     )
-    workflow_failure_scenarios = Artifact.json(
-        "{{ workflow.folder }}/workflow_failure_scenarios.json",
-        schema=WORKFLOW_FAILURE_SCENARIOS_ARTIFACT.model_cls,
+    workflow_optimization_candidate_review = Artifact.json(
+        "{{ workflow.folder }}/workflow_optimization_candidate_review.json",
+        schema=CandidateReview,
     )
-    workflow_failure_scenario_seeds = Artifact.json(
-        "{{ workflow.folder }}/workflow_failure_scenario_seeds.json",
-        schema=WORKFLOW_FAILURE_SCENARIO_SEEDS_ARTIFACT.model_cls,
+    workflow_optimization_report = Artifact.md(
+        "{{ workflow.folder }}/workflow_optimization_report.md"
     )
-    producer_prompt_optimization_candidates = Artifact.json(
-        "{{ workflow.folder }}/producer_prompt_optimization_candidates.json",
-        schema=PRODUCER_PROMPT_OPTIMIZATION_CANDIDATES_ARTIFACT.model_cls,
+    workflow_refinement_evidence = Artifact.json(
+        "{{ workflow.folder }}/workflow_refinement_evidence.json"
     )
-    verifier_rubric_optimization_candidates = Artifact.json(
-        "{{ workflow.folder }}/verifier_rubric_optimization_candidates.json",
-        schema=VERIFIER_RUBRIC_OPTIMIZATION_CANDIDATES_ARTIFACT.model_cls,
+    optimization_publication_receipt = Artifact.json(
+        "{{ workflow.folder }}/optimization_publication_receipt.json"
     )
-    token_optimization_candidates = Artifact.json(
-        "{{ workflow.folder }}/token_optimization_candidates.json",
-        schema=TOKEN_OPTIMIZATION_CANDIDATES_ARTIFACT.model_cls,
-    )
-    adversarial_case_candidates = Artifact.json(
-        "{{ workflow.folder }}/adversarial_case_candidates.json",
-        schema=ADVERSARIAL_CASE_CANDIDATES_ARTIFACT.model_cls,
-    )
-    workflow_level_optimization_candidates = Artifact.json(
-        "{{ workflow.folder }}/workflow_level_optimization_candidates.json",
-        schema=WORKFLOW_LEVEL_OPTIMIZATION_CANDIDATES_ARTIFACT.model_cls,
-    )
-    workflow_optimization_scorecard = Artifact.json(
-        "{{ workflow.folder }}/workflow_optimization_scorecard.json",
-        schema=WORKFLOW_OPTIMIZATION_SCORECARD_ARTIFACT.model_cls,
-    )
-    workflow_refinement_evidence = Artifact.json("{{ workflow.folder }}/workflow_refinement_evidence.json")
-    workflow_optimization_packet = Artifact("{{ workflow.folder }}/workflow_optimization_packet.md")
-    optimization_publication_receipt = Artifact.json("{{ workflow.folder }}/optimization_publication_receipt.json")
-
-    frame = produce_verify_step(
-        producer_prompt=Prompt.file("prompts/frame_producer.md"),
-        verifier_prompt=Prompt.file("prompts/frame_verifier.md"),
-        session=frame_session,
+    recommend = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/recommendation_producer.md"),
+        verifier_prompt=Prompt.file("prompts/recommendation_verifier.md"),
+        session=recommendation_session,
+        verifier_session=verifier_session,
         requires=[
             request,
             invocation_contract,
-            selected_workflow_capability,
             selected_workflow_authoring_surface,
-            selected_workflow_decomposition_surface,
-            selected_workflow_source_manifest,
-            workflow_optimization_scope,
-            workflow_optimization_trace_corpus,
-            excluded_run_report,
-            workflow_failure_scenario_seeds,
-            framework_architecture_doc,
-            framework_authoring_doc,
-            workflow_authoring_guidelines,
+            baseline_surface_manifest,
+            workflow_optimization_evidence,
         ],
         producer_writes=[
-            selected_workflow_capability,
-            selected_workflow_authoring_surface,
-            selected_workflow_decomposition_surface,
-            selected_workflow_source_manifest,
-            workflow_optimization_scope,
-            workflow_optimization_trace_corpus,
-            excluded_run_report,
-            workflow_failure_scenario_seeds,
+            workflow_optimization_candidates,
+            workflow_optimization_supporting,
         ],
-        control_schema=FrameOptimizationPayload,
-        routes=FRAME_ROUTE_CONTRACTS,
-        after_verifier=_after_frame,
-    )
-    rank_targets = produce_verify_step(
-        producer_prompt=Prompt.file("prompts/rank_targets_producer.md"),
-        verifier_prompt=Prompt.file("prompts/rank_targets_verifier.md"),
-        session=rank_targets_session,
-        requires=[
-            request,
-            invocation_contract,
-            selected_workflow_capability,
-            selected_workflow_authoring_surface,
-            selected_workflow_decomposition_surface,
-            workflow_optimization_scope,
-            workflow_optimization_trace_corpus,
-        ],
-        producer_writes=[step_trace_metrics, step_optimization_priority_report],
-        control_schema=RankTargetsPayload,
-        routes=RANK_TARGETS_ROUTE_CONTRACTS,
-        after_verifier=_after_rank_targets,
-    )
-    mine_failures = produce_verify_step(
-        producer_prompt=Prompt.file("prompts/mine_failures_producer.md"),
-        verifier_prompt=Prompt.file("prompts/mine_failures_verifier.md"),
-        session=mine_failures_session,
-        requires=[
-            request,
-            invocation_contract,
-            selected_workflow_authoring_surface,
-            workflow_optimization_scope,
-            workflow_optimization_internal_trace_corpus,
-            workflow_optimization_trace_corpus,
-            step_optimization_priority_report,
-            workflow_failure_scenario_seeds,
-        ],
-        producer_writes=[workflow_failure_scenarios],
-        control_schema=FailureScenarioPayload,
-        routes=MINE_FAILURES_ROUTE_CONTRACTS,
-        after_verifier=_after_mine_failures,
-    )
-    optimize_producer = produce_verify_step(
-        producer_prompt=Prompt.file("prompts/optimize_producer_producer.md"),
-        verifier_prompt=Prompt.file("prompts/optimize_producer_verifier.md"),
-        session=optimize_producer_session,
-        requires=[
-            request,
-            invocation_contract,
-            selected_workflow_authoring_surface,
-            workflow_optimization_scope,
-            workflow_failure_scenarios,
-            step_optimization_priority_report,
-        ],
-        producer_writes=[producer_prompt_optimization_candidates],
-        control_schema=CandidatePassPayload,
-        routes=OPTIMIZE_PRODUCER_ROUTE_CONTRACTS,
-        after_verifier=_after_optimize_producer,
-    )
-    optimize_verifier_rubric = produce_verify_step(
-        producer_prompt=Prompt.file("prompts/optimize_verifier_rubric_producer.md"),
-        verifier_prompt=Prompt.file("prompts/optimize_verifier_rubric_verifier.md"),
-        session=optimize_verifier_rubric_session,
-        requires=[
-            request,
-            invocation_contract,
-            selected_workflow_authoring_surface,
-            workflow_optimization_scope,
-            workflow_failure_scenarios,
-            step_optimization_priority_report,
-        ],
-        producer_writes=[verifier_rubric_optimization_candidates],
-        control_schema=CandidatePassPayload,
-        routes=OPTIMIZE_VERIFIER_RUBRIC_ROUTE_CONTRACTS,
-        after_verifier=_after_optimize_verifier_rubric,
-    )
-    optimize_tokens = produce_verify_step(
-        producer_prompt=Prompt.file("prompts/optimize_tokens_producer.md"),
-        verifier_prompt=Prompt.file("prompts/optimize_tokens_verifier.md"),
-        session=optimize_tokens_session,
-        requires=[
-            request,
-            invocation_contract,
-            selected_workflow_authoring_surface,
-            workflow_optimization_scope,
-            workflow_optimization_trace_corpus,
-            step_optimization_priority_report,
-        ],
-        producer_writes=[token_optimization_candidates],
-        control_schema=CandidatePassPayload,
-        routes=OPTIMIZE_TOKENS_ROUTE_CONTRACTS,
-        after_verifier=_after_optimize_tokens,
-    )
-    adversarial_cases = produce_verify_step(
-        producer_prompt=Prompt.file("prompts/adversarial_cases_producer.md"),
-        verifier_prompt=Prompt.file("prompts/adversarial_cases_verifier.md"),
-        session=adversarial_cases_session,
-        requires=[
-            request,
-            invocation_contract,
-            workflow_optimization_scope,
-            workflow_failure_scenarios,
-            step_optimization_priority_report,
-        ],
-        producer_writes=[adversarial_case_candidates],
-        control_schema=AdversarialCasesPayload,
-        routes=ADVERSARIAL_CASES_ROUTE_CONTRACTS,
-        after_verifier=_after_adversarial_cases,
-    )
-    workflow_level = produce_verify_step(
-        producer_prompt=Prompt.file("prompts/workflow_level_producer.md"),
-        verifier_prompt=Prompt.file("prompts/workflow_level_verifier.md"),
-        session=workflow_level_session,
-        requires=[
-            request,
-            invocation_contract,
-            selected_workflow_capability,
-            selected_workflow_authoring_surface,
-            selected_workflow_decomposition_surface,
-            workflow_optimization_scope,
-            workflow_optimization_trace_corpus,
-            step_optimization_priority_report,
-        ],
-        producer_writes=[workflow_level_optimization_candidates],
-        control_schema=CandidatePassPayload,
-        routes=WORKFLOW_LEVEL_ROUTE_CONTRACTS,
-        after_verifier=_after_workflow_level,
-    )
-    package = produce_verify_step(
-        producer_prompt=Prompt.file("prompts/package_producer.md"),
-        verifier_prompt=Prompt.file("prompts/package_verifier.md"),
-        session=package_session,
-        requires=[
-            request,
-            invocation_contract,
-            selected_workflow_capability,
-            selected_workflow_authoring_surface,
-            selected_workflow_decomposition_surface,
-            selected_workflow_source_manifest,
-            workflow_optimization_scope,
-            workflow_optimization_trace_corpus,
-            excluded_run_report,
-            optimization_package_checklist,
-        ],
-        producer_writes=[workflow_optimization_scorecard, workflow_optimization_packet],
-        control_schema=OptimizationPackagePayload,
-        routes=PACKAGE_ROUTE_CONTRACTS,
-        after_verifier=_after_package,
+        verifier_writes=[workflow_optimization_candidate_review],
+        control_schema=RecommendationControl,
+        routes=RECOMMENDATION_ROUTES,
+        after_verifier=_after_review,
     )
 
     @python_step(
-        name="bootstrap",
+        name="capture",
         requires=[request],
-        writes=[invocation_contract],
-        routes={"inputs_prepared": "capture_frame_context"},
+        writes=[
+            invocation_contract,
+            selected_workflow_authoring_surface,
+            baseline_surface_manifest,
+            workflow_optimization_evidence,
+            optimizer_checkpoint,
+            workflow_optimization_candidates,
+            optimization_publication_receipt,
+        ],
+        routes={
+            "evidence_ready": Route.to(
+                "recommend",
+                summary="Frozen eligible evidence is ready.",
+                required_writes=(
+                    "invocation_contract",
+                    "selected_workflow_authoring_surface",
+                    "baseline_surface_manifest",
+                    "workflow_optimization_evidence",
+                    "optimizer_checkpoint",
+                    "optimization_publication_receipt",
+                ),
+            ),
+            "no_actionable_evidence": Route.to(
+                "publish_recommendation",
+                summary="Publish an evidence action with zero model calls.",
+                required_writes=(
+                    "invocation_contract",
+                    "selected_workflow_authoring_surface",
+                    "baseline_surface_manifest",
+                    "workflow_optimization_evidence",
+                    "optimizer_checkpoint",
+                    "workflow_optimization_candidates",
+                    "optimization_publication_receipt",
+                ),
+            ),
+        },
     )
-    def bootstrap(ctx):
-        params = ctx.params
-        selected_workflow_name = resolve_selected_workflow_name(ctx.root, params.selected_workflow)
-        next_state = ctx.state.model_copy(
-            update={
-                "selected_workflow_reference": params.selected_workflow,
-                "selected_workflow_name": selected_workflow_name,
-                "task_title": params.task_title,
-                "run_refs": list(params.run_refs),
-                "run_statuses": list(params.run_statuses),
-                "route_tags": list(params.route_tags),
-                "history_limit": params.history_limit,
-                "top_k_steps": params.top_k_steps,
-                "optimization_depth": params.optimization_depth,
-                "include_adversarial_generation": params.include_adversarial_generation,
-                "include_token_optimization": params.include_token_optimization,
-                "include_workflow_level_candidates": params.include_workflow_level_candidates,
-                "max_failure_scenarios": params.max_failure_scenarios,
-                "max_candidates_per_pass": params.max_candidates_per_pass,
-                "focus": params.focus,
-                "sponsor_role": params.sponsor_role,
-                "desired_outcome": params.desired_outcome,
-                "constraints": list(params.constraints),
-                "frame_status": None,
-                "ranking_status": None,
-                "failure_status": None,
-                "producer_status": None,
-                "verifier_rubric_status": None,
-                "token_status": None,
-                "adversarial_status": None,
-                "workflow_level_status": None,
-                "packaging_status": None,
-                "candidate_run_count": 0,
-                "eligible_run_count": 0,
-                "excluded_run_count": 0,
-                "no_eligible_trace_evidence": False,
-                "published": False,
-            }
+    def capture(ctx):
+        p = ctx.params
+        name = p.selected_workflow
+        # Replace any stale success marker before validation so a failed new
+        # invocation can never leave an older accepted receipt consumable.
+        write_incomplete_receipt(
+            output_dir=ctx.workflow_folder,
+            selected_workflow=name,
+            stop_reason="validating_inputs",
         )
-        open_workflow_sessions(
+        try:
+            resolved = resolve_workflow_reference(ctx.root, p.selected_workflow)
+            capability = inspect_resolved_workflow(ctx.root, resolved)
+            name = resolved.reference.workflow_name
+            runs = list_selected_workflow_runs(
+                ctx.root,
+                name,
+                run_refs=p.run_refs,
+                run_statuses=p.run_statuses,
+                history_limit=p.history_limit,
+            )
+        except Exception as exc:
+            write_incomplete_receipt(
+                output_dir=ctx.workflow_folder,
+                selected_workflow=name,
+                stop_reason=f"invalid_input: {exc}",
+            )
+            raise
+        for stale in (
+            ctx.artifacts.workflow_optimization_candidates.path,
+            ctx.artifacts.workflow_optimization_supporting.path,
+            ctx.artifacts.workflow_optimization_candidate_review.path,
+            ctx.artifacts.workflow_optimization_report.path,
+            ctx.artifacts.workflow_refinement_evidence.path,
+        ):
+            stale.unlink(missing_ok=True)
+        write_incomplete_receipt(
+            output_dir=ctx.workflow_folder,
+            selected_workflow=name,
+            stop_reason="analysis_in_progress",
+        )
+        authoring = selected_workflow_authoring_surface_payload(capability)
+        boundary, sources, authoritative = _runtime_surface(
+            capability, ctx.root.resolve()
+        )
+        manifest = _copy_baseline(ctx.workflow_folder, boundary, sources)
+        if manifest["surface_id"] != authoritative["surface_id"]:
+            raise ValueError("captured baseline does not match runtime surface")
+        write_workflow_json(
             ctx,
-            "frame_session",
-            "rank_targets_session",
-            "mine_failures_session",
-            "optimize_producer_session",
-            "optimize_verifier_rubric_session",
-            "optimize_tokens_session",
-            "adversarial_cases_session",
-            "workflow_level_session",
-            "package_session",
+            "selected_workflow_authoring_surface.json",
+            {
+                "schema": "botpipe.workflow_authoring_surface/v2",
+                "selected_workflow": name,
+                "surface": authoring,
+            },
+        )
+        write_workflow_json(ctx, "baseline_surface_manifest.json", manifest)
+        compiled = compile_workflow(resolved.workflow_cls)
+        workflow_identity = canonical_workflow_identity(
+            resolved.reference, workflow_name=compiled.workflow_name
+        )
+        snapshot = capture_evidence_snapshot(
+            ctx.root,
+            name,
+            runs,
+            ctx.workflow_folder / "evidence_snapshot",
+            route_tags=p.route_tags,
+            objective=p.objective,
+            top_k_steps=p.top_k_steps,
+            max_evidence_bytes=p.max_evidence_bytes,
+            explicit_run_refs=bool(p.run_refs),
+            current_workflow_identity=workflow_identity,
+            current_surface_manifest_id=manifest["surface_id"],
+            current_topology_id=compiled.topology_hash,
+        )
+        write_evidence_snapshot(
+            snapshot, ctx.artifacts.workflow_optimization_evidence.path
+        )
+        invocation = _invocation_id(p, ctx.artifacts.request.path, name)
+        anchor = _source_anchor(sources)
+        cid = _checkpoint(
+            invocation, snapshot.snapshot_id, manifest["surface_id"], anchor
         )
         write_invocation_contract(
             ctx,
             {
-                "selected_workflow_reference": next_state.selected_workflow_reference,
-                "task_title": next_state.task_title,
-                "run_refs": next_state.run_refs,
-                "run_statuses": next_state.run_statuses,
-                "route_tags": next_state.route_tags,
-                "history_limit": next_state.history_limit,
-                "top_k_steps": next_state.top_k_steps,
-                "optimization_depth": next_state.optimization_depth,
-                "include_adversarial_generation": next_state.include_adversarial_generation,
-                "include_token_optimization": next_state.include_token_optimization,
-                "include_workflow_level_candidates": next_state.include_workflow_level_candidates,
-                "max_failure_scenarios": next_state.max_failure_scenarios,
-                "max_candidates_per_pass": next_state.max_candidates_per_pass,
-                "focus": next_state.focus,
-                "sponsor_role": next_state.sponsor_role,
-                "desired_outcome": next_state.desired_outcome,
-                "constraints": next_state.constraints,
+                "schema": "botpipe.workflow_optimization.invocation/v2",
+                "invocation_identity": invocation,
+                "selected_workflow": name,
+                **p.model_dump(
+                    mode="json",
+                    exclude={"optimization_depth", "max_candidates_per_pass"},
+                ),
             },
         )
-        ctx.state = next_state
-        return "inputs_prepared"
-
-    @python_step(
-        name="capture_frame_context",
-        requires=[request, invocation_contract],
-        writes=[
-            selected_workflow_capability,
-            selected_workflow_authoring_surface,
-            selected_workflow_decomposition_surface,
-            selected_workflow_source_manifest,
-            workflow_optimization_scope,
-            workflow_optimization_trace_corpus,
-            workflow_optimization_internal_trace_corpus,
-            excluded_run_report,
-            workflow_failure_scenario_seeds,
-        ],
-        routes={"frame_context_captured": "frame"},
-    )
-    def capture_frame_context(ctx):
-        frame_capture = capture_optimization_frame_context(
-            ctx=ctx,
-            selected_workflow_reference=ctx.state.selected_workflow_reference,
-            task_title=ctx.state.task_title,
-            run_refs=ctx.state.run_refs,
-            run_statuses=ctx.state.run_statuses,
-            route_tags=ctx.state.route_tags,
-            history_limit=ctx.state.history_limit,
-            top_k_steps=ctx.state.top_k_steps,
-            optimization_depth=ctx.state.optimization_depth,
-            include_adversarial_generation=ctx.state.include_adversarial_generation,
-            include_token_optimization=ctx.state.include_token_optimization,
-            include_workflow_level_candidates=ctx.state.include_workflow_level_candidates,
-            max_failure_scenarios=ctx.state.max_failure_scenarios,
-            max_candidates_per_pass=ctx.state.max_candidates_per_pass,
-            focus=ctx.state.focus,
-            constraints=ctx.state.constraints,
-        )
-        ctx.state.selected_workflow_name = frame_capture.selected_workflow_name
-        ctx.state.candidate_run_count = frame_capture.candidate_run_count
-        ctx.state.eligible_run_count = frame_capture.eligible_run_count
-        ctx.state.excluded_run_count = frame_capture.excluded_run_count
-        ctx.state.no_eligible_trace_evidence = frame_capture.no_eligible_trace_evidence
-        return "frame_context_captured"
-
-    @python_step(
-        name="route_optimize_tokens",
-        writes=[token_optimization_candidates],
-        routes={
-            "token_optimization_enabled": Route.to(
-                "optimize_tokens",
-                summary="Token optimization remains enabled, so the workflow continues into the token candidate pass.",
-            ),
-            "token_pass_not_applicable": Route.to(
-                "route_adversarial_cases",
-                summary="Token optimization was disabled explicitly, so the workflow publishes an empty candidate artifact and skips the pass.",
-                required_writes=("token_optimization_candidates",),
-            ),
-        },
-    )
-    def route_optimize_tokens(ctx):
-        if ctx.state.include_token_optimization:
-            return "token_optimization_enabled"
-        finalize_optional_optimization_artifact(
-            route="token_pass_not_applicable",
-            path=ctx.workflow_folder / _TOKEN_CANDIDATES_SPEC.filename,
-            selected_workflow_name=_selected_workflow_name_from_state(ctx.state),
-            spec=_TOKEN_CANDIDATES_SPEC,
-        )
-        ctx.state.token_status = "token_pass_not_applicable"
-        return "token_pass_not_applicable"
-
-    @python_step(
-        name="route_adversarial_cases",
-        writes=[adversarial_case_candidates],
-        routes={
-            "adversarial_generation_enabled": Route.to(
-                "adversarial_cases",
-                summary="Adversarial case generation remains enabled, so the workflow continues into the adversarial candidate pass.",
-            ),
-            "adversarial_generation_skipped": Route.to(
-                "route_workflow_level",
-                summary="Adversarial case generation was disabled explicitly, so the workflow publishes an empty candidate artifact and skips the pass.",
-                required_writes=("adversarial_case_candidates",),
-            ),
-        },
-    )
-    def route_adversarial_cases(ctx):
-        if ctx.state.include_adversarial_generation:
-            return "adversarial_generation_enabled"
-        finalize_optional_optimization_artifact(
-            route="adversarial_generation_skipped",
-            path=ctx.workflow_folder / _ADVERSARIAL_CASES_SPEC.filename,
-            selected_workflow_name=_selected_workflow_name_from_state(ctx.state),
-            spec=_ADVERSARIAL_CASES_SPEC,
-        )
-        ctx.state.adversarial_status = "adversarial_generation_skipped"
-        return "adversarial_generation_skipped"
-
-    @python_step(
-        name="route_workflow_level",
-        writes=[workflow_level_optimization_candidates],
-        routes={
-            "workflow_level_enabled": Route.to(
-                "workflow_level",
-                summary="Workflow-level optimization remains enabled, so the workflow continues into the cross-step candidate pass.",
-            ),
-            "workflow_level_pass_not_applicable": Route.to(
-                "package",
-                summary="Workflow-level optimization was disabled explicitly, so the workflow publishes an empty candidate artifact and skips the pass.",
-                required_writes=("workflow_level_optimization_candidates",),
-            ),
-        },
-    )
-    def route_workflow_level(ctx):
-        if ctx.state.include_workflow_level_candidates:
-            return "workflow_level_enabled"
-        finalize_optional_optimization_artifact(
-            route="workflow_level_pass_not_applicable",
-            path=ctx.workflow_folder / _WORKFLOW_LEVEL_CANDIDATES_SPEC.filename,
-            selected_workflow_name=_selected_workflow_name_from_state(ctx.state),
-            spec=_WORKFLOW_LEVEL_CANDIDATES_SPEC,
-        )
-        ctx.state.workflow_level_status = "workflow_level_pass_not_applicable"
-        return "workflow_level_pass_not_applicable"
-
-    @python_step(
-        name="publish_optimization_packet",
-        requires=[
-            selected_workflow_capability,
-            selected_workflow_authoring_surface,
-            selected_workflow_decomposition_surface,
-            selected_workflow_source_manifest,
-            workflow_optimization_scope,
-            workflow_optimization_trace_corpus,
-            excluded_run_report,
-            workflow_optimization_scorecard,
-            workflow_optimization_packet,
-        ],
-        writes=[workflow_refinement_evidence, optimization_publication_receipt],
-        routes={"optimization_candidates_published": FINISH},
-    )
-    def publish_optimization_packet(ctx):
-        workflow_folder = ctx.workflow_folder
-        required_paths = require_existing_artifact_paths(
-            {
-                "selected_workflow_capability": workflow_folder / "selected_workflow_capability.json",
-                "selected_workflow_authoring_surface": workflow_folder / "selected_workflow_authoring_surface.json",
-                "selected_workflow_decomposition_surface": workflow_folder / "selected_workflow_decomposition_surface.json",
-                "selected_workflow_source_manifest": workflow_folder / "selected_workflow_source_manifest.json",
-                "workflow_optimization_scope": workflow_folder / "workflow_optimization_scope.json",
-                "workflow_optimization_trace_corpus": workflow_folder / "workflow_optimization_trace_corpus.json",
-                "excluded_run_report": workflow_folder / "excluded_run_report.json",
-                "workflow_optimization_scorecard": workflow_folder / "workflow_optimization_scorecard.json",
-                "workflow_optimization_packet": workflow_folder / "workflow_optimization_packet.md",
-            }
-        )
-        capability_snapshot = read_json_object(required_paths["selected_workflow_capability"])
-        selected_workflow_name, _ = validate_selected_workflow_capability_snapshot(
-            capability_snapshot,
-            expected_selected_workflow_name=ctx.state.selected_workflow_name,
-            expected_label="workflow state",
-        )
-        validate_selected_workflow_authoring_surface_snapshot(
-            read_json_object(required_paths["selected_workflow_authoring_surface"]),
-            expected_selected_workflow_name=selected_workflow_name,
-            expected_label="selected_workflow_capability.json",
-        )
-        validate_selected_workflow_decomposition_surface_snapshot(
-            read_json_object(required_paths["selected_workflow_decomposition_surface"]),
-            expected_selected_workflow_name=selected_workflow_name,
-            expected_label="selected_workflow_capability.json",
-        )
-        validate_optimization_selected_workflow_field(
-            read_json_object(required_paths["selected_workflow_source_manifest"]),
-            artifact_name="selected_workflow_source_manifest.json",
-            expected_selected_workflow_name=selected_workflow_name,
-        )
-        scope_payload = read_json_object(required_paths["workflow_optimization_scope"])
-        validate_optimization_selected_workflow_field(
-            scope_payload,
-            artifact_name="workflow_optimization_scope.json",
-            expected_selected_workflow_name=selected_workflow_name,
-        )
-        WORKFLOW_OPTIMIZATION_SCOPE_ARTIFACT.read(required_paths["workflow_optimization_scope"])
-        validate_optimization_selected_workflow_field(
-            read_json_object(required_paths["workflow_optimization_trace_corpus"]),
-            artifact_name="workflow_optimization_trace_corpus.json",
-            expected_selected_workflow_name=selected_workflow_name,
-        )
-        excluded_report = read_json_object(required_paths["excluded_run_report"])
-        if excluded_report.get("schema") != EXCLUDED_RUN_REPORT_SCHEMA:
-            raise ValueError("excluded_run_report.json must preserve the optimizer excluded-run schema")
-        validate_optimization_selected_workflow_field(
-            excluded_report,
-            artifact_name="excluded_run_report.json",
-            expected_selected_workflow_name=selected_workflow_name,
-        )
-
-        if scope_payload.get("optimization_depth") != ctx.state.optimization_depth:
-            raise ValueError("workflow_optimization_scope.json optimization_depth must match the workflow request")
-
-        publication_surface = collect_optimization_publication_surface(
-            workflow_folder,
-            selected_workflow_name=selected_workflow_name,
-            artifact_specs=_CANDIDATE_ARTIFACT_SPECS,
-        )
-        scorecard_payload = read_json_object(required_paths["workflow_optimization_scorecard"])
-        scorecard_payload["optimization_depth"] = ctx.state.optimization_depth
-        scorecard_payload["ablation_executed"] = False
-        scorecard_payload["requires_ablation_before_promotion"] = publication_surface.requires_ablation
-        write_workflow_json(ctx, "workflow_optimization_scorecard.json", scorecard_payload)
-        WORKFLOW_OPTIMIZATION_SCORECARD_ARTIFACT.read(required_paths["workflow_optimization_scorecard"])
-        validate_optimization_selected_workflow_field(
-            scorecard_payload,
-            artifact_name="workflow_optimization_scorecard.json",
-            expected_selected_workflow_name=selected_workflow_name,
-        )
-        validate_optimization_scorecard_publication(
-            scorecard_payload=scorecard_payload,
-            publication_surface=publication_surface,
-        )
-        packet_text = read_required_text(
-            required_paths["workflow_optimization_packet"],
-            "workflow_optimization_packet.md must be non-empty",
-        )
-        packet_text = _ensure_packet_optimization_depth_section(
-            packet_text,
-            optimization_depth=ctx.state.optimization_depth,
-        )
-        required_paths["workflow_optimization_packet"].write_text(packet_text, encoding="utf-8")
-        validate_no_hidden_execution_signal(
-            packet_text,
-            "workflow_optimization_packet.md must not imply hidden downstream execution",
-        )
-
-        source_ok, source_details = validate_selected_workflow_source_unchanged(
-            ctx=ctx,
-            selected_workflow=selected_workflow_name,
-            manifest_path=required_paths["selected_workflow_source_manifest"],
-        )
-        if not source_ok:
-            updated_scorecard = dict(scorecard_payload)
-            updated_scorecard["source_mutation_check"] = {"passed": False, "details": source_details}
-            write_workflow_json(ctx, "workflow_optimization_scorecard.json", updated_scorecard)
-            raise ValueError(
-                "authoritative selected workflow file changed during optimization publication"
-            )
-
-        evidence_entries = _optimization_evidence_entries(
-            workflow_folder,
-            no_eligible=ctx.state.no_eligible_trace_evidence,
-            ranking_status=ctx.state.ranking_status,
-            failure_status=ctx.state.failure_status,
-        )
-        write_optimization_refinement_evidence(
-            ctx=ctx,
-            selected_workflow=selected_workflow_name,
-            evidence_entries=evidence_entries,
-        )
-        receipt_payload = {
-            "selected_workflow_name": selected_workflow_name,
-            "evidence_run_count": ctx.state.eligible_run_count,
-            "excluded_run_count": ctx.state.excluded_run_count,
-            "no_eligible_trace_evidence": ctx.state.no_eligible_trace_evidence,
-            "optimization_depth": ctx.state.optimization_depth,
-            "publication_boundary": "candidate_only",
-            "artifacts": {
-                "workflow_optimization_scorecard": "workflow_optimization_scorecard.json",
-                "workflow_refinement_evidence": "workflow_refinement_evidence.json",
-                "workflow_optimization_packet": "workflow_optimization_packet.md",
-            },
-            "source_mutation_check": {"passed": True, "details": source_details},
-        }
-        write_publication_receipt(
+        budget = current_provider_dispatch_budget()
+        write_workflow_json(
             ctx,
-            "optimization_publication_receipt.json",
-            receipt_payload,
-        )
-        ctx.state.published = True
-        return "optimization_candidates_published"
-
-    entry = bootstrap
-
-
-
-def _optimization_evidence_entries(
-    workflow_folder: Path,
-    *,
-    no_eligible: bool,
-    ranking_status: str | None,
-    failure_status: str | None,
-) -> list[dict[str, str]]:
-    entries: list[dict[str, str]] = []
-    for filename, kind in _PACKAGE_EVIDENCE_FILES.items():
-        path = workflow_folder / filename
-        if not path.is_file():
-            continue
-        if no_eligible and kind != "workflow_optimization_scorecard":
-            continue
-        if kind == "workflow_failure_scenarios" and (
-            ranking_status != "targets_ranked" or failure_status != "failure_scenarios_mined"
-        ):
-            continue
-        summary = (
-            "No eligible Plan-1 observability bundles were available, so this scorecard is a no-op publication boundary."
-            if kind == "workflow_optimization_scorecard" and no_eligible
-            else f"Optimization evidence published in {filename}."
-        )
-        handling = (
-            "Candidate-only boundary; use this to explain the no-op publication outcome."
-            if kind == "workflow_optimization_scorecard" and no_eligible
-            else "Candidate only; validate before materializing workflow changes."
-        )
-        entries.append(
+            "optimizer_checkpoint.json",
             {
-                "kind": kind,
-                "path": filename,
-                "summary": summary,
-                "handling": handling,
-            }
+                "schema": "botpipe.workflow_optimization.checkpoint/v2",
+                "checkpoint_id": cid,
+                "invocation_identity": invocation,
+                "baseline_root": manifest["root"],
+                "authoritative_sources": anchor,
+                "provider_budget": None if budget is None else budget.snapshot(),
+            },
         )
-    return entries
+        ctx.state.selected_workflow_name = name
+        ctx.state.invocation_identity = invocation
+        ctx.state.evidence_snapshot_id = snapshot.snapshot_id
+        ctx.state.baseline_surface_manifest_id = manifest["surface_id"]
+        ctx.state.baseline_root = manifest["root"]
+        ctx.state.baseline_boundary = boundary
+        ctx.state.authoritative_sources = anchor
+        open_workflow_sessions(ctx, "recommendation_session", "verifier_session")
+        if snapshot.next_action == "propose_changes" and snapshot.shortlist:
+            return "evidence_ready"
+        empty = build_empty_candidate_set(
+            selected_workflow=name,
+            evidence_snapshot_id=snapshot.snapshot_id,
+            baseline_surface_manifest_id=manifest["surface_id"],
+            next_action=(
+                "collect_evidence"
+                if snapshot.next_action == "collect_evidence"
+                else "no_change"
+            ),
+            reason="No objective-eligible evidence was available in the admitted sample.",
+        )
+        write_workflow_json(
+            ctx,
+            "workflow_optimization_candidates.json",
+            empty.model_dump(mode="json", by_alias=True),
+        )
+        return "no_actionable_evidence"
 
-
-def _selected_workflow_name_from_state(state: WorkflowRunTracesToOptimizationCandidates.State) -> str:
-    return require_non_empty_string(
-        state.selected_workflow_name or state.selected_workflow_reference,
-        error_message="selected_workflow_name must be available before optional pass routing",
-        coerce=True,
+    @python_step(
+        name="publish_recommendation",
+        requires=[
+            invocation_contract,
+            baseline_surface_manifest,
+            workflow_optimization_evidence,
+            optimizer_checkpoint,
+            workflow_optimization_candidates,
+        ],
+        reads=[
+            workflow_optimization_candidate_review,
+            workflow_optimization_supporting,
+        ],
+        writes=[
+            workflow_optimization_report,
+            workflow_refinement_evidence,
+            optimization_publication_receipt,
+        ],
+        routes={
+            "published": Route.to(
+                FINISH,
+                summary="Recommendation and handoff committed.",
+                required_writes=(
+                    "workflow_optimization_report",
+                    "workflow_refinement_evidence",
+                    "optimization_publication_receipt",
+                ),
+            )
+        },
     )
+    def publish_recommendation(ctx):
+        try:
+            budget = current_provider_dispatch_budget()
+            remaining = None if budget is None else budget.remaining_seconds()
+            if remaining is not None and remaining <= 0:
+                raise ValueError("optimizer deadline exhausted before publication")
+            evidence, manifest = _verify(ctx)
+            _admit_model_outputs(ctx, include_review=True)
+            cs = read_candidate_set(
+                ctx.artifacts.workflow_optimization_candidates.path,
+                max_output_bytes=ctx.params.max_output_bytes,
+            )
+            _validate(ctx, cs, evidence, manifest, ctx.params.max_candidates)
+            review = None
+            rpath = ctx.artifacts.workflow_optimization_candidate_review.path
+            if rpath.is_file():
+                review = read_candidate_review(
+                    rpath, max_output_bytes=ctx.params.max_output_bytes
+                )
+                validate_candidate_review(review, candidate_set=cs)
+            supporting = ctx.artifacts.workflow_optimization_supporting.path
+            supporting_paths = [supporting] if supporting.is_file() else []
+
+            def before_commit():
+                active = current_provider_dispatch_budget()
+                left = None if active is None else active.remaining_seconds()
+                if left is not None and left <= 0:
+                    raise ValueError(
+                        "optimizer deadline exhausted before receipt commit"
+                    )
+
+            receipt = publish_recommendation(
+                output_dir=ctx.workflow_folder,
+                evidence_snapshot_path=ctx.artifacts.workflow_optimization_evidence.path,
+                baseline_surface_manifest_path=ctx.artifacts.baseline_surface_manifest.path,
+                evidence_snapshot=evidence,
+                candidate_set=cs,
+                review=review,
+                max_output_bytes=ctx.params.max_output_bytes,
+                max_evidence_bytes=ctx.params.max_evidence_bytes,
+                candidate_set_source_path=ctx.artifacts.workflow_optimization_candidates.path,
+                review_source_path=rpath if review is not None else None,
+                supporting_artifact_paths=supporting_paths,
+                expected_baseline_root=Path(ctx.state.baseline_root),
+                expected_baseline_boundary=ctx.state.baseline_boundary,
+                expected_baseline_kind=KIND,
+                expected_authoritative_sources=ctx.state.authoritative_sources,
+                before_commit=before_commit,
+            )
+            ctx.state.published = receipt.status == "accepted"
+            return "published"
+        except Exception as exc:
+            write_incomplete_receipt(
+                output_dir=ctx.workflow_folder,
+                selected_workflow=ctx.state.selected_workflow_name or "unknown",
+                evidence_snapshot_id=ctx.state.evidence_snapshot_id,
+                stop_reason=str(exc),
+            )
+            raise
+
+    entry = capture
 
 
-def _empty_failure_scenarios_payload(*, selected_workflow: str) -> dict[str, Any]:
-    return {
-        "schema": FAILURE_SCENARIOS_SCHEMA,
-        "selected_workflow": selected_workflow,
-        "failure_scenarios": [],
-    }
-
-
-def _empty_producer_candidates_payload(*, selected_workflow: str) -> dict[str, Any]:
-    return {
-        "schema": _PRODUCER_CANDIDATES_SCHEMA,
-        "selected_workflow": selected_workflow,
-        "target_steps": [],
-        "candidates": [],
-    }
-
-
-def _empty_verifier_rubric_candidates_payload(*, selected_workflow: str) -> dict[str, Any]:
-    return {
-        "schema": _VERIFIER_RUBRIC_CANDIDATES_SCHEMA,
-        "selected_workflow": selected_workflow,
-        "target_steps": [],
-        "candidates": [],
-    }
-
-
-def _empty_token_candidates_payload(*, selected_workflow: str) -> dict[str, Any]:
-    return {
-        "schema": _TOKEN_CANDIDATES_SCHEMA,
-        "selected_workflow": selected_workflow,
-        "candidates": [],
-    }
-
-
-def _empty_adversarial_cases_payload(*, selected_workflow: str) -> dict[str, Any]:
-    return {
-        "schema": _ADVERSARIAL_CASE_CANDIDATES_SCHEMA,
-        "selected_workflow": selected_workflow,
-        "cases": [],
-    }
-
-
-def _empty_workflow_level_candidates_payload(*, selected_workflow: str) -> dict[str, Any]:
-    return {
-        "schema": _WORKFLOW_LEVEL_CANDIDATES_SCHEMA,
-        "selected_workflow": selected_workflow,
-        "candidates": [],
-    }
-
-
-_FAILURE_SCENARIOS_SPEC = OptimizationArtifactSpec(
-    filename="workflow_failure_scenarios.json",
-    artifact_name="workflow_failure_scenarios.json",
-    expected_schema=FAILURE_SCENARIOS_SCHEMA,
-    list_field="failure_scenarios",
-    reader=WORKFLOW_FAILURE_SCENARIOS_ARTIFACT.read,
-    empty_payload_factory=_empty_failure_scenarios_payload,
-)
-
-_PRODUCER_CANDIDATES_SPEC = OptimizationArtifactSpec(
-    filename="producer_prompt_optimization_candidates.json",
-    artifact_name="producer_prompt_optimization_candidates.json",
-    expected_schema=_PRODUCER_CANDIDATES_SCHEMA,
-    list_field="candidates",
-    reader=PRODUCER_PROMPT_OPTIMIZATION_CANDIDATES_ARTIFACT.read,
-    empty_payload_factory=_empty_producer_candidates_payload,
-    count_key="producer",
-    id_field="candidate_id",
-    requires_ablation_field="requires_ablation",
-)
-
-_VERIFIER_RUBRIC_CANDIDATES_SPEC = OptimizationArtifactSpec(
-    filename="verifier_rubric_optimization_candidates.json",
-    artifact_name="verifier_rubric_optimization_candidates.json",
-    expected_schema=_VERIFIER_RUBRIC_CANDIDATES_SCHEMA,
-    list_field="candidates",
-    reader=VERIFIER_RUBRIC_OPTIMIZATION_CANDIDATES_ARTIFACT.read,
-    empty_payload_factory=_empty_verifier_rubric_candidates_payload,
-    count_key="verifier_rubric",
-    id_field="candidate_id",
-    requires_ablation_field="requires_ablation",
-)
-
-_TOKEN_CANDIDATES_SPEC = OptimizationArtifactSpec(
-    filename="token_optimization_candidates.json",
-    artifact_name="token_optimization_candidates.json",
-    expected_schema=_TOKEN_CANDIDATES_SCHEMA,
-    list_field="candidates",
-    reader=TOKEN_OPTIMIZATION_CANDIDATES_ARTIFACT.read,
-    empty_payload_factory=_empty_token_candidates_payload,
-    count_key="token",
-    id_field="candidate_id",
-    requires_ablation_field="requires_ablation",
-)
-
-_ADVERSARIAL_CASES_SPEC = OptimizationArtifactSpec(
-    filename="adversarial_case_candidates.json",
-    artifact_name="adversarial_case_candidates.json",
-    expected_schema=_ADVERSARIAL_CASE_CANDIDATES_SCHEMA,
-    list_field="cases",
-    reader=ADVERSARIAL_CASE_CANDIDATES_ARTIFACT.read,
-    empty_payload_factory=_empty_adversarial_cases_payload,
-    count_key="adversarial_cases",
-    id_field="case_id",
-)
-
-_WORKFLOW_LEVEL_CANDIDATES_SPEC = OptimizationArtifactSpec(
-    filename="workflow_level_optimization_candidates.json",
-    artifact_name="workflow_level_optimization_candidates.json",
-    expected_schema=_WORKFLOW_LEVEL_CANDIDATES_SCHEMA,
-    list_field="candidates",
-    reader=WORKFLOW_LEVEL_OPTIMIZATION_CANDIDATES_ARTIFACT.read,
-    empty_payload_factory=_empty_workflow_level_candidates_payload,
-    count_key="workflow_level",
-    id_field="candidate_id",
-    requires_ablation_field="requires_ablation",
-)
-
-_CANDIDATE_ARTIFACT_SPECS = (
-    _PRODUCER_CANDIDATES_SPEC,
-    _VERIFIER_RUBRIC_CANDIDATES_SPEC,
-    _TOKEN_CANDIDATES_SPEC,
-    _ADVERSARIAL_CASES_SPEC,
-    _WORKFLOW_LEVEL_CANDIDATES_SPEC,
-)
-
-
-def _ensure_packet_optimization_depth_section(packet_text: str, *, optimization_depth: str) -> str:
-    section_lines = [
-        "## Optimization Depth",
-        "",
-        f"Requested depth: `{optimization_depth}`",
-        "",
-        "Target workflow reruns executed: no  ",
-        "Ablations executed: no  ",
-        "Refinement executed: no",
-    ]
-    if optimization_depth == "ablation":
-        section_lines.extend(
-            [
-                "",
-                "Ablation mode produced ablation recommendations only. It did not execute ablation runs.",
-            ]
-        )
-    section = "\n".join(section_lines)
-    if "## Optimization Depth" in packet_text:
-        return packet_text
-    if packet_text.endswith("\n"):
-        return f"{packet_text}\n{section}\n"
-    return f"{packet_text}\n\n{section}\n"
 __all__ = ["WorkflowRunTracesToOptimizationCandidates"]

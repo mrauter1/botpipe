@@ -6,7 +6,7 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import json
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from pathlib import Path
 from types import SimpleNamespace
@@ -24,7 +24,10 @@ from botpipe.core.errors import WorkflowExecutionError
 from botpipe.core.mappings import normalize_mapping
 from botpipe.core.primitives import AWAIT_INPUT, FINISH
 from botpipe.core.providers.models import RuntimeInteractionPolicy
+from botpipe.core.providers.budget import ProviderBudgetResumeError, ProviderDispatchBudget, activate_provider_dispatch_budget
 from botpipe.core.providers.protocols import LLMProvider
+from botpipe.core.surface_identity import canonical_content_id, canonical_workflow_identity, derive_workflow_surface_manifest
+from botpipe.core.workflow_capabilities import WorkflowCapabilityEntry, inspect_resolved_workflow
 from botpipe.core.schema_registry import WORKFLOW_TOPOLOGY_SCHEMA, migrate_schemaless_payload, validate_persisted_schema
 from botpipe.core.statuses import terminal_to_run_status
 from botpipe.extensions.session_paths import extract_session_path_strategy
@@ -171,12 +174,13 @@ def execute_workflow_package(
 ) -> RunExecution:
     resolved = resolve_workflow_reference(options.root, workflow_reference)
     compiled = compile_workflow(resolved.workflow_cls)
-    capability = inspect_workflow_reference(options.root, resolved.workflow_cls)
+    capability = inspect_resolved_workflow(options.root, resolved)
     execution_options = _normalize_execution_options(options, parameters_cls=resolved.parameters_cls)
     return _execute_compiled_workflow(
         compiled,
         reference=resolved.reference,
         parameters_cls=resolved.parameters_cls,
+        capability=capability,
         capability_prompt_paths=capability.prompt_paths,
         provider=provider,
         options=execution_options,
@@ -191,10 +195,12 @@ def execute_workflow_plan(
     options: RunnerOptions,
 ) -> RunExecution:
     execution_options = _normalize_execution_options(options, parameters_cls=compiled.parameters_cls)
+    capability = inspect_workflow_reference(options.root, compiled.workflow_cls)
     return _execute_compiled_workflow(
         compiled,
         reference=reference,
         parameters_cls=compiled.parameters_cls,
+        capability=capability,
         capability_prompt_paths=(),
         provider=provider,
         options=execution_options,
@@ -206,6 +212,7 @@ def _execute_compiled_workflow(
     *,
     reference: WorkflowReference,
     parameters_cls: type[Any] | None,
+    capability: WorkflowCapabilityEntry,
     capability_prompt_paths: tuple[Path, ...] = (),
     provider: LLMProvider,
     options: RunnerOptions,
@@ -360,6 +367,8 @@ def _execute_compiled_workflow(
         workflow_workspace=prepared.workflow_workspace,
         run_workspace=prepared.run_workspace,
     )
+    start_provenance = _runtime_provenance(options.root, reference, capability, prepared.compiled, resolved_workflow_params, options, max_steps)
+    _merge_run_metadata(prepared.run_workspace, {"provenance": {"start": start_provenance}})
     run_started_payload = {
         "workflow": prepared.compiled.workflow_name,
         "task_id": prepared.task_workspace.task_id,
@@ -368,6 +377,7 @@ def _execute_compiled_workflow(
         "run_folder": str(prepared.run_workspace.run_dir),
         "events_file": str(prepared.run_workspace.events_file),
         "trace_enabled": options.runtime_config.tracing.enabled,
+        **start_provenance,
     }
     if options.runtime_config.tracing.enabled:
         run_started_payload["trace_file"] = str(trace_writer.trace_path)
@@ -383,55 +393,47 @@ def _execute_compiled_workflow(
         "run_resumed" if options.resume else "run_started",
         **run_started_payload,
     )
+    trace_writer.runtime_event(event_type="run_resumed" if options.resume else "run_started", **run_started_payload)
     try:
-        if options.resume:
-            result = engine.resume(
-                task_id=prepared.task_workspace.task_id,
-                run_id=prepared.run_workspace.run_id,
-                task_folder=prepared.task_workspace.task_dir,
-                workflow_folder=prepared.workflow_workspace.workflow_dir,
-                run_folder=prepared.run_workspace.run_dir,
-                package_folder=prepared.workflow_workspace.package_dir,
-                root=prepared.task_workspace.root,
-                request_file=prepared.run_workspace.request_file,
-                task_request_file=prepared.task_workspace.task_request_file,
-                params=resolved_params,
-                workflow_params=resolved_workflow_params,
-                message=options.message,
-                workflow_input=resolved_workflow_input,
-                workflow_invoker=workflow_invoker,
-                answer=options.answer,
-                max_steps=max_steps,
-            )
-        else:
-            result = engine.run(
-                task_id=prepared.task_workspace.task_id,
-                run_id=prepared.run_workspace.run_id,
-                task_folder=prepared.task_workspace.task_dir,
-                workflow_folder=prepared.workflow_workspace.workflow_dir,
-                run_folder=prepared.run_workspace.run_dir,
-                package_folder=prepared.workflow_workspace.package_dir,
-                root=prepared.task_workspace.root,
-                request_file=prepared.run_workspace.request_file,
-                task_request_file=prepared.task_workspace.task_request_file,
-                params=resolved_params,
-                workflow_params=resolved_workflow_params,
-                message=options.message,
-                workflow_input=resolved_workflow_input,
-                workflow_invoker=workflow_invoker,
-                max_steps=max_steps,
-            )
+        budget = _provider_dispatch_budget_for_run(prepared.run_workspace, resolved_workflow_params, options.resume)
+        if budget is not None: budget.checkpoint()
+        budget_context = activate_provider_dispatch_budget(budget) if budget is not None else __import__("contextlib").nullcontext()
+        with budget_context:
+            if options.resume:
+                result = engine.resume(
+                    task_id=prepared.task_workspace.task_id, run_id=prepared.run_workspace.run_id,
+                    task_folder=prepared.task_workspace.task_dir, workflow_folder=prepared.workflow_workspace.workflow_dir,
+                    run_folder=prepared.run_workspace.run_dir, package_folder=prepared.workflow_workspace.package_dir,
+                    root=prepared.task_workspace.root, request_file=prepared.run_workspace.request_file,
+                    task_request_file=prepared.task_workspace.task_request_file, params=resolved_params,
+                    workflow_params=resolved_workflow_params, message=options.message,
+                    workflow_input=resolved_workflow_input, workflow_invoker=workflow_invoker,
+                    answer=options.answer, max_steps=max_steps)
+            else:
+                result = engine.run(
+                    task_id=prepared.task_workspace.task_id, run_id=prepared.run_workspace.run_id,
+                    task_folder=prepared.task_workspace.task_dir, workflow_folder=prepared.workflow_workspace.workflow_dir,
+                    run_folder=prepared.run_workspace.run_dir, package_folder=prepared.workflow_workspace.package_dir,
+                    root=prepared.task_workspace.root, request_file=prepared.run_workspace.request_file,
+                    task_request_file=prepared.task_workspace.task_request_file, params=resolved_params,
+                    workflow_params=resolved_workflow_params, message=options.message,
+                    workflow_input=resolved_workflow_input, workflow_invoker=workflow_invoker, max_steps=max_steps)
 
         for step_name in result.history:
             prepared.logger.emit("step_executed", workflow=prepared.compiled.workflow_name, step_name=step_name)
 
+        end_provenance = _runtime_end_provenance(start_provenance, options.root, capability)
         prepared.logger.emit(
             "run_finished",
             workflow=prepared.compiled.workflow_name,
             terminal=result.terminal,
             status=_run_status(result.terminal, result.last_event),
             last_step=result.history[-1] if result.history else None,
+            **end_provenance,
         )
+        trace_writer.runtime_event(event_type="run_finished", workflow=prepared.compiled.workflow_name,
+            terminal=result.terminal, status=_run_status(result.terminal, result.last_event),
+            last_step=result.history[-1] if result.history else None, **end_provenance)
         update_run_metadata(
             prepared.run_workspace,
             workflow_params=resolved_workflow_params,
@@ -444,6 +446,7 @@ def _execute_compiled_workflow(
         _ensure_default_session_binding(prepared)
         child_metadata = _typed_output_metadata(execution_result=result, compiled=prepared.compiled)
         _merge_run_metadata(prepared.run_workspace, child_metadata)
+        _merge_run_metadata(prepared.run_workspace, {"provenance":{"start":start_provenance,"end":end_provenance}})
         runtime_observability.commit_terminal(terminal=result.terminal)
         execution = RunExecution(
             result=result,
@@ -458,13 +461,17 @@ def _execute_compiled_workflow(
             append_child_run_record(options.parent_run, _child_run_record_payload(_build_child_workflow_result(execution)))
         return execution
     except Exception as exc:
+        end_provenance = _runtime_end_provenance(start_provenance, options.root, capability)
         prepared.logger.emit(
             "run_finished",
             workflow=prepared.compiled.workflow_name,
             status="fatal_error",
             error_type=type(exc).__name__,
             error=str(exc),
+            **end_provenance,
         )
+        trace_writer.runtime_event(event_type="run_finished", workflow=prepared.compiled.workflow_name,
+            status="fatal_error", error_type=type(exc).__name__, error=str(exc), **end_provenance)
         update_run_metadata(
             prepared.run_workspace,
             workflow_params=resolved_workflow_params,
@@ -472,6 +479,7 @@ def _execute_compiled_workflow(
             status="fatal_error",
             error=str(exc),
         )
+        _merge_run_metadata(prepared.run_workspace, {"provenance":{"start":start_provenance,"end":end_provenance}})
         runtime_observability.commit_fatal(error=_runtime_observability_error(exc))
         if options.parent_run is not None:
             append_child_run_record(
@@ -1057,6 +1065,51 @@ def _run_topology_metadata(run_workspace: RunWorkspace, compiled: WorkflowPlan) 
             "compile_report": COMPILE_REPORT_FILENAME,
         },
     }
+
+def _runtime_provenance(root, reference, capability, compiled, params, options, max_steps):
+    try:
+        surface_id = derive_workflow_surface_manifest(root, capability)["surface_id"]; surface_error = None
+    except Exception as exc:
+        surface_id = None; surface_error = f"{type(exc).__name__}: {exc}"
+    execution = _execution_config_metadata(options, effective_max_steps=max_steps, workflow_policy=compiled.provider_policy)
+    config = {"schema":"botpipe.runtime-configuration.v1","runtime":execution["runtime"],"provider":execution.get("provider"),"provider_policy_config":execution["provider_policy_config"],"policy_layers":execution["policy_layers"]}
+    policy = execution["provider_policy_config"]
+    result = {
+        "workflow_identity":canonical_workflow_identity(reference, workflow_name=compiled.workflow_name),
+        "workflow_surface_manifest_id":surface_id,"topology_id":compiled.topology_hash,
+        "parameter_digest":canonical_content_id({"schema":"botpipe.workflow-parameters.v1","parameters":normalize_mapping(params)}),
+        "configuration_digest":canonical_content_id(config),"provider_policy_identity":policy.get("redacted_hash"),
+        "provenance_status":"verified" if surface_id else "unavailable"}
+    if surface_error: result["workflow_surface_error"] = surface_error
+    return result
+
+def _runtime_end_provenance(start, root, capability):
+    try: end_id=derive_workflow_surface_manifest(root,capability)["surface_id"]; error=None
+    except Exception as exc: end_id=None; error=f"{type(exc).__name__}: {exc}"
+    start_id=start.get("workflow_surface_manifest_id"); matched=isinstance(start_id,str) and start_id==end_id
+    result={key:start.get(key) for key in ("workflow_identity","topology_id","parameter_digest","configuration_digest","provider_policy_identity")}
+    result.update(workflow_surface_manifest_id=end_id,workflow_surface_manifest_id_at_start=start_id,provenance_status="verified" if matched else "mixed_or_unavailable",source_identity_matched=matched)
+    if error: result["workflow_surface_error"]=error
+    return result
+
+def _provider_dispatch_budget_for_run(run_workspace, params, resume):
+    maximum=params.get("max_provider_turns")
+    if maximum is None: return None
+    if isinstance(maximum,bool) or not isinstance(maximum,int) or maximum<=0: raise WorkflowExecutionError("max_provider_turns must be a positive integer")
+    timeout=params.get("provider_turn_timeout_seconds")
+    if timeout is not None and (isinstance(timeout,bool) or not isinstance(timeout,(int,float)) or timeout<=0): raise WorkflowExecutionError("provider_turn_timeout_seconds must be positive")
+    saved=_load_run_metadata_file(run_workspace.run_meta_file).get("provider_dispatch_budget")
+    if saved is not None and not isinstance(saved,dict): raise WorkflowExecutionError("saved provider dispatch budget must be an object")
+    if resume and saved is None: raise WorkflowExecutionError("configured provider dispatch budget is missing from resumed run; start a new analysis")
+    def persist(value): _merge_run_metadata(run_workspace,{"provider_dispatch_budget":dict(value)})
+    try:
+        if saved is not None: return ProviderDispatchBudget(maximum,timeout_seconds=timeout,state=saved,checkpoint=persist)
+        seconds=params.get("max_analysis_seconds"); deadline=None
+        if seconds is not None:
+            if isinstance(seconds,bool) or not isinstance(seconds,(int,float)) or seconds<=0: raise WorkflowExecutionError("max_analysis_seconds must be positive")
+            deadline=datetime.now(timezone.utc)+timedelta(seconds=float(seconds))
+        return ProviderDispatchBudget(maximum,timeout_seconds=timeout,deadline_utc=deadline,checkpoint=persist)
+    except ProviderBudgetResumeError as exc: raise WorkflowExecutionError(f"provider dispatch budget resume rejected: {exc}") from exc
 
 
 def _runtime_compiled_workflow(compiled: WorkflowPlan) -> tuple[WorkflowPlan, tuple[dict[str, str], ...]]:

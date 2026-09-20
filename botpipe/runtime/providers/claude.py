@@ -21,6 +21,7 @@ from ..config import ClaudeProviderConfig, ConfigError, ResolvedRuntimeConfig
 from ._common import (
     build_session_binding,
     communicate_text_subprocess,
+    create_provider_subprocess_exec,
     emit_turn_policy,
     ensure_session_provider_match,
     extract_token_usage,
@@ -171,6 +172,15 @@ class ClaudeTransport(ProviderTransport):
         self._validation = validation or ProviderPolicyValidationConfig()
         self._emitter = ClaudePolicyEmitter(capabilities=capabilities)
 
+    provider_name = "claude"
+    supports_cancellation = True
+
+    def effective_dispatch_identity(self, turn: RenderedProviderTurn) -> dict[str, str | None]:
+        model, effort = self._config.model, self._config.effort
+        if turn.policy is not None:
+            model, effort = turn.policy.model.default or model, turn.policy.model.effort or effort
+        return {"provider": "claude", "model": model, "effort": effort}
+
     async def run_turn(self, turn: RenderedProviderTurn) -> ProviderTurnResult:
         ensure_session_provider_match("claude", turn.session)
         resume_session_id = resumable_session_id("claude", turn.session)
@@ -188,7 +198,7 @@ class ClaudeTransport(ProviderTransport):
         command.extend(["-p", turn.prompt_text, "--output-format", "json"])
         command.extend(command_args)
 
-        process = await asyncio.create_subprocess_exec(
+        process = await create_provider_subprocess_exec(
             *command,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,

@@ -204,20 +204,28 @@ def load_run_observability_bundle(run_dir: Path) -> RunObservabilityBundle:
     static_step_graph_path = resolved_run_dir / "static_step_graph.json"
     raw_dir = resolved_run_dir / "raw"
 
+    run_json = None
+    trace_records = None
+    git_tracking_records = None
+    static_step_graph = None
+    load_error = None
+    # Identity and trace are core. Optional Git/topology evidence must not erase
+    # otherwise usable observations when it is absent or malformed.
     try:
         run_json = _read_json_object(run_json_path) if run_json_path.is_file() else None
         trace_records = _read_jsonl_objects(trace_jsonl_path) if trace_jsonl_path.is_file() else None
-        git_tracking_records = (
-            _read_jsonl_objects(git_tracking_jsonl_path) if git_tracking_jsonl_path.is_file() else None
-        )
-        static_step_graph = _read_json_object(static_step_graph_path) if static_step_graph_path.is_file() else None
-        load_error = None
     except (OSError, ValueError, json.JSONDecodeError) as exc:
-        run_json = None
-        trace_records = None
-        git_tracking_records = None
-        static_step_graph = None
         load_error = str(exc)
+    if load_error is None and git_tracking_jsonl_path.is_file():
+        try:
+            git_tracking_records = _read_jsonl_objects(git_tracking_jsonl_path)
+        except (OSError, ValueError, json.JSONDecodeError):
+            pass
+    if load_error is None and static_step_graph_path.is_file():
+        try:
+            static_step_graph = _read_json_object(static_step_graph_path)
+        except (OSError, ValueError, json.JSONDecodeError):
+            pass
 
     return RunObservabilityBundle(
         run_dir=resolved_run_dir,
@@ -239,18 +247,12 @@ def load_run_observability_bundle(run_dir: Path) -> RunObservabilityBundle:
 
 
 def validate_observability_bundle(bundle: RunObservabilityBundle) -> tuple[bool, str | None]:
-    """Validate Plan-1 observability presence and basic workflow identity alignment."""
+    """Validate core observability and workflow identity alignment."""
 
     if not bundle.run_json_path.is_file():
         return False, "missing_run_json"
     if not bundle.trace_jsonl_path.is_file():
         return False, "missing_trace_jsonl"
-    if not bundle.git_tracking_jsonl_path.is_file():
-        return False, "missing_git_tracking_jsonl"
-    if not bundle.static_step_graph_path.is_file():
-        return False, "missing_static_step_graph"
-    if not bundle.raw_dir.is_dir():
-        return False, "missing_raw_dir"
     if bundle.load_error is not None:
         lowered = bundle.load_error.lower()
         if "decode" in lowered or "could not parse" in lowered:
@@ -435,11 +437,15 @@ def normalize_trace_corpus(
             continue
         assert bundle.run_json is not None
         assert bundle.trace_records is not None
-        assert bundle.git_tracking_records is not None
-        assert bundle.static_step_graph is not None
-
-        git_index = _git_tracking_index(bundle.git_tracking_records)
+        git_index = _git_tracking_index(bundle.git_tracking_records or ())
         run_git = _require_mapping_or_empty(bundle.run_json.get("git_tracking"))
+        optional_issues: list[dict[str, str]] = []
+        if not bundle.git_tracking_records:
+            optional_issues.append({"dimension": "git", "reason": "missing_or_empty"})
+        if bundle.static_step_graph is None:
+            optional_issues.append({"dimension": "topology", "reason": "missing_or_invalid"})
+        if not bundle.raw_dir.is_dir():
+            optional_issues.append({"dimension": "raw_output", "reason": "missing"})
         run_entry = {
             "run_ref": bundle.run_ref,
             "run_id": bundle.run_id,
@@ -455,6 +461,7 @@ def normalize_trace_corpus(
             "commit_before_run": _optional_text(run_git.get("commit_before_run")),
             "commit_after_run": _optional_text(run_git.get("commit_after_run")),
             "eligible_for_optimization": True,
+            "evidence_issues": optional_issues,
         }
         runs.append(run_entry)
 
@@ -545,14 +552,21 @@ def build_step_trace_metrics(
     trace_corpus: Mapping[str, Any],
     static_step_graphs: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any]:
-    """Build deterministic step metrics for optimization ranking."""
+    """Build a compatibility projection of observed step burden.
+
+    New callers use ``EvidenceSnapshot.step_metrics``. This wrapper preserves
+    the public entry point without causal/downstream attribution, numeric
+    confidence, name-based surface guesses, or missing-as-zero usage claims.
+    """
 
     selected_workflow = require_non_empty_string(
         trace_corpus.get("selected_workflow"),
         error_message="trace_corpus.selected_workflow must be non-empty",
     )
-    observations = _analysis_observations(trace_corpus)
-    total_tokens = 0
+    observations = _require_mapping_list(
+        trace_corpus.get("step_observations"),
+        "trace_corpus.step_observations must be a list of objects",
+    )
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for observation in observations:
         step_name = require_non_empty_string(
@@ -560,13 +574,7 @@ def build_step_trace_metrics(
             error_message="step observations must define step_name",
         )
         grouped[step_name].append(observation)
-        usage = _require_mapping_or_empty(observation.get("usage"))
-        total_tokens += int(usage.get("total_tokens") or 0)
-
-    centrality_by_step: dict[str, list[float]] = defaultdict(list)
-    for graph in static_step_graphs:
-        for step_name, score in compute_static_step_centrality(graph).items():
-            centrality_by_step[step_name].append(score)
+    del static_step_graphs  # static reachability is not observed causal evidence
 
     step_entries: list[dict[str, Any]] = []
     for step_name, step_observations in grouped.items():
@@ -574,11 +582,20 @@ def build_step_trace_metrics(
             _optional_text(observation.get("route")) or "unknown" for observation in step_observations
         )
         observed_count = len(step_observations)
-        estimated_token_total = sum(int(_require_mapping_or_empty(obs.get("usage")).get("total_tokens") or 0) for obs in step_observations)
-        token_share = 0.0 if total_tokens <= 0 else round(estimated_token_total / total_tokens, 4)
-        centrality_values = centrality_by_step.get(step_name, [])
-        artifact_centrality = round(sum(centrality_values) / len(centrality_values), 4) if centrality_values else 0.0
-        route_criticality = round(_weighted_route_pressure(route_counts, observed_count), 4)
+        usage_values = [_require_mapping_or_empty(obs.get("usage")) for obs in step_observations]
+        known_usage = [usage for usage in usage_values if isinstance(usage.get("total_tokens"), int)]
+        known_tokens = sum(int(usage["total_tokens"]) for usage in known_usage)
+        run_refs = {str(obs["run_ref"]) for obs in step_observations if isinstance(obs.get("run_ref"), str)}
+        failed_runs = {
+            str(obs["run_ref"]) for obs in step_observations
+            if isinstance(obs.get("run_ref"), str)
+            and (_optional_text(obs.get("route")) in {"failed", "blocked", "needs_rework"}
+                 or _optional_text(obs.get("runtime_control")) == "fail")
+        }
+        rework_runs = {
+            str(obs["run_ref"]) for obs in step_observations
+            if isinstance(obs.get("run_ref"), str) and route_is_rework(_optional_text(obs.get("route")))
+        }
         step_entries.append(
             {
                 "step_name": step_name,
@@ -590,16 +607,12 @@ def build_step_trace_metrics(
                 "failed_count": route_counts.get("failed", 0) + route_counts.get("runtime_control:fail", 0),
                 "needs_rework_count": route_counts.get("needs_rework", 0),
                 "needs_replan_count": route_counts.get("needs_replan", 0),
-                "estimated_token_total": estimated_token_total,
-                "token_share": token_share,
-                "downstream_failure_after_pass_count": sum(
-                    1
-                    for obs in step_observations
-                    if _optional_text(obs.get("local_outcome")) == "locally_accepted"
-                    and _is_downstream_failure_outcome(_optional_text(obs.get("downstream_outcome")))
-                ),
-                "artifact_centrality": artifact_centrality,
-                "route_criticality": route_criticality,
+                "distinct_run_count": len(run_refs),
+                "direct_failure_run_count": len(failed_runs),
+                "rework_run_count": len(rework_runs),
+                "known_token_total": known_tokens,
+                "usage_complete": len(known_usage) == len(step_observations),
+                "estimated_token_total": known_tokens,
             }
         )
 
@@ -651,8 +664,13 @@ def rank_optimization_targets(
     step_metrics: Mapping[str, Any],
     static_centrality: Mapping[str, float],
     top_k: int,
+    objective: str = "reliability",
 ) -> dict[str, Any]:
-    """Rank highest-leverage optimization targets with a deterministic score."""
+    """Return the deterministic observed-burden starting order.
+
+    ``static_centrality`` remains accepted for compatibility but is ignored:
+    graph reachability is not causal evidence.
+    """
 
     require_positive_int(top_k, field_name="top_k", error_message="top_k must be positive")
     selected_workflow = require_non_empty_string(
@@ -661,84 +679,59 @@ def rank_optimization_targets(
     )
     steps = _require_mapping_list(step_metrics.get("steps"), "step_metrics.steps must be a list of objects")
 
+    del static_centrality
+    if objective not in {"reliability", "token_usage", "latency"}:
+        raise ValueError("objective must be reliability, token_usage, or latency")
     ranked_entries: list[dict[str, Any]] = []
+    measure_first: list[str] = []
     for step in steps:
         step_name = require_non_empty_string(step.get("step_name"), error_message="step metrics must define step_name")
         observed_count = int(step.get("observed_count") or 0)
         failed_count = int(step.get("failed_count") or 0)
         blocked_count = int(step.get("blocked_count") or 0)
         needs_rework_count = int(step.get("needs_rework_count") or 0)
-        downstream_failures = int(step.get("downstream_failure_after_pass_count") or 0)
-        token_share = float(step.get("token_share") or 0.0)
-        route_criticality = float(step.get("route_criticality") or 0.0)
-        artifact_centrality = float(step.get("artifact_centrality") or static_centrality.get(step_name, 0.0))
-
-        direct_failure_rate = min(1.0, (failed_count + blocked_count + needs_rework_count) / max(1, observed_count))
-        downstream_blast_radius = min(1.0, downstream_failures / max(1, observed_count))
-        rework_loop_cost = min(1.0, needs_rework_count / max(1, observed_count))
-        sample_support = min(1.0, observed_count / 5.0)
-        insufficient_sample_penalty = 0.10 if observed_count < 2 else 0.0
-        missing_trace_data_penalty = 0.05 if token_share <= 0.0 else 0.0
-        no_prompt_surface_penalty = 0.05 if not _has_prompt_surface(step_name) else 0.0
-        likely_downstream_symptom_penalty = _downstream_symptom_penalty(step, artifact_centrality)
-        score = (
-            0.25 * direct_failure_rate
-            + 0.20 * downstream_blast_radius
-            + 0.15 * rework_loop_cost
-            + 0.15 * artifact_centrality
-            + 0.10 * route_criticality
-            + 0.10 * token_share
-            + 0.05 * sample_support
-        )
-        score -= (
-            insufficient_sample_penalty
-            + missing_trace_data_penalty
-            + no_prompt_surface_penalty
-            + likely_downstream_symptom_penalty
-        )
-        evidence_strength = (
-            "high"
-            if observed_count >= 5 and insufficient_sample_penalty == 0.0 and missing_trace_data_penalty == 0.0
-            else "medium"
-            if observed_count >= 2
-            else "low"
-        )
+        direct_runs = int(step.get("direct_failure_run_count") or 0)
+        rework_runs = int(step.get("rework_run_count") or 0)
+        distinct_runs = int(step.get("distinct_run_count") or 0)
+        tokens = int(step.get("known_token_total") or step.get("estimated_token_total") or 0)
+        elapsed = float(step.get("total_elapsed_seconds") or 0)
+        if objective == "reliability":
+            eligible = failed_count + blocked_count + needs_rework_count > 0
+            order = (-direct_runs, -rework_runs, step_name)
+        elif objective == "token_usage":
+            eligible = step.get("usage_complete") is True and tokens > 0
+            order = (-tokens, step_name)
+            if step.get("usage_complete") is not True:
+                measure_first.append(step_name)
+        else:
+            eligible = step.get("elapsed_complete") is True and elapsed > 0
+            order = (-elapsed, step_name)
+            if step.get("elapsed_complete") is not True:
+                measure_first.append(step_name)
+        if not eligible:
+            continue
         ranked_entries.append(
             {
                 "step_name": step_name,
-                "priority_score": round(max(0.0, min(1.0, score)), 4),
-                "confidence": round(
-                    min(
-                        1.0,
-                        0.25
-                        + 0.35 * sample_support
-                        + 0.20 * artifact_centrality
-                        + 0.10 * min(1.0, direct_failure_rate + downstream_blast_radius)
-                        + 0.10 * max(0.0, 1.0 - missing_trace_data_penalty - insufficient_sample_penalty),
-                    ),
-                    4,
-                ),
-                "evidence_strength": evidence_strength,
-                "recommended_first_pass": _recommended_first_pass(step),
-                "secondary_passes": _secondary_passes(step),
-                "why_high_leverage": _why_high_leverage(step),
-                "likely_failure_surfaces": _likely_failure_surfaces(step),
-                "_artifact_centrality": artifact_centrality,
-                "_failed_count": failed_count,
-                "_needs_rework_count": needs_rework_count,
-                "_downstream_failures": downstream_failures,
-                "_token_share": token_share,
+                "objective": objective,
+                "observed_count": observed_count,
+                "distinct_run_count": distinct_runs,
+                "direct_failure_run_count": direct_runs,
+                "rework_run_count": rework_runs,
+                "known_token_total": tokens,
+                "total_elapsed_seconds": elapsed,
+                "_order": order,
             }
         )
 
-    ranked_entries.sort(key=lambda entry: (-entry["priority_score"], entry["step_name"]))
+    ranked_entries.sort(key=lambda entry: entry["_order"])
     top_ranked = ranked_entries[:top_k]
     for index, entry in enumerate(top_ranked, start=1):
         entry["rank"] = index
     not_selected = [
         {
             "step_name": entry["step_name"],
-            "reason": _not_selected_reason(entry),
+            "reason": f"Lower observed {objective} burden in the deterministic starting order.",
         }
         for entry in ranked_entries[top_k:]
     ]
@@ -746,10 +739,12 @@ def rank_optimization_targets(
     return {
         "schema": STEP_PRIORITY_REPORT_SCHEMA,
         "selected_workflow": selected_workflow,
-        "ranking_method": "static_graph_plus_trace_metrics_plus_llm_attribution",
+        "objective": objective,
+        "ranking_method": "deterministic_observed_burden",
         "top_k_steps": top_k,
         "ranked_steps": published_ranked,
         "not_selected": not_selected,
+        "measure_first": sorted(measure_first),
     }
 
 
@@ -789,9 +784,9 @@ def extract_failure_scenario_seeds(
             route = _optional_text(observation.get("route")) or "unknown"
             route_groups[route].append(observation)
         for route in ("needs_rework", "needs_replan"):
-            grouped = route_groups.get(route, [])
-            if len(grouped) > 1:
-                seed_reasons = [f"repeated_same_step_{route}_loop"]
+            grouped = [item for item in route_groups.get(route, []) if item.get("rework_cycle") is True]
+            if grouped:
+                seed_reasons = [f"explicit_same_lane_{route}_cycle"]
                 suggested_failure_kind = _classify_seed_failure_kind(seed_reasons)
                 seeds.append(
                     {
@@ -806,7 +801,7 @@ def extract_failure_scenario_seeds(
                         ],
                         "frequency": len(grouped),
                         "seed_reasons": seed_reasons,
-                        "summary": f"{step_name} repeatedly returned {route} across ranked observations.",
+                        "summary": f"{step_name} explicitly returned through {route} in the same execution lane.",
                         "suggested_failure_kind": suggested_failure_kind,
                     }
                 )
@@ -1196,9 +1191,9 @@ def _normalize_raw_output_refs(value: Any) -> dict[str, str]:
 
 
 def _classify_seed_failure_kind(reasons: Sequence[str]) -> str:
-    if any(reason == "repeated_same_step_needs_rework_loop" for reason in reasons):
+    if any(reason == "explicit_same_lane_needs_rework_cycle" for reason in reasons):
         return "needs_rework_loop"
-    if any(reason == "repeated_same_step_needs_replan_loop" for reason in reasons):
+    if any(reason == "explicit_same_lane_needs_replan_cycle" for reason in reasons):
         return "needs_replan_loop"
     if "terminal_failure_after_local_pass" in reasons:
         return "downstream_failure_after_local_pass"
@@ -1330,9 +1325,6 @@ def _optional_text(value: Any) -> str | None:
 
 
 def _analysis_observations(trace_corpus: Mapping[str, Any]) -> list[dict[str, Any]]:
-    candidate = trace_corpus.get("all_step_observations")
-    if isinstance(candidate, list):
-        return _require_mapping_list(candidate, "trace_corpus.all_step_observations must be a list of objects")
     return _require_mapping_list(
         trace_corpus.get("step_observations"),
         "trace_corpus.step_observations must be a list of objects",
@@ -1346,116 +1338,12 @@ def _repo_relative_if_possible(path: Path, repo_root: Path) -> str:
         return str(path.resolve())
 
 
-def _has_prompt_surface(step_name: str) -> bool:
-    return not step_name.startswith("publish") and step_name != "bootstrap"
-
-
-def _weighted_route_pressure(route_counts: Mapping[str, int], observed_count: int) -> float:
-    weights = {
-        "failed": 1.0,
-        "blocked": 0.85,
-        "needs_replan": 0.75,
-        "needs_rework": 0.65,
-        "runtime_control:fail": 1.0,
-        "runtime_control:request_input": 0.5,
-    }
-    weighted_sum = sum(count * weights.get(route, 0.0) for route, count in route_counts.items())
-    return min(1.0, weighted_sum / max(1, observed_count))
-
-
-def _likely_downstream_symptom(step: Mapping[str, Any], artifact_centrality: float) -> bool:
-    step_name = require_non_empty_string(step.get("step_name"), error_message="step metrics must define step_name")
-    failed_count = int(step.get("failed_count") or step.get("_failed_count") or 0)
-    needs_rework_count = int(step.get("needs_rework_count") or step.get("_needs_rework_count") or 0)
-    downstream_failures = int(
-        step.get("downstream_failure_after_pass_count") or step.get("_downstream_failures") or 0
-    )
-    token_share = float(step.get("token_share") or step.get("_token_share") or 0.0)
-    if step_name.startswith("package") or step_name.startswith("publish"):
-        return artifact_centrality <= 0.6 and failed_count > 0 and needs_rework_count == 0
-    return artifact_centrality <= 0.35 and failed_count > 0 and downstream_failures == 0 and token_share < 0.15
-
-
-def _downstream_symptom_penalty(step: Mapping[str, Any], artifact_centrality: float) -> float:
-    if not _likely_downstream_symptom(step, artifact_centrality):
-        return 0.0
-    step_name = require_non_empty_string(step.get("step_name"), error_message="step metrics must define step_name")
-    if step_name.startswith("package") or step_name.startswith("publish"):
-        return 0.25
-    return 0.10
-
-
-def _recommended_first_pass(step: Mapping[str, Any]) -> str:
-    if int(step.get("needs_rework_count") or 0) > int(step.get("failed_count") or 0):
-        return "verifier_rubric_local_optimization"
-    if float(step.get("token_share") or 0.0) >= 0.25 and int(step.get("failed_count") or 0) == 0:
-        return "token_optimization"
-    return "producer_local_optimization"
-
-
-def _secondary_passes(step: Mapping[str, Any]) -> list[str]:
-    passes = ["producer_local_optimization", "verifier_rubric_local_optimization", "token_optimization"]
-    first = _recommended_first_pass(step)
-    return [candidate for candidate in passes if candidate != first]
-
-
-def _why_high_leverage(step: Mapping[str, Any]) -> list[str]:
-    reasons: list[str] = []
-    if int(step.get("needs_rework_count") or 0) > 0:
-        reasons.append("highest needs_rework loop rate among observed routes")
-    if float(step.get("token_share") or 0.0) >= 0.20:
-        reasons.append("large token share")
-    if int(step.get("downstream_failure_after_pass_count") or 0) > 0:
-        reasons.append("downstream failures after local acceptance")
-    if not reasons:
-        reasons.append("largest deterministic leverage score among observed steps")
-    return reasons
-
-
-def _likely_failure_surfaces(step: Mapping[str, Any]) -> list[dict[str, object]]:
-    surfaces: list[dict[str, object]] = []
-    if int(step.get("needs_rework_count") or 0) > 0:
-        surfaces.append(
-            {
-                "surface": "verifier_rubric",
-                "probability": 0.48,
-                "rationale": "Repeated rework loops suggest acceptance-boundary or feedback-discipline pressure.",
-            }
-        )
-    if int(step.get("failed_count") or 0) > 0 or float(step.get("token_share") or 0.0) > 0.25:
-        surfaces.append(
-            {
-                "surface": "producer_prompt",
-                "probability": 0.34 if int(step.get("failed_count") or 0) > 0 else 0.28,
-                "rationale": "Observed failures and prompt cost suggest upstream instruction or evidence-discipline issues.",
-            }
-        )
-    if not surfaces:
-        surfaces.append(
-            {
-                "surface": "insufficient_evidence",
-                "probability": 0.2,
-                "rationale": "Deterministic evidence is thin, so later LLM attribution should stay conservative.",
-            }
-        )
-    return surfaces
-
-
-def _not_selected_reason(entry: Mapping[str, Any]) -> str:
-    step_name = require_non_empty_string(entry.get("step_name"), error_message="ranked entry must define step_name")
-    if not _has_prompt_surface(step_name):
-        return "No prompt-local optimization surface was detected for this step."
-    if _likely_downstream_symptom(entry, float(entry.get("_artifact_centrality") or 0.0)):
-        return "Mostly downstream symptom of weaker upstream artifacts."
-    return "Lower deterministic leverage score than the selected target set."
-
-
 def _failure_seed_sort_key(seed: Mapping[str, Any]) -> tuple[int, int, str]:
     severity_rank = 0
     reasons = [reason for reason in seed.get("seed_reasons", []) if isinstance(reason, str)]
     if any(reason in {"terminal_failure_after_local_pass", "route:failed", "route:blocked"} for reason in reasons):
         severity_rank = 3
-    elif any(reason.startswith("repeated_same_step_") for reason in reasons):
+    elif any(reason.startswith("explicit_same_lane_") for reason in reasons):
         severity_rank = 2
     elif "high_token_usage_without_success" in reasons:
         severity_rank = 1

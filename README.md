@@ -473,6 +473,7 @@ catalog information. The workflow behavior lives in Python.
 - `docs/sdk.md`: run workflows and steps from Python
 - `docs/architecture.md`: runtime and project boundaries
 - `docs/authoring.md`: deeper authoring guidance
+- `docs/optimizer.md`: diagnose runs, hand off candidates, and run paired evaluation
 - `docs/workflow_authoring_guidelines.md`: workflow design doctrine for Codex-scale steps
 
 ## License

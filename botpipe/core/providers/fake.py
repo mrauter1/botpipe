@@ -46,6 +46,9 @@ class ProviderCall:
 class ScriptedLLMProvider:
     """Queue-backed provider that records calls."""
 
+    provider_name = "scripted"
+    supports_cancellation = True
+
     def __init__(
         self,
         *,
