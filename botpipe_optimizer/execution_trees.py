@@ -385,6 +385,10 @@ def _enumerate(
                 raise ValueError(
                     f"execution tree source contains a special file: {out}"
                 )
+            # The live ownership fence is runtime state, not executable input.
+            # Reading it through another handle also violates Windows byte locks.
+            if entry.name == ".botpipe-workspace.lock":
+                continue
             if path.suffix in {".pyc", ".pyo"}:
                 continue
             info = entry.stat(follow_symlinks=False)
@@ -472,6 +476,7 @@ def _excluded_roots(root: Path, values: Sequence[Path]) -> tuple[Path, ...]:
 
 def _exclusion_payload(values: Sequence[Path]) -> list[str]:
     return sorted(EXCLUDED_DIRECTORY_NAMES) + [
+        ".botpipe-workspace.lock",
         ".venv*",
         "*.py[cod]",
         *(f"owned:{x.name}" for x in values),

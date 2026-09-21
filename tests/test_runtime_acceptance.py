@@ -99,7 +99,7 @@ def test_interrupted_unsafe_activity_requires_reconciliation_and_accepts_observe
 ):
     effects = []
 
-    @activity
+    @activity(retry_safe=False)
     def charge():
         effects.append("charged")
         raise SystemExit("lost after external effect")
@@ -127,7 +127,7 @@ def test_explicit_retry_of_interrupted_unsafe_activity_is_recorded_and_replayed_
 ):
     effects = []
 
-    @activity
+    @activity(retry_safe=False)
     def submit():
         effects.append("attempt")
         if len(effects) == 1:
@@ -380,7 +380,7 @@ def test_validation_repair_uses_new_recorded_turn_and_survives_replay(tmp_path):
 def test_reconciliation_can_supply_none_as_an_activity_result(tmp_path):
     effects = []
 
-    @activity
+    @activity(retry_safe=False)
     def send():
         effects.append("sent")
         raise SystemExit("connection lost after send")
@@ -660,7 +660,7 @@ def test_completed_root_does_not_enter_user_exception_handler_after_edit(tmp_pat
 def test_parallel_collect_does_not_commit_an_interrupted_branch_as_error_data(tmp_path):
     effects = []
 
-    @activity
+    @activity(retry_safe=False)
     def interrupted():
         effects.append("effect reached")
         raise SystemExit("lost after side effect")

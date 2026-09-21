@@ -23,7 +23,7 @@ def _workflow_file(tmp_path: Path) -> Path:
         "@workflow\n"
         "def approval() -> str:\n"
         "    return ask('Ship it?', returns=str)\n\n"
-        "@activity\n"
+        "@activity(retry_safe=False)\n"
         "def external_effect() -> str:\n"
         "    raise KeyboardInterrupt()\n\n"
         "@workflow\n"

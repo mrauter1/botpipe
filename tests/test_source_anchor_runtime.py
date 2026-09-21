@@ -58,7 +58,7 @@ def test_source_free_root_replays_child_contracts_across_relocation(tmp_path):
         "from botpipe import activity, workflow\n"
         "from helperpkg.helper import worker\n"
         "from helperpkg.model import Reconciled\n"
-        "@activity\n"
+        "@activity(retry_safe=False)\n"
         "def unsafe() -> Reconciled:\n"
         "    raise KeyboardInterrupt\n"
         "@workflow\n"

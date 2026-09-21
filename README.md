@@ -159,8 +159,9 @@ a security boundary.
   creates a durable child scope.
 - `Session.run()` records a provider operation. The same mutable session is
   serialized; use separate sessions for parallel work.
-- `@activity` records custom Python I/O. Interrupted unsafe activities stop for
-  explicit operator reconciliation.
+- `@activity` records custom Python I/O and defaults to `retry_safe=True`, so
+  unfinished calls can run again on resume. Set `retry_safe=False` to require
+  explicit operator reconciliation before repeating an interrupted call.
 - `ask()` records a typed human-input request. Resume with an answer.
 - `parallel()` gives every callable a stable independent scope and preserves
   result order.

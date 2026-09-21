@@ -767,7 +767,7 @@ def workflow(fn=None, *, name=None, version="1", policy=None):
     return decorate(fn) if fn is not None else decorate
 
 
-def activity(fn=None, *, retry_safe=False, retries=0, name=None):
+def activity(fn=None, *, retry_safe=True, retries=0, name=None):
     frame = inspect.currentframe()
     local_types = (
         dict(frame.f_back.f_locals) if frame is not None and frame.f_back else {}
