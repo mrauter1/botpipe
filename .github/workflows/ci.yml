@@ -56,6 +56,7 @@ jobs:
           tests/test_artifact_attempts.py
           tests/test_artifact_rollback.py
           tests/test_codec_corrections.py
+          tests/test_activity_defaults.py
           tests/test_runtime_corrections.py
           tests/test_mutable_replay.py
           tests/test_input_acceptance.py

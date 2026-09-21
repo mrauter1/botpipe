@@ -85,7 +85,7 @@ def test_relocated_nested_activity_can_be_manually_resolved(tmp_path):
     (package / "__init__.py").write_text("")
     (package / "workflow.py").write_text(
         "from botpipe import activity, workflow\n"
-        "@activity\n"
+        "@activity(retry_safe=False)\n"
         "def effect(): raise KeyboardInterrupt\n"
         "@workflow\n"
         "def child(): return effect()\n"

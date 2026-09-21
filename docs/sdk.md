@@ -54,7 +54,7 @@ run. Status is one of `completed`, `failed`, `awaiting_input`, `interrupted`, or
 @workflow(name=None, version="1", policy=None)
 def workflow_function(...): ...
 
-@activity(retry_safe=False, retries=0, name=None)
+@activity(retry_safe=True, retries=0, name=None)
 def external_operation(...): ...
 ```
 
@@ -65,9 +65,13 @@ field layout. An explicit `name` supplies the logical activity or workflow name;
 otherwise its module and qualified callable name identify it. Workflow `version`
 labels a release for observation; it is not a resume gate.
 
-Automatic retry requires both the recorded attempt and current activity to declare
-`retry_safe=True`. Editing that flag cannot authorize repeating an earlier unsafe
-attempt; use explicit reconciliation when its effect is uncertain.
+Activities default to `retry_safe=True`: an unfinished call can execute again on
+resume. Set `retry_safe=False` when repeating the operation requires explicit
+reconciliation. Completed calls always reuse their saved outcomes. `retries=0`
+still means exceptions receive no additional attempts; set `retries` to opt in.
+Automatic retry requires both the recorded attempt and current activity to permit
+it. Editing the flag cannot authorize repeating an earlier unsafe attempt; use
+explicit reconciliation when its effect is uncertain.
 
 `Session.run(prompt, *, input=None, reads=(), writes=(), returns=str,
 policy=None, name=None, retries=2, workspace=None)` returns a `Result` with

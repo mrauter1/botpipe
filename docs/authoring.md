@@ -97,9 +97,12 @@ non-conflicting output paths.
 SDK or CLI with a typed answer. The answer is validated against `Type` before it
 is recorded. A rejected answer leaves the same request pending and includes a
 `diagnostic` in `pending_input`, so it can be corrected with another resume.
-An uncertain unsafe activity pauses as
+Activities default to `retry_safe=True`, so unfinished calls can run again on
+resume. Use `@activity(retry_safe=False)` when repeating a call requires an
+explicit decision. An uncertain activity with that setting pauses as
 `interrupted`; inspect it and call `resolve(..., retry=True)` or
-`resolve(..., response=value)` explicitly.
+`resolve(..., response=value)` explicitly. Completed calls reuse their saved
+outcomes in either case.
 
 If a provider completed before its artifact inventory was saved, inspect its
 declared files and approve their exact contents before resuming. For example,

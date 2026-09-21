@@ -240,8 +240,11 @@ def create_ticket(title: str) -> dict[str, str]:
     return remote_api.create_ticket(title)
 ```
 
-`retry_safe=True` permits automatic retry only when both the saved attempt and
-the current activity declare retry safety. Changing the flag cannot authorize
+Activities default to `retry_safe=True`, allowing unfinished calls to execute
+again on resume. Use `retry_safe=False` for operations such as ticket creation
+that require reconciliation before repeating. Exception retries remain opt-in
+through `retries` (default `0`). Automatic retry requires both the saved attempt
+and the current activity to permit it. Changing the flag cannot authorize
 repeating an earlier unsafe attempt. Explicit `resolve(..., retry=True)` remains
 the operator's authorization. This is not an exactly-once guarantee.
 

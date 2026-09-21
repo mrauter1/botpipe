@@ -242,7 +242,7 @@ def test_manual_typed_activity_resolution_accepts_runtime_subtype_method_edit(
                 "from pathlib import Path\n"
                 "from botpipe import activity, workflow\n"
                 "from .base import BaseValue\n"
-                "@activity\n"
+                "@activity(retry_safe=False)\n"
                 f"def unsafe(){return_annotation}:\n"
                 "    with Path('effects.log').open('a') as stream:\n"
                 "        stream.write('unsafe\\n')\n"
