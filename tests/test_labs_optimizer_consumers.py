@@ -405,3 +405,117 @@ def test_completed_workflow_reads_saved_pair_without_relaunch(tmp_path):
     assert replay.ok, replay.error
     assert replay.value == result.value
     assert calls.read_text(encoding="utf-8").splitlines() == ["call", "call"]
+
+
+def _interrupt_paired_cache(tmp_path, monkeypatch, *, cache_saved):
+    from tests.test_labs import _successful_provider
+
+    from labs.workflows import optimizer_integration
+
+    candidate_id = _publish_optimizer_candidate(tmp_path, kind="workflow")
+    spec, calls = _write_evaluation_spec(tmp_path)
+    params = RefinementParams(
+        selected_workflow="release-go-no-go",
+        task_title="Recover interrupted evaluation",
+        optimization_receipt_path="optimization_publication_receipt.json",
+        candidate_id=candidate_id,
+        evaluation_spec_path=spec.name,
+        target_test_argv=[sys.executable, "-c", "pass"],
+    )
+    atomic_json = optimizer_integration._atomic_json
+    saved = {}
+
+    def interrupt_cache(path, payload):
+        if path.name.startswith("paired-evaluation-cache-") and not saved:
+            saved.update(path=path, payload=payload)
+            if cache_saved:
+                atomic_json(path, payload)
+            raise KeyboardInterrupt("interrupted at paired cache publication")
+        return atomic_json(path, payload)
+
+    with Botpipe(
+        tmp_path, provider=FakeProvider([_successful_provider] * 24)
+    ) as client:
+        with monkeypatch.context() as patched:
+            patched.setattr(optimizer_integration, "_atomic_json", interrupt_cache)
+            result = client.run(
+                refinement_workflow,
+                params,
+                request="Measure the accepted optimizer candidate",
+                run_id="interrupted-pair",
+            )
+        assert result.status == "interrupted", result.error
+        assert saved
+        operation = next(
+            row
+            for row in client.inspect(result.run_id)["operations"]
+            if row["name"] == "validate frozen candidate and optional paired evaluation"
+        )
+        assert operation["status"] == "started"
+    assert calls.read_text(encoding="utf-8").splitlines() == ["call", "call"]
+    return result.run_id, operation["id"], saved, calls
+
+
+@pytest.mark.parametrize("cache_saved", [False, True])
+def test_interrupted_pair_recovers_without_relaunch(tmp_path, monkeypatch, cache_saved):
+    from tests.test_labs import _successful_provider
+
+    from labs.workflows import optimizer_integration
+
+    run_id, operation_id, saved, calls = _interrupt_paired_cache(
+        tmp_path, monkeypatch, cache_saved=cache_saved
+    )
+    with Botpipe(
+        tmp_path, provider=FakeProvider([_successful_provider] * 24)
+    ) as client:
+        if not cache_saved:
+            for _ in range(2):
+                suspended = client.resume(run_id)
+                assert suspended.status == "interrupted", suspended.error
+                assert "outcome is unresolved" in suspended.error
+                assert client.journal.get(operation_id)["status"] == "started"
+                assert calls.read_text(encoding="utf-8").splitlines() == [
+                    "call",
+                    "call",
+                ]
+
+            client.resolve(run_id, operation_id, retry=True)
+            suspended = client.resume(run_id)
+            assert suspended.status == "interrupted", suspended.error
+            assert client.journal.get(operation_id)["status"] in ("started", "response")
+            assert calls.read_text(encoding="utf-8").splitlines() == ["call", "call"]
+            # Recover the genuine result from the completed evaluator arms.
+            optimizer_integration._atomic_json(saved["path"], saved["payload"])
+
+        resumed = client.resume(run_id)
+        assert resumed.ok, resumed.error
+        assert client.journal.get(operation_id)["status"] == "completed"
+        replayed = client.resume(run_id)
+        assert replayed.ok, replayed.error
+        assert replayed.value == resumed.value
+        assert calls.read_text(encoding="utf-8").splitlines() == ["call", "call"]
+
+
+@pytest.mark.parametrize("invalid_record", ["attempt", "cache"])
+def test_interrupted_pair_rejects_invalid_records(
+    tmp_path, monkeypatch, invalid_record
+):
+    run_id, operation_id, saved, calls = _interrupt_paired_cache(
+        tmp_path, monkeypatch, cache_saved=invalid_record == "cache"
+    )
+    if invalid_record == "attempt":
+        path = next(saved["path"].parent.glob("paired-evaluation-attempt-*.json"))
+        payload = json.loads(path.read_text())
+        payload["attempt_id"] = "different-attempt"
+        path.write_text(json.dumps(payload), encoding="utf-8")
+        expected_error = "paired evaluation inputs changed"
+    else:
+        saved["path"].write_text("{}", encoding="utf-8")
+        expected_error = "ValueError"
+
+    with Botpipe(tmp_path, provider=FakeProvider([])) as client:
+        rejected = client.resume(run_id)
+        assert rejected.status == "failed", rejected.error
+        assert expected_error in rejected.error
+        assert client.journal.get(operation_id)["status"] == "failed"
+        assert calls.read_text(encoding="utf-8").splitlines() == ["call", "call"]

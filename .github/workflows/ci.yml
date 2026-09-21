@@ -92,4 +92,6 @@ jobs:
           tests/test_execution_isolation.py
           tests/test_paired_evaluation.py
           tests/test_paired_resume.py
+          tests/test_labs_optimizer_consumers.py::test_interrupted_pair_recovers_without_relaunch
+          tests/test_labs_optimizer_consumers.py::test_interrupted_pair_rejects_invalid_records
           tests/test_provenance.py

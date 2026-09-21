@@ -10,7 +10,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from botpipe import activity
+from botpipe import UncertainOperation, activity, current_run
 from botpipe.storage import sync_directory
 
 
@@ -425,8 +425,10 @@ def _validate_candidate_and_compare_activity(
                     raise ValueError(
                         "paired evaluation inputs changed; start a new refinement run"
                     )
-                raise ValueError(
-                    "a prior paired evaluation was interrupted; evaluator arms were not relaunched"
+                raise UncertainOperation(
+                    "Paired evaluation outcome is unresolved; recover its result before "
+                    "continuing. Retrying will not relaunch evaluator arms.",
+                    current_run().operation_id,
                 )
             else:
                 _atomic_json(

@@ -45,8 +45,12 @@ parsed into argv without a shell; it is mutually exclusive with
 When `evaluation_spec_path` is supplied, the workflow materializes disjoint
 baseline and candidate arms and performs one frozen paired evaluation. A saved
 comparison is reused only after its spec, evaluator, cases, arm identities, and
-outputs revalidate. An interrupted attempt is never silently relaunched, and no
-comparison automatically promotes the candidate.
+outputs revalidate. If an interrupted attempt has no saved comparison, resume
+stays `interrupted` so its result can be reconciled. Repeated resumes and explicit
+retry authorization do not relaunch the evaluator arms. Once a valid comparison
+cache is recovered, resume validates and reuses it automatically. Invalid caches
+or mismatched attempt identities remain validation failures. No comparison
+automatically promotes the candidate.
 
 ## Phases and evidence
 
