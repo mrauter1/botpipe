@@ -101,6 +101,7 @@ def test_standard_flag_pseudo_members_round_trip_without_missing_hook(value):
     assert type(restored) is type(value)
     assert restored.value == value.value
     assert restored.name == value.name
+    assert restored is type(value)(value.value)
 
 
 def test_exception_type_contract_covers_native_family_and_inherited_slots():

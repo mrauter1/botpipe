@@ -91,6 +91,97 @@ def test_activity_argument_change_is_a_replay_mismatch(tmp_path):
     assert "ReplayMismatch" in resumed.error
 
 
+def test_activity_keyword_order_change_rejects_before_answer(tmp_path):
+    effects = []
+
+    @activity(name="calculate")
+    def calculate(**values):
+        effects.append(tuple(values))
+        return "saved"
+
+    @workflow(name="activity-keyword-order-job")
+    def first():
+        calculate(left=1, right=2)
+        return ask("Continue?")
+
+    with Botpipe(tmp_path, provider=FakeProvider([])) as client:
+        paused = client.run(first, run_id="activity-keyword-order")
+        assert paused.status == "awaiting_input"
+        waiting = paused.pending_input["operation_id"]
+
+        @workflow(name="activity-keyword-order-job")
+        def second():
+            calculate(right=2, left=1)
+            return ask("Continue?")
+
+        replayed = client.resume(paused.run_id, workflow=second, answer="yes")
+
+        assert replayed.status == "failed"
+        assert "ReplayMismatch" in replayed.error
+        assert client.journal.get(waiting)["status"] == "waiting"
+
+    assert effects == [("left", "right")]
+
+
+def test_activity_keyword_order_unchanged_resumes_successfully(tmp_path):
+    effects = []
+
+    @activity(name="calculate")
+    def calculate(**values):
+        effects.append(tuple(values))
+        return "saved"
+
+    @workflow(name="same-activity-keyword-order-job")
+    def first():
+        calculate(left=1, right=2)
+        return ask("Continue?")
+
+    with Botpipe(tmp_path, provider=FakeProvider([])) as client:
+        paused = client.run(first, run_id="same-activity-keyword-order")
+
+        @workflow(name="same-activity-keyword-order-job")
+        def second():
+            calculate(left=1, right=2)
+            return ask("Continue?")
+
+        replayed = client.resume(paused.run_id, workflow=second, answer="yes")
+
+    assert replayed.ok, replayed.error
+    assert replayed.value == "yes"
+    assert effects == [("left", "right")]
+
+
+def test_child_keyword_order_change_rejects_before_answer_and_effects(tmp_path):
+    effects = []
+
+    @workflow(name="keyword-child")
+    def child(**values):
+        answer = ask("Continue?")
+        effects.append((tuple(values), answer))
+        return answer
+
+    @workflow(name="child-keyword-order-job")
+    def first():
+        return child(left=1, right=2)
+
+    with Botpipe(tmp_path, provider=FakeProvider([])) as client:
+        paused = client.run(first, run_id="child-keyword-order")
+        assert paused.status == "awaiting_input"
+        waiting = paused.pending_input["operation_id"]
+
+        @workflow(name="child-keyword-order-job")
+        def second():
+            return child(right=2, left=1)
+
+        replayed = client.resume(paused.run_id, workflow=second, answer="yes")
+
+        assert replayed.status == "failed"
+        assert "ReplayMismatch" in replayed.error
+        assert client.journal.get(waiting)["status"] == "waiting"
+
+    assert effects == []
+
+
 def test_completed_root_returns_saved_result_without_a_revision_or_execution(tmp_path):
     executions = []
 

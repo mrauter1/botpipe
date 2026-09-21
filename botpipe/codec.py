@@ -10,7 +10,7 @@ import math
 import re
 import sys
 from datetime import date, datetime, timedelta, timezone
-from enum import Enum, Flag
+from enum import CONFORM, EJECT, KEEP, STRICT, Enum, Flag
 from inspect import get_annotations, getattr_static
 from pathlib import Path
 from types import MappingProxyType, MemberDescriptorType, SimpleNamespace, UnionType
@@ -776,6 +776,171 @@ def _is_type_alias(value):
     )
 
 
+_NO_STANDARD_FLAG_RESULT = object()
+_FLAG_INSTANCE_FIELDS = frozenset({"_value_", "_name_", "_inverted_"})
+
+
+def _flag_has_native_instance_state(value):
+    """Return whether a pseudo-member has only core state and disposable caches."""
+
+    try:
+        state = object.__getattribute__(value, "__dict__")
+    except AttributeError:
+        state = {}
+    if any(name not in _FLAG_INSTANCE_FIELDS for name in state):
+        return False
+    for owner in type(value).__mro__:
+        for name, descriptor in vars(owner).items():
+            if name in _FLAG_INSTANCE_FIELDS or not isinstance(
+                descriptor, MemberDescriptorType
+            ):
+                continue
+            try:
+                descriptor.__get__(value, type(value))
+            except AttributeError:
+                continue
+            return False
+    return True
+
+
+def _flag_hook(cls, name):
+    hook = getattr_static(cls, name)
+    return getattr(hook, "__func__", hook)
+
+
+def _standard_flag_result(cls, raw):
+    """Predict stdlib Flag._missing_ output without invoking application hooks."""
+
+    member_type = cls._member_type_
+    if getattr_static(cls, "__setattr__") is not getattr_static(
+        member_type, "__setattr__"
+    ) or getattr_static(cls, "__getattribute__") is not getattr_static(
+        member_type, "__getattribute__"
+    ):
+        return _NO_STANDARD_FLAG_RESULT
+    try:
+        getattr_static(cls, "__getattr__")
+    except AttributeError:
+        pass
+    else:
+        return _NO_STANDARD_FLAG_RESULT
+    if _flag_hook(cls, "_missing_") is not _flag_hook(Flag, "_missing_"):
+        return _NO_STANDARD_FLAG_RESULT
+
+    value = raw
+    flag_mask = cls._flag_mask_
+    singles_mask = cls._singles_mask_
+    all_bits = cls._all_bits_
+    boundary = cls._boundary_
+    if not ~all_bits <= value <= all_bits or value & (all_bits ^ flag_mask):
+        if boundary is STRICT:
+            return _NO_STANDARD_FLAG_RESULT
+        if boundary is CONFORM:
+            value &= flag_mask
+        elif boundary is EJECT:
+            return _NO_STANDARD_FLAG_RESULT
+        elif boundary is KEEP:
+            if value < 0:
+                value = max(all_bits + 1, 2 ** value.bit_length()) + value
+        else:
+            return _NO_STANDARD_FLAG_RESULT
+    if value < 0:
+        value = all_bits + 1 + value
+
+    unknown = value & ~flag_mask
+    aliases = value & ~singles_mask
+    member_value = value & singles_mask
+    if unknown and boundary is not KEEP:
+        return _NO_STANDARD_FLAG_RESULT
+    if not (member_value or aliases):
+        return value, None
+
+    iterator = _flag_hook(cls, "_iter_member_")
+    by_value = _flag_hook(Flag, "_iter_member_by_value_")
+    by_definition = _flag_hook(Flag, "_iter_member_by_def_")
+    if iterator not in (by_value, by_definition):
+        return _NO_STANDARD_FLAG_RESULT
+    if (
+        iterator is by_definition
+        and _flag_hook(cls, "_iter_member_by_value_") is not by_value
+    ):
+        return _NO_STANDARD_FLAG_RESULT
+    members = []
+    remaining = member_value & flag_mask
+    while remaining:
+        bit = remaining & -remaining
+        member = cls._value2member_map_.get(bit)
+        if member is None:
+            return _NO_STANDARD_FLAG_RESULT
+        members.append(member)
+        remaining ^= bit
+    if iterator is by_definition:
+        if any(
+            type(object.__getattribute__(member, "_sort_order_")) is not int
+            for member in members
+        ):
+            return _NO_STANDARD_FLAG_RESULT
+        members.sort(key=lambda member: object.__getattribute__(member, "_sort_order_"))
+
+    combined_value = 0
+    for member in members:
+        combined_value |= object.__getattribute__(member, "_value_")
+    if aliases:
+        equality = getattr_static(cls, "__eq__")
+        native_equality = object.__eq__ if cls._member_type_ is object else int.__eq__
+        if (members or len(cls._member_map_) > 1) and equality is not native_equality:
+            return _NO_STANDARD_FLAG_RESULT
+        for member in cls._member_map_.values():
+            if any(member is present for present in members):
+                continue
+            member_raw = object.__getattribute__(member, "_value_")
+            if member_raw and member_raw & value == member_raw:
+                members.append(member)
+                combined_value |= member_raw
+
+    unknown = value ^ combined_value
+    names = [object.__getattribute__(member, "_name_") for member in members]
+    if any(type(name) is not str for name in names):
+        return _NO_STANDARD_FLAG_RESULT
+    name = "|".join(names)
+    if not combined_value:
+        name = None
+    elif unknown and boundary is STRICT:
+        return _NO_STANDARD_FLAG_RESULT
+    elif unknown:
+        if getattr_static(cls, "_numeric_repr_") is not repr:
+            return _NO_STANDARD_FLAG_RESULT
+        name += f"|{unknown!r}"
+    return value, name
+
+
+def _new_flag_member(cls, raw, name):
+    if cls._member_type_ is object:
+        member = object.__new__(cls)
+    else:
+        member = int.__new__(cls, raw)
+    object.__setattr__(member, "_value_", raw)
+    object.__setattr__(member, "_name_", name)
+    return member
+
+
+def _compatible_cached_flag_member(member, cls, raw, name):
+    if type(member) is not cls:
+        return False
+    try:
+        member_raw = object.__getattribute__(member, "_value_")
+        member_name = object.__getattribute__(member, "_name_")
+    except AttributeError:
+        return False
+    return (
+        type(member_raw) is int
+        and member_raw == raw
+        and type(member_name) is type(name)
+        and member_name == name
+        and _flag_has_native_instance_state(member)
+    )
+
+
 def encode(value):
     """Encode supported values with canonical, source-free storage contracts."""
 
@@ -809,14 +974,22 @@ def _encode(value, path, depth, traversal, contracts):
         if isinstance(value, Enum):
             cls = type(value)
             member = value.name
-            if (
-                member not in cls.__members__ or cls.__members__[member] is not value
-            ) and (
-                not isinstance(value, Flag)
-                or cls._member_type_ not in (object, int)
-                or type(value.value) is not int
-            ):
-                raise TypeError(f"{path}: unsupported unnamed enum value")
+            declared = (
+                type(member) is str
+                and member in cls.__members__
+                and cls.__members__[member] is value
+            )
+            if not declared:
+                if (
+                    not isinstance(value, Flag)
+                    or cls._member_type_ not in (object, int)
+                    or type(value.value) is not int
+                ):
+                    raise TypeError(f"{path}: unsupported unnamed enum value")
+                if not _flag_has_native_instance_state(value):
+                    raise TypeError(
+                        f"{path}: pseudo-member has unsupported instance state"
+                    )
             return {
                 "$botpipe": "enum",
                 "type": type_name(cls),
@@ -1544,15 +1717,17 @@ def _decode(value, path, depth, traversal):
             ):
                 raw = record["value"]
                 cached = cls._value2member_map_.get(raw)
-                if cached is not None:
+                if cached is not None and _compatible_cached_flag_member(
+                    cached, cls, raw, composite
+                ):
                     return cached
-                if cls._member_type_ is object:
-                    member = object.__new__(cls)
-                else:
-                    member = int.__new__(cls, raw)
-                object.__setattr__(member, "_value_", raw)
-                object.__setattr__(member, "_name_", composite)
-                return cls._value2member_map_.setdefault(raw, member)
+                member = _new_flag_member(cls, raw, composite)
+                if _standard_flag_result(cls, raw) != (raw, composite):
+                    return member
+                winner = cls._value2member_map_.setdefault(raw, member)
+                if _compatible_cached_flag_member(winner, cls, raw, composite):
+                    return winner
+                return member
             raise TypeError(
                 f"{path}.member: {record['member']!r} is not a member of "
                 f"{record['type']}"

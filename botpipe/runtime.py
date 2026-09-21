@@ -800,7 +800,7 @@ def activity(fn=None, *, retry_safe=False, retries=0, name=None):
             inputs = {
                 "activity": _logical_callable_surface(function, explicit_name=name),
                 "args": args,
-                "kwargs": kwargs,
+                "kwargs": list(kwargs.items()),
             }
             last = None
             for attempt in range(retries + 1):
@@ -1099,7 +1099,7 @@ class RunContext:
         inputs = {
             "workflow": definition.logical_identity,
             "args": args,
-            "kwargs": kwargs,
+            "kwargs": list(kwargs.items()),
         }
 
         def execute():

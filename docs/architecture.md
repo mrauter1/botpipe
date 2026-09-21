@@ -71,6 +71,18 @@ clearly without coercion or automatic migration. Before a resume accepts an
 answer, changes limits, or starts work, it checks contracts throughout the
 recorded run state.
 
+Activity and child-workflow requests store keyword arguments as ordered
+name/value pairs. Replay therefore preserves observable Python keyword order;
+execution still receives ordinary keyword arguments.
+
+`Flag` and `IntFlag` pseudo-members store their native integer value and name.
+Application attributes and populated custom slots are rejected; disposable
+stdlib caches are not durable state. Restoration does not invoke application
+construction hooks. A historical value that current construction would no longer
+produce is restored without inserting it into the enum's shared cache, so reading
+old state does not change the validation of new values. Equivalent standard
+composites retain normal enum identity.
+
 Datetime records retain wall time, `fold`, and fixed-offset timezone names.
 Supported timezones are naive values and exact `datetime.timezone` instances;
 `ZoneInfo` and custom `tzinfo` implementations are rejected because their
