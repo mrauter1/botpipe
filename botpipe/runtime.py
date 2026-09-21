@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextvars
+import dataclasses
 import functools
 import hashlib
 import inspect
@@ -14,11 +15,12 @@ import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
+from enum import Enum
 from pathlib import Path
 from types import MemberDescriptorType
 from typing import get_type_hints
 
-from pydantic import TypeAdapter, ValidationError
+from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from . import codec
 from ._callables import describe_callable
@@ -577,12 +579,33 @@ def _callable_reference(value):
 
 
 def _logical_binding(value, *, seen, depth):
-    """Describe callable data explicitly bound into a partial, without object state."""
+    """Describe data explicitly bound into a partial."""
 
     if callable(value):
+        surface = _logical_callable_surface(value, _seen=seen, _depth=depth)
+        declared_data = isinstance(value, (BaseModel, Enum)) or (
+            dataclasses.is_dataclass(value) and not isinstance(value, type)
+        )
+        if declared_data:
+            try:
+                codec.encode(value)
+            except TypeError:
+                # Some declared data objects have deliberately non-durable state.
+                # Preserve their existing opaque callable-reference behavior.
+                pass
+            else:
+                # A callable instance used as an explicit partial argument is data as
+                # well as code. Preserve its supported durable state while keeping
+                # implementation identity source-free. Callable receivers otherwise
+                # remain opaque logical references.
+                return {
+                    "binding": "callable_data",
+                    "callable": surface,
+                    "value": value,
+                }
         return {
             "binding": "callable",
-            "value": _logical_callable_surface(value, _seen=seen, _depth=depth),
+            "value": surface,
         }
     return {"binding": "value", "value": value}
 
@@ -605,8 +628,6 @@ def _logical_callable_surface(value, *, explicit_name=None, _seen=None, _depth=0
         declared_name = namespace.get("_botpipe_explicit_name")
         if explicit_name is None and declared_name is not None:
             explicit_name = declared_name
-        if explicit_name is not None:
-            return {"kind": "named", "name": str(explicit_name)}
         if (
             type(value).__module__ == __name__
             and type(value).__name__ == "Workflow"
@@ -622,7 +643,10 @@ def _logical_callable_surface(value, *, explicit_name=None, _seen=None, _depth=0
             return {
                 "kind": "partial",
                 "callable": _logical_callable_surface(
-                    value.func, _seen=seen, _depth=_depth + 1
+                    value.func,
+                    explicit_name=explicit_name,
+                    _seen=seen,
+                    _depth=_depth + 1,
                 ),
                 "args": [
                     _logical_binding(item, seen=seen, depth=_depth + 1)
@@ -633,9 +657,11 @@ def _logical_callable_surface(value, *, explicit_name=None, _seen=None, _depth=0
                         key,
                         _logical_binding(item, seen=seen, depth=_depth + 1),
                     ]
-                    for key, item in sorted((value.keywords or {}).items())
+                    for key, item in (value.keywords or {}).items()
                 ],
             }
+        if explicit_name is not None:
+            return {"kind": "named", "name": str(explicit_name)}
         if inspect.ismethod(value):
             owner = (
                 value.__self__

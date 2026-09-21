@@ -1,12 +1,38 @@
 from __future__ import annotations
 
-from functools import partial
 import json
+from dataclasses import dataclass
+from functools import partial
 
 import pytest
 
-from botpipe import Botpipe, ReplayMismatch, activity, ask, codec, parallel, workflow
+from botpipe import (
+    Botpipe,
+    ReplayMismatch,
+    Workflow,
+    activity,
+    ask,
+    codec,
+    parallel,
+    workflow,
+)
 from botpipe.providers import FakeProvider
+
+
+@dataclass
+class _BoundCallback:
+    amount: int
+
+    def __call__(self):
+        return self.amount
+
+
+@dataclass
+class _OpaqueDataclassCallback:
+    nondurable_state: object
+
+    def __call__(self):
+        return "opaque"
 
 
 def test_activity_body_can_change_while_completed_outcome_replays(tmp_path):
@@ -216,6 +242,126 @@ def test_pending_parallel_partial_binding_change_is_rejected(tmp_path):
 
     assert replayed.status == "failed"
     assert "ReplayMismatch" in replayed.error
+
+
+def test_pending_partial_preserves_explicit_callable_data_state(tmp_path, monkeypatch):
+    calls = []
+
+    def branch(callback):
+        ask("Continue?")
+        return callback()
+
+    selected = partial(branch, _BoundCallback(1))
+
+    @workflow(name="callable-data-job")
+    def job():
+        return parallel(selected)
+
+    with Botpipe(tmp_path, provider=FakeProvider([])) as client:
+        first = client.run(job, run_id="same-callable-data")
+        assert first.status == "awaiting_input"
+
+        def revised(callback):
+            calls.append(callback.amount)
+            return callback.amount + 100
+
+        monkeypatch.setattr(_BoundCallback, "__call__", revised)
+        selected = partial(branch, _BoundCallback(1))
+        same_state = client.resume(first.run_id, workflow=job, answer="yes")
+        assert same_state.ok, same_state.error
+        assert same_state.value == [101]
+        assert calls == [1]
+
+        second = client.run(job, run_id="changed-callable-data")
+        assert second.status == "awaiting_input"
+        waiting = second.pending_input["operation_id"]
+        selected = partial(branch, _BoundCallback(2))
+        changed_state = client.resume(second.run_id, workflow=job, answer="yes")
+
+        assert changed_state.status == "failed"
+        assert "ReplayMismatch" in changed_state.error
+        assert client.journal.get(waiting)["status"] == "waiting"
+        assert calls == [1]
+
+
+def test_pending_partial_keyword_order_change_is_rejected(tmp_path):
+    def branch(**values):
+        ask("Continue?")
+        return list(values)
+
+    selected = partial(branch, left=1, right=2)
+
+    @workflow(name="keyword-order-job")
+    def job():
+        return parallel(selected)
+
+    with Botpipe(tmp_path, provider=FakeProvider([])) as client:
+        paused = client.run(job, run_id="keyword-order")
+        assert paused.status == "awaiting_input"
+        waiting = paused.pending_input["operation_id"]
+
+        selected = partial(branch, right=2, left=1)
+        replayed = client.resume(paused.run_id, workflow=job, answer="yes")
+
+        assert replayed.status == "failed"
+        assert "ReplayMismatch" in replayed.error
+        assert client.journal.get(waiting)["status"] == "waiting"
+
+
+def test_named_partial_child_retains_bound_inputs(tmp_path):
+    def branch(value):
+        ask("Continue?")
+        return value
+
+    selected = Workflow(partial(branch, 1), name="bound")
+
+    @workflow(name="named-partial-job")
+    def job():
+        return selected()
+
+    with Botpipe(tmp_path, provider=FakeProvider([])) as client:
+        paused = client.run(job, run_id="named-partial")
+        assert paused.status == "awaiting_input"
+        waiting = paused.pending_input["operation_id"]
+
+        selected = Workflow(partial(branch, 2), name="bound")
+        replayed = client.resume(paused.run_id, workflow=job, answer="yes")
+
+        assert replayed.status == "failed"
+        assert "ReplayMismatch" in replayed.error
+        assert client.journal.get(waiting)["status"] == "waiting"
+
+
+def test_partial_opaque_and_workflow_callbacks_remain_logical_references(tmp_path):
+    def branch(callback):
+        ask("Continue?")
+        return callback()
+
+    @workflow(name="bound-child")
+    def child():
+        return "workflow"
+
+    selected = partial(branch, _OpaqueDataclassCallback(object()))
+
+    @workflow(name="reference-binding-job")
+    def job():
+        return parallel(selected)
+
+    with Botpipe(tmp_path, provider=FakeProvider([])) as client:
+        opaque = client.run(job, run_id="opaque-binding")
+        assert opaque.status == "awaiting_input"
+        opaque = client.resume(opaque.run_id, workflow=job, answer="yes")
+        assert opaque.ok, opaque.error
+        assert opaque.value == ["opaque"]
+
+        selected = partial(branch, child)
+        workflow_callback = client.run(job, run_id="workflow-binding")
+        assert workflow_callback.status == "awaiting_input"
+        workflow_callback = client.resume(
+            workflow_callback.run_id, workflow=job, answer="yes"
+        )
+        assert workflow_callback.ok, workflow_callback.error
+        assert workflow_callback.value == ["workflow"]
 
 
 def test_recorded_inputs_must_match_their_replay_fingerprint(tmp_path):

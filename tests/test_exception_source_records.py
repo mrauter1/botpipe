@@ -64,6 +64,8 @@ def test_enum_contract_records_members_values_and_restores_without_lookup_hooks(
     assert encoded["contract"] == {
         "kind": "enum",
         "type": codec.type_name(Choice),
+        "member_type": codec.type_name(object),
+        "flag": False,
         "members": [["ONE", 1]],
     }
     assert codec.decode(encoded) is Choice.ONE

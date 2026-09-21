@@ -63,12 +63,13 @@ its state was recorded, so validation hooks must remain free of external effects
 Codec traversal has depth and value-count limits and rejects cycles.
 
 Typed records carry a codec-owned structural storage contract: concrete type
-identity, declared field types and layout, enum membership, and supported
-exception storage. The contract excludes implementation code, validators,
-default values, aliases, and source locations. Source-only edits remain
-compatible; incompatible type or field changes fail clearly without coercion or
-automatic migration. Before a resume accepts an answer, changes limits, or starts
-work, it checks contracts throughout the recorded run state.
+identity, declared field types and layout, enum membership and backing type,
+flag storage, and supported exception storage. The contract excludes
+implementation code, validators, default values, aliases, and source locations.
+Source-only edits remain compatible; incompatible type or field changes fail
+clearly without coercion or automatic migration. Before a resume accepts an
+answer, changes limits, or starts work, it checks contracts throughout the
+recorded run state.
 
 Datetime records retain wall time, `fold`, and fixed-offset timezone names.
 Supported timezones are naive values and exact `datetime.timezone` instances;
@@ -239,11 +240,13 @@ edits require an explicit isolated workspace per branch; read-only sessions may
 share the application workspace.
 
 `parallel()` records the ordered logical identities and explicit bound arguments
-of its prepared branches, along with the settlement mode. Code edits do not
-change that request, while a changed target or binding does. Branch identity is
-checked before branch execution. Dynamically created callables can only be
-checked when orchestration reaches that call site; run-status bookkeeping may
-already have been committed by then.
+of its prepared branches, along with the settlement mode. Partial bindings retain
+keyword order and serializable callable data; explicit names do not erase those
+bindings. Nonserializable callable objects remain opaque references. Code edits
+do not change that request, while a changed target or durable binding does.
+Branch identity is checked before branch execution. Dynamically created
+callables can only be checked when orchestration reaches that call site;
+run-status bookkeeping may already have been committed by then.
 
 Prompt paths use the branch's application source directory when it has one.
 Branches composed only from SDK callables inherit their parent's source directory;

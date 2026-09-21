@@ -683,7 +683,13 @@ class _Contracts:
                             ),
                         ]
                     )
-                contract = {"kind": "enum", "type": name, "members": members}
+                contract = {
+                    "kind": "enum",
+                    "type": name,
+                    "member_type": type_name(cls._member_type_),
+                    "flag": issubclass(cls, Flag),
+                    "members": members,
+                }
             elif issubclass(cls, BaseException):
                 slots = []
                 for owner in cls.__mro__:
