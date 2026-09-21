@@ -294,7 +294,7 @@ def test_stale_pending_metadata_cannot_replace_accepted_answer(tmp_path):
         assert client.resume(paused.run_id, workflow=gate).value == "first"
 
 
-def test_legacy_raw_answer_checkpoint_is_rejected_without_revalidation(tmp_path):
+def test_unvalidated_answer_checkpoint_is_rejected_without_revalidation(tmp_path):
     @workflow
     def gate():
         return ask("Approve?")
@@ -307,7 +307,7 @@ def test_legacy_raw_answer_checkpoint_is_rejected_without_revalidation(tmp_path)
         result = client.resume(paused.run_id, workflow=gate)
 
         assert result.status == "failed"
-        assert "legacy unvalidated answer format" in result.error
+        assert "missing its validated answer" in result.error
         assert client.journal.get(operation_id)["status"] == "response"
 
 

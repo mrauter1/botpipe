@@ -164,8 +164,9 @@ a security boundary.
 - `ask()` records a typed human-input request. Resume with an answer.
 - `parallel()` gives every callable a stable independent scope and preserves
   result order.
-- Completed operation results are immutable. Resume checks workflow source,
-  prompt, schema, and operation identity before replay.
+- Completed outcomes are immutable. Resume matches operation identity and
+  inputs and checks stored-data contracts. Code edits are allowed: future work
+  uses current code, while completed runs return their saved results.
 - Botpipe provides durable replay, not an exactly-once claim for external
   systems.
 

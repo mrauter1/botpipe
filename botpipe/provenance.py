@@ -5,6 +5,7 @@ from __future__ import annotations
 import inspect
 import os
 from dataclasses import dataclass
+from functools import partial
 from hashlib import sha256
 from pathlib import Path
 from types import CodeType, ModuleType
@@ -12,7 +13,13 @@ from typing import Any, get_type_hints
 
 from pydantic.errors import PydanticSchemaGenerationError
 
-from ._callables import CallableGraph, _is_sdk_implementation, describe_callable
+from ._callables import (
+    CallableGraph,
+    _canonical_source_path,
+    _is_sdk_implementation,
+    _is_workflow,
+    describe_callable,
+)
 from ._code_identity import code_identity as _code_binding
 from .surface_identity import (
     canonical_workflow_identity,
@@ -28,7 +35,6 @@ class SourceContext:
     origin_source: Path | None
     origin_boundary: Path | None
     owned_boundaries: tuple[Path, ...]
-    ownership_anchor: Path | None
 
 
 class SourceCaptureError(TypeError):
@@ -50,18 +56,6 @@ def _identified_source_path(target: Any) -> Path | None:
     return candidate if candidate.suffix == ".py" else None
 
 
-def _source_path(target: Any) -> Path | None:
-    candidate = _identified_source_path(target)
-    if candidate is None:
-        return None
-    try:
-        return candidate.resolve(strict=True)
-    except OSError as exc:
-        raise SourceCaptureError(
-            f"Cannot resolve identified Python source {candidate.resolve(strict=False)}"
-        ) from exc
-
-
 def _boundary_for_source(source: Path) -> Path:
     package = (
         (source.parent / "__init__.py").is_file()
@@ -77,33 +71,36 @@ def source_context(
     """Project source origin and ownership once from a callable graph."""
 
     descriptor = graph or describe_callable(definition)
+    locations: dict[Path, tuple[Path | None, Path | None]] = {}
+
+    def location(target: Any) -> tuple[Path | None, Path | None]:
+        candidate = _identified_source_path(target)
+        if candidate is None:
+            return None, None
+        if candidate not in locations:
+            source = _canonical_source_path(candidate)
+            locations[candidate] = (
+                (None, None)
+                if _is_sdk_implementation(source)
+                else (source, _boundary_for_source(source))
+            )
+        return locations[candidate]
+
     origin_target = descriptor.origin_target
-    origin_source = _source_path(origin_target)
-    if origin_source is not None and _is_sdk_implementation(origin_source):
-        origin_source = None
-    origin_boundary = (
-        _boundary_for_source(origin_source) if origin_source is not None else None
-    )
+    origin_source, origin_boundary = location(origin_target)
     owned: list[Path] = []
     for target in descriptor.boundary_targets:
-        source = _source_path(target)
-        if source is None:
+        _, boundary = location(target)
+        if boundary is None:
             continue
-        if _is_sdk_implementation(source):
-            continue
-        boundary = _boundary_for_source(source)
         if boundary not in owned:
             owned.append(boundary)
     owned_boundaries = tuple(owned)
-    ownership_anchor = origin_boundary or (
-        owned_boundaries[0] if owned_boundaries else None
-    )
     return SourceContext(
         origin_target=origin_target,
         origin_source=origin_source,
         origin_boundary=origin_boundary,
         owned_boundaries=owned_boundaries,
-        ownership_anchor=ownership_anchor,
     )
 
 
@@ -223,7 +220,7 @@ def capture_orchestration_sources(
     )
     try:
         boundary_paths = tuple(
-            Path(item).resolve(strict=True) for item in raw_boundaries
+            _canonical_source_path(item, strict=True) for item in raw_boundaries
         )
     except (OSError, ValueError) as exc:
         raise SourceCaptureError("Cannot resolve owned source boundary") from exc
@@ -236,10 +233,88 @@ def capture_orchestration_sources(
         )
     )
     values: list[tuple[str, Any, Path]] = []
+    traversal_values: list[tuple[str, Any]] = []
     seen_values: set[int] = set()
-    callable_targets: dict[int, tuple[Any, tuple[Any, ...]]] = {
-        id(node.value): (node.value, node.source_targets) for node in descriptor.nodes
-    }
+    seen_traversal: set[int] = set()
+    source_paths: dict[int, tuple[Any, Path | None]] = {}
+    dependency_targets: dict[int, tuple[Any, tuple[Any, ...]]] = {}
+    resolving_dependencies: set[int] = set()
+    required_targets = {id(target): target for target in descriptor_targets}
+
+    def resolved_source(candidate: Any) -> Path | None:
+        cached = source_paths.get(id(candidate))
+        if cached is not None and cached[0] is candidate:
+            return cached[1]
+        source_candidate = _identified_source_path(candidate)
+        if source_candidate is None:
+            path = None
+        else:
+            try:
+                path = _canonical_source_path(source_candidate, strict=True)
+            except OSError as exc:
+                unresolved = _canonical_source_path(source_candidate)
+                required = required_targets.get(id(candidate)) is candidate
+                if unresolved.suffix == ".py" and (required or is_owned(unresolved)):
+                    raise SourceCaptureError(
+                        f"Cannot resolve owned Python source {unresolved}"
+                    ) from exc
+                path = None
+        source_paths[id(candidate)] = (candidate, path)
+        return path
+
+    def callable_source_targets(value: Any) -> tuple[Any, ...]:
+        marker = id(value)
+        cached = dependency_targets.get(marker)
+        if cached is not None and cached[0] is value:
+            return cached[1]
+        if marker in resolving_dependencies:
+            return ()
+        resolving_dependencies.add(marker)
+        targets: list[Any] = []
+        seen_targets: set[int] = set()
+
+        def include(candidate: Any) -> None:
+            for target in callable_source_targets(candidate):
+                target_marker = id(target)
+                if target_marker not in seen_targets:
+                    seen_targets.add(target_marker)
+                    targets.append(target)
+
+        try:
+            if _is_workflow(value):
+                include(vars(value)["fn"])
+            elif isinstance(value, partial):
+                include(value.func)
+                for bound in value.args:
+                    if callable(bound):
+                        include(bound)
+                for bound in (value.keywords or {}).values():
+                    if callable(bound):
+                        include(bound)
+            elif inspect.ismethod(value):
+                include(value.__func__)
+                owner = (
+                    value.__self__
+                    if isinstance(value.__self__, type)
+                    else type(value.__self__)
+                )
+                include(owner)
+            elif inspect.isfunction(value):
+                seen_targets.add(marker)
+                targets.append(value)
+                wrapped = vars(value).get("__wrapped__")
+                if callable(wrapped):
+                    include(wrapped)
+            elif isinstance(value, (type, ModuleType)):
+                seen_targets.add(marker)
+                targets.append(value)
+            elif callable(value) and not inspect.isbuiltin(value):
+                include(type(value))
+        finally:
+            resolving_dependencies.remove(marker)
+        result = tuple(targets)
+        dependency_targets[marker] = (value, result)
+        return result
 
     def is_owned(path: Path) -> bool:
         return any(
@@ -248,11 +323,10 @@ def capture_orchestration_sources(
         )
 
     def enqueue(label: str, value: Any) -> None:
-        if isinstance(value, (ModuleType, type)) or inspect.isfunction(value):
+        if isinstance(value, (ModuleType, type)):
             candidates = (value,)
         elif callable(value):
-            cached = callable_targets.get(id(value))
-            candidates = cached[1] if cached is not None and cached[0] is value else ()
+            candidates = callable_source_targets(value)
         else:
             return
         for target_index, candidate in enumerate(candidates):
@@ -261,27 +335,28 @@ def capture_orchestration_sources(
                 or isinstance(candidate, (type, ModuleType))
             ):
                 continue
-            source_candidate = _identified_source_path(candidate)
-            if source_candidate is None:
-                continue
-            try:
-                path = source_candidate.resolve(strict=True)
-            except OSError as exc:
-                unresolved = source_candidate.resolve(strict=False)
-                if unresolved.suffix == ".py" and is_owned(unresolved):
-                    raise SourceCaptureError(
-                        f"Cannot resolve owned Python source {unresolved}"
-                    ) from exc
+            target_label = (
+                label if len(candidates) == 1 else f"{label}.callable:{target_index}"
+            )
+            path = resolved_source(candidate)
+            if path is None:
+                identity = id(candidate)
+                if (
+                    not isinstance(candidate, ModuleType)
+                    and identity not in seen_traversal
+                ):
+                    seen_traversal.add(identity)
+                    traversal_values.append((target_label, candidate))
                 continue
             if not is_owned(path) or path.suffix != ".py" or path.is_symlink():
                 continue
             identity = id(candidate)
+            if identity not in seen_traversal:
+                seen_traversal.add(identity)
+                traversal_values.append((target_label, candidate))
             if identity in seen_values:
                 continue
             seen_values.add(identity)
-            target_label = (
-                label if len(candidates) == 1 else f"{label}.callable:{target_index}"
-            )
             values.append((target_label, candidate, path))
 
     def enqueue_contracts(annotation: Any, label: str) -> None:
@@ -312,8 +387,8 @@ def capture_orchestration_sources(
         )
         enqueue(label, callable_target)
     index = 0
-    while index < len(values):
-        label, value, _ = values[index]
+    while index < len(traversal_values):
+        label, value = traversal_values[index]
         index += 1
         if inspect.isfunction(value):
             namespace = value.__globals__
@@ -386,135 +461,6 @@ def capture_orchestration_sources(
     }
 
 
-def capture_type_source(
-    cls: type, boundaries: tuple[str | Path, ...]
-) -> dict[str, Any]:
-    """Capture bounded source evidence for one concrete durable type."""
-
-    if not isinstance(cls, type):
-        raise TypeError("durable source identity requires a type")
-    name = f"{cls.__module__}:{cls.__qualname__}"
-    boundary_paths = tuple(Path(item).resolve(strict=True) for item in boundaries)
-    candidate = _identified_source_path(cls)
-    try:
-        path = candidate.resolve(strict=True) if candidate is not None else None
-    except OSError as exc:
-        unresolved = candidate.resolve(strict=False)
-        identified_owned = any(
-            unresolved == item if item.is_file() else unresolved.is_relative_to(item)
-            for item in boundary_paths
-        )
-        if candidate.suffix == ".py" and identified_owned:
-            raise SourceCaptureError(
-                f"Cannot resolve identified owned Python source {unresolved}"
-            ) from exc
-        path = None
-    owned = path is not None and any(
-        path == item if item.is_file() else path.is_relative_to(item)
-        for item in boundary_paths
-    )
-    if not owned:
-        return {
-            "schema": "botpipe.type-source.v1",
-            "type": name,
-            "kind": "external",
-        }
-    roots = [item if item.is_dir() else item.parent for item in boundary_paths]
-    anchor = Path(os.path.commonpath([str(item) for item in roots]))
-    sources = capture_orchestration_sources(cls, boundary=boundary_paths)
-    if sources is None:
-        raise TypeError(f"Cannot capture source identity for durable type {name}")
-    ownership = {
-        "type_path": path.relative_to(anchor).as_posix(),
-        "boundaries": [
-            {
-                "kind": "directory" if item.is_dir() else "file",
-                "path": (
-                    item.relative_to(anchor).as_posix() if item != anchor else "."
-                ),
-            }
-            for item in boundary_paths
-        ],
-    }
-    return {
-        "schema": "botpipe.type-source.v1",
-        "type": name,
-        "kind": "python",
-        "ownership": ownership,
-        "sources": sources,
-    }
-
-
-def verify_type_source(cls: type, identity: Any) -> None:
-    """Reject source, path, or loaded-binding drift before value hydration."""
-
-    if type(identity) is not dict or identity.get("schema") != "botpipe.type-source.v1":
-        raise TypeError("durable type has invalid source identity")
-    name = f"{cls.__module__}:{cls.__qualname__}"
-    if identity.get("type") != name:
-        raise TypeError(f"durable type source identity does not match {name}")
-    kind = identity.get("kind")
-    if kind == "external":
-        if set(identity) != {
-            "schema",
-            "type",
-            "kind",
-        }:
-            raise TypeError(f"durable type source identity is invalid for {name}")
-        return
-    if kind != "python" or set(identity) != {
-        "schema",
-        "type",
-        "kind",
-        "ownership",
-        "sources",
-    }:
-        raise TypeError(f"durable type source identity is invalid for {name}")
-    boundaries = type_source_boundary(cls, identity)
-    current = capture_type_source(cls, boundaries)
-    if current != identity:
-        raise TypeError(
-            f"Source for durable type {name} changed; resume with original code or start a new run"
-        )
-
-
-def type_source_boundary(cls: type, identity: Any) -> tuple[Path, ...]:
-    """Resolve relocation-safe owned boundaries from recorded type ownership."""
-
-    name = f"{cls.__module__}:{cls.__qualname__}"
-    ownership = identity.get("ownership") if type(identity) is dict else None
-    if (
-        type(ownership) is not dict
-        or set(ownership) != {"type_path", "boundaries"}
-        or type(ownership["type_path"]) is not str
-        or type(ownership["boundaries"]) is not list
-    ):
-        raise TypeError(f"durable type source identity is invalid for {name}")
-    try:
-        raw = inspect.getsourcefile(cls)
-        path = Path(raw).resolve(strict=True) if raw is not None else None
-    except (OSError, TypeError, ValueError):
-        path = None
-    parts = Path(ownership["type_path"]).parts
-    if path is None or not parts or tuple(path.parts[-len(parts) :]) != parts:
-        raise TypeError(f"durable type source path changed for {name}")
-    anchor = path.parents[len(parts) - 1]
-    boundaries = []
-    for locator in ownership["boundaries"]:
-        if (
-            type(locator) is not dict
-            or set(locator) != {"kind", "path"}
-            or locator["kind"] not in {"file", "directory"}
-            or type(locator["path"]) is not str
-        ):
-            raise TypeError(f"durable type source identity is invalid for {name}")
-        candidate = (anchor / locator["path"]).resolve(strict=True)
-        if (locator["kind"] == "file") != candidate.is_file():
-            raise TypeError(f"durable type source path changed for {name}")
-        boundaries.append(candidate)
-    return tuple(boundaries)
-
-
 def _verify_loaded_source(definition: Any) -> None:
     captured = getattr(definition, "_source_identity_at_definition", None)
     descriptor = describe_callable(definition)
@@ -570,13 +516,13 @@ def capture_workflow_provenance(
             "orchestration_id": definition.fingerprint,
             "surface_manifest": manifest,
         }
-    except (OSError, SyntaxError, TypeError, ValueError) as exc:
+    except Exception as exc:  # noqa: BLE001 - observation cannot block execution
         return {
             "schema": "botpipe.workflow-provenance.v1",
             "verified": False,
             "workflow_identity": None,
             "surface_id": None,
-            "orchestration_id": getattr(definition, "fingerprint", None),
+            "orchestration_id": None,
             "error": f"{type(exc).__name__}: {exc}",
         }
 
@@ -586,10 +532,7 @@ __all__ = [
     "SourceContext",
     "capture_definition_sources",
     "capture_orchestration_sources",
-    "capture_type_source",
     "capture_workflow_provenance",
     "source_boundary",
     "source_context",
-    "type_source_boundary",
-    "verify_type_source",
 ]

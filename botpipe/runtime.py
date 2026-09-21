@@ -32,13 +32,12 @@ from .errors import (
     RunBusy,
     Suspension,
     UncertainOperation,
-    WorkflowChanged,
 )
 from .journal import Journal, now, workspace_lock
 from .limits import RunLimits
 from .models import RunResult
 from .policy import Policy
-from .provenance import capture_workflow_provenance, source_context
+from .provenance import SourceContext, capture_workflow_provenance, source_context
 from .provider_checkpoints import (
     NotDispatchedCheckpoint,
     ProviderCheckpoint,
@@ -114,33 +113,44 @@ def _operation_encoded_values(record):
             yield response[field]
 
 
-def _recorded_boundaries(data, operations, source_anchor, owned_boundaries=()):
-    values = [data.get(field) for field in ("args", "kwargs", "value")]
-    for record in operations:
-        values.extend(_operation_encoded_values(record))
-    boundaries = list(owned_boundaries)
-    for value in values:
-        if value is not None:
-            boundaries.extend(
-                codec.recorded_source_boundaries(value, root_boundary=source_anchor)
-            )
-    return tuple(dict.fromkeys(boundaries)), values
+def _preflight_recorded_contracts(data, operations):
+    """Validate every durable value before accepting input or running effects."""
 
-
-def _preflight_recorded_sources(data, operations, source_anchor, owned_boundaries=()):
     try:
-        boundaries, values = _recorded_boundaries(
-            data, operations, source_anchor, owned_boundaries
-        )
-        with codec.source_identity(boundaries, anchor=source_anchor):
-            for value in values:
+        for field in ("workflow_call", "args", "kwargs", "value"):
+            value = data.get(field)
+            if value is not None:
+                codec.verify_contracts(value, path=f"$.run.{field}")
+        for index, record in enumerate(operations):
+            for value_index, value in enumerate(_operation_encoded_values(record)):
                 if value is not None:
-                    codec.verify_sources(value)
-            for record in operations:
-                error = record.get("error")
-                if error is not None:
-                    _preflight_exception_record(error)
-        return boundaries
+                    codec.verify_contracts(
+                        value,
+                        path=f"$.operations[{index}].values[{value_index}]",
+                    )
+            error = record.get("error")
+            if error is not None:
+                _preflight_exception_record(error)
+        for record in operations:
+            recorded_inputs = codec.decode(record["inputs"])
+            if record["kind"] == "activity":
+                if not isinstance(recorded_inputs, dict):
+                    raise ReplayMismatch("Recorded activity inputs are malformed")
+                retry_safe = recorded_inputs.pop("retry_safe", None)
+                if type(retry_safe) is not bool:
+                    raise ReplayMismatch("Recorded activity retry safety is malformed")
+            expected = _hash(
+                {
+                    "kind": record["kind"],
+                    "name": record["name"],
+                    "inputs": codec.encode(recorded_inputs),
+                }
+            )
+            if record["fingerprint"] != expected:
+                raise ReplayMismatch(
+                    f"Recorded operation {record['id']} inputs do not match "
+                    "its replay fingerprint"
+                )
     except ReplayMismatch:
         raise
     except (
@@ -152,7 +162,7 @@ def _preflight_recorded_sources(data, operations, source_anchor, owned_boundarie
         ValueError,
     ) as exc:
         raise ReplayMismatch(
-            f"Recorded operation source identity cannot be verified: {exc}"
+            f"Recorded durable value contracts cannot be verified: {exc}"
         ) from exc
 
 
@@ -173,6 +183,7 @@ def _exception_record(exc):
             for descriptor in vars(owner).values()
         )
     }
+    state_errors = []
     try:
         record["args"] = codec.encode(BaseException.args.__get__(exc, type(exc)))
         if isinstance(exc, OSError):
@@ -182,64 +193,49 @@ def _exception_record(exc):
             record["native_family"] = "OSError"
             record["native_args"] = codec.encode(reduced[1])
         record["attributes"] = codec.encode(object.__getattribute__(exc, "__dict__"))
-        slots = []
-        for owner in type(exc).__mro__:
-            if owner is BaseException:
-                continue
-            for name, descriptor in vars(owner).items():
-                if not isinstance(descriptor, MemberDescriptorType):
-                    continue
-                try:
-                    value = descriptor.__get__(exc, type(exc))
-                except AttributeError:
-                    continue
-                slots.append(
-                    {
-                        "owner": codec.type_name(owner),
-                        "owner_type": slot_owner_types[owner],
-                        "name": name,
-                        "value": codec.encode(value),
-                    }
-                )
-        record["slots"] = slots
-        record["restorable"] = True
     except (TypeError, AttributeError) as error:
+        state_errors.append(str(error))
+
+    slots = []
+    for owner in type(exc).__mro__:
+        if owner is BaseException:
+            continue
+        for name, descriptor in vars(owner).items():
+            if not isinstance(descriptor, MemberDescriptorType):
+                continue
+            slot = {
+                "owner": codec.type_name(owner),
+                "owner_type": slot_owner_types[owner],
+                "name": name,
+            }
+            try:
+                value = descriptor.__get__(exc, type(exc))
+            except AttributeError:
+                slot["present"] = False
+            else:
+                slot["present"] = True
+                try:
+                    slot["value"] = codec.encode(value)
+                except (TypeError, AttributeError) as error:
+                    # The placeholder is never restored when restorable is false,
+                    # but keeps the durable slot layout structurally complete.
+                    slot["value"] = codec.encode(None)
+                    state_errors.append(str(error))
+            slots.append(slot)
+    record["slots"] = slots
+    if not state_errors:
+        record["restorable"] = True
+    else:
         record["restorable"] = False
-        record["state_error"] = str(error)
+        record["state_error"] = "; ".join(state_errors)
     return record
-
-
-def _legacy_exception_type(module, qualname, label):
-    """Restore only source-free native exceptions from pre-provenance records."""
-
-    name = f"{module}:{qualname}"
-    if module != "builtins":
-        raise ReplayMismatch(
-            f"Legacy recorded {label} {name} has no source identity; "
-            "resume with a journal created by the current Botpipe version"
-        )
-    try:
-        cls = codec.resolve_type(name)
-    except (ImportError, AttributeError, LookupError, TypeError, ValueError) as exc:
-        raise ReplayMismatch(f"Recorded {label} {name} cannot be resolved") from exc
-    return cls
 
 
 def _recorded_exception_type(record, *, slot=False):
     encoded_field = "owner_type" if slot else "exception_type"
-    legacy_field = "owner" if slot else "type"
     label = "exception slot owner" if slot else "exception type"
     if encoded_field not in record:
-        if slot:
-            name = record.get(legacy_field)
-            if type(name) is not str or ":" not in name:
-                raise ReplayMismatch(f"Recorded {label} is malformed")
-            module, qualname = name.split(":", 1)
-        else:
-            module, qualname = record.get("module"), record.get(legacy_field)
-            if type(module) is not str or type(qualname) is not str:
-                raise ReplayMismatch(f"Recorded {label} is malformed")
-        return _legacy_exception_type(module, qualname, label)
+        raise ReplayMismatch(f"Recorded {label} is malformed")
     try:
         cls = codec.decode(record[encoded_field])
     except ReplayMismatch:
@@ -253,7 +249,7 @@ def _recorded_exception_type(record, *, slot=False):
         ValueError,
     ) as exc:
         raise ReplayMismatch(
-            f"Recorded {label} source identity cannot be verified: {exc}"
+            f"Recorded {label} storage contract cannot be verified: {exc}"
         ) from exc
     if not isinstance(cls, type):
         raise ReplayMismatch(f"Recorded {label} did not resolve to a type")
@@ -267,13 +263,32 @@ def _preflight_exception_record(record):
     if not issubclass(cls, BaseException):
         raise ReplayMismatch("Recorded exception type is not an exception")
     slots = record.get("slots", ())
-    if type(slots) not in (list, tuple):
+    if type(slots) is not list:
         raise ReplayMismatch("Recorded exception slots are malformed")
-    for slot in slots:
+    expected = [
+        (owner, name)
+        for owner in cls.__mro__
+        if owner is not BaseException
+        for name, descriptor in vars(owner).items()
+        if isinstance(descriptor, MemberDescriptorType)
+    ]
+    if len(slots) != len(expected):
+        raise ReplayMismatch("Recorded exception slots no longer match its type")
+    for slot, (expected_owner, expected_name) in zip(slots, expected):
         if type(slot) is not dict:
             raise ReplayMismatch("Recorded exception slot is malformed")
+        present = slot.get("present")
+        required = {"owner", "owner_type", "name", "present"}
+        if present is True:
+            required.add("value")
+        if type(present) is not bool or set(slot) != required:
+            raise ReplayMismatch("Recorded exception slot is malformed")
         owner = _recorded_exception_type(slot, slot=True)
-        if not issubclass(cls, owner):
+        if (
+            owner is not expected_owner
+            or slot["owner"] != codec.type_name(expected_owner)
+            or slot["name"] != expected_name
+        ):
             raise ReplayMismatch("Recorded exception slot owner no longer matches")
 
 
@@ -303,10 +318,10 @@ def _allocate_exception(cls, args, record):
 
 
 def _decode_exception_value(value, label):
-    """Keep source-verification failures out of state-restoration fallback."""
+    """Keep contract-verification failures out of state-restoration fallback."""
 
     try:
-        codec.verify_sources(value)
+        codec.verify_contracts(value, path="$exception")
     except (
         ImportError,
         AttributeError,
@@ -316,7 +331,7 @@ def _decode_exception_value(value, label):
         ValueError,
     ) as exc:
         raise ReplayMismatch(
-            f"Recorded {label} source identity cannot be verified: {exc}"
+            f"Recorded {label} contract cannot be verified: {exc}"
         ) from exc
     return codec.decode(value)
 
@@ -346,6 +361,8 @@ def _restore_exception_state(record):
             _decode_exception_value(record["attributes"], "exception attributes")
         )
     for slot, owner in zip(slots, slot_owners):
+        if not slot["present"]:
+            continue
         if issubclass(cls, OSError) and owner is OSError:
             continue
         descriptor = vars(owner)[slot["name"]]
@@ -382,11 +399,6 @@ def _finalize_exception_record(record):
 
 def _function_version(fn):
     """Hash one canonical, identity-preserving graph of callable code."""
-    with codec.without_source_identity():
-        return _function_version_unscoped(fn)
-
-
-def _function_version_unscoped(fn):
     graph = describe_callable(fn)
     skipped = object()
 
@@ -480,6 +492,13 @@ def _function_version_unscoped(fn):
     )
 
 
+def _observed_workflow_fingerprint(definition):
+    try:
+        return definition.fingerprint
+    except Exception:  # noqa: BLE001 - fingerprints are observational evidence
+        return None
+
+
 def _validate_args(fn, args, kwargs):
     from .discovery import WorkflowInputError
 
@@ -546,6 +565,106 @@ async def _async_call(fn, *args, **kwargs):
     return result
 
 
+def _callable_reference(value):
+    module = getattr(value, "__module__", None)
+    qualname = getattr(value, "__qualname__", None)
+    if type(module) is not str or type(qualname) is not str:
+        raise TypeError(
+            "Callable replay identity requires a module and qualified name; "
+            "provide an explicit activity or workflow name"
+        )
+    return f"{module}:{qualname}"
+
+
+def _logical_binding(value, *, seen, depth):
+    """Describe callable data explicitly bound into a partial, without object state."""
+
+    if callable(value):
+        return {
+            "binding": "callable",
+            "value": _logical_callable_surface(value, _seen=seen, _depth=depth),
+        }
+    return {"binding": "value", "value": value}
+
+
+def _logical_callable_surface(value, *, explicit_name=None, _seen=None, _depth=0):
+    """Return the source-free callable surface used for replay matching."""
+
+    if _depth > 100:
+        raise TypeError("Callable replay identity exceeds maximum nesting depth")
+    seen = set() if _seen is None else _seen
+    marker = id(value)
+    if marker in seen:
+        raise TypeError("Callable replay identity contains a cycle")
+    seen.add(marker)
+    try:
+        try:
+            namespace = object.__getattribute__(value, "__dict__")
+        except (AttributeError, TypeError):
+            namespace = {}
+        declared_name = namespace.get("_botpipe_explicit_name")
+        if explicit_name is None and declared_name is not None:
+            explicit_name = declared_name
+        if explicit_name is not None:
+            return {"kind": "named", "name": str(explicit_name)}
+        if (
+            type(value).__module__ == __name__
+            and type(value).__name__ == "Workflow"
+            and "fn" in vars(value)
+        ):
+            return _logical_callable_surface(
+                value.fn,
+                explicit_name=value._explicit_name,
+                _seen=seen,
+                _depth=_depth + 1,
+            )
+        if isinstance(value, functools.partial):
+            return {
+                "kind": "partial",
+                "callable": _logical_callable_surface(
+                    value.func, _seen=seen, _depth=_depth + 1
+                ),
+                "args": [
+                    _logical_binding(item, seen=seen, depth=_depth + 1)
+                    for item in value.args
+                ],
+                "kwargs": [
+                    [
+                        key,
+                        _logical_binding(item, seen=seen, depth=_depth + 1),
+                    ]
+                    for key, item in sorted((value.keywords or {}).items())
+                ],
+            }
+        if inspect.ismethod(value):
+            owner = (
+                value.__self__
+                if isinstance(value.__self__, type)
+                else type(value.__self__)
+            )
+            return {
+                "kind": "method",
+                "callable": _callable_reference(value.__func__),
+                "owner": _callable_reference(owner),
+            }
+        if inspect.isfunction(value) or inspect.isbuiltin(value):
+            return {"kind": "function", "reference": _callable_reference(value)}
+        if inspect.ismethoddescriptor(value) and hasattr(value, "__objclass__"):
+            return {
+                "kind": "method_descriptor",
+                "reference": (
+                    f"{_callable_reference(value.__objclass__)}.{value.__name__}"
+                ),
+            }
+        if inspect.isclass(value):
+            return {"kind": "type", "reference": _callable_reference(value)}
+        if callable(value):
+            return {"kind": "instance", "type": _callable_reference(type(value))}
+        raise TypeError(f"Expected a callable, got {type(value).__name__}")
+    finally:
+        seen.remove(marker)
+
+
 class Workflow:
     """Callable definition. A workflow's public body remains ordinary Python."""
 
@@ -553,6 +672,7 @@ class Workflow:
         functools.update_wrapper(self, fn)
         self.fn = fn
         self.name = name or getattr(fn, "__name__", type(fn).__name__)
+        self._explicit_name = name
         self.version = str(version)
         self.policy = Policy.resolve(policy)
         from .provenance import (
@@ -561,17 +681,24 @@ class Workflow:
         )
 
         descriptor = describe_callable(self)
-        self._source_context = source_context(self, graph=descriptor)
-        self._source_identity_at_definition = capture_definition_sources(
-            self, graph=descriptor, context=self._source_context
-        )
-        self._orchestration_sources_at_definition = (
-            capture_orchestration_sources(
+        try:
+            self._source_context = source_context(self, graph=descriptor)
+        except Exception:  # noqa: BLE001 - source evidence is observational
+            self._source_context = SourceContext(None, None, None, ())
+        try:
+            self._source_identity_at_definition = capture_definition_sources(
                 self, graph=descriptor, context=self._source_context
             )
-            if self._source_boundaries
-            else None
-        )
+            self._orchestration_sources_at_definition = (
+                capture_orchestration_sources(
+                    self, graph=descriptor, context=self._source_context
+                )
+                if self._source_boundaries
+                else None
+            )
+        except Exception:  # noqa: BLE001 - source evidence is observational
+            self._source_identity_at_definition = None
+            self._orchestration_sources_at_definition = None
 
     @property
     def _source_boundaries(self):
@@ -582,6 +709,10 @@ class Workflow:
         if inspect.iscoroutinefunction(self.fn):
             return _async_call(ctx.invoke, self, *args, **kwargs)
         return ctx.invoke(self, *args, **kwargs)
+
+    @property
+    def logical_identity(self):
+        return _logical_callable_surface(self.fn, explicit_name=self._explicit_name)
 
     @property
     def fingerprint(self):
@@ -623,6 +754,15 @@ def activity(fn=None, *, retry_safe=False, retries=0, name=None):
 
     def decorate(function):
         _resolve_annotations(function, local_types)
+        operation_name = (
+            str(name)
+            if name is not None
+            else getattr(
+                function,
+                "__qualname__",
+                f"{type(function).__module__}.{type(function).__qualname__}",
+            )
+        )
 
         @functools.wraps(function)
         def wrapped(*args, **kwargs):
@@ -632,7 +772,7 @@ def activity(fn=None, *, retry_safe=False, retries=0, name=None):
                     "An activity cannot call another managed activity; use an ordinary helper"
                 )
             inputs = {
-                "function": _function_version(function),
+                "activity": _logical_callable_surface(function, explicit_name=name),
                 "args": args,
                 "kwargs": kwargs,
             }
@@ -652,7 +792,7 @@ def activity(fn=None, *, retry_safe=False, retries=0, name=None):
                         {**inputs, "attempt": attempt},
                         execute,
                         retry_safe=retry_safe,
-                        name=name or function.__qualname__,
+                        name=operation_name,
                     )
                 except BotpipeError:
                     # Runtime/replay failures are not activity failures and may
@@ -662,12 +802,15 @@ def activity(fn=None, *, retry_safe=False, retries=0, name=None):
                     last = exc
             raise last
 
+        wrapped._botpipe_explicit_name = name
+
         if inspect.iscoroutinefunction(function):
 
             @functools.wraps(function)
             async def async_wrapped(*args, **kwargs):
                 return await _async_call(wrapped, *args, **kwargs)
 
+            async_wrapped._botpipe_explicit_name = name
             return async_wrapped
         return wrapped
 
@@ -736,14 +879,6 @@ class RunContext:
         self._execution_lock = threading.RLock()
         self._replay_state = parent._replay_state if parent else {"error": None}
         self.provider_budgets = parent.provider_budgets if parent else ()
-        inherited = parent.source_boundaries if parent is not None else ()
-        own_boundaries = definition._source_boundaries
-        self.source_boundaries = tuple(dict.fromkeys((*inherited, *own_boundaries)))
-        self.source_anchor = (
-            parent.source_anchor
-            if parent is not None
-            else definition._source_context.ownership_anchor or self.workspace
-        )
 
     def take_input_candidate(self, operation_id):
         """Consume a submitted answer only from the input operation it targets."""
@@ -768,7 +903,6 @@ class RunContext:
         orchestrator=False,
         recover=None,
         name=None,
-        source_boundaries=None,
     ):
         if self._replay_state["error"] is not None:
             raise self._replay_state["error"]
@@ -777,21 +911,15 @@ class RunContext:
                 "Concurrent operations require parallel() with independent branch scopes"
             )
         try:
-            boundaries = (
-                self.source_boundaries
-                if source_boundaries is None
-                else source_boundaries
+            return self._operation(
+                kind,
+                inputs,
+                execute,
+                retry_safe=retry_safe,
+                orchestrator=orchestrator,
+                recover=recover,
+                name=name,
             )
-            with codec.source_identity(boundaries, anchor=self.source_anchor):
-                return self._operation(
-                    kind,
-                    inputs,
-                    execute,
-                    retry_safe=retry_safe,
-                    orchestrator=orchestrator,
-                    recover=recover,
-                    name=name,
-                )
         except ReplayMismatch as exc:
             # A caught application exception cannot make divergent history
             # valid or authorize additional effects in another scope.
@@ -819,10 +947,13 @@ class RunContext:
         ordinal = self.ordinal
         self.ordinal += 1
         operation_id = f"{self.run_id}:{self.scope}:{ordinal}"
-        encoded_inputs = codec.encode(inputs, record_owners=True)
-        encoded_fingerprint_inputs = codec.semantic_encoding(encoded_inputs)
-        fingerprint = _hash(
-            {"kind": kind, "name": name, "inputs": encoded_fingerprint_inputs}
+        fingerprint_inputs = codec.encode(inputs)
+        fingerprint = _hash({"kind": kind, "name": name, "inputs": fingerprint_inputs})
+        durable_inputs = (
+            {**inputs, "retry_safe": retry_safe} if kind == "activity" else inputs
+        )
+        encoded_inputs = (
+            codec.encode(durable_inputs) if kind == "activity" else fingerprint_inputs
         )
         record = self.journal.get(operation_id)
         if record is not None:
@@ -833,6 +964,7 @@ class RunContext:
             if record["status"] == "completed":
                 return codec.decode(record["result"])
             if record["status"] == "failed":
+                _preflight_exception_record(record["error"])
                 raise _restore_exception(record["error"])
             if kind == "provider":
                 provider_checkpoint = ProviderCheckpoint.from_record(
@@ -843,7 +975,15 @@ class RunContext:
                 authorized = bool(
                     (record.get("response") or {}).get("retry_authorized")
                 )
-            if recover is None and not (retry_safe or orchestrator or authorized):
+            automatic_retry = retry_safe
+            if kind == "activity":
+                recorded_inputs = codec.decode(record["inputs"])
+                automatic_retry = (
+                    retry_safe
+                    and isinstance(recorded_inputs, dict)
+                    and recorded_inputs.get("retry_safe") is True
+                )
+            if recover is None and not (automatic_retry or orchestrator or authorized):
                 raise UncertainOperation(
                     f"Operation {operation_id} was interrupted; reconcile it before retrying",
                     operation_id,
@@ -917,7 +1057,11 @@ class RunContext:
         )
         token = _CURRENT.set(child)
         try:
-            value = _invoke(definition.fn, args, kwargs)
+            try:
+                value = _invoke(definition.fn, args, kwargs)
+            except Exception:
+                child.assert_consumed()
+                raise
             child.assert_consumed()
             return value
         finally:
@@ -927,8 +1071,7 @@ class RunContext:
         if not isinstance(definition, Workflow):
             raise TypeError("Child workflows must use @workflow")
         inputs = {
-            "workflow": definition.name,
-            "version": definition.fingerprint,
+            "workflow": definition.logical_identity,
             "args": args,
             "kwargs": kwargs,
         }
@@ -938,21 +1081,12 @@ class RunContext:
                 definition, args, kwargs, f"{self.scope}/child-{self.ordinal - 1}"
             )
 
-        boundaries = tuple(
-            dict.fromkeys(
-                (
-                    *self.source_boundaries,
-                    *definition._source_boundaries,
-                )
-            )
-        )
         return self.operation(
             "child",
             inputs,
             execute,
             orchestrator=True,
             name=definition.name,
-            source_boundaries=boundaries,
         )
 
     def scope_call(self, scope, definition):
@@ -987,10 +1121,7 @@ def ask(question, *, returns=str):
             response = record["response"]
             if "validated_answer" in response:
                 return codec.decode(response["validated_answer"])
-            raise ReplayMismatch(
-                "Recorded input uses the legacy unvalidated answer format; "
-                "start a new run and submit the answer again"
-            )
+            raise ReplayMismatch("Recorded input is missing its validated answer")
         candidate = ctx.take_input_candidate(ctx.operation_id)
         if record["status"] == "waiting" and candidate is not _UNSET:
             try:
@@ -1046,29 +1177,10 @@ def parallel(*calls, max_workers=None, settle="all"):
         for index, fn in enumerate(calls)
     )
     inputs = {
-        "identity": "botpipe.parallel-branches.v2",
-        "calls": [
-            {"name": definition.name, "fingerprint": definition.fingerprint}
-            for definition in definitions
-        ],
+        "identity": "botpipe.parallel-branches.v3",
+        "calls": [_logical_callable_surface(fn) for fn in calls],
         "settle": settle,
     }
-
-    operation_id = f"{ctx.run_id}:{ctx.scope}:{ctx.ordinal}"
-    recorded = ctx.journal.get(operation_id)
-    if recorded is not None and recorded.get("kind") == "parallel":
-        try:
-            recorded_inputs = codec.decode(recorded["inputs"])
-        except (TypeError, ValueError):
-            recorded_inputs = None
-        if (
-            not isinstance(recorded_inputs, dict)
-            or recorded_inputs.get("identity") != "botpipe.parallel-branches.v2"
-        ):
-            raise ReplayMismatch(
-                f"Parallel operation {operation_id} has legacy callable identity "
-                "that cannot verify branch source; start a new run"
-            )
 
     def execute():
         group = ctx.ordinal - 1
@@ -1100,25 +1212,12 @@ def parallel(*calls, max_workers=None, settle="all"):
                 raise errors[0]
             return values
 
-    boundaries = tuple(
-        dict.fromkeys(
-            (
-                *ctx.source_boundaries,
-                *(
-                    boundary
-                    for definition in definitions
-                    for boundary in definition._source_boundaries
-                ),
-            )
-        )
-    )
     return ctx.operation(
         "parallel",
         inputs,
         execute,
         orchestrator=True,
         name="parallel",
-        source_boundaries=boundaries,
     )
 
 
@@ -1247,8 +1346,6 @@ class Botpipe:
         definition = self._definition(definition)
         args, kwargs = _validate_args(definition.fn, args, kwargs)
         context = definition._source_context
-        boundaries = context.owned_boundaries
-        anchor = context.ownership_anchor or self.workspace
         limits = self.limits
         task_id = task_id or uuid.uuid4().hex[:12]
         run_id = run_id or uuid.uuid4().hex
@@ -1258,20 +1355,23 @@ class Botpipe:
             ):
                 raise ValueError(f"{label} must be a safe identifier")
         folder = self.state_dir / "tasks" / task_id / "runs" / run_id
-        with codec.source_identity(boundaries, anchor=anchor):
-            encoded_args = codec.encode(args)
-            encoded_kwargs = codec.encode(kwargs)
+        encoded_args = codec.encode(args)
+        encoded_kwargs = codec.encode(kwargs)
         data = {
             "run_id": run_id,
             "task_id": task_id,
             "workflow": definition.name,
-            "module": definition.fn.__module__,
-            "function": definition.fn.__qualname__,
+            "workflow_call": codec.encode(definition.logical_identity),
+            "module": getattr(
+                definition.fn, "__module__", type(definition.fn).__module__
+            ),
+            "function": getattr(
+                definition.fn, "__qualname__", type(definition.fn).__qualname__
+            ),
             "source_file": str(context.origin_source)
             if context.origin_source
             else None,
-            "source_anchor": str(anchor),
-            "version": definition.fingerprint,
+            "version": _observed_workflow_fingerprint(definition),
             "args": encoded_args,
             "kwargs": encoded_kwargs,
             "status": "created",
@@ -1289,7 +1389,13 @@ class Botpipe:
                 definition, self.workspace
             )
             self.journal.create_run(data)
-            return self._execute(definition, data, args, kwargs)
+            return self._execute(
+                definition,
+                data,
+                args,
+                kwargs,
+                provenance_start=data["provenance_start"],
+            )
 
     async def arun(self, definition, *args, **kwargs):
         # One runtime and one provider boundary. Cancellation joins the worker;
@@ -1301,14 +1407,18 @@ class Botpipe:
     ):
         with self._ownership(run_id):
             data = self.journal.run(run_id)
-            if workflow is None:
+            self._check_run_configuration(data)
+            operations = self.journal.operations(run_id)
+
+            def recorded_definition():
                 reference = f"{data['module']}:{data['function']}"
                 try:
-                    definition = self._definition(reference)
+                    return self._definition(reference)
                 except (
                     ImportError,
                     AttributeError,
                     LookupError,
+                    TypeError,
                     ValueError,
                     BotpipeError,
                 ):
@@ -1316,22 +1426,41 @@ class Botpipe:
                         raise BotpipeError(
                             "Pass workflow= when resuming a local workflow function"
                         )
-                    definition = self._definition(
-                        f"{data['source_file']}:{data['function']}"
-                    )
-            else:
-                definition = self._definition(workflow)
-            if definition.fingerprint != data["version"]:
-                raise WorkflowChanged(
-                    "Workflow code or referenced contracts changed; resume with original code or start a new run"
+                    return self._definition(f"{data['source_file']}:{data['function']}")
+
+            definition = self._definition(workflow) if workflow is not None else None
+            if data["status"] == "completed":
+                try:
+                    _preflight_recorded_contracts(data, operations)
+                except ReplayMismatch as contract_error:
+                    if definition is not None:
+                        raise
+                    try:
+                        definition = recorded_definition()
+                    except Exception:  # noqa: BLE001 - preserve contract diagnosis
+                        raise contract_error
+                    _preflight_recorded_contracts(data, operations)
+                value = codec.decode(data["value"])
+                artifacts, usage = self._outputs(run_id)
+                return RunResult(
+                    run_id,
+                    data["task_id"],
+                    "completed",
+                    value,
+                    artifacts,
+                    None,
+                    None,
+                    Path(data["folder"]),
+                    usage,
                 )
-            self._check_run_configuration(data)
-            operations = self.journal.operations(run_id)
-            context = definition._source_context
-            source_anchor = context.ownership_anchor or self.workspace
-            source_boundaries = _preflight_recorded_sources(
-                data, operations, source_anchor, context.owned_boundaries
-            )
+            if definition is None:
+                definition = recorded_definition()
+            _preflight_recorded_contracts(data, operations)
+            if codec.encode(definition.logical_identity) != data["workflow_call"]:
+                raise ReplayMismatch(
+                    "Workflow identity changed; resume with the recorded workflow name "
+                    "or callable"
+                )
             changes = {}
             limits = RunLimits(
                 data["max_operations"] if max_operations is None else max_operations,
@@ -1371,9 +1500,8 @@ class Botpipe:
                 ):
                     raise ValueError("Run is no longer waiting for that answer")
                 input_candidate = {"operation_id": operation_id, "raw": answer}
-            with codec.source_identity(source_boundaries, anchor=source_anchor):
-                decoded_args = codec.decode(data["args"])
-                decoded_kwargs = codec.decode(data["kwargs"])
+            decoded_args = codec.decode(data["args"])
+            decoded_kwargs = codec.decode(data["kwargs"])
             return self._execute(
                 definition,
                 data,
@@ -1385,19 +1513,34 @@ class Botpipe:
     async def aresume(self, run_id, **kwargs):
         return await _async_call(self.resume, run_id, **kwargs)
 
-    def _execute(self, definition, data, args, kwargs, *, input_candidate=None):
+    def _execute(
+        self,
+        definition,
+        data,
+        args,
+        kwargs,
+        *,
+        input_candidate=None,
+        provenance_start=None,
+    ):
         ctx = RunContext(self, data, definition, input_candidate=input_candidate)
-        token = _CURRENT.set(ctx)
         status = "completed"
         value = None
         error = None
         pending = data.get("pending_input")
+        if provenance_start is None:
+            provenance_start = capture_workflow_provenance(definition, self.workspace)
+        self.journal.event(
+            ctx.run_id,
+            "execution_revision",
+            {"phase": "start", "provenance": provenance_start},
+        )
         self.journal.update_run(ctx.run_id, status="running", error=None)
+        token = _CURRENT.set(ctx)
         try:
-            with codec.source_identity(ctx.source_boundaries, anchor=ctx.source_anchor):
-                value = _invoke(definition.fn, args, kwargs)
-                ctx.assert_consumed()
-                encoded = codec.encode(value)
+            value = _invoke(definition.fn, args, kwargs)
+            ctx.assert_consumed()
+            encoded = codec.encode(value)
             pending = None
         except InputRequired as exc:
             status = "awaiting_input"
@@ -1429,13 +1572,19 @@ class Botpipe:
                     pending = None
             encoded = None
         except Exception as exc:
+            failure = exc
+            try:
+                ctx.assert_consumed()
+            except ReplayMismatch as mismatch:
+                failure = mismatch
             status = "failed"
-            error = f"{type(exc).__name__}: {exc}"
+            error = f"{type(failure).__name__}: {failure}"
             pending = None
             encoded = None
         finally:
             _CURRENT.reset(token)
         artifacts, usage = self._outputs(ctx.run_id)
+        provenance_end = capture_workflow_provenance(definition, self.workspace)
         self.journal.update_run(
             ctx.run_id,
             status=status,
@@ -1444,7 +1593,12 @@ class Botpipe:
             pending_input=pending,
             usage=usage,
             updated_at=now(),
-            provenance_end=capture_workflow_provenance(definition, self.workspace),
+            provenance_end=provenance_end,
+        )
+        self.journal.event(
+            ctx.run_id,
+            "execution_revision",
+            {"phase": "end", "provenance": provenance_end},
         )
         return RunResult(
             ctx.run_id,
@@ -1489,38 +1643,7 @@ class Botpipe:
             data = self.journal.run(run_id)
             self._check_run_configuration(data)
             operations = self.journal.operations(run_id)
-            source_anchor = None
-            owned_boundaries = ()
-            try:
-                reference = f"{data['module']}:{data['function']}"
-                context = self._definition(reference)._source_context
-                source_anchor = context.ownership_anchor or self.workspace
-                owned_boundaries = context.owned_boundaries
-            except (ImportError, AttributeError, LookupError, ValueError, BotpipeError):
-                # A local/non-importable workflow can reconcile only while its
-                # recorded source remains at the original location. Portable
-                # relocation requires an importable root to anchor ownership.
-                recorded_anchor = data.get("source_anchor")
-                source_file = data.get("source_file")
-                if recorded_anchor:
-                    source_anchor = Path(recorded_anchor).resolve(strict=True)
-                elif source_file:
-                    try:
-                        source = Path(source_file).resolve(strict=True)
-                    except OSError:
-                        pass
-                    else:
-                        package = (
-                            (source.parent / "__init__.py").is_file()
-                            or (source.parent / "workflow.toml").is_file()
-                            or source.name in {"workflow.py", "flow.py"}
-                        )
-                        source_anchor = source.parent if package else source
-                else:
-                    source_anchor = self.workspace
-            source_boundaries = _preflight_recorded_sources(
-                data, operations, source_anchor, owned_boundaries
-            )
+            _preflight_recorded_contracts(data, operations)
             record = self.journal.get(operation_id)
             if record is None or record["run_id"] != run_id:
                 raise KeyError(operation_id)
@@ -1543,8 +1666,7 @@ class Botpipe:
                         "Budget exhausted before dispatch; no effects need reconciliation. "
                         "Start a new run to use different provider budget limits"
                     )
-                with codec.source_identity(source_boundaries, anchor=source_anchor):
-                    inputs = codec.decode(record["inputs"])
+                inputs = codec.decode(record["inputs"])
                 request_data = checkpoint.request_data or {}
                 # A retry marker names the *next* generation; reconcile the
                 # attempt whose effects are still awaiting resolution.
@@ -1661,8 +1783,7 @@ class Botpipe:
                         session_key=inputs.get("session"),
                     )
             elif response is not _UNSET:
-                with codec.source_identity(source_boundaries, anchor=source_anchor):
-                    result = codec.encode(response)
+                result = codec.encode(response)
                 _commit_or_confirm(
                     self.journal,
                     operation_id,

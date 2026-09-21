@@ -18,6 +18,7 @@ from typing import Any, get_type_hints
 
 from botpipe.codec import decode as decode_durable
 from botpipe.dispatches import known_token_total, normalize_usage
+from botpipe.read_projection import project_execution_revision
 
 _FAILURES = frozenset({"failed", "interrupted", "budget_exceeded", "cancelled"})
 
@@ -234,48 +235,10 @@ def load_run_observation(payload: Mapping[str, Any]) -> RunObservation:
     run = _mapping(payload.get("run"))
     run_id = _text(run.get("run_id") or payload.get("run_id"), "run_id")
     workflow_name = run.get("workflow_name") or run.get("workflow") or run.get("name")
-    provenance_start = _mapping(run.get("provenance_start"))
-    provenance_end = _mapping(run.get("provenance_end"))
-    start_identity = provenance_start.get("workflow_identity")
-    end_identity = provenance_end.get("workflow_identity")
-    start_surface = provenance_start.get("surface_id")
-    end_surface = provenance_end.get("surface_id")
-    start_orchestration = provenance_start.get("orchestration_id")
-    end_orchestration = provenance_end.get("orchestration_id")
-    if (
-        provenance_start.get("verified") is True
-        and provenance_end.get("verified") is True
-        and start_identity == end_identity
-        and start_surface == end_surface
-        and start_orchestration == end_orchestration
-        and start_identity
-        and start_surface
-        and start_orchestration
-    ):
-        provenance_state = "known"
-        workflow_identity_value = str(start_identity)
-        surface_id = str(start_surface)
-        orchestration_id = str(start_orchestration)
-    elif any(
-        value
-        for value in (
-            start_identity,
-            end_identity,
-            start_surface,
-            end_surface,
-            start_orchestration,
-            end_orchestration,
-        )
-    ):
-        provenance_state = "mixed"
-        workflow_identity_value = None
-        surface_id = None
-        orchestration_id = None
-    else:
-        provenance_state = "unknown"
-        workflow_identity_value = None
-        surface_id = None
-        orchestration_id = None
+    events = payload.get("events", ())
+    if not isinstance(events, Sequence) or isinstance(events, (str, bytes)):
+        raise TypeError("inspection events must be a sequence")
+    revision = project_execution_revision(_mapping(event) for event in events)
     raw_operations = payload.get("operations", ())
     if not isinstance(raw_operations, Sequence) or isinstance(
         raw_operations, (str, bytes)
@@ -285,9 +248,7 @@ def load_run_observation(payload: Mapping[str, Any]) -> RunObservation:
     try:
         from botpipe.dispatches import dispatch_records
 
-        events = payload.get("events", ())
-        if isinstance(events, Sequence) and not isinstance(events, (str, bytes)):
-            raw_dispatches = dispatch_records(events)
+        raw_dispatches = dispatch_records(events)
     except (KeyError, TypeError, ValueError):
         raw_dispatches = {}
     operations = tuple(
@@ -311,10 +272,10 @@ def load_run_observation(payload: Mapping[str, Any]) -> RunObservation:
         workflow_version=(
             None if run.get("version") is None else str(run.get("version"))
         ),
-        workflow_identity=workflow_identity_value,
-        surface_id=surface_id,
-        orchestration_id=orchestration_id,
-        provenance_state=provenance_state,
+        workflow_identity=revision["workflow_identity"],
+        surface_id=revision["surface_id"],
+        orchestration_id=revision["orchestration_id"],
+        provenance_state=revision["provenance_state"],
         status=str(run.get("status") or "unknown").lower(),
         operations=operations,
         artifacts=_artifact_names(payload.get("artifacts", ())),

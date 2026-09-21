@@ -9,7 +9,6 @@ from .errors import (
     ReplayMismatch,
     RunBusy,
     UncertainOperation,
-    WorkflowChanged,
 )
 from .models import Result, RunResult
 from .policy import (
@@ -42,7 +41,6 @@ __all__ = [
     "ReplayMismatch",
     "RunBusy",
     "UncertainOperation",
-    "WorkflowChanged",
     "Result",
     "RunResult",
     "Policy",

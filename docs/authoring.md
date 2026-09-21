@@ -36,8 +36,11 @@ class Change(BaseModel):
 async def implement(change: Change) -> Report: ...
 ```
 
-Changing a workflow's source or durable contract while a run is active causes a
-version/source mismatch on resume. Start a new run for new behavior.
+You may edit activities, helpers, and workflow implementations between executions.
+Completed operations replay their saved outcomes; future work uses current code.
+Keep the recorded operation sequence, logical identities, and inputs consistent.
+Stored values must still match their type and field-layout contracts. A completed
+run always returns its saved result without executing the workflow again.
 
 ## Sessions
 

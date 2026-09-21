@@ -31,10 +31,18 @@ file flush and atomic replacement, but Python cannot fsync directory handles
 there; the same directory-entry persistence after sudden power loss is not
 guaranteed.
 
-On replay, a completed operation returns its recorded result. A changed kind,
-scope, input, prompt, schema, or source raises a mismatch instead of silently
-doing different work. Workflow versions label intentional releases; they do not
-bypass source validation.
+On replay, a completed operation returns its recorded outcome. Matching uses its
+scope, ordinal, kind, logical callable identity, and actual inputs, including
+provider prompts and schemas. A mismatch blocks that operation before effects.
+Implementation hashes and workflow version labels are observational metadata.
+Activities, workflow bodies, and helpers may be edited: recorded work is reused
+and future work executes current code. A completed root run returns its saved
+result without rerunning the workflow or rewriting its history.
+
+Orchestration must still consume the recorded operation prefix. Botpipe does not
+remap inserted or reordered operations; indistinguishable requests at the same
+position retain the same identity. Material observations belong inside recorded
+operations, rather than unrecorded mutable closure or receiver state.
 
 ## Durable value codec
 
@@ -54,19 +62,13 @@ ordinary Python argument semantics. Validation may repeat after a crash before
 its state was recorded, so validation hooks must remain free of external effects.
 Codec traversal has depth and value-count limits and rejects cycles.
 
-Within a run, checkpoints containing concrete model, dataclass, enum, or type
-objects carry a versioned, deduplicated source capsule. The capsule and value
-commit in the same SQLite transaction. Operation inputs also record the active
-ownership boundaries, so manual resolution can capture a concrete result even
-when its activity has no return annotation. These boundary locators are excluded
-from operation fingerprints. Nested workflows inherit their caller's ownership
-and add their own boundary. Before a
-resume writes an answer, changes limits, or decodes state, Botpipe verifies the
-capsules already recorded by the run. Owned type evidence covers source bytes,
-loaded method code, properties, referenced helpers, and owned base classes.
-Types outside the workflow ownership boundary are recorded as external by
-qualified name; their installations and mutable configuration remain part of
-the environment authors must preserve.
+Typed records carry a codec-owned structural storage contract: concrete type
+identity, declared field types and layout, enum membership, and supported
+exception storage. The contract excludes implementation code, validators,
+default values, aliases, and source locations. Source-only edits remain
+compatible; incompatible type or field changes fail clearly without coercion or
+automatic migration. Before a resume accepts an answer, changes limits, or starts
+work, it checks contracts throughout the recorded run state.
 
 Datetime records retain wall time, `fold`, and fixed-offset timezone names.
 Supported timezones are naive values and exact `datetime.timezone` instances;
@@ -84,59 +86,41 @@ not represented by ordinary fields. This includes private fields, excluded
 fields, secrets, custom serializers (including compiled core-schema serializers),
 cached or unknown instance attributes, custom state hooks, and unrecognized
 storage slots. Put such data in an artifact or
-return a separate plain model designed as durable state. Legacy unversioned
-model and dataclass records are rejected with a migration error; Botpipe never
-passes them through current validation and silently changes their meaning.
-Historical typed checkpoints without a source capsule are likewise refused on
-resume because current source cannot be used to bless unverifiable old state.
+return a separate plain model designed as durable state. Records must use the
+current explicit storage format; there is no legacy reader.
 
-Recorded operation failures carry source evidence for the concrete exception
-class and classes that own its stored slots. Replay verifies that evidence
-before restoring exception state without application constructors. Missing or
-changed source evidence is a replay failure, not an `ActivityFailed` fallback;
-that fallback is only for a verified exception whose state cannot be restored.
+Recorded operation failures retain concrete exception types, native state, and
+stored slot owners. Replay checks their storage contracts before restoring state
+without application constructors. Contract incompatibility is a replay failure;
+`ActivityFailed` is reserved for exception state that cannot be restored safely.
 
-The automatic fingerprint pins the whole orchestration module and bounded,
-owned Python helper and contract modules, including class behavior. Mutable
-application files are outside this fingerprint. It is not an immutable process
-or environment snapshot: provider installations, external modules, environment
-values, and configuration semantics
-can change outside that source bundle. Authors should bump
-`@workflow(version=...)` when those dependencies change meaningfully and start a
-new run when the original environment cannot be reproduced.
+## Source observations
 
-Callable identity describes executable behavior and supported explicit bindings,
-including recursive partials, bound methods, and callable instances. It does not
-serialize arbitrary receiver state, closures, or the process environment. Live
-`Session` objects remain usable in ordinary Python composition. Code identity,
-recorded prompt/data observations, and the full package provenance surface serve
-different purposes: a package resource edit is not by itself a new replay gate.
+Source fingerprints describe revisions for inspection and optimization; they do
+not gate ordinary replay. They capture bounded Python helper and contract
+sources, including class behavior. Provider installations, external modules,
+environment values, arbitrary closures and receiver state are not frozen.
 
-Executable identity is a rooted callable graph. Ordered, labeled edges describe
-wrappers, partial bindings, referenced helpers, and class construction, including
-custom metaclass execution. Each callable is recorded once per calculation;
-local node references represent recursion and shared dependencies. Object
-addresses never enter the fingerprint. Sharing is observable Python behavior:
-binding one callback twice differs from binding two independently created callbacks.
-Fingerprinting and source capture use the same executable dependency description.
+Executable provenance is a rooted callable graph. Ordered, labeled edges describe
+wrappers, partial bindings, referenced helpers, and class construction. Each
+callable is expanded once per calculation; local references represent recursion
+and shared dependencies. Fingerprinting and source capture share this dependency
+description. Dependencies discovered through owned modules and classes join the
+same bounded traversal.
 
-Each workflow projects one source context from that graph. Its application origin
-follows the implementation through partials, bound methods, and decorators to the
-wrapped application body. That origin selects prompt files and definition
-evidence. Executable callable bindings in arguments and positional or keyword
-defaults add owned source boundaries without changing the origin; type-valued
-defaults retain their compact type/schema contract. Source capture visits every
-eligible target, skips native and synthetic callables without Python source, and
-fails explicitly if an identified owned Python source cannot be read.
+Each workflow has an application source origin. It follows partials, bound
+methods, and decorators to the application implementation; imported decorators
+and helper bindings do not replace it. That origin selects relative prompt files.
+SDK classification and source discovery use canonical resolved paths, including
+symlinked installations. Source ownership is only a capture boundary, not stored
+value compatibility or a requirement to preserve a directory layout.
 
-Source ownership and relocation use separate values. The root's application
-boundary anchors portable owner records; a root without an application origin
-uses its first owned boundary, or its workspace when it owns no source. Child
-operations inherit that anchor and record their actual owners relative to it.
-An anchor never grants ownership by itself. Initial inputs, operation records,
-replay, and manual reconciliation use the complete applicable ownership set.
-Portable owner records use `botpipe.source-owners.v2`; earlier versioned owner
-records require a new run.
+Every execution appends start and end revision observations to the journal.
+Inspection derives provenance from the complete history, so A → B → A remains
+mixed. Missing observations remain explicit. Capture failure does not prevent
+ordinary execution; frozen optimizer experiments still require verified source.
+Mixed or unknown histories remain useful diagnostics but cannot establish a
+verified single-revision baseline.
 
 Graph expansion scales with distinct callables and dependency edges, rather than
 the number of paths through shared helpers. Caches belong to one calculation so
@@ -154,7 +138,7 @@ Provider recovery and manual reconciliation use the same explicit outcomes:
 `Completed(response)`, `Stopped`, `Running`, and `Unknown`. A completed matching
 receipt is authoritative over operator input. Only a confirmed stopped attempt
 without a completed response accepts a manual response or retry authorization.
-Running and unknown attempts remain blocked; a legacy recovery hook returning
+Running and unknown attempts remain blocked; a recovery hook returning
 `None` establishes no knowledge of termination. A native launch interrupted
 before its process identity was recorded therefore remains uncertain.
 
@@ -238,8 +222,10 @@ def create_ticket(title: str) -> dict[str, str]:
     return remote_api.create_ticket(title)
 ```
 
-`retry_safe=True` means retry is safe according to the activity contract. It is
-not an exactly-once guarantee.
+`retry_safe=True` permits automatic retry only when both the saved attempt and
+the current activity declare retry safety. Changing the flag cannot authorize
+repeating an earlier unsafe attempt. Explicit `resolve(..., retry=True)` remains
+the operator's authorization. This is not an exactly-once guarantee.
 
 ## Scopes and concurrency
 
@@ -252,14 +238,12 @@ Concurrent mutation through one shared session is rejected. Parallel provider
 edits require an explicit isolated workspace per branch; read-only sessions may
 share the application workspace.
 
-`parallel()` records each prepared branch's complete workflow fingerprint and
-uses the same definition to execute it. Its result carries the union of the
-caller's and branches' source ownership, including types returned across package
-boundaries. Branch identity is checked before branch execution. Dynamically
-created callables can only be checked when orchestration reaches that call site;
-run-status bookkeeping may already have been committed by then.
-Historical parallel records without complete branch identity cannot be upgraded
-from current code and are rejected on replay.
+`parallel()` records the ordered logical identities and explicit bound arguments
+of its prepared branches, along with the settlement mode. Code edits do not
+change that request, while a changed target or binding does. Branch identity is
+checked before branch execution. Dynamically created callables can only be
+checked when orchestration reaches that call site; run-status bookkeeping may
+already have been committed by then.
 
 Prompt paths use the branch's application source directory when it has one.
 Branches composed only from SDK callables inherit their parent's source directory;

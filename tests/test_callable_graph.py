@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from botpipe import Botpipe, WorkflowChanged, parallel, workflow
+from botpipe import Botpipe, parallel, workflow
 from botpipe._callables import describe_callable
 from botpipe.providers import FakeProvider
 from botpipe.runtime import _function_version
@@ -45,7 +45,7 @@ def _execute(first, second):
     return first() + second()
 
 
-def test_duplicate_qualname_binding_is_distinct_and_replay_rejects_change(tmp_path):
+def test_completed_parallel_returns_recorded_result_after_binding_change(tmp_path):
     original = functools.partial(_execute, _factory(1), _factory(2))
     changed = functools.partial(_execute, _factory(1), _factory(3))
     assert _function_version(original) != _function_version(changed)
@@ -62,8 +62,7 @@ def test_duplicate_qualname_binding_is_distinct_and_replay_rejects_change(tmp_pa
         before = client.journal.operations(first.run_id)
         selected[0] = changed
         resumed = client.resume(first.run_id, workflow=job)
-        assert resumed.status == "failed", resumed.error
-        assert "ReplayMismatch" in resumed.error
+        assert resumed.ok and resumed.value == [3]
         assert client.journal.operations(first.run_id) == before
 
 
@@ -146,7 +145,7 @@ def test_class_defaults_remain_compact_type_bindings():
     assert any(node.value is default_type for node in explicit.nodes)
 
 
-def test_callable_default_durable_state_rejects_replay(tmp_path):
+def test_completed_callable_default_state_change_returns_recorded_result(tmp_path):
     default = _StatefulCallable(1)
 
     @workflow
@@ -157,8 +156,8 @@ def test_callable_default_durable_state_rejects_replay(tmp_path):
         first = client.run(job)
         assert first.value == 1
         job.fn.__defaults__ = (_StatefulCallable(2),)
-        with pytest.raises(WorkflowChanged):
-            client.resume(first.run_id, workflow=job)
+        resumed = client.resume(first.run_id, workflow=job)
+        assert resumed.ok and resumed.value == 1
 
 
 def test_decorator_cycles_terminate_and_are_deterministic():
@@ -277,7 +276,7 @@ def test_custom_metaclass_and_helper_have_relocatable_identity(tmp_path):
 
 
 @pytest.mark.parametrize("edited", ["meta", "helper"])
-def test_paused_parallel_rejects_metaclass_execution_source_drift(tmp_path, edited):
+def test_paused_parallel_replays_result_after_metaclass_source_edit(tmp_path, edited):
     _make_meta_tree(tmp_path)
     _write(tmp_path / "rootpkg/__init__.py", "")
     _write(
@@ -306,11 +305,8 @@ def test_paused_parallel_rejects_metaclass_execution_source_drift(tmp_path, edit
         "from botpipe.providers import FakeProvider\n"
         "from rootpkg.workflow import job\n"
         "with Botpipe('.', provider=FakeProvider([])) as client:\n"
-        "    before = client.journal.operations('meta-drift')\n"
         "    result = client.resume('meta-drift', workflow=job, answer='yes')\n"
-        "    assert result.status == 'failed', result.error\n"
-        "    assert 'ReplayMismatch' in result.error, result.error\n"
-        "    assert client.journal.operations('meta-drift') == before\n",
+        "    assert result.ok and result.value == ['old'], result.error\n",
     )
     initial = _run(start)
     assert initial.returncode == 0, initial.stderr

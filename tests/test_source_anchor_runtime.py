@@ -1,4 +1,4 @@
-"""Runtime integration coverage for independent source ownership anchors."""
+"""Runtime integration coverage for source-free relocation and contracts."""
 
 from __future__ import annotations
 
@@ -46,7 +46,7 @@ _SYNTHETIC_ROOT = (
 )
 
 
-def test_source_free_root_anchors_full_child_ownership_across_relocation(tmp_path):
+def test_source_free_root_replays_child_contracts_across_relocation(tmp_path):
     original = tmp_path / "original"
     relocated = tmp_path / "relocated"
     state = tmp_path / "state"
@@ -91,7 +91,6 @@ def test_source_free_root_anchors_full_child_ownership_across_relocation(tmp_pat
         "assert job.fn.__qualname__ == 'job'\n"
         "assert job._source_context.origin_source is None\n"
         "assert job._source_context.owned_boundaries == ()\n"
-        "assert job._source_context.ownership_anchor is None\n"
         "with Botpipe(\n"
         "    workspace,\n"
         "    state_dir=os.environ['BOTPIPE_TEST_STATE'],\n"
@@ -101,26 +100,10 @@ def test_source_free_root_anchors_full_child_ownership_across_relocation(tmp_pat
         "    assert result.status == 'interrupted', result.error\n"
         "    metadata = client.journal.run(result.run_id)\n"
         "    assert metadata['source_file'] is None\n"
-        "    assert Path(metadata['source_anchor']) == workspace\n"
         "    operations = client.journal.operations(result.run_id)\n"
         "    assert [item['kind'] for item in operations] == ['child', 'activity']\n"
-        "    expected = (workspace / 'childpkg', workspace / 'helperpkg')\n"
-        "    expected_locators = [\n"
-        "        {'kind': 'directory', 'relative': 'childpkg'},\n"
-        "        {'kind': 'directory', 'relative': 'helperpkg'},\n"
-        "    ]\n"
         "    for operation in operations:\n"
-        "        owners = operation['inputs']['owners']\n"
-        "        assert owners == {\n"
-        "            'schema': 'botpipe.source-owners.v2',\n"
-        "            'anchor_kind': 'directory',\n"
-        "            'boundaries': expected_locators,\n"
-        "        }, owners\n"
-        "        actual = codec.recorded_source_boundaries(\n"
-        "            operation['inputs'], root_boundary=workspace\n"
-        "        )\n"
-        "        assert actual == expected, actual\n"
-        "        assert workspace not in actual\n"
+        "        codec.verify_contracts(operation['inputs'])\n"
         "    Path('owner-inputs.json').write_text(json.dumps(\n"
         "        [item['inputs'] for item in operations], sort_keys=True\n"
         "    ))\n",
@@ -140,16 +123,15 @@ def test_source_free_root_anchors_full_child_ownership_across_relocation(tmp_pat
         ") as client:\n"
         "    operations = client.journal.operations('source-anchor')\n"
         "    activity = next(item for item in operations if item['kind'] == 'activity')\n"
-        "    assert codec.recorded_source_boundaries(\n"
-        "        activity['inputs'], root_boundary=workspace\n"
-        "    ) == (workspace / 'childpkg', workspace / 'helperpkg')\n"
+        "    codec.verify_contracts(activity['inputs'])\n"
         "    client.resolve(\n"
         "        'source-anchor', activity['id'],\n"
         "        response=Reconciled(value='reconciled'),\n"
         "    )\n"
         "    completed = client.journal.get(activity['id'])\n"
         "    assert completed['status'] == 'completed'\n"
-        "    assert 'helperpkg.model:Reconciled' in completed['result']['sources']\n",
+        "    codec.verify_contracts(completed['result'])\n"
+        "    assert codec.decode(completed['result']) == Reconciled(value='reconciled')\n",
     )
     resume_source = (
         _SYNTHETIC_ROOT + "import json, os\n"
@@ -169,11 +151,8 @@ def test_source_free_root_anchors_full_child_ownership_across_relocation(tmp_pat
         "    assert result.value == Reconciled(value='reconciled')\n"
         "    operations = client.journal.operations('source-anchor')\n"
         "    assert [item['inputs'] for item in operations] == before\n"
-        "    expected = (workspace / 'childpkg', workspace / 'helperpkg')\n"
         "    for operation in operations:\n"
-        "        assert codec.recorded_source_boundaries(\n"
-        "            operation['inputs'], root_boundary=workspace\n"
-        "        ) == expected\n"
+        "        codec.verify_contracts(operation['inputs'])\n"
     )
 
     first = _run(start, original, state)

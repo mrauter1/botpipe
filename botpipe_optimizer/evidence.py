@@ -202,7 +202,6 @@ class EvidenceSnapshot(EvidenceRecord):
     recommendation_basis: Literal[
         "current_verified",
         "historical_verified",
-        "historical_unverified",
         "no_comparable_evidence",
     ]
     step_metrics: tuple[StepMetric, ...]
@@ -218,7 +217,11 @@ class EvidenceSnapshot(EvidenceRecord):
         return self
 
     def citable_observation_ids(self) -> frozenset[str]:
-        return frozenset(item.observation_id for item in self.observations)
+        return frozenset(
+            item.observation_id
+            for item in self.observations
+            if item.group_id == self.selected_group_id and item.focused
+        )
 
 
 def capture_evidence_snapshot(
@@ -424,8 +427,10 @@ def capture_evidence_snapshot(
     selected_group = next(
         (item.group_id for item in group_records if item.current_match), None
     )
-    if selected_group is None and group_order:
-        selected_group = group_order[0]
+    if selected_group is None:
+        selected_group = next(
+            (group_id for group_id in group_order if group_versions[group_id]), None
+        )
     comparable = [
         item
         for item in observations
@@ -445,8 +450,6 @@ def capture_evidence_snapshot(
         else "current_verified"
         if any(item.current_match for item in group_records)
         else "historical_verified"
-        if group_versions.get(selected_group)
-        else "historical_unverified"
     )
     baseline_id = baseline_surface_manifest_id or baseline_surface_id(source_manifest)
     payload = {

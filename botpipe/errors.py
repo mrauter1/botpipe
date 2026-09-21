@@ -9,16 +9,12 @@ class ReplayMismatch(BotpipeError):
     """Recorded execution and current orchestration disagree."""
 
 
-class WorkflowChanged(ReplayMismatch):
-    pass
-
-
 class RunBusy(BotpipeError):
     pass
 
 
 class ActivityFailed(BotpipeError):
-    """A recorded custom exception whose original type is unavailable."""
+    """A recorded exception whose state cannot be restored safely."""
 
 
 class Suspension(BaseException):

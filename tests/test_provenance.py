@@ -65,6 +65,28 @@ def test_source_capture_keeps_code_for_cyclic_decorator(tmp_path):
     assert captured["bindings"]["<workflow>"]["name"] == "entry"
 
 
+def test_unexpected_observation_failure_is_explicitly_unverified(tmp_path, monkeypatch):
+    from botpipe import provenance
+
+    class Definition:
+        fingerprint = "known-orchestration"
+
+    def unavailable(*args, **kwargs):
+        raise RuntimeError("observation backend unavailable")
+
+    monkeypatch.setattr(provenance, "_verify_loaded_source", unavailable)
+    captured = provenance.capture_workflow_provenance(Definition(), tmp_path)
+
+    assert captured == {
+        "schema": "botpipe.workflow-provenance.v1",
+        "verified": False,
+        "workflow_identity": None,
+        "surface_id": None,
+        "orchestration_id": None,
+        "error": "RuntimeError: observation backend unavailable",
+    }
+
+
 def _package(root: Path) -> Path:
     package = root / "sample"
     package.mkdir(parents=True)
@@ -99,7 +121,7 @@ def test_source_surface_is_root_independent_and_tracks_package_resources(tmp_pat
     )
 
 
-def test_resume_retains_recorded_start_provenance_and_exposes_source_drift(tmp_path):
+def test_completed_resume_returns_record_without_reobserving_source_drift(tmp_path):
     source = _package(tmp_path)
     flow = resolve_workflow(f"{source}:sample", tmp_path)
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
@@ -114,11 +136,7 @@ def test_resume_retains_recorded_start_provenance_and_exposes_source_drift(tmp_p
         (source.parent / "prompt.md").write_text("Updated external resource")
         assert client.resume(result.run_id, workflow=flow).ok
         current = client.inspect(result.run_id)["run"]
-        assert current["provenance_start"] == original["provenance_start"]
-        assert (
-            current["provenance_end"]["surface_id"]
-            != current["provenance_start"]["surface_id"]
-        )
+        assert current == original
 
 
 def test_workflow_surface_rejects_linked_package_content(tmp_path):

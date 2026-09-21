@@ -140,14 +140,9 @@ def test_unknown_effect_checkpoint_status_is_conservatively_fenced():
     )
 
 
-def test_provider_writes_are_read_through_tagged_and_capsule_inputs():
+def test_provider_writes_are_read_from_encoded_mapping_inputs():
     without_writes = {"$botpipe": "dict", "value": {"writes": []}}
-    with_writes = {
-        "$botpipe": "capsule",
-        "version": 1,
-        "sources": {},
-        "value": {"$botpipe": "dict", "value": {"writes": [{}]}},
-    }
+    with_writes = {"$botpipe": "dict", "value": {"writes": [{}]}}
 
     assert Journal._provider_has_writes(without_writes) is False
     assert Journal._provider_has_writes(with_writes) is True
@@ -271,7 +266,7 @@ def test_restored_nondispatched_provider_releases_foreign_fence(tmp_path):
 
 
 @pytest.mark.parametrize("writes", [[], [{"name": "report"}]])
-def test_foreign_provider_reads_portable_owner_capsules(tmp_path, writes):
+def test_foreign_provider_reads_encoded_declared_outputs(tmp_path, writes):
     from botpipe import codec
 
     path = _provider_journal(
@@ -279,9 +274,7 @@ def test_foreign_provider_reads_portable_owner_capsules(tmp_path, writes):
         {"request": {}, "generation": 0, "text": "done"},
         writes=writes,
     )
-    with codec.source_identity(tmp_path):
-        inputs = codec.encode({"writes": writes}, record_owners=True)
-    assert inputs["owners"]["schema"] == "botpipe.source-owners.v2"
+    inputs = codec.encode({"writes": writes})
     journal = Journal(path)
     try:
         with journal.transaction() as db:
@@ -295,12 +288,11 @@ def test_foreign_provider_reads_portable_owner_capsules(tmp_path, writes):
     assert Journal.foreign_has_unresolved_effects(path, "run") is bool(writes)
 
 
-def test_portable_owner_inspection_does_not_resolve_source(tmp_path, monkeypatch):
+def test_plain_value_inspection_does_not_resolve_types(monkeypatch):
     from botpipe import codec
     from botpipe.read_projection import _inspection_value
 
-    with codec.source_identity(tmp_path):
-        record = codec.encode({"name": "report"}, record_owners=True)
+    record = codec.encode({"name": "report"})
 
     def no_import(*args, **kwargs):
         pytest.fail("Inspection attempted application type resolution")

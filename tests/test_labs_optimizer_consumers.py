@@ -369,7 +369,7 @@ def _write_evaluation_spec(root):
     return spec, calls
 
 
-def test_completed_workflow_replay_revalidates_pair_without_relaunch(tmp_path):
+def test_completed_workflow_reads_saved_pair_without_relaunch(tmp_path):
     from tests.test_labs import _successful_provider
 
     candidate_id = _publish_optimizer_candidate(tmp_path, kind="workflow")
@@ -402,6 +402,6 @@ def test_completed_workflow_replay_revalidates_pair_without_relaunch(tmp_path):
         )
         frozen_evaluator.write_text("changed after completion\n", encoding="utf-8")
         replay = client.resume(result.run_id)
-    assert replay.status == "failed"
-    assert "frozen evaluator changed" in (replay.error or "")
+    assert replay.ok, replay.error
+    assert replay.value == result.value
     assert calls.read_text(encoding="utf-8").splitlines() == ["call", "call"]

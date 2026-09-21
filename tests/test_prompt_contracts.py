@@ -559,7 +559,7 @@ def test_security_artifacts_carry_assessment_remediation_and_closure_evidence(
     assert set(result.value.artifact_names) == set(result.value.artifacts)
 
 
-def test_workflow_builder_materializes_validates_and_rechecks_real_candidate(tmp_path):
+def test_workflow_builder_materializes_validates_and_retains_completed_result(tmp_path):
     from tests.test_labs import _successful_provider
 
     (tmp_path / "README.md").write_text("# Candidate source repository\n")
@@ -610,8 +610,8 @@ def test_workflow_builder_materializes_validates_and_rechecks_real_candidate(tmp
         generated.write_text("# changed after validation\n")
         changed_replay = client.resume(result.run_id)
 
-    assert changed_replay.status == "failed"
-    assert "generated candidate file changed" in (changed_replay.error or "")
+    assert changed_replay.ok, changed_replay.error
+    assert changed_replay.value == result.value
 
 
 def test_workflow_builder_rejects_manifest_that_only_claims_a_file(tmp_path):

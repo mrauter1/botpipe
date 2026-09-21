@@ -238,9 +238,6 @@ class Journal:
 
     @staticmethod
     def _provider_has_writes(inputs):
-        from .codec import encoded_body
-
-        inputs = encoded_body(inputs)
         if (
             type(inputs) is not dict
             or inputs.get("$botpipe") != "dict"

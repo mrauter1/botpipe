@@ -91,7 +91,13 @@ def _run(*operations, run_id="run-1"):
             "provenance_end": provenance,
         },
         "operations": list(operations),
-        "events": [],
+        "events": [
+            {
+                "event": "execution_revision",
+                "data": {"phase": phase, "provenance": provenance},
+            }
+            for phase in ("start", "end")
+        ],
         "artifacts": {},
     }
 

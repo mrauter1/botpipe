@@ -93,7 +93,9 @@ def test_unsupported_exception_state_falls_back_on_initial_and_replay(tmp_path):
     "import_style",
     ["future_annotation", "module", "nested", "facade", "method_helper"],
 )
-def test_fresh_import_rejects_contract_property_source_edit(tmp_path, import_style):
+def test_fresh_import_returns_completed_value_after_contract_source_edit(
+    tmp_path, import_style
+):
     package = tmp_path / "owned"
     package.mkdir()
     (package / "__init__.py").write_text("")
@@ -196,7 +198,7 @@ def test_fresh_import_rejects_contract_property_source_edit(tmp_path, import_sty
         "from owned.workflow import job\n"
         "root = Path(__file__).parent\n"
         "with Botpipe(root, provider=FakeProvider([])) as client:\n"
-        "    client.resume('source-edit', workflow=job)\n"
+        "    print(client.resume('source-edit', workflow=job).value)\n"
     )
     env = {
         **os.environ,
@@ -224,5 +226,5 @@ def test_fresh_import_rejects_contract_property_source_edit(tmp_path, import_sty
         text=True,
         check=False,
     )
-    assert second.returncode != 0
-    assert "WorkflowChanged" in second.stderr
+    assert second.returncode == 0, second.stderr
+    assert second.stdout.strip() == "2"

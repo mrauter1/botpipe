@@ -67,6 +67,27 @@ class FrozenState:
         object.__setattr__(self, "derived", self.value * 2)
 
 
+@dataclass(init=False)
+class ConstructedState:
+    calls: ClassVar[int] = 0
+    value: int
+
+    def __init__(self, value):
+        type(self).calls += 1
+        self.value = value
+
+
+def _default_items():
+    DefaultedState.default_calls += 1
+    return [3]
+
+
+@dataclass
+class DefaultedState:
+    default_calls: ClassVar[int] = 0
+    items: list[int] = field(default_factory=_default_items)
+
+
 T = TypeVar("T")
 
 
@@ -130,6 +151,22 @@ def test_frozen_slotted_dataclass_state_does_not_run_post_init():
     assert FrozenState.post_init_calls == 1
     assert restored.value == 4
     assert restored.derived == 8
+
+
+def test_dataclass_restore_does_not_run_constructor_or_default_factory():
+    ConstructedState.calls = 0
+    constructed = ConstructedState(4)
+    ConstructedState.calls = 0
+    restored_constructed = codec.decode(codec.encode(constructed))
+    assert restored_constructed.value == 4
+    assert ConstructedState.calls == 0
+
+    DefaultedState.default_calls = 0
+    defaulted = DefaultedState()
+    DefaultedState.default_calls = 0
+    restored_defaulted = codec.decode(codec.encode(defaulted))
+    assert restored_defaulted.items == [3]
+    assert DefaultedState.default_calls == 0
 
 
 def test_repository_dataclasses_and_generated_pydantic_generics_round_trip():
@@ -240,14 +277,14 @@ def test_cached_and_cyclic_state_is_rejected_with_a_field_path():
         codec.encode(cycle)
 
 
-def test_legacy_unknown_version_and_corrupt_state_are_rejected():
-    legacy = {
+def test_missing_unknown_version_and_corrupt_state_are_rejected():
+    incomplete = {
         "$botpipe": "model",
         "type": codec.type_name(Animal),
         "value": {"name": "old"},
     }
-    with pytest.raises(TypeError, match="legacy unversioned model state"):
-        codec.decode(legacy)
+    with pytest.raises(TypeError, match="durable record is missing"):
+        codec.decode(incomplete)
 
     record = codec.encode(Animal(name="new"))
     record["version"] = 2
@@ -264,11 +301,16 @@ def test_legacy_unknown_version_and_corrupt_state_are_rejected():
     with pytest.raises(TypeError, match="does not allow extra fields"):
         codec.decode(record)
 
+    record = codec.encode(Envelope(animal=Animal(name="new"), bonus=1))
+    record["extra"]["animal"] = record["fields"]["animal"]
+    with pytest.raises(TypeError, match="duplicates declared fields"):
+        codec.verify_contracts(record)
+
 
 def test_decode_rejects_wrong_type_category_before_hydration():
     record = codec.encode(Animal(name="new"))
     record["type"] = codec.type_name(FrozenState)
-    with pytest.raises(TypeError, match="is not a Pydantic model"):
+    with pytest.raises(TypeError, match="storage contract"):
         codec.decode(record)
 
 
@@ -277,6 +319,43 @@ def test_decode_rejects_values_outside_the_encoded_language():
         codec.decode(object())
     with pytest.raises(TypeError, match="untagged durable mapping"):
         codec.decode({"value": 1})
+
+
+def test_decode_preflights_later_shapes_before_hydrating_earlier_values(
+    monkeypatch, tmp_path
+):
+    handle = ArtifactHandle(
+        name="report",
+        path=tmp_path / "report.txt",
+        source_path=tmp_path / "source.txt",
+        kind="text",
+        digest="abc",
+    )
+    encoded_handle = codec.encode(handle)
+    calls = 0
+    original = ArtifactHandle.from_record.__func__
+
+    def counted(cls, record):
+        nonlocal calls
+        calls += 1
+        return original(cls, record)
+
+    monkeypatch.setattr(ArtifactHandle, "from_record", classmethod(counted))
+    malformed = [encoded_handle, {"$botpipe": "bytes", "value": "not base64"}]
+
+    with pytest.raises(TypeError, match="invalid base64"):
+        codec.decode(malformed)
+    assert calls == 0
+
+
+def test_repeated_contract_metadata_does_not_consume_payload_limit(monkeypatch):
+    monkeypatch.setattr(codec, "_MAX_VALUES", 30)
+    values = [Animal(name=str(index)) for index in range(12)]
+
+    encoded = codec.encode(values)
+    restored = codec.decode(encoded)
+
+    assert restored == values
 
 
 def test_dataclass_descriptors_are_rejected_without_invoking_them():
@@ -303,12 +382,8 @@ def test_dataclass_descriptors_are_rejected_without_invoking_them():
         codec.encode(original)
     assert calls == []
 
-    record = {
-        "$botpipe": "dataclass",
-        "version": 1,
-        "type": codec.type_name(DescriptorState),
-        "fields": {"value": 1},
-    }
+    record = codec.encode(CacheState(1))
+    record["type"] = codec.type_name(DescriptorState)
     with pytest.raises(TypeError, match="field descriptors are not durable"):
         codec.decode(record)
     assert calls == []

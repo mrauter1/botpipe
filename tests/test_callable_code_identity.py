@@ -87,7 +87,7 @@ def test_source_free_parameter_names_and_argument_layout_contribute(before, afte
     assert _function_version(original) != _function_version(changed)
 
 
-def test_completed_parallel_rejects_source_free_complex_literal_change(tmp_path):
+def test_completed_parallel_returns_saved_value_after_complex_literal_change(tmp_path):
     original = _compiled("def branch(): return str(1 + 2j)\n")
     changed = _compiled("def branch(): return str(3 + 4j)\n")
     selected = [original]
@@ -104,6 +104,6 @@ def test_completed_parallel_rejects_source_free_complex_literal_change(tmp_path)
         selected[0] = changed
         replay = client.resume(first.run_id, workflow=job)
 
-        assert replay.status == "failed", replay.error
-        assert "ReplayMismatch" in replay.error
+        assert replay.ok, replay.error
+        assert replay.value == ["(1+2j)"]
         assert client.journal.operations(first.run_id) == before

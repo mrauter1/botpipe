@@ -6,10 +6,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
-
-from botpipe import codec
-
 
 def _run(script: Path, source_root: Path, workspace: Path):
     env = {
@@ -144,73 +140,3 @@ def _run_with_args(script, source_root, workspace, *args):
         text=True,
         check=False,
     )
-
-
-def test_owner_locator_requires_current_root_and_legacy_is_same_location_only(tmp_path):
-    root = tmp_path / "workflow.py"
-    root.write_text("# workflow\n")
-    with codec.source_identity(root):
-        encoded = codec.encode({"plain": 1}, record_owners=True)
-    assert encoded["owners"]["schema"] == "botpipe.source-owners.v2"
-    assert codec.semantic_encoding(encoded) == codec.encode({"plain": 1})
-    with pytest.raises(TypeError, match="requires the current source anchor"):
-        codec.recorded_source_boundaries(encoded)
-    assert codec.recorded_source_boundaries(encoded, root_boundary=root) == (root,)
-
-    legacy = {**encoded, "owners": [str(root)]}
-    assert codec.recorded_source_boundaries(legacy) == (root,)
-    root.unlink()
-    with pytest.raises(FileNotFoundError):
-        codec.recorded_source_boundaries(legacy)
-
-
-def test_malformed_owner_locator_fails_closed(tmp_path):
-    root = tmp_path / "workflow.py"
-    root.write_text("# workflow\n")
-    malformed = {
-        "$botpipe": "capsule",
-        "version": 1,
-        "sources": {},
-        "owners": {
-            "schema": "botpipe.source-owners.v2",
-            "anchor_kind": "file",
-            "boundaries": [{"kind": "file", "relative": "workflow.py"}],
-        },
-        "value": {"$botpipe": "dict", "value": {"$botpipe": "still user data"}},
-    }
-    with pytest.raises(TypeError, match="current source anchor"):
-        codec.recorded_source_boundaries(malformed)
-
-    # Source-free mappings that resemble codec tags remain ordinary user data.
-    assert codec.decode(codec.encode({"$botpipe": "type", "type": "not-a-type"})) == {
-        "$botpipe": "type",
-        "type": "not-a-type",
-    }
-
-    with codec.source_identity(()):
-        assert codec.encode({"plain": 1}, record_owners=True) == codec.encode(
-            {"plain": 1}
-        )
-
-
-@pytest.mark.parametrize(
-    "relative", ["C:\\owned.py", "C:owned.py", "\\\\host\\owned.py", "a/../b.py"]
-)
-def test_nonportable_or_noncanonical_owner_paths_are_rejected(tmp_path, relative):
-    root = tmp_path / "workflow.py"
-    root.write_text("# workflow\n")
-    encoded = {
-        "$botpipe": "capsule",
-        "version": 1,
-        "sources": {},
-        "owners": {
-            "schema": "botpipe.source-owners.v2",
-            "anchor_kind": "file",
-            "boundaries": [
-                {"kind": "file", "relative": relative},
-            ],
-        },
-        "value": None,
-    }
-    with pytest.raises(TypeError, match="source owner"):
-        codec.recorded_source_boundaries(encoded, root_boundary=root)

@@ -15,8 +15,18 @@ from pathlib import Path
 from types import CodeType, ModuleType
 from typing import Any
 
+
+def _canonical_source_path(
+    value: str | os.PathLike[str], *, strict: bool = False
+) -> Path:
+    """Return one physical, case-normalized spelling for a source path."""
+
+    resolved = Path(value).resolve(strict=strict)
+    return Path(os.path.normcase(str(resolved)))
+
+
 _SDK_SOURCE_FILES = {
-    os.path.normcase(os.path.abspath(Path(__file__).with_name(name)))
+    _canonical_source_path(Path(__file__).with_name(name), strict=True)
     for name in (
         "runtime.py",
         "sessions.py",
@@ -41,7 +51,7 @@ def _is_sdk_implementation(value: Any) -> bool:
     if raw is None:
         return False
     try:
-        return os.path.normcase(os.path.abspath(raw)) in _SDK_SOURCE_FILES
+        return _canonical_source_path(raw) in _SDK_SOURCE_FILES
     except (OSError, TypeError, ValueError):
         return False
 
@@ -207,6 +217,13 @@ def describe_callable(value: Any) -> CallableGraph:
     nodes: list[_NodeBuilder] = []
     ordinals: dict[int, int] = {}
     pending: list[int] = []
+    sdk_sources: dict[str, bool] = {}
+
+    def sdk_function(target: Any) -> bool:
+        source = target.__code__.co_filename
+        if source not in sdk_sources:
+            sdk_sources[source] = _is_sdk_implementation(source)
+        return sdk_sources[source]
 
     def strict_edge_labels(node: _NodeBuilder) -> set[str]:
         if node.kind == "partial":
@@ -295,12 +312,20 @@ def describe_callable(value: Any) -> CallableGraph:
                     CallableBinding(f"global:{name}", bound, False, "type")
                 )
             elif callable(bound):
-                if (
+                wrapped = (
+                    vars(bound).get("__wrapped__")
+                    if inspect.isfunction(bound)
+                    else None
+                )
+                sdk_wrapper = (
                     inspect.isfunction(bound)
-                    and _is_sdk_implementation(bound)
+                    and sdk_function(bound)
                     and not _is_workflow(bound)
-                ):
+                )
+                if sdk_wrapper and not callable(wrapped):
                     continue
+                if sdk_wrapper and callable(wrapped):
+                    node.boundary_targets = (*node.boundary_targets, wrapped)
                 edge(node, f"global:{name}", bound)
             elif type(bound) in (str, int, float, bool, tuple) or bound is None:
                 node.bindings.append(CallableBinding(f"global:{name}", bound, False))

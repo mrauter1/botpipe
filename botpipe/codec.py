@@ -3,21 +3,29 @@
 from __future__ import annotations
 
 import base64
-import contextvars
 import dataclasses
 import importlib
 import json
 import math
-import os
 import re
 import sys
-from contextlib import contextmanager
 from datetime import date, datetime, timedelta, timezone
-from enum import Enum
+from enum import Enum, Flag
 from inspect import get_annotations, getattr_static
-from pathlib import Path, PurePosixPath, PureWindowsPath
-from types import MappingProxyType, MemberDescriptorType, SimpleNamespace
-from typing import ForwardRef, get_args, get_origin, get_type_hints
+from pathlib import Path
+from types import MappingProxyType, MemberDescriptorType, SimpleNamespace, UnionType
+from typing import (
+    Annotated,
+    Any,
+    ForwardRef,
+    Literal,
+    TypeAliasType,
+    TypeVar,
+    Union,
+    get_args,
+    get_origin,
+    get_type_hints,
+)
 
 from pydantic import BaseModel, Secret, SecretBytes, SecretStr, TypeAdapter
 
@@ -26,155 +34,6 @@ _STATE_VERSION = 1
 _MAX_DEPTH = 100
 _MAX_VALUES = 100_000
 _TYPE_NAME = re.compile(r"^[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*:[^:\x00\r\n]{1,1000}$")
-_SOURCE_BOUNDARY = contextvars.ContextVar("botpipe_source_boundary", default=None)
-_SOURCE_ANCHOR = contextvars.ContextVar("botpipe_source_anchor", default=None)
-_SOURCE_CAPTURE = contextvars.ContextVar("botpipe_source_capture", default=None)
-_DECODE_SOURCES = contextvars.ContextVar("botpipe_decode_sources", default=None)
-_OWNER_SCHEMA = "botpipe.source-owners.v2"
-_INFER_SOURCE_ANCHOR = object()
-
-
-@contextmanager
-def source_identity(boundary, *, anchor=_INFER_SOURCE_ANCHOR):
-    """Record and verify owned source for durable values in this boundary."""
-
-    raw = boundary if isinstance(boundary, (tuple, list, set)) else (boundary,)
-    boundaries = tuple(
-        dict.fromkeys(str(Path(item).resolve(strict=True)) for item in raw)
-    )
-    if anchor is _INFER_SOURCE_ANCHOR:
-        resolved_anchor = boundaries[0] if boundaries else None
-    else:
-        resolved_anchor = str(Path(anchor).resolve(strict=True))
-    boundary_token = _SOURCE_BOUNDARY.set(boundaries)
-    anchor_token = _SOURCE_ANCHOR.set(resolved_anchor)
-    try:
-        yield
-    finally:
-        _SOURCE_ANCHOR.reset(anchor_token)
-        _SOURCE_BOUNDARY.reset(boundary_token)
-
-
-def _boundary_kind(path):
-    if path.is_file():
-        return "file"
-    if path.is_dir():
-        return "directory"
-    raise TypeError(
-        f"Source ownership boundary is neither a file nor directory: {path}"
-    )
-
-
-def _source_owner_record(boundaries, anchor):
-    """Describe operation ownership relative to an independent source anchor."""
-
-    paths = tuple(Path(item).resolve(strict=True) for item in boundaries)
-    if not paths:
-        return None
-    if anchor is None:
-        raise TypeError("Source ownership boundaries require a source anchor")
-    anchor = Path(anchor).resolve(strict=True)
-    base = anchor if anchor.is_dir() else anchor.parent
-    items = []
-    for path in paths:
-        relative = Path(os.path.relpath(path, base)).as_posix()
-        _portable_owner_relative(relative, "source owner")
-        items.append({"kind": _boundary_kind(path), "relative": relative})
-    return {
-        "schema": _OWNER_SCHEMA,
-        "anchor_kind": _boundary_kind(anchor),
-        "boundaries": items,
-    }
-
-
-def _portable_owner_relative(relative, path):
-    if type(relative) is not str or not relative or "\x00" in relative:
-        raise TypeError(f"{path}: invalid source owner locator")
-    posix = PurePosixPath(relative)
-    windows = PureWindowsPath(relative)
-    if (
-        posix.is_absolute()
-        or windows.is_absolute()
-        or windows.drive
-        or "\\" in relative
-        or posix.as_posix() != relative
-    ):
-        raise TypeError(f"{path}: invalid portable source ownership path {relative!r}")
-    seen_name = False
-    for part in posix.parts:
-        if part == "..":
-            if seen_name:
-                raise TypeError(
-                    f"{path}: invalid portable source ownership path {relative!r}"
-                )
-        elif part != ".":
-            seen_name = True
-    return posix
-
-
-def _resolve_owner_relative(base, relative, path):
-    parts = _portable_owner_relative(relative, path).parts
-    candidate = base
-    for part in parts:
-        if part == "..":
-            candidate = candidate.parent
-        elif part != ".":
-            candidate = candidate / part
-            if candidate.is_symlink():
-                raise TypeError(f"{path}: source owner locator traverses a symlink")
-    return candidate.resolve(strict=True)
-
-
-@contextmanager
-def without_source_identity():
-    """Keep non-durable structural hashes independent of runtime context."""
-
-    boundary_token = _SOURCE_BOUNDARY.set(None)
-    anchor_token = _SOURCE_ANCHOR.set(None)
-    try:
-        yield
-    finally:
-        _SOURCE_ANCHOR.reset(anchor_token)
-        _SOURCE_BOUNDARY.reset(boundary_token)
-
-
-def _type_source(cls):
-    boundaries = _SOURCE_BOUNDARY.get()
-    if boundaries is None:
-        return None
-    from .provenance import capture_type_source
-
-    return capture_type_source(cls, boundaries)
-
-
-def _verify_type_record(cls, record, path):
-    if _SOURCE_BOUNDARY.get() is None:
-        return
-    sources = _DECODE_SOURCES.get()
-    source = sources.get(record.get("type")) if sources is not None else None
-    if source is None:
-        raise TypeError(
-            f"{path}: historical durable type {record.get('type')!r} has no "
-            "source identity and cannot be safely resumed"
-        )
-    from .provenance import verify_type_source
-
-    verify_type_source(cls, source)
-
-
-def _with_type_source(record, cls):
-    capture = _SOURCE_CAPTURE.get()
-    if capture is not None:
-        name = type_name(cls)
-        if name in capture:
-            return record
-        source = _type_source(cls)
-        if source is None:
-            return record
-        previous = capture.setdefault(name, source)
-        if previous != source:
-            raise TypeError(f"Conflicting source identity for durable type {name}")
-    return record
 
 
 def type_name(cls):
@@ -192,14 +51,16 @@ def type_name(cls):
 def resolve_type(name):
     if type(name) is not str or not _TYPE_NAME.fullmatch(name):
         raise TypeError(f"Invalid durable type reference {name!r}")
-    if name in _TYPES:
-        return _TYPES[name]
     module, qualname = name.split(":", 1)
     if "<locals>" in qualname:
+        if name in _TYPES:
+            return _TYPES[name]
         raise TypeError(f"Local type {name} must be registered by the resumed workflow")
     # Generated generic classes (for example Model[int]) cannot be recovered by
     # attribute traversal. schema_for() registers annotated generated classes.
     if any(character in qualname for character in "[] ,"):
+        if name in _TYPES:
+            return _TYPES[name]
         raise TypeError(
             f"Generated type {name} must be registered by the resumed workflow"
         )
@@ -667,48 +528,255 @@ def preflight_types(annotation, path="$", *, localns=None):
     return _preflight(annotation, path, localns)[1]
 
 
-def encode(value, *, record_owners=False):
-    """Encode a supported value as JSON-compatible, versioned durable state."""
+class _Contracts:
+    """Build canonical storage contracts with operation-local bounded memoization."""
 
-    if _SOURCE_BOUNDARY.get() is None or _SOURCE_CAPTURE.get() is not None:
-        return _encode(value, "$", 0, _Traversal())
-    sources = {}
-    token = _SOURCE_CAPTURE.set(sources)
-    try:
-        encoded = _encode(value, "$.value", 0, _Traversal())
-    finally:
-        _SOURCE_CAPTURE.reset(token)
-    owners = (
-        _source_owner_record(_SOURCE_BOUNDARY.get(), _SOURCE_ANCHOR.get())
-        if record_owners
-        else None
+    def __init__(self):
+        self.memo = {}
+        self.active = set()
+        self.alias_memo = {}
+        self.active_aliases = set()
+        self.value_traversal = _Traversal()
+        self.count = 0
+
+    def _visit(self, path, depth):
+        self.count += 1
+        if self.count > _MAX_VALUES:
+            raise TypeError(
+                f"{path}: durable contract exceeds the {_MAX_VALUES}-value limit"
+            )
+        if depth > _MAX_DEPTH:
+            raise TypeError(
+                f"{path}: durable contract exceeds the {_MAX_DEPTH}-level limit"
+            )
+
+    def annotation(self, annotation, path, depth=0):
+        self._visit(path, depth)
+        if annotation is None or annotation is type(None):
+            return {"kind": "none"}
+        if annotation is ...:
+            return {"kind": "ellipsis"}
+        if annotation is Annotated or get_origin(annotation) is Annotated:
+            arguments = get_args(annotation)
+            target = arguments[0] if arguments else annotation
+            return self.annotation(target, path, depth + 1)
+        if isinstance(annotation, str):
+            return {"kind": "forward", "name": annotation}
+        if isinstance(annotation, ForwardRef):
+            return {"kind": "forward", "name": annotation.__forward_arg__}
+        if _is_type_alias(annotation):
+            return self.alias(annotation, path, depth + 1)
+        if isinstance(annotation, TypeVar):
+            record = {"kind": "typevar", "name": annotation.__name__}
+            if annotation.__constraints__:
+                record["constraints"] = sorted(
+                    (
+                        self.annotation(item, path, depth + 1)
+                        for item in annotation.__constraints__
+                    ),
+                    key=_canonical_key,
+                )
+            elif annotation.__bound__ is not None:
+                record["bound"] = self.annotation(annotation.__bound__, path, depth + 1)
+            return record
+        origin = get_origin(annotation)
+        if origin is not None:
+            if _is_type_alias(origin):
+                return {
+                    "kind": "generic-alias",
+                    "value": self.alias(origin, path, depth + 1),
+                    "arguments": [
+                        self.annotation(item, path, depth + 1)
+                        for item in get_args(annotation)
+                    ],
+                }
+            if origin is Literal:
+                values = [
+                    self.literal(item, path, depth + 1) for item in get_args(annotation)
+                ]
+                values.sort(key=_canonical_key)
+                return {
+                    "kind": "literal",
+                    "values": values,
+                }
+            arguments = [
+                self.annotation(item, path, depth + 1) for item in get_args(annotation)
+            ]
+            if origin in (Union, UnionType):
+                arguments.sort(key=_canonical_key)
+                return {"kind": "union", "arguments": arguments}
+            origin_record = (
+                self.annotation(origin, path, depth + 1)
+                if isinstance(origin, type)
+                else {"kind": "typing", "name": str(origin)}
+            )
+            return {
+                "kind": "generic",
+                "origin": origin_record,
+                "arguments": arguments,
+            }
+        if annotation is Any:
+            return {"kind": "any"}
+        if isinstance(annotation, type):
+            return {"kind": "type", "name": type_name(annotation)}
+        if type(annotation) in (str, int, bool) or annotation is None:
+            return {"kind": "literal", "value": annotation}
+        if type(annotation) is float and math.isfinite(annotation):
+            return {"kind": "literal", "value": annotation}
+        if getattr(annotation, "__module__", None) == "typing":
+            return {"kind": "typing", "name": str(annotation)}
+        raise TypeError(f"{path}: unsupported durable field annotation {annotation!r}")
+
+    def alias(self, alias, path, depth):
+        cached = self.alias_memo.get(alias)
+        if cached is not None:
+            return cached
+        if alias in self.active_aliases:
+            return {"kind": "recursive-alias"}
+        self.active_aliases.add(alias)
+        try:
+            contract = self.annotation(alias.__value__, path, depth + 1)
+            self.alias_memo[alias] = contract
+            return contract
+        finally:
+            self.active_aliases.remove(alias)
+
+    def literal(self, value, path, depth):
+        self._visit(path, depth)
+        if value is None or type(value) in (str, int, bool):
+            return value
+        if type(value) is float and math.isfinite(value):
+            return value
+        if type(value) is bytes:
+            return {"bytes": base64.b64encode(value).decode("ascii")}
+        if isinstance(value, Enum):
+            return {
+                "enum": type_name(type(value)),
+                "member": value.name,
+            }
+        if isinstance(value, type):
+            return {"type": type_name(value)}
+        raise TypeError(f"{path}: unsupported durable literal {value!r}")
+
+    def for_type(self, cls, path, depth=0):
+        self._visit(path, depth)
+        cached = self.memo.get(cls)
+        if cached is not None:
+            return cached
+        name = type_name(cls)
+        if cls in self.active:
+            return {"kind": "reference", "type": name}
+        self.active.add(cls)
+        try:
+            if issubclass(cls, Enum):
+                members = []
+                for member_name, member in sorted(cls.__members__.items()):
+                    members.append(
+                        [
+                            member_name,
+                            _encode(
+                                member.value,
+                                f"{path}.members[{member_name!r}]",
+                                depth + 1,
+                                self.value_traversal,
+                                self,
+                            ),
+                        ]
+                    )
+                contract = {"kind": "enum", "type": name, "members": members}
+            elif issubclass(cls, BaseException):
+                slots = []
+                for owner in cls.__mro__:
+                    if owner is BaseException:
+                        continue
+                    for slot_name, descriptor in vars(owner).items():
+                        if isinstance(descriptor, MemberDescriptorType):
+                            slots.append([type_name(owner), slot_name])
+                slots.sort()
+                if issubclass(cls, OSError):
+                    native_family = type_name(OSError)
+                elif cls.__module__ == "builtins":
+                    native_family = name
+                else:
+                    native_family = type_name(
+                        next(
+                            base
+                            for base in cls.__mro__[1:]
+                            if base.__module__ == "builtins"
+                            and issubclass(base, BaseException)
+                        )
+                    )
+                contract = {
+                    "kind": "exception",
+                    "type": name,
+                    "native_family": native_family,
+                    "slots": slots,
+                }
+            elif issubclass(cls, BaseModel):
+                fields = _pydantic_fields(cls, path)
+                resolved = _resolved_class_annotations(cls)
+                contract = {
+                    "kind": "model",
+                    "type": name,
+                    "fields": [
+                        [
+                            field_name,
+                            self.annotation(
+                                _pydantic_annotation(field_name, field, resolved),
+                                _child(path, field_name),
+                                depth + 1,
+                            ),
+                        ]
+                        for field_name, field in sorted(fields.items())
+                    ],
+                    "extra": cls.model_config.get("extra") == "allow",
+                    "root": bool(cls.__pydantic_root_model__),
+                }
+            elif dataclasses.is_dataclass(cls):
+                _, namespace = _annotation_namespaces(cls)
+                fields = _dataclass_fields(cls, path, localns=namespace)
+                resolved = _resolved_class_annotations(cls, namespace)
+                contract = {
+                    "kind": "dataclass",
+                    "type": name,
+                    "fields": [
+                        [
+                            field.name,
+                            self.annotation(
+                                resolved.get(field.name, field.type),
+                                _child(path, field.name),
+                                depth + 1,
+                            ),
+                        ]
+                        for field in sorted(fields, key=lambda field: field.name)
+                    ],
+                }
+            else:
+                contract = {"kind": "type", "type": name}
+            self.memo[cls] = contract
+            return contract
+        finally:
+            self.active.remove(cls)
+
+
+def _canonical_key(value):
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
+
+
+def _is_type_alias(value):
+    return isinstance(value, TypeAliasType) or (
+        type(value).__name__ == "TypeAliasType"
+        and type(value).__module__ == "typing_extensions"
     )
-    if not sources and not owners:
-        return encoded
-    capsule = {
-        "$botpipe": "capsule",
-        "version": 1,
-        "sources": dict(sorted(sources.items())),
-        "value": encoded,
-    }
-    if owners is not None:
-        capsule["owners"] = owners
-    return capsule
 
 
-def semantic_encoding(value):
-    """Remove non-semantic operation ownership metadata from an encoding."""
+def encode(value):
+    """Encode supported values with canonical, source-free storage contracts."""
 
-    if type(value) is not dict or value.get("$botpipe") != "capsule":
-        return value
-    if "owners" not in value:
-        return value
-    capsule = dict(value)
-    capsule.pop("owners")
-    return capsule["value"] if not capsule.get("sources") else capsule
+    return _encode(value, "$", 0, _Traversal(), _Contracts())
 
 
-def _encode(value, path, depth, traversal):
+def _encode(value, path, depth, traversal, contracts):
     from .artifacts import ArtifactHandle, ArtifactMap
 
     identity = traversal.visit(
@@ -728,21 +796,30 @@ def _encode(value, path, depth, traversal):
             return {
                 "$botpipe": "artifacts",
                 "value": {
-                    k: _encode(v, _child(path, k), depth + 1, traversal)
+                    k: _encode(v, _child(path, k), depth + 1, traversal, contracts)
                     for k, v in items
                 },
             }
         if isinstance(value, Enum):
-            return _with_type_source(
-                {
-                    "$botpipe": "enum",
-                    "type": type_name(type(value)),
-                    "value": _encode(
-                        value.value, f"{path}.value", depth + 1, traversal
-                    ),
-                },
-                type(value),
-            )
+            cls = type(value)
+            member = value.name
+            if (
+                member not in cls.__members__ or cls.__members__[member] is not value
+            ) and (
+                not isinstance(value, Flag)
+                or cls._member_type_ not in (object, int)
+                or type(value.value) is not int
+            ):
+                raise TypeError(f"{path}: unsupported unnamed enum value")
+            return {
+                "$botpipe": "enum",
+                "type": type_name(cls),
+                "contract": contracts.for_type(cls, f"{path}.contract"),
+                "member": member,
+                "value": _encode(
+                    value.value, f"{path}.value", depth + 1, traversal, contracts
+                ),
+            }
         if value is None or type(value) in (str, int, bool):
             return value
         if type(value) is float:
@@ -785,8 +862,11 @@ def _encode(value, path, depth, traversal):
                 "value": base64.b64encode(value).decode("ascii"),
             }
         if type(value) in (set, frozenset):
-            body = [_encode(v, f"{path}[set]", depth + 1, traversal) for v in value]
-            body.sort(key=lambda item: json.dumps(item, sort_keys=True))
+            body = [
+                _encode(v, f"{path}[set]", depth + 1, traversal, contracts)
+                for v in value
+            ]
+            body.sort(key=_canonical_key)
             return {"$botpipe": type(value).__name__, "value": body}
         if isinstance(value, BaseModel):
             cls = type(value)
@@ -810,13 +890,17 @@ def _encode(value, path, depth, traversal):
             if extra is not None and type(extra) is not dict:
                 raise TypeError(f"{path}: unsupported Pydantic extra-field storage")
             encoded_fields = {
-                name: _encode(state[name], _child(path, name), depth + 1, traversal)
+                name: _encode(
+                    state[name], _child(path, name), depth + 1, traversal, contracts
+                )
                 for name in fields
             }
             encoded_extra = None
             if extra is not None:
                 encoded_extra = {
-                    key: _encode(item, _child(path, key), depth + 1, traversal)
+                    key: _encode(
+                        item, _child(path, key), depth + 1, traversal, contracts
+                    )
                     for key, item in _string_mapping(
                         extra, f"{path}.__pydantic_extra__"
                     ).items()
@@ -829,21 +913,21 @@ def _encode(value, path, depth, traversal):
             allowed_set = set(fields) | set(extra or ())
             if not fields_set <= allowed_set:
                 raise TypeError(f"{path}: Pydantic fields_set names unknown fields")
-            return _with_type_source(
-                {
-                    "$botpipe": "model",
-                    "version": _STATE_VERSION,
-                    "type": type_name(cls),
-                    "fields": encoded_fields,
-                    "fields_set": sorted(fields_set),
-                    "extra": encoded_extra,
-                },
-                cls,
-            )
+            return {
+                "$botpipe": "model",
+                "version": _STATE_VERSION,
+                "type": type_name(cls),
+                "contract": contracts.for_type(cls, f"{path}.contract"),
+                "fields": encoded_fields,
+                "fields_set": sorted(fields_set),
+                "extra": encoded_extra,
+            }
         if isinstance(value, type):
-            return _with_type_source(
-                {"$botpipe": "type", "type": type_name(value)}, value
-            )
+            return {
+                "$botpipe": "type",
+                "type": type_name(value),
+                "contract": contracts.for_type(value, f"{path}.contract"),
+            }
         if dataclasses.is_dataclass(value) and not isinstance(value, type):
             cls = type(value)
             fields = _dataclass_fields(cls, path)
@@ -858,34 +942,33 @@ def _encode(value, path, depth, traversal):
                     raise TypeError(
                         f"{path}: dataclass has cached or unknown state {sorted(unknown)!r}"
                     )
-            return _with_type_source(
-                {
-                    "$botpipe": "dataclass",
-                    "version": _STATE_VERSION,
-                    "type": type_name(cls),
-                    "fields": {
-                        field.name: _encode(
-                            object.__getattribute__(value, field.name),
-                            _child(path, field.name),
-                            depth + 1,
-                            traversal,
-                        )
-                        for field in fields
-                    },
+            return {
+                "$botpipe": "dataclass",
+                "version": _STATE_VERSION,
+                "type": type_name(cls),
+                "contract": contracts.for_type(cls, f"{path}.contract"),
+                "fields": {
+                    field.name: _encode(
+                        object.__getattribute__(value, field.name),
+                        _child(path, field.name),
+                        depth + 1,
+                        traversal,
+                        contracts,
+                    )
+                    for field in fields
                 },
-                cls,
-            )
+            }
         if type(value) is tuple:
             return {
                 "$botpipe": "tuple",
                 "value": [
-                    _encode(v, f"{path}[{index}]", depth + 1, traversal)
+                    _encode(v, f"{path}[{index}]", depth + 1, traversal, contracts)
                     for index, v in enumerate(value)
                 ],
             }
         if type(value) is list:
             return [
-                _encode(v, f"{path}[{index}]", depth + 1, traversal)
+                _encode(v, f"{path}[{index}]", depth + 1, traversal, contracts)
                 for index, v in enumerate(value)
             ]
         if type(value) is dict:
@@ -893,7 +976,7 @@ def _encode(value, path, depth, traversal):
             return {
                 "$botpipe": "dict",
                 "value": {
-                    k: _encode(v, _child(path, k), depth + 1, traversal)
+                    k: _encode(v, _child(path, k), depth + 1, traversal, contracts)
                     for k, v in mapping.items()
                 },
             }
@@ -902,7 +985,7 @@ def _encode(value, path, depth, traversal):
             return {
                 "$botpipe": "mappingproxy",
                 "value": {
-                    k: _encode(v, _child(path, k), depth + 1, traversal)
+                    k: _encode(v, _child(path, k), depth + 1, traversal, contracts)
                     for k, v in mapping.items()
                 },
             }
@@ -940,16 +1023,10 @@ def _record(value, path, required, optional=()):
 
 
 def _state_record(value, path, kind):
-    # Check version before the full envelope so old {value: ...} records receive
-    # an actionable migration error rather than a generic missing-fields error.
-    if "version" not in value:
-        raise TypeError(
-            f"{path}: legacy unversioned {kind} state requires an explicit migration"
-        )
-    required = {"$botpipe", "version", "type", "fields"}
+    required = {"$botpipe", "version", "type", "contract", "fields"}
     if kind == "model":
         required |= {"fields_set", "extra"}
-    record = _record(value, path, required, optional={"source"})
+    record = _record(value, path, required)
     version = record["version"]
     if type(version) is not int or version != _STATE_VERSION:
         raise TypeError(f"{path}: unsupported {kind} state version {version!r}")
@@ -962,51 +1039,42 @@ def _state_record(value, path, kind):
     return record
 
 
-def encoded_body(record):
-    """Read a source capsule's value without resolving owners or application types."""
-
-    if type(record) is dict and record.get("$botpipe") == "capsule":
-        capsule = _record(
-            record,
-            "$",
-            {"$botpipe", "version", "sources", "value"},
-            optional={"owners"},
-        )
-        if type(capsule["version"]) is not int or capsule["version"] != 1:
-            raise TypeError(
-                f"$: unsupported source capsule version {capsule['version']!r}"
-            )
-        _string_mapping(capsule["sources"], "$.sources")
-        owners = capsule.get("owners", [])
-        if type(owners) is list:
-            if not all(type(owner) is str for owner in owners):
-                raise TypeError("$.owners: legacy source owners must be path strings")
-        elif type(owners) is dict:
-            owner_record = _record(
-                owners, "$.owners", {"schema", "anchor_kind", "boundaries"}
-            )
-            if owner_record["schema"] != _OWNER_SCHEMA:
-                raise TypeError("$.owners: unsupported source owner schema")
-            if owner_record["anchor_kind"] not in {"file", "directory"}:
-                raise TypeError("$.owners: invalid source anchor kind")
-            boundaries = owner_record["boundaries"]
-            if type(boundaries) is not list or not boundaries:
-                raise TypeError("$.owners.boundaries: expected a nonempty list")
-            for boundary in boundaries:
-                item = _record(boundary, "$.owners.boundaries", {"relative", "kind"})
-                if item["kind"] not in {"file", "directory"}:
-                    raise TypeError("$.owners.boundaries: invalid source boundary kind")
-                _portable_owner_relative(item["relative"], "$.owners.boundaries")
-        else:
-            raise TypeError("$.owners: source owners must be a locator record")
-        return capsule["value"]
-    return record
+def _verify_datetime_record(record, path):
+    body = record["value"]
+    if type(body) is not str:
+        raise TypeError(f"{path}.value: datetime state must be a string")
+    fold = record["fold"]
+    if type(fold) is not int or fold not in (0, 1):
+        raise TypeError(f"{path}.fold: datetime fold must be 0 or 1")
+    try:
+        result = datetime.fromisoformat(body)
+    except ValueError as exc:
+        raise TypeError(f"{path}.value: invalid datetime state") from exc
+    if result.tzinfo is not None:
+        raise TypeError(f"{path}.value: datetime wall time must not contain an offset")
+    timezone_state = record["timezone"]
+    if timezone_state is None:
+        return
+    timezone_record = _record(
+        timezone_state,
+        f"{path}.timezone",
+        {"offset_microseconds", "name"},
+    )
+    offset = timezone_record["offset_microseconds"]
+    name = timezone_record["name"]
+    if type(offset) is not int:
+        raise TypeError(f"{path}.timezone.offset_microseconds: expected an integer")
+    if type(name) is not str:
+        raise TypeError(f"{path}.timezone.name: expected a string")
+    try:
+        timezone(timedelta(microseconds=offset), name)
+    except (OverflowError, ValueError) as exc:
+        raise TypeError(f"{path}.timezone: invalid fixed-offset timezone") from exc
 
 
 def encoded_field(record, name):
     """Return one encoded state field without importing or hydrating its type."""
 
-    record = encoded_body(record)
     if type(record) is not dict:
         raise TypeError("$: durable state record must be an object")
     kind = record.get("$botpipe")
@@ -1023,176 +1091,240 @@ def encoded_field(record, name):
         raise KeyError(f"durable {kind} state has no field {name!r}") from None
 
 
-def verify_sources(value, path="$"):
-    """Verify typed envelopes inside an encoded value without hydrating values."""
+def verify_contracts(value, path="$"):
+    """Verify every typed storage contract without hydrating recorded values."""
 
-    sources = {}
-    body = value
-    if type(value) is dict and value.get("$botpipe") == "capsule":
-        record = _record(
-            value,
-            path,
-            {"$botpipe", "version", "sources", "value"},
-            optional={"owners"},
-        )
-        if record["version"] != 1:
-            raise TypeError(
-                f"{path}: unsupported source capsule version {record['version']!r}"
-            )
-        sources = _string_mapping(record["sources"], f"{path}.sources")
-        for name, identity in sources.items():
-            cls = resolve_type(name)
-            from .provenance import verify_type_source
-
-            verify_type_source(cls, identity)
-        body = record["value"]
-
-    token = _DECODE_SOURCES.set(sources)
     traversal = _Traversal()
-    try:
+    contracts = _Contracts()
+    contract_traversal = _Traversal()
+    verified_contracts = {}
 
-        def visit(item, item_path, depth):
-            identity = traversal.visit(
-                item, item_path, depth, compound=type(item) in (list, dict)
-            )
-            try:
-                if type(item) is list:
-                    for index, child in enumerate(item):
-                        visit(child, f"{item_path}[{index}]", depth + 1)
-                elif type(item) is dict:
-                    kind = item.get("$botpipe")
-                    if kind in {"model", "dataclass", "enum", "type"}:
-                        cls = resolve_type(item.get("type"))
-                        _verify_type_record(cls, item, item_path)
-                    if kind in {"dict", "mappingproxy", "artifacts"}:
-                        body = item.get("value")
-                        if type(body) is dict:
-                            for key, child in body.items():
-                                visit(child, _child(item_path, key), depth + 1)
-                    elif kind in {"tuple", "set", "frozenset"}:
-                        body = item.get("value")
-                        if type(body) is list:
-                            for index, child in enumerate(body):
-                                visit(child, f"{item_path}[{index}]", depth + 1)
-                    elif kind in {"model", "dataclass"}:
-                        fields = item.get("fields")
-                        if type(fields) is dict:
-                            for key, child in fields.items():
-                                visit(child, _child(item_path, key), depth + 1)
-                        extra = item.get("extra")
-                        if type(extra) is dict:
-                            for key, child in extra.items():
-                                visit(child, _child(item_path, key), depth + 1)
-                    elif kind == "enum" and "value" in item:
-                        visit(item["value"], f"{item_path}.value", depth + 1)
-            finally:
-                traversal.leave(identity)
-
-        visit(body, f"{path}.value" if body is not value else path, 0)
-    finally:
-        _DECODE_SOURCES.reset(token)
-
-
-def recorded_source_boundaries(value, root_boundary=None):
-    """Return owned boundaries named by one already-verified source capsule."""
-
-    if type(value) is not dict or value.get("$botpipe") != "capsule":
-        return ()
-    record = _record(
-        value,
-        "$",
-        {"$botpipe", "version", "sources", "value"},
-        optional={"owners"},
-    )
-    sources = _string_mapping(record["sources"], "$.sources")
-    from .provenance import type_source_boundary
-
-    owners = record.get("owners", [])
-    if type(owners) is list:
-        # Version 1 capsules originally stored absolute locations. They remain
-        # usable at that exact location, but intentionally gain no relocation
-        # semantics retroactively.
-        if not all(type(item) is str for item in owners):
-            raise TypeError("$.owners: legacy source owners must be path strings")
-        result = [Path(item).resolve(strict=True) for item in owners]
-    elif type(owners) is dict:
-        owner_record = _record(
-            owners, "$.owners", {"schema", "anchor_kind", "boundaries"}
+    def visit(item, item_path, depth):
+        identity = traversal.visit(
+            item, item_path, depth, compound=type(item) in (list, dict)
         )
-        if owner_record["schema"] != _OWNER_SCHEMA:
-            raise TypeError(
-                f"$.owners: unsupported source owner schema {owner_record['schema']!r}"
-            )
-        anchor_kind = owner_record["anchor_kind"]
-        if anchor_kind not in {"file", "directory"}:
-            raise TypeError("$.owners: invalid source anchor kind")
-        locators = owner_record["boundaries"]
-        if type(locators) is not list or not locators:
-            raise TypeError(
-                "$.owners.boundaries: source owners must be a nonempty list"
-            )
-        if root_boundary is None:
-            raise TypeError(
-                "$.owners: portable source ownership requires the current source anchor"
-            )
-        anchor = Path(root_boundary).resolve(strict=True)
-        if _boundary_kind(anchor) != anchor_kind:
-            raise TypeError("$.owners: current source anchor kind changed")
-        result = []
-        base = anchor if anchor.is_dir() else anchor.parent
-        for index, locator in enumerate(locators):
-            item = _record(
-                locator,
-                f"$.owners.boundaries[{index}]",
-                {"kind", "relative"},
-            )
-            relative = item["relative"]
-            if item["kind"] not in {"file", "directory"}:
+        try:
+            if type(item) is list:
+                for index, child in enumerate(item):
+                    visit(child, f"{item_path}[{index}]", depth + 1)
+                return
+            if type(item) is not dict:
+                if item is None or type(item) in (str, int, bool):
+                    return
+                if type(item) is float and math.isfinite(item):
+                    return
                 raise TypeError(
-                    f"$.owners.boundaries[{index}]: invalid source owner locator"
+                    f"{item_path}: unsupported encoded value {type(item).__name__}"
                 )
-            candidate = _resolve_owner_relative(
-                base, relative, f"$.owners.boundaries[{index}]"
-            )
-            if _boundary_kind(candidate) != item["kind"]:
+            if "$botpipe" not in item:
                 raise TypeError(
-                    f"$.owners.boundaries[{index}]: source owner kind changed"
+                    f"{item_path}: untagged durable mapping state is not supported"
                 )
-            result.append(candidate)
-        if len(set(result)) != len(result):
-            raise TypeError("$.owners: source owner locators are ambiguous")
-    else:
-        raise TypeError("$.owners: source owners must be a locator record")
-    for name, identity in sources.items():
-        if type(identity) is dict and identity.get("kind") == "python":
-            result.extend(type_source_boundary(resolve_type(name), identity))
-    return tuple(dict.fromkeys(result))
+            kind = item.get("$botpipe")
+            if type(kind) is not str:
+                raise TypeError(
+                    f"{item_path}.$botpipe: durable encoding kind must be a string"
+                )
+            if kind in {"model", "dataclass"}:
+                record = _state_record(item, item_path, kind)
+                actual, _cls = _verify_contract(
+                    record,
+                    item_path,
+                    contracts,
+                    contract_traversal,
+                    verified_contracts,
+                    depth,
+                )
+                if actual["kind"] != kind:
+                    label = "Pydantic model" if kind == "model" else "dataclass"
+                    raise TypeError(
+                        f"{item_path}.type: {record['type']} is not a {label}"
+                    )
+                field_names = {name for name, _ in actual["fields"]}
+                if set(record["fields"]) != field_names:
+                    raise TypeError(
+                        f"{item_path}.fields: recorded fields do not match "
+                        f"{record['type']}"
+                    )
+                if kind == "model":
+                    fields_set = record["fields_set"]
+                    if (
+                        type(fields_set) is not list
+                        or not all(type(name) is str for name in fields_set)
+                        or len(fields_set) != len(set(fields_set))
+                    ):
+                        raise TypeError(
+                            f"{item_path}.fields_set: expected unique "
+                            "field-name strings"
+                        )
+                    extra = record["extra"]
+                    if extra is not None:
+                        extra = _string_mapping(extra, f"{item_path}.extra")
+                        if not actual["extra"]:
+                            raise TypeError(
+                                f"{item_path}.extra: model does not allow extra fields"
+                            )
+                        overlap = field_names & set(extra)
+                        if overlap:
+                            raise TypeError(
+                                f"{item_path}.extra: duplicates declared fields "
+                                f"{sorted(overlap)!r}"
+                            )
+                    if not set(fields_set) <= field_names | set(extra or ()):
+                        raise TypeError(f"{item_path}.fields_set: names unknown fields")
+                for key, child in record["fields"].items():
+                    visit(child, _child(item_path, key), depth + 1)
+                extra = record.get("extra")
+                if extra is not None:
+                    for key, child in _string_mapping(
+                        extra, f"{item_path}.extra"
+                    ).items():
+                        visit(child, _child(f"{item_path}.extra", key), depth + 1)
+                return
+            if kind == "type":
+                record = _record(item, item_path, {"$botpipe", "type", "contract"})
+                _verify_contract(
+                    record,
+                    item_path,
+                    contracts,
+                    contract_traversal,
+                    verified_contracts,
+                    depth,
+                )
+                return
+            if kind == "enum":
+                record = _record(
+                    item,
+                    item_path,
+                    {"$botpipe", "type", "contract", "member", "value"},
+                )
+                actual, cls = _verify_contract(
+                    record,
+                    item_path,
+                    contracts,
+                    contract_traversal,
+                    verified_contracts,
+                    depth,
+                )
+                if not issubclass(cls, Enum) or actual["kind"] != "enum":
+                    raise TypeError(
+                        f"{item_path}.type: {record['type']} is not an enum"
+                    )
+                member = record["member"]
+                members = dict(actual["members"])
+                visit(record["value"], f"{item_path}.value", depth + 1)
+                if type(member) is str and member in members:
+                    expected = members[member]
+                elif (
+                    issubclass(cls, Flag)
+                    and cls._member_type_ in (object, int)
+                    and (member is None or type(member) is str)
+                    and type(record["value"]) is int
+                ):
+                    expected = record["value"]
+                else:
+                    raise TypeError(f"{item_path}.member: invalid enum member")
+                if _canonical_key(record["value"]) != _canonical_key(expected):
+                    raise TypeError(
+                        f"{item_path}.value: recorded enum value does not match "
+                        f"{record['type']}.{member}"
+                    )
+                return
+            if kind == "artifact":
+                record = _record(item, item_path, {"$botpipe", "value"})
+                body = record["value"]
+                if type(body) is not dict:
+                    raise TypeError(
+                        f"{item_path}.value: artifact record must be an object"
+                    )
+                artifact = _record(
+                    body,
+                    f"{item_path}.value",
+                    {"name", "path", "source_path", "kind", "digest", "schema"},
+                )
+                for key in ("name", "path", "source_path", "kind", "digest"):
+                    if type(artifact[key]) is not str:
+                        raise TypeError(f"{item_path}.value.{key}: expected a string")
+                if (
+                    artifact["schema"] is not None
+                    and type(artifact["schema"]) is not dict
+                ):
+                    raise TypeError(
+                        f"{item_path}.value.schema: expected an object or null"
+                    )
+                _plain_json(body, f"{item_path}.value", depth + 1, traversal)
+                return
+            if kind in {"dict", "mappingproxy", "artifacts"}:
+                record = _record(item, item_path, {"$botpipe", "value"})
+                body = _string_mapping(record["value"], f"{item_path}.value")
+                for key, child in body.items():
+                    visit(child, _child(item_path, key), depth + 1)
+                return
+            if kind in {"tuple", "set", "frozenset"}:
+                body = _record(item, item_path, {"$botpipe", "value"})["value"]
+                if type(body) is not list:
+                    raise TypeError(f"{item_path}.value: {kind} state must be an array")
+                for index, child in enumerate(body):
+                    visit(child, f"{item_path}[{index}]", depth + 1)
+                return
+            if kind in {"bytes", "path", "date"}:
+                body = _record(item, item_path, {"$botpipe", "value"})["value"]
+                if type(body) is not str:
+                    raise TypeError(f"{item_path}.value: {kind} state must be a string")
+                if kind == "bytes":
+                    try:
+                        base64.b64decode(body, validate=True)
+                    except ValueError as exc:
+                        raise TypeError(
+                            f"{item_path}.value: invalid base64 bytes state"
+                        ) from exc
+                elif kind == "date":
+                    try:
+                        date.fromisoformat(body)
+                    except ValueError as exc:
+                        raise TypeError(
+                            f"{item_path}.value: invalid date state"
+                        ) from exc
+                return
+            if kind == "datetime":
+                record = _record(
+                    item,
+                    item_path,
+                    {"$botpipe", "value", "fold", "timezone"},
+                )
+                _verify_datetime_record(record, item_path)
+                return
+            raise TypeError(f"{item_path}: unknown durable encoding {kind!r}")
+        finally:
+            traversal.leave(identity)
+
+    visit(value, path, 0)
+
+
+def _verify_contract(
+    record, path, contracts, contract_traversal, verified_contracts, depth
+):
+    stored = record["contract"]
+    cls = resolve_type(record["type"])
+    actual = contracts.for_type(cls, f"{path}.contract")
+    expected = verified_contracts.get(record["type"])
+    if expected is None:
+        _plain_json(stored, f"{path}.contract", 0, contract_traversal)
+        expected = _canonical_key(actual)
+        verified_contracts[record["type"]] = expected
+    try:
+        encoded_stored = _canonical_key(stored)
+    except (TypeError, ValueError) as exc:
+        raise TypeError(f"{path}.contract: invalid storage contract") from exc
+    if encoded_stored != expected:
+        raise TypeError(f"{path}: storage contract for {record['type']} changed")
+    return actual, cls
 
 
 def decode(value):
-    """Decode a durable value without rerunning application initialization hooks."""
+    """Decode durable state without rerunning application initialization hooks."""
 
-    if type(value) is dict and value.get("$botpipe") == "capsule":
-        record = _record(
-            value,
-            "$",
-            {"$botpipe", "version", "sources", "value"},
-            optional={"owners"},
-        )
-        if record["version"] != 1:
-            raise TypeError(
-                f"$: unsupported source capsule version {record['version']!r}"
-            )
-        if _SOURCE_BOUNDARY.get() is not None:
-            verify_sources(value)
-        sources = _string_mapping(record["sources"], "$.sources")
-        token = _DECODE_SOURCES.set(sources)
-        try:
-            return _decode(record["value"], "$.value", 0, _Traversal())
-        finally:
-            _DECODE_SOURCES.reset(token)
-    if _SOURCE_BOUNDARY.get() is not None:
-        verify_sources(value)
+    verify_contracts(value)
     return _decode(value, "$", 0, _Traversal())
 
 
@@ -1327,7 +1459,6 @@ def _decode(value, path, depth, traversal):
         if kind in {"model", "dataclass"}:
             record = _state_record(value, path, kind)
             cls = resolve_type(record["type"])
-            _verify_type_record(cls, record, path)
             if kind == "model":
                 if not issubclass(cls, BaseModel):
                     raise TypeError(
@@ -1386,17 +1517,40 @@ def _decode(value, path, depth, traversal):
                 object.__setattr__(instance, "__pydantic_private__", None)
             return instance
         if kind in {"type", "enum"}:
-            required = {"$botpipe", "type"}
+            required = {"$botpipe", "type", "contract"}
             if kind == "enum":
-                required.add("value")
-            record = _record(value, path, required, optional={"source"})
+                required |= {"member", "value"}
+            record = _record(value, path, required)
             cls = resolve_type(record["type"])
-            _verify_type_record(cls, record, path)
             if kind == "type":
                 return cls
             if not issubclass(cls, Enum):
                 raise TypeError(f"{path}.type: {record['type']} is not an enum")
-            return cls(_decode(record["value"], f"{path}.value", depth + 1, traversal))
+            composite = record["member"]
+            if type(composite) is str:
+                member = cls.__members__.get(composite)
+                if member is not None:
+                    return member
+            if (
+                issubclass(cls, Flag)
+                and cls._member_type_ in (object, int)
+                and (composite is None or type(composite) is str)
+            ):
+                raw = record["value"]
+                cached = cls._value2member_map_.get(raw)
+                if cached is not None:
+                    return cached
+                if cls._member_type_ is object:
+                    member = object.__new__(cls)
+                else:
+                    member = int.__new__(cls, raw)
+                object.__setattr__(member, "_value_", raw)
+                object.__setattr__(member, "_name_", composite)
+                return cls._value2member_map_.setdefault(raw, member)
+            raise TypeError(
+                f"{path}.member: {record['member']!r} is not a member of "
+                f"{record['type']}"
+            )
         raise TypeError(f"{path}: unknown durable encoding {kind!r}")
     finally:
         traversal.leave(identity)

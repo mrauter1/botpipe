@@ -90,7 +90,15 @@ def test_cli_subprocess_run_list_show_and_logs(tmp_path: Path) -> None:
     assert shown["run"]["provider_config"] == {"command": ["codex", "exec"]}
     assert shown["run"]["policy"] == {"model": "unit-model", "network": "none"}
     assert shown["observed_graph"]["complete_static_topology"] is False
-    assert _cli(tmp_path, "runs", "logs", result["run_id"]).stdout == ""
+    events = [
+        json.loads(line)
+        for line in _cli(tmp_path, "runs", "logs", result["run_id"]).stdout.splitlines()
+    ]
+    assert [event["event"] for event in events] == [
+        "execution_revision",
+        "execution_revision",
+    ]
+    assert [event["data"]["phase"] for event in events] == ["start", "end"]
 
 
 def test_cli_subprocess_answers_human_input(tmp_path: Path) -> None:

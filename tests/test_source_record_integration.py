@@ -1,4 +1,4 @@
-"""Fresh-process coverage for source identity carried by runtime values."""
+"""Fresh-process coverage for mutable code and structural state contracts."""
 
 from __future__ import annotations
 
@@ -8,9 +8,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-import botpipe
 import pytest
 
+import botpipe
 
 SDK_ROOT = Path(botpipe.__file__).resolve().parents[1]
 
@@ -47,7 +47,7 @@ def _run(path: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
-def test_pure_nested_workflow_tracks_child_owned_runtime_subtype(tmp_path):
+def test_pure_nested_workflow_accepts_runtime_subtype_method_edit(tmp_path):
     _package(
         tmp_path,
         "rootpkg",
@@ -112,7 +112,7 @@ def test_pure_nested_workflow_tracks_child_owned_runtime_subtype(tmp_path):
         "with Botpipe('.', provider=FakeProvider([])) as client:\n"
         "    client.resume('nested', workflow=job, answer='yes')\n",
     )
-    inspect_pending = _script(
+    inspect_completed = _script(
         tmp_path,
         "inspect_pending.py",
         "from botpipe import Botpipe\n"
@@ -122,8 +122,8 @@ def test_pure_nested_workflow_tracks_child_owned_runtime_subtype(tmp_path):
         "    request = next(\n"
         "        op for op in record['operations'] if op['kind'] == 'input'\n"
         "    )\n"
-        "    assert record['run']['status'] == 'awaiting_input'\n"
-        "    assert request['status'] == 'waiting'\n",
+        "    assert record['run']['status'] == 'completed'\n"
+        "    assert request['status'] == 'completed'\n",
     )
 
     first = _run(start)
@@ -131,17 +131,14 @@ def test_pure_nested_workflow_tracks_child_owned_runtime_subtype(tmp_path):
     derived = child_package / "derived.py"
     derived.write_text(derived.read_text().replace("value + 1", "value + 1000"))
 
-    rejected = _run(resume)
-    assert rejected.returncode != 0
-    assert "Source for durable type childpkg.derived:DerivedValue changed" in (
-        rejected.stderr
-    )
-    unchanged = _run(inspect_pending)
-    assert unchanged.returncode == 0, unchanged.stderr
+    resumed = _run(resume)
+    assert resumed.returncode == 0, resumed.stderr
+    inspected = _run(inspect_completed)
+    assert inspected.returncode == 0, inspected.stderr
     assert (tmp_path / "effects.log").read_text().splitlines() == ["once"]
 
 
-def test_nested_runtime_subtype_in_activity_result_blocks_replay_before_effects(
+def test_nested_runtime_subtype_in_activity_result_accepts_method_edit(
     tmp_path,
 ):
     package = _package(
@@ -206,16 +203,13 @@ def test_nested_runtime_subtype_in_activity_result_blocks_replay_before_effects(
     derived = package / "derived.py"
     derived.write_text(derived.read_text().replace("value + 1", "value + 2000"))
 
-    rejected = _run(resume)
-    assert rejected.returncode != 0
-    assert "Source for durable type owned.derived:DerivedValue changed" in (
-        rejected.stderr
-    )
+    resumed = _run(resume)
+    assert resumed.returncode == 0, resumed.stderr
     assert (tmp_path / "effects.log").read_text().splitlines() == ["produce"]
 
 
 @pytest.mark.parametrize("return_annotation", [" -> BaseValue", ""])
-def test_manual_typed_activity_resolution_records_runtime_subtype_identity(
+def test_manual_typed_activity_resolution_accepts_runtime_subtype_method_edit(
     tmp_path, return_annotation
 ):
     _package(
@@ -300,11 +294,8 @@ def test_manual_typed_activity_resolution_records_runtime_subtype_identity(
 
     derived = child / "derived.py"
     derived.write_text(derived.read_text().replace("value + 1", "value + 3000"))
-    rejected = _run(resume)
-    assert rejected.returncode != 0
-    assert "Source for durable type childpkg.derived:DerivedValue changed" in (
-        rejected.stderr
-    )
+    resumed = _run(resume)
+    assert resumed.returncode == 0, resumed.stderr
     assert (tmp_path / "effects.log").read_text().splitlines() == ["unsafe"]
 
 

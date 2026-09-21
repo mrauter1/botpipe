@@ -80,42 +80,14 @@ botpipe runs show RUN_ID
 botpipe resume RUN_ID --answer yes
 ```
 
-## Persistence compatibility
+## Persistence format
 
-Old graph-runtime checkpoints are not replayed by the new ledger. Finish old
-runs with the earlier major version or start new durable-function runs. Workflow
-source changes during a run are rejected rather than automatically migrated.
-Automatic source fingerprints follow referenced Python helpers, but they cannot
-freeze provider installations, external packages, environment values, or config
-semantics. Bump the workflow version when those dependencies change behavior.
+This greenfield runtime supports its current journal and durable-value format.
+It has no readers or migration policy for earlier experimental formats.
 
-Early durable-function snapshots that stored unversioned Pydantic/dataclass
-JSON are also incompatible with the validated-state codec. Their omitted state
-cannot be reconstructed reliably. Finish those runs using their original code
-or start new runs; the decoder refuses silent revalidation as a migration.
-
-Provider checkpoint storage still uses the existing operation response records.
-Valid historical states remain readable; unknown or contradictory combinations
-are rejected instead of guessing whether a provider can be dispatched again.
-This does not override a workflow or operation source mismatch.
-
-Parallel records now include each branch's complete workflow identity. Earlier
-parallel records with only a function hash cannot be safely upgraded during
-replay. Recorded application exceptions likewise require concrete type and slot
-owner source evidence; source-free built-in exceptions retain their explicit
-legacy decoding path.
-
-New operation ownership locators are relative to the supplied workflow's source
-boundary. Unchanged code can move while preserving that relative layout. Legacy
-absolute owner records remain usable at their original locations, but do not
-gain relocation support retroactively. Missing owners, changed boundary kinds,
-and symlink redirects within relative owner locators are rejected rather than
-silently selecting different code. The root anchor uses the supplied workflow's
-canonical source location and its separately verified executable identity.
-
-Callable-graph fingerprints replace the earlier function/tree fingerprints.
-They distinguish explicit callable bindings and shared references and include
-custom metaclass execution. Existing runs with the earlier identity format must
-use their original runtime or be restarted. Current code cannot reconstruct the
-executable evidence omitted from those histories; there is no automatic identity
-migration.
+Implementation edits do not require a new run. Recorded operations replay their
+saved outcomes; future operations use current code. The recorded operation
+sequence, logical identities, inputs, and stored-data contracts must still match.
+Completed root runs retain their saved result. Source revisions are observations
+for inspection and optimization, not replay gates. See [architecture](architecture.md)
+for the matching, retry, and storage guarantees.

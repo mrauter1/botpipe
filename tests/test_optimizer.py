@@ -8,7 +8,9 @@ import pytest
 from pydantic import BaseModel
 
 from botpipe import Botpipe, Policy, Session, current_run, workflow
+from botpipe.journal import JournalSnapshot
 from botpipe.providers import FakeProvider, ProviderResponse
+from botpipe.read_projection import project_run
 from botpipe_optimizer import (
     capture_evidence_snapshot,
     capture_source_manifest,
@@ -62,6 +64,113 @@ def inspected_run(*, run_id="run-1", status="failed", operations=()):
     }
 
 
+def revision_event(
+    revision: str,
+    *,
+    phase: str = "start",
+    verified: bool = True,
+):
+    return {
+        "event": "execution_revision",
+        "data": {
+            "phase": phase,
+            "provenance": {
+                "verified": verified,
+                "workflow_identity": "workflow-example" if verified else None,
+                "surface_id": f"surface-{revision}" if verified else None,
+                "orchestration_id": f"orchestration-{revision}" if verified else None,
+            },
+        },
+    }
+
+
+def test_execution_revision_history_requires_one_stable_verified_revision():
+    observation = load_run_observation(provenanced_run(operations=[]))
+
+    assert observation.provenance_state == "known"
+    assert observation.workflow_identity == "workflow-example"
+    assert observation.surface_id == "surface-current"
+    assert observation.orchestration_id == "orchestration-current"
+
+
+def test_run_read_projection_exposes_event_derived_revision_ids():
+    events = tuple(
+        {
+            **revision_event("a", phase=phase),
+            "operation_id": None,
+            "at": f"2026-01-01T00:00:0{index}+00:00",
+        }
+        for index, phase in enumerate(("start", "end"))
+    )
+    projection = project_run(
+        JournalSnapshot(
+            run={"run_id": "run", "workflow_call": {"kind": "named"}},
+            operations=(),
+            events=events,
+        )
+    )
+
+    assert projection.run["workflow_call"] == {"kind": "named"}
+    assert projection.run["provenance_state"] == "known"
+    assert projection.run["workflow_identity"] == "workflow-example"
+    assert projection.run["surface_id"] == "surface-a"
+    assert projection.run["orchestration_id"] == "orchestration-a"
+
+
+def test_execution_revision_history_does_not_collapse_a_b_a_to_endpoints():
+    inspection = provenanced_run(operations=[])
+    inspection["events"] = [
+        revision_event(revision, phase=phase)
+        for revision in ("a", "b", "a")
+        for phase in ("start", "end")
+    ]
+    observation = load_run_observation(inspection)
+
+    assert observation.provenance_state == "mixed"
+    assert observation.workflow_identity is None
+    assert observation.surface_id is None
+    assert observation.orchestration_id is None
+
+
+def test_unavailable_execution_revision_is_sticky():
+    inspection = provenanced_run(operations=[])
+    inspection["events"] = [
+        revision_event("a"),
+        revision_event("unavailable", verified=False),
+        revision_event("a", phase="end"),
+    ]
+    observation = load_run_observation(inspection)
+
+    assert observation.provenance_state == "unknown"
+    assert observation.workflow_identity is None
+    assert observation.surface_id is None
+    assert observation.orchestration_id is None
+
+
+def test_endpoint_only_provenance_is_not_optimizer_evidence():
+    inspection = provenanced_run(operations=[])
+    inspection["events"] = []
+
+    assert load_run_observation(inspection).provenance_state == "unknown"
+
+
+@pytest.mark.parametrize(
+    "events",
+    [
+        [revision_event("a")],
+        [revision_event("a"), revision_event("a"), revision_event("a", phase="end")],
+    ],
+)
+def test_incomplete_execution_revision_boundaries_are_unknown(events):
+    inspection = provenanced_run(operations=[])
+    inspection["events"] = events
+
+    observation = load_run_observation(inspection)
+
+    assert observation.provenance_state == "unknown"
+    assert observation.workflow_identity is None
+
+
 def operation(operation_id, *, name="draft", status="completed", attempts=1, tokens=0):
     return {
         "id": operation_id,
@@ -103,7 +212,13 @@ def provenanced_run(
             "provenance_end": provenance,
         },
         "operations": operations,
-        "events": [],
+        "events": [
+            {
+                "event": "execution_revision",
+                "data": {"phase": phase, "provenance": provenance},
+            }
+            for phase in ("start", "end")
+        ],
         "artifacts": {},
     }
 
@@ -437,6 +552,104 @@ def test_v2_same_surface_with_different_orchestration_stays_separate():
     assert snapshot.selected_group_id == selected.group_id
 
 
+def test_v2_mixed_and_unknown_runs_are_diagnostics_not_comparison_evidence():
+    manifest = capture_source_manifest(lambda: None)
+    mixed = provenanced_run(
+        operations=[operation("mixed-failure", status="failed")], run_id="mixed"
+    )
+    mixed["events"] = [
+        revision_event(revision, phase=phase)
+        for revision in ("a", "b")
+        for phase in ("start", "end")
+    ]
+    unknown = provenanced_run(
+        operations=[operation("unknown-failure", status="failed")], run_id="unknown"
+    )
+    unknown["events"] = [
+        revision_event("a"),
+        revision_event("a", phase="end"),
+        revision_event("missing", verified=False),
+        revision_event("missing", phase="end", verified=False),
+    ]
+
+    snapshot = capture_evidence_snapshot(
+        "example",
+        [mixed, unknown],
+        source_manifest=manifest,
+        objective="reliability",
+        current_workflow_identity="workflow-example",
+        current_surface_id="surface-a",
+        current_orchestration_id="orchestration-a",
+    )
+
+    assert {run.provenance_state for run in snapshot.runs} == {"mixed", "unknown"}
+    assert len(snapshot.observations) == 2
+    assert {issue.reason for issue in snapshot.issues} == {
+        "mixed_workflow_surface",
+        "unknown_workflow_surface",
+        "elapsed_time_unavailable",
+    }
+    assert snapshot.selected_group_id is None
+    assert snapshot.citable_observation_ids() == frozenset()
+    assert snapshot.recommendation_basis == "no_comparable_evidence"
+    assert snapshot.step_metrics == ()
+    assert snapshot.shortlist == ()
+    assert snapshot.next_action == "collect_evidence"
+
+
+def test_v2_historical_fallback_skips_mixed_run():
+    manifest = capture_source_manifest(lambda: None)
+    mixed = provenanced_run(
+        operations=[operation("mixed-failure", status="failed")], run_id="mixed"
+    )
+    mixed["events"] = [
+        revision_event(revision, phase=phase)
+        for revision in ("a", "b")
+        for phase in ("start", "end")
+    ]
+    stable = provenanced_run(
+        operations=[operation("stable-failure", status="failed")],
+        surface="surface-old",
+        orchestration="orchestration-old",
+        run_id="stable",
+    )
+
+    snapshot = capture_evidence_snapshot(
+        "example",
+        [mixed, stable],
+        source_manifest=manifest,
+        objective="reliability",
+        current_workflow_identity="workflow-example",
+        current_surface_id="surface-current",
+        current_orchestration_id="orchestration-current",
+    )
+
+    assert snapshot.recommendation_basis == "historical_verified"
+    assert snapshot.selected_group_id == snapshot.runs[1].structural_group_id
+    assert {metric.step_id for metric in snapshot.step_metrics} == {"draft"}
+    citable = snapshot.citable_observation_ids()
+    assert citable == frozenset(snapshot.runs[1].observation_ids)
+
+
+def test_v2_unfocused_route_observations_are_not_citable():
+    focused = operation("focused", name="focused")
+    focused["result"] = {"value": {"outcome": "rejected"}, "artifacts": {}}
+    unfocused = operation("unfocused", name="unfocused")
+    snapshot = capture_evidence_snapshot(
+        "example",
+        [provenanced_run(operations=[focused, unfocused])],
+        source_manifest=capture_source_manifest(lambda: None),
+        route_tags=("rejected",),
+    )
+
+    by_operation = {item.operation_id: item for item in snapshot.observations}
+    assert by_operation["focused"].focused is True
+    assert by_operation["unfocused"].focused is False
+    assert snapshot.citable_observation_ids() == frozenset(
+        {by_operation["focused"].observation_id}
+    )
+
+
 def test_v2_evidence_and_candidate_bytes_are_bounded_and_identities_are_verified(
     tmp_path,
 ):
@@ -614,16 +827,6 @@ def test_v2_eligible_evidence_uses_one_producer_and_independent_verifier(tmp_pat
         finalize_candidate_set_payload,
     )
 
-    @workflow(name="release_candidate_to_go_no_go")
-    def failing_release():
-        return current_run().operation(
-            "activity",
-            {"case": "observed-failure"},
-            lambda: (_ for _ in ()).throw(RuntimeError("observed failure")),
-            retry_safe=True,
-            name="explode",
-        )
-
     def prompt_input(request):
         body = request.prompt.rsplit("\n\nInput:\n", 1)[1]
         return json.JSONDecoder().raw_decode(body)[0]
@@ -692,10 +895,23 @@ def test_v2_eligible_evidence_uses_one_producer_and_independent_verifier(tmp_pat
     class TimedFakeProvider(FakeProvider):
         supports_timeout = True
 
+    source = tmp_path / "failing_release.py"
+    source.write_text(
+        "from botpipe import current_run, workflow\n"
+        "def explode():\n"
+        "    raise RuntimeError('observed failure')\n"
+        "@workflow(name='release_candidate_to_go_no_go')\n"
+        "def failing_release():\n"
+        "    return current_run().operation(\n"
+        "        'activity', {'case': 'observed-failure'}, explode,\n"
+        "        retry_safe=True, name='explode')\n"
+    )
     provider = TimedFakeProvider([propose, review])
     with Botpipe(tmp_path, provider=provider) as client:
         failed = client.run(
-            failing_release, task_id="release", run_id="failed-observation"
+            f"{source}:failing_release",
+            task_id="release",
+            run_id="failed-observation",
         )
         assert not failed.ok
         result = client.run(

@@ -14,7 +14,6 @@ from botpipe import (
     Botpipe,
     RunBusy,
     Session,
-    WorkflowChanged,
     activity,
     ask,
     parallel,
@@ -277,7 +276,7 @@ def test_operation_budget_blocks_new_effects_and_does_not_reset_on_resume(tmp_pa
         assert len(client.journal.operations(result.run_id)) == 2
 
 
-def test_version_change_is_rejected_before_replayed_or_new_effects(tmp_path):
+def test_version_change_does_not_invalidate_recorded_effects(tmp_path):
     effects = []
 
     @activity
@@ -292,10 +291,10 @@ def test_version_change_is_rejected_before_replayed_or_new_effects(tmp_path):
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(versioned)
         versioned.version = "2"
-        with pytest.raises(WorkflowChanged):
-            client.resume(paused.run_id, answer="yes", workflow=versioned)
+        resumed = client.resume(paused.run_id, answer="yes", workflow=versioned)
+        assert resumed.ok, resumed.error
         assert effects == ["ran"]
-        assert client.journal.run(paused.run_id)["status"] == "awaiting_input"
+        assert client.journal.run(paused.run_id)["status"] == "completed"
 
 
 def test_replay_rejects_changed_operation_even_when_mutable_closure_changed(tmp_path):
@@ -482,7 +481,7 @@ def test_repeated_async_cancellation_waits_until_effectful_worker_finishes(tmp_p
         asyncio.run(scenario(client))
 
 
-def test_version_pins_global_helpers_referenced_inside_comprehensions(
+def test_completed_run_ignores_global_helper_edits_inside_comprehensions(
     tmp_path, monkeypatch
 ):
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
@@ -493,8 +492,8 @@ def test_version_pins_global_helpers_referenced_inside_comprehensions(
             "_acceptance_transform",
             _acceptance_changed_transform,
         )
-        with pytest.raises(WorkflowChanged):
-            client.resume(completed.run_id, workflow=_comprehension_workflow)
+        replayed = client.resume(completed.run_id, workflow=_comprehension_workflow)
+        assert replayed.value == (1, 2)
 
 
 def test_replayed_activity_exception_preserves_custom_type_and_constructor_args(
@@ -608,7 +607,7 @@ def test_interrupted_alternate_workspace_remains_fenced_after_owner_exits(tmp_pa
             assert other.run(contender).ok
 
 
-def test_activity_retry_never_swallows_replay_mismatch_and_dispatches_new_effect(
+def test_completed_root_does_not_reenter_changed_activity_call(
     tmp_path,
 ):
     settings = {"label": "original"}
@@ -628,12 +627,12 @@ def test_activity_retry_never_swallows_replay_mismatch_and_dispatches_new_effect
         assert completed.ok, completed.error
         settings["label"] = "changed"
         replay = client.resume(completed.run_id, workflow=job)
-        assert replay.status == "failed"
-        assert "ReplayMismatch" in replay.error
+        assert replay.ok
+        assert replay.value == "original"
         assert effects == ["original"]
 
 
-def test_user_exception_handler_cannot_continue_effects_after_replay_mismatch(tmp_path):
+def test_completed_root_does_not_enter_user_exception_handler_after_edit(tmp_path):
     settings = {"label": "original"}
     effects = []
 
@@ -653,8 +652,8 @@ def test_user_exception_handler_cannot_continue_effects_after_replay_mismatch(tm
         completed = client.run(job)
         settings["label"] = "changed"
         replay = client.resume(completed.run_id, workflow=job)
-        assert replay.status == "failed"
-        assert "ReplayMismatch" in replay.error
+        assert replay.ok
+        assert replay.value == "original"
         assert effects == ["original"]
 
 

@@ -13,6 +13,37 @@ import pytest
 SDK_ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_source_context_resolves_shared_source_once_per_calculation(monkeypatch):
+    from botpipe import provenance
+    from botpipe._callables import describe_callable
+
+    def leaf():
+        return 1
+
+    current = leaf
+    for _ in range(16):
+
+        def branch(left=current, right=current):
+            return left() + right()
+
+        current = branch
+    graph = describe_callable(current)
+    resolved = []
+    canonical = provenance._canonical_source_path
+
+    def counted(path, **kwargs):
+        resolved.append(path)
+        return canonical(path, **kwargs)
+
+    monkeypatch.setattr(provenance, "_canonical_source_path", counted)
+    context = provenance.source_context(current, graph=graph)
+    assert context.origin_source == Path(__file__).resolve()
+    assert len(context.owned_boundaries) == 1
+    assert len(resolved) == 1
+    assert provenance.source_context(current, graph=graph) == context
+    assert len(resolved) == 2
+
+
 def _write(path: Path, source: str) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(source)
@@ -32,9 +63,10 @@ def _run(
     source_root: Path | None = None,
     workspace: Path | None = None,
     args: tuple[str, ...] = (),
+    sdk_root: Path = SDK_ROOT,
 ) -> subprocess.CompletedProcess[str]:
     source_root = source_root or script.parent
-    entries = (str(SDK_ROOT), str(source_root), os.environ.get("PYTHONPATH", ""))
+    entries = (str(sdk_root), str(source_root), os.environ.get("PYTHONPATH", ""))
     env = {**os.environ, "PYTHONPATH": os.pathsep.join(filter(None, entries))}
     if workspace is not None:
         env["BOTPIPE_TEST_WORKSPACE"] = str(workspace)
@@ -49,7 +81,7 @@ def _run(
 
 
 @pytest.mark.parametrize("default_kind", ["positional", "keyword"])
-def test_owned_callable_default_rejects_dependency_edit_before_answer(
+def test_owned_callable_default_uses_current_dependency_after_answer(
     tmp_path: Path, default_kind: str
 ) -> None:
     branch = _package(tmp_path, "branchpkg")
@@ -90,30 +122,16 @@ def test_owned_callable_default_rejects_dependency_edit_before_answer(
         "with Botpipe('.', provider=FakeProvider([])) as client:\n"
         "    result = client.run(job, run_id='owned-default')\n"
         "    assert result.status == 'awaiting_input', result.error\n"
-        "    record = client.journal.run(result.run_id)\n"
-        "    capsules = [value for value in (record['args'], record['kwargs']) "
-        "if isinstance(value, dict) and value.get('$botpipe') == 'capsule']\n"
-        "    assert len(capsules) == 1, (record['args'], record['kwargs'])\n"
-        "    source = capsules[0]['sources']['branchpkg.helper:Helper']\n"
-        "    assert source['kind'] == 'python', source\n"
         "    assert len(client.journal.operations(result.run_id)) == 1\n",
     )
     resume = _write(
         tmp_path / "resume.py",
-        "from botpipe import Botpipe, WorkflowChanged\n"
+        "from botpipe import Botpipe\n"
         "from botpipe.providers import FakeProvider\n"
         "from rootpkg.workflow import job\n"
         "with Botpipe('.', provider=FakeProvider([])) as client:\n"
-        "    before_run = client.journal.run('owned-default')\n"
-        "    before_operations = client.journal.operations('owned-default')\n"
-        "    try:\n"
-        "        client.resume('owned-default', workflow=job, answer='yes')\n"
-        "    except WorkflowChanged:\n"
-        "        pass\n"
-        "    else:\n"
-        "        raise AssertionError('changed default dependency was accepted')\n"
-        "    assert client.journal.run('owned-default') == before_run\n"
-        "    assert client.journal.operations('owned-default') == before_operations\n",
+        "    result = client.resume('owned-default', workflow=job, answer='yes')\n"
+        "    assert result.ok and result.value == ('changed', 'yes'), result.error\n",
     )
 
     first = _run(start)
@@ -169,19 +187,12 @@ def test_raw_partial_branch_keeps_application_manifest_and_rejects_model_edit(
     )
     resume = _write(
         tmp_path / "resume.py",
-        "from botpipe import Botpipe, WorkflowChanged\n"
+        "from botpipe import Botpipe\n"
         "from botpipe.providers import FakeProvider\n"
         "from rootpkg.workflow import job\n"
         "with Botpipe('.', provider=FakeProvider([])) as client:\n"
-        "    before_operations = client.journal.operations('raw-partial')\n"
-        "    try:\n"
-        "        result = client.resume('raw-partial', workflow=job, answer='yes')\n"
-        "    except WorkflowChanged:\n"
-        "        pass\n"
-        "    else:\n"
-        "        assert result.status == 'failed', result\n"
-        "        assert 'ReplayMismatch' in result.error, result.error\n"
-        "    assert client.journal.operations('raw-partial') == before_operations\n",
+        "    result = client.resume('raw-partial', workflow=job, answer='yes')\n"
+        "    assert result.ok and result.value == [('old', 'FileIO')], result.error\n",
     )
 
     first = _run(start)
@@ -239,20 +250,12 @@ def test_imported_wraps_uses_application_prompt_and_wrapper_source_is_verified(
     )
     resume = _write(
         tmp_path / "resume.py",
-        "from botpipe import Botpipe, WorkflowChanged\n"
+        "from botpipe import Botpipe\n"
         "from botpipe.providers import FakeProvider\n"
         "from application.workflow import job\n"
         "with Botpipe('.', provider=FakeProvider([])) as client:\n"
-        "    before_run = client.journal.run('wrapped')\n"
-        "    before_operations = client.journal.operations('wrapped')\n"
-        "    try:\n"
-        "        client.resume('wrapped', workflow=job, answer='yes')\n"
-        "    except WorkflowChanged:\n"
-        "        pass\n"
-        "    else:\n"
-        "        raise AssertionError('changed imported wrapper was accepted')\n"
-        "    assert client.journal.run('wrapped') == before_run\n"
-        "    assert client.journal.operations('wrapped') == before_operations\n",
+        "    result = client.resume('wrapped', workflow=job, answer='yes')\n"
+        "    assert result.ok and result.value == 'done', result.error\n",
     )
 
     first = _run(start)
@@ -265,6 +268,80 @@ def test_imported_wraps_uses_application_prompt_and_wrapper_source_is_verified(
     )
     rejected = _run(resume)
     assert rejected.returncode == 0, rejected.stdout + rejected.stderr
+
+
+def test_sdk_activity_wrapper_retains_application_activity_source(
+    tmp_path: Path,
+) -> None:
+    activities = _package(tmp_path, "activitypkg")
+    _write(
+        activities / "tasks.py",
+        "from botpipe import activity\n@activity\ndef answer(): return 'done'\n",
+    )
+    application = _package(tmp_path, "application")
+    _write(
+        application / "workflow.py",
+        "from botpipe import workflow\n"
+        "from activitypkg.tasks import answer\n"
+        "@workflow\n"
+        "def job(): return answer()\n",
+    )
+    check = _write(
+        tmp_path / "check.py",
+        "from application.workflow import job\n"
+        "manifest = job._orchestration_sources_at_definition\n"
+        "assert manifest is not None, manifest\n"
+        "assert set(manifest['files']) >= {\n"
+        "    'application/workflow.py', 'activitypkg/tasks.py'\n"
+        "}, manifest\n",
+    )
+
+    completed = _run(check)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
+def test_missing_loaded_helper_does_not_erase_application_resource_origin(
+    tmp_path: Path,
+) -> None:
+    helper = _package(tmp_path, "helperpkg")
+    helper_source = _write(
+        helper / "tasks.py",
+        "def loaded_helper(): return 'loaded'\n",
+    )
+    application = _package(tmp_path, "application")
+    (application / "prompt.md").write_text("application prompt")
+    _write(
+        application / "workflow.py",
+        "from botpipe import Policy, Prompt, Session\n"
+        "from helperpkg.tasks import loaded_helper\n"
+        "def job():\n"
+        "    loaded_helper()\n"
+        "    return Session().run(\n"
+        "        Prompt.file('prompt.md'),\n"
+        "        policy=Policy(sandbox_mode='read_only'),\n"
+        "    ).value\n",
+    )
+    run = _write(
+        tmp_path / "missing-helper.py",
+        "from pathlib import Path\n"
+        "from botpipe import Botpipe, workflow\n"
+        "from botpipe.providers import FakeProvider\n"
+        "from application.workflow import job as function\n"
+        f"Path({str(helper_source)!r}).unlink()\n"
+        "job = workflow(function)\n"
+        "assert job._source_context.origin_source == (\n"
+        "    Path('application/workflow.py').resolve()\n"
+        ")\n"
+        "assert job._orchestration_sources_at_definition is None\n"
+        "provider = FakeProvider(['done'])\n"
+        "with Botpipe('.', provider=provider) as client:\n"
+        "    result = client.run(job)\n"
+        "    assert result.ok and result.value == 'done', result.error\n"
+        "    assert provider.calls[0].prompt == 'application prompt'\n",
+    )
+
+    completed = _run(run)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
 
 
 def test_wrapped_application_with_owned_default_relocates(tmp_path: Path) -> None:
@@ -364,6 +441,49 @@ def test_sdk_partial_branch_inherits_application_prompt(tmp_path: Path) -> None:
     )
 
     completed = _run(run)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
+def test_symlinked_sdk_partial_branch_inherits_application_prompt(
+    tmp_path: Path,
+) -> None:
+    sdk_link = tmp_path / "sdk-link"
+    try:
+        sdk_link.symlink_to(SDK_ROOT, target_is_directory=True)
+    except OSError:
+        pytest.skip("symlink creation unavailable")
+    application = _package(tmp_path, "application")
+    (application / "prompt.md").write_text("application prompt")
+    _write(
+        application / "workflow.py",
+        "from functools import partial\n"
+        "from botpipe import Policy, Prompt, Session, parallel, workflow\n"
+        "@workflow\n"
+        "def job():\n"
+        "    callback = partial(\n"
+        "        Session().run,\n"
+        "        Prompt.file('prompt.md'),\n"
+        "        policy=Policy(sandbox_mode='read_only'),\n"
+        "    )\n"
+        "    return parallel(callback)[0].value\n",
+    )
+    run = _write(
+        tmp_path / "run-symlinked.py",
+        "from pathlib import Path\n"
+        "import botpipe\n"
+        "from botpipe import Botpipe\n"
+        "from botpipe.providers import FakeProvider\n"
+        "from application.workflow import job\n"
+        f"sdk_link = Path({str(sdk_link)!r}).absolute()\n"
+        "assert Path(botpipe.__file__).absolute().is_relative_to(sdk_link)\n"
+        "provider = FakeProvider(['done'])\n"
+        "with Botpipe('.', provider=provider) as client:\n"
+        "    result = client.run(job, run_id='symlinked-sdk')\n"
+        "    assert result.ok and result.value == 'done', result.error\n"
+        "    assert provider.calls[0].prompt == 'application prompt'\n",
+    )
+
+    completed = _run(run, sdk_root=sdk_link)
     assert completed.returncode == 0, completed.stdout + completed.stderr
 
 

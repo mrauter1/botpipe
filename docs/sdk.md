@@ -27,6 +27,8 @@ client = Botpipe(
   contexts; resuming never changes the client's defaults for another run.
   Operation limits require positive integers; timeouts require finite positive
   numbers. Booleans and silently truncated values are rejected.
+  A completed run returns its saved result without executing the workflow or
+  changing its limits and revision history.
 - `resolve(run_id, operation_id, *, retry=False, response=..., artifact_digests=None)` explicitly
   reconciles an interrupted operation. Choose a resolution, then call
   `resume`; an explicit `None` response records `None` as the activity result.
@@ -52,9 +54,20 @@ run. Status is one of `completed`, `failed`, `awaiting_input`, `interrupted`, or
 @workflow(name=None, version="1", policy=None)
 def workflow_function(...): ...
 
-@activity(retry_safe=False, retries=0)
+@activity(retry_safe=False, retries=0, name=None)
 def external_operation(...): ...
 ```
+
+Implementation edits are allowed between executions. Completed operations retain
+their saved outcomes; future operations use current code. Replay matches logical
+callable identities, operation positions, and inputs, and checks stored types and
+field layout. An explicit `name` supplies the logical activity or workflow name;
+otherwise its module and qualified callable name identify it. Workflow `version`
+labels a release for observation; it is not a resume gate.
+
+Automatic retry requires both the recorded attempt and current activity to declare
+`retry_safe=True`. Editing that flag cannot authorize repeating an earlier unsafe
+attempt; use explicit reconciliation when its effect is uncertain.
 
 `Session.run(prompt, *, input=None, reads=(), writes=(), returns=str,
 policy=None, name=None, retries=2, workspace=None)` returns a `Result` with
@@ -91,13 +104,14 @@ time, survives resume, and never extends. Nested budgets all apply.
 `policy`, `limits`, and `journal`. `limits` is the immutable configuration for
 the current run, independent of `client.limits` (defaults for new runs).
 
-Run metadata includes `provenance_start` and `provenance_end`. Each observation
-records a workflow identity, orchestration fingerprint, and exact package
-surface hash when Botpipe can verify them. Capture failures remain explicit as
-`verified: false` with unknown identity fields; Botpipe never substitutes the
-current package hash for missing historical provenance. Different verified
-start/end surfaces mean the run changed source while executing and must not be
-pooled as one stable optimizer baseline.
+Each execution appends `execution_revision` events with start and end source
+observations. Run metadata retains `provenance_start` and `provenance_end` as
+summaries; inspection and optimizer attribution use the complete event history.
+Observations record workflow identity, orchestration fingerprint, and package
+surface hash when verifiable. Unavailable source stays explicit as
+`verified: false`. Any revision changes or unavailable observations prevent the
+run from becoming verified evidence for one revision, even if a later execution
+returns to the original source.
 
 Verified provenance requires source-backed module definitions. Functions created
 later inside another function, transformed bytecode, stale imports, or unavailable

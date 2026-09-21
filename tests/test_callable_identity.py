@@ -8,14 +8,13 @@ import subprocess
 import sys
 from pathlib import Path
 
-import botpipe
 import pytest
 
+import botpipe
 from botpipe import Botpipe, Policy, Session, parallel, workflow
 from botpipe._callables import describe_callable
 from botpipe.providers import FakeProvider
 from botpipe.runtime import _function_version
-
 
 SDK_ROOT = Path(botpipe.__file__).resolve().parents[1]
 
@@ -176,7 +175,9 @@ def test_partial_live_session_method_does_not_serialize_receiver(tmp_path):
 
 @pytest.mark.parametrize("field", ["name", "version", "policy"])
 @pytest.mark.parametrize("partial", [False, True])
-def test_completed_parallel_pins_workflow_metadata(tmp_path, field, partial):
+def test_completed_parallel_returns_stored_result_after_metadata_change(
+    tmp_path, field, partial
+):
     executions = []
 
     @workflow(name="branch", version="1", policy=Policy(sandbox_mode="read_only"))
@@ -207,13 +208,12 @@ def test_completed_parallel_pins_workflow_metadata(tmp_path, field, partial):
 
         replay = client.resume(first.run_id, workflow=job)
 
-        assert replay.status == "failed"
-        assert "ReplayMismatch" in replay.error
+        assert replay.ok and replay.value == ["done"]
         assert client.journal.operations(first.run_id) == before
         assert executions == ["once"]
 
 
-def test_raw_paused_branch_rejects_cross_package_model_helper_edit(tmp_path):
+def test_raw_paused_branch_uses_current_model_helper_after_edit(tmp_path):
     _write(tmp_path / "branchpkg/__init__.py", "")
     model = _write(
         tmp_path / "branchpkg/model.py",
@@ -252,16 +252,15 @@ def test_raw_paused_branch_rejects_cross_package_model_helper_edit(tmp_path):
         "from rootpkg.workflow import job\n"
         "with Botpipe('.', provider=FakeProvider([])) as client:\n"
         "    result = client.resume('paused', workflow=job, answer='yes')\n"
-        "    assert result.status == 'failed', result.error\n"
-        "    assert 'ReplayMismatch' in result.error, result.error\n"
+        "    assert result.ok and result.value == [('current', 'yes')], result\n"
         "    assert len(client.journal.operations('paused')) == 2\n",
     )
 
     first = _run(start)
     assert first.returncode == 0, first.stderr
-    model.write_text(model.read_text().replace("'old'", "'new'"))
-    rejected = _run(resume)
-    assert rejected.returncode == 0, rejected.stderr
+    model.write_text(model.read_text().replace("'old'", "'current'"))
+    resumed = _run(resume)
+    assert resumed.returncode == 0, resumed.stderr
 
 
 def test_parallel_result_owns_cross_package_type_and_replays_unchanged(tmp_path):
@@ -316,15 +315,22 @@ def test_parallel_result_owns_cross_package_type_and_replays_unchanged(tmp_path)
     valid = _run(resume)
     assert valid.returncode == 0, valid.stderr
 
-    # A second paused run proves the recorded aggregate value owns branchpkg,
-    # so hydration rejects a model implementation edit before replay.
+    # A second paused run proves hydration is structural: an implementation
+    # edit does not invalidate the recorded aggregate value.
     start_source = start.read_text().replace("'typed'", "'typed-drift'")
     start.write_text(start_source)
     second = _run(start)
     assert second.returncode == 0, second.stderr
     model.write_text(model.read_text().replace("amount + 1", "amount + 100"))
-    drift_resume = resume.read_text().replace("'typed'", "'typed-drift'")
+    drift_resume = (
+        resume.read_text()
+        .replace("'typed'", "'typed-drift'")
+        .replace(
+            "assert result.value[0].amount == 3",
+            "assert result.value[0].amount == 3\n"
+            "    assert result.value[0].adjusted == 103",
+        )
+    )
     resume.write_text(drift_resume)
-    rejected = _run(resume)
-    assert rejected.returncode != 0
-    assert "Source for durable type branchpkg.model:Value changed" in rejected.stderr
+    resumed = _run(resume)
+    assert resumed.returncode == 0, resumed.stderr

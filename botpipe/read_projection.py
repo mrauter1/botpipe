@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -59,13 +60,88 @@ def project_run(snapshot: JournalSnapshot) -> RunReadProjection:
         _collect_artifacts(record, artifacts)
         operations.append(record)
 
+    run = dict(snapshot.run)
+    run.update(project_execution_revision(events))
     return RunReadProjection(
-        run=dict(snapshot.run),
+        run=run,
         operations=operations,
         events=events,
         artifacts=ArtifactMap(artifacts),
         usage=total_usage,
     )
+
+
+def project_execution_revision(events: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
+    """Derive the one provable run revision from its append-only observations."""
+
+    state: str | None = None
+    revision: tuple[str, str, str] | None = None
+    awaiting_end = False
+    for event in events:
+        if event.get("event") != "execution_revision":
+            continue
+        data = event.get("data")
+        phase = data.get("phase") if isinstance(data, Mapping) else None
+        if phase != "start" and phase != "end":
+            if state is None or state == "known":
+                state = "unknown"
+                revision = None
+            continue
+        if phase == "start":
+            if awaiting_end and (state is None or state == "known"):
+                state = "unknown"
+                revision = None
+            awaiting_end = True
+        elif not awaiting_end:
+            if state is None or state == "known":
+                state = "unknown"
+                revision = None
+        else:
+            awaiting_end = False
+
+        provenance = data.get("provenance")
+        observed = _verified_revision(provenance)
+        if observed is None:
+            if state is None or state == "known":
+                state = "unknown"
+                revision = None
+            continue
+        if state is None:
+            state = "known"
+            revision = observed
+        elif state == "known" and observed != revision:
+            state = "mixed"
+            revision = None
+
+    if awaiting_end and (state is None or state == "known"):
+        state = "unknown"
+        revision = None
+
+    if state != "known" or revision is None:
+        return {
+            "provenance_state": state or "unknown",
+            "workflow_identity": None,
+            "surface_id": None,
+            "orchestration_id": None,
+        }
+    return {
+        "provenance_state": "known",
+        "workflow_identity": revision[0],
+        "surface_id": revision[1],
+        "orchestration_id": revision[2],
+    }
+
+
+def _verified_revision(value: Any) -> tuple[str, str, str] | None:
+    if not isinstance(value, Mapping) or value.get("verified") is not True:
+        return None
+    fields = tuple(
+        value.get(key)
+        for key in ("workflow_identity", "surface_id", "orchestration_id")
+    )
+    if not all(isinstance(item, str) and item for item in fields):
+        return None
+    return fields
 
 
 def _usage_availability(dispatches, usage):
@@ -92,7 +168,6 @@ def _collect_artifacts(record, artifacts):
 
 
 def _artifact(encoded):
-    encoded = codec.encoded_body(encoded)
     if type(encoded) is dict and encoded.get("$botpipe") == "dict":
         encoded = _inspection_value(encoded)
     if (
@@ -125,8 +200,6 @@ def _inspection_value(encoded):
     if type(encoded) is not dict:
         raise TypeError("Artifact record contains an unsupported value")
     kind = encoded.get("$botpipe")
-    if kind == "capsule":
-        return _inspection_value(codec.encoded_body(encoded))
     if kind == "dict" and type(encoded.get("value")) is dict:
         if not all(type(key) is str for key in encoded["value"]):
             raise TypeError("Artifact record contains a non-string mapping key")
@@ -139,7 +212,6 @@ def _inspection_value(encoded):
 
 
 def _artifact_map(encoded):
-    encoded = codec.encoded_body(encoded)
     if type(encoded) is not dict or encoded.get("$botpipe") != "artifacts":
         raise TypeError("Provider result artifacts are not an encoded artifact map")
     values = encoded.get("value")
