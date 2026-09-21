@@ -1,3 +1,7 @@
+## Durable verifier outcome
+
+Return a JSON result matching the injected schema. Use `accepted` when the artifacts meet the positive phase condition described below, `needs_rework` when the same phase can be repaired, `needs_replan` when an accepted earlier plan must be revisited, `question` or `blocked` when operator input is required, and `failed` for a terminal domain failure. The phase labels below describe semantic checks; do not return old route labels as the `outcome`. Cite only artifact names supplied by the runtime.
+
 # Analyze Recursive Improvement Pressures Verifier
 
 ## Step Contract
@@ -12,25 +16,10 @@
 - This work item verifies recursive-improvement analysis only.
 - Keep the boundary at checking the analysis artifacts against the scoped company evidence. Do not publish the cycle package in this step.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `workflow_capability_snapshot` | Read | Required input. |
-| `workflow_portfolio_health_snapshot` | Read | Required input. |
-| `company_operation_snapshot` | Read | Required input. |
-| `company_operation_brief` | Read | Required input. |
-| `recursive_improvement_criteria` | Read | Required input. |
-| `company_pressure_map` | Read | Required input. |
-| `recursive_improvement_priority_matrix` | Read | Required input. |
-| `recursive_improvement_candidates` | Read | Required input. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Write verifier control metadata only through the selected route and payload.
-- Do not overwrite `company_pressure_map`, `recursive_improvement_priority_matrix`, or `recursive_improvement_candidates` during verification.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -46,15 +35,16 @@
 
 ## Evidence
 
+- Verify the declared phase artifacts—`company_pressure_map`, `recursive_improvement_priority_matrix`, `recursive_improvement_candidates`—against the phase requirements and require their claims to be internally consistent.
 - Reject analysis that invents runtime-owned prioritization or external business systems.
 - Reject duplicate candidate ids, unsupported categories, unsupported priorities, or category drift between the matrix and manifest.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance
+### Outcome guidance
 - `recursive_improvement_pressures_analyzed`: the analysis artifacts are aligned and ready for packaging.
 - `needs_rework`: the same analysis boundary still holds, but the artifacts need local repair.
 - `needs_replan`: the scoped task slice, workflow slice, or recursive-improvement objective changed materially.

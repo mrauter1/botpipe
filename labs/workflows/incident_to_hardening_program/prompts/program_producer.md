@@ -1,3 +1,7 @@
+## Durable producer result
+
+After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+
 # Prepare Hardening Program Producer
 
 ## Step Contract
@@ -12,30 +16,10 @@
 - This work item owns final hardening-package assembly only.
 - Keep the work-item boundary at the final hardening deliverables. Do not change the incident framing or invent new evidence.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `incident_package_checklist` | Read | Required input. |
-| `incident_scope_brief` | Read | Required input. |
-| `response_objectives` | Read | Required input. |
-| `incident_timeline` | Read | Required input. |
-| `affected_surface` | Read | Required input. |
-| `blast_radius` | Read | Required input. |
-| `observability_gaps` | Read | Required input. |
-| `evidence_gap_register` | Read | Required input. |
-| `cause_hypothesis_ranking` | Read | Required input. |
-| `immediate_mitigation_plan` | Read | Required input. |
-| `validation_plan` | Read | Required input. |
-| `incident_summary` | Read | Required input. |
-| `hardening_program` | Write | Overwrite. |
-| `hardening_backlog` | Write | Overwrite. |
-| `follow_up_owners` | Write | Overwrite. |
-| `stakeholder_communications_draft` | Write | Overwrite. |
-| `incident_resolution_package` | Write | Overwrite. |
-
-### Artifact Notes
-- Do not modify `incident_summary` or create the publication receipt in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -44,7 +28,7 @@
 - `hardening_backlog` must break the program into actionable backlog items with priority, rationale, and expected evidence of closure.
 - `follow_up_owners` must capture owner suggestions or role expectations for each major workstream and unresolved decision.
 - `stakeholder_communications_draft` must be stakeholder-ready, consistent with `incident_summary`, and explicit about impact, current status, next actions, and confidence limits.
-- `incident_resolution_package` must assemble the final narrative package another team can act on immediately, using the bundled checklist to confirm section coverage.
+- `incident_resolution_package` must assemble the final narrative package another team can act on immediately, covering every required section named in this prompt.
 
 ### Expected outcome
 - Produce a final incident hardening package that another team can execute and that the publish step can reference mechanically.
@@ -55,16 +39,16 @@
 - Make observability gaps, mitigations, and follow-up work explicit instead of burying them in prose.
 - Preserve the exact `recommended_posture` vocabulary from `incident_summary`.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance for the verifier
+### Outcome guidance for the verifier
 - `hardening_program_ready`: the program, backlog, owner map, communication draft, and final package are complete and aligned to the assessed posture.
 - `needs_rework`: the same package boundary still holds, but the final package needs local repair.
 - `needs_replan`: package assembly shows that the analysis itself must change materially before publication.
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only for genuine missing prerequisites or irrecoverable contradictions.
+- Use `blocked` only when a missing prerequisite or irreconcilable contradiction prevents safe progress.
 
 ## Out Of Scope
 

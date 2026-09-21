@@ -1,3 +1,7 @@
+## Durable verifier outcome
+
+Return a JSON result matching the injected schema. Use `accepted` when the artifacts meet the positive phase condition described below, `needs_rework` when the same phase can be repaired, `needs_replan` when an accepted earlier plan must be revisited, `question` or `blocked` when operator input is required, and `failed` for a terminal domain failure. The phase labels below describe semantic checks; do not return old route labels as the `outcome`. Cite only artifact names supplied by the runtime.
+
 # Package Candidate Workflow Set Verifier
 
 ## Step Contract
@@ -12,29 +16,17 @@
 - This work item owns packaging validation only.
 - Judge the existing package artifacts. Do not choose the final strategy route or execute any downstream workflow in this step.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `workflow_capability_snapshot` | Read | Required input. |
-| `workflow_candidate_matrix` | Read | Required input. |
-| `workflow_gap_analysis` | Read | Required input. |
-| `candidate_route_posture` | Read | Required input. |
-| `candidate_workflow_set` | Read | Required input. |
-| `candidate_workflow_set_summary` | Read | Required input. |
-| `candidate_next_action` | Read | Required input. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
 ### Artifact checks
 - `candidate_workflow_set` must preserve the ranked candidate set, portfolio posture, and strategy-ready handoff surface.
 - `candidate_workflow_set_summary` must be valid JSON that names the comparison candidates, ranked candidates, recommended candidate workflows, builder baseline, posture, authoritative artifacts, next action, and readiness signal.
-- `candidate_next_action` must tell the downstream strategy layer exactly what to decide next and what task facts to carry forward.
+- `candidate_workflow_next_action` must tell the downstream strategy layer exactly what to decide next and what task facts to carry forward.
 - If the builder baseline exists in the capability snapshot, it must remain visible in the package and summary.
 
 ### Payload requirements
@@ -50,12 +42,16 @@
 - `ready_for_strategy_selection`: must be `true` when the route is `candidate_workflow_set_ready`.
 - `replan_reason`: required only when the route is `needs_replan`.
 
-## Routes
+## Evidence
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Verify the declared phase artifacts—`candidate_workflow_set`, `candidate_workflow_set_summary`, `candidate_workflow_next_action`—against the phase requirements and require their claims to be internally consistent.
 
-### Route guidance
+## Phase decision criteria
+
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
+
+### Outcome guidance
 - Return `candidate_workflow_set_ready` only when the package, summary, and next-action artifact are aligned and publication-safe.
 - Return `needs_rework` when the same ranked candidate set still stands but the packaging artifacts need local repair.
 - Return `needs_replan` when packaging revealed that the ranked candidate set, posture, or downstream handoff changed materially.

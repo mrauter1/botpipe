@@ -1,17 +1,8 @@
-# `ralph_loop`
+# Ralph Loop
 
-`ralph_loop` is a minimal packaged implementation workflow for repository work.
-It plans a requested change into durable work items, then runs an implementation
-and verification loop for each item.
+`ralph_loop(request)` plans a repository change into stable work items. A
+separate reviewer must accept the plan. Each item then uses a persistent
+work-item session for implementation and independent review, repeating until
+accepted. Accepted items are durably completed in the versioned worklist.
 
-The workflow has two provider-backed steps:
-
-- `plan`: writes `work.json` with ordered implementation items and verifies the plan.
-- `implement`: runs once per work item, edits the repository, and verifies the actual implementation.
-
-It is installed with the `botpipe` package and is discoverable as:
-
-```bash
-botpipe workflows show ralph_loop
-botpipe workflows show ralph
-```
+The workflow returns the final immutable `work.json` artifact handle.

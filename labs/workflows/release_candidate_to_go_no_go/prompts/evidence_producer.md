@@ -1,3 +1,7 @@
+## Durable producer result
+
+After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+
 # Assemble Evidence Producer
 
 ## Step Contract
@@ -12,25 +16,10 @@
 - This work item owns evidence assembly only.
 - Keep the work-item boundary at the evidence artifacts. Do not write the final recommendation package in this step.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `release_scope_brief` | Read | Required input. |
-| `decision_criteria` | Read | Required input. |
-| `evidence_intake_register` | Read | Required input. |
-| `release_inventory` | Write | Overwrite. |
-| `test_evidence_pack` | Write | Overwrite. |
-| `operational_readiness` | Write | Overwrite. |
-| `rollback_readiness` | Write | Overwrite. |
-| `blocking_issues` | Write | Overwrite. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request.
-- Inspect the repository for release notes, tests, rollout docs, dashboards, or other evidence sources that satisfy the intake register.
-- Do not create assessment or publication artifacts in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -50,16 +39,16 @@
 - Make uncertainty explicit; weak or missing proof is still evidence and should be written down as such.
 - Keep blocker statements specific enough that the final package can cite them directly.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance for the verifier
+### Outcome guidance for the verifier
 - `evidence_pack_ready`: the evidence pack is coherent, concrete, and ready for assessment.
 - `needs_rework`: the same evidence boundary still holds, but the pack or blocker analysis needs local repair.
 - `needs_replan`: the evidence plan or release boundary changed materially and framing must be revisited.
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only for genuine missing prerequisites, stakeholder blockers, or irrecoverable contradictions.
+- Use `blocked` only when a missing prerequisite or irreconcilable contradiction prevents safe progress.
 
 ## Out Of Scope
 

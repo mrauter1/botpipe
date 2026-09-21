@@ -11,7 +11,7 @@ import stat
 import sys
 import time
 import uuid
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping
 from hashlib import sha256
 from pathlib import Path
 from typing import Any, Literal
@@ -234,7 +234,7 @@ def compare_evaluation_aggregates(
         delta = (
             after - before if metric.direction == "higher_is_better" else before - after
         )
-        deltas[metric.name] = delta
+        deltas[metric.name] = _finite(delta)
         if metric.name in relevant and delta < -metric.maximum_regression:
             regressions.append(metric.name)
     primary = next(m for m in spec.metrics if m.name == spec.primary_metric)
@@ -282,6 +282,7 @@ def run_paired_evaluation(
         or cand_root.is_relative_to(base_root)
     ):
         raise ValueError("baseline and candidate execution arms must be disjoint")
+    _reject_symlink_components(Path(output_root), "paired evaluation output")
     destination = Path(output_root).resolve()
     if destination.exists():
         raise ValueError("paired evaluation output_root must be newly allocated")
@@ -298,13 +299,20 @@ def run_paired_evaluation(
     if destination.is_relative_to(base_root) or destination.is_relative_to(cand_root):
         raise ValueError("evaluation output must live outside editable execution arms")
     frozen = _freeze(spec, spec_path, destination / "frozen")
+    source_ids = dict(
+        zip(
+            sources,
+            (frozen["spec_file_id"], frozen["evaluator_id"], frozen["case_input_id"]),
+            strict=True,
+        )
+    )
     request_root = destination / "requests"
     request_root.mkdir()
     process_runner = process_runner or _default_runner()
     if snapshot_arm is None or assert_arm_unchanged is None:
         from .execution_trees import (
-            snapshot_execution_arm,
             assert_execution_arm_unchanged,
+            snapshot_execution_arm,
         )
 
         snapshot_arm = snapshot_arm or snapshot_execution_arm
@@ -312,6 +320,16 @@ def run_paired_evaluation(
     env_id = _environment_id(spec, frozen)
     deadline = time.monotonic() + spec.max_elapsed_seconds
     arms: dict[str, dict[str, Any]] = {}
+    snapshots = [
+        (snapshot_arm(arm), root, tree)
+        for arm, root, tree in (
+            (baseline_arm, base_root, base_tree),
+            (candidate_arm, cand_root, cand_tree),
+        )
+    ]
+    for expected, _, tree in snapshots:
+        if expected.get("execution_tree_id") != tree:
+            raise ValueError("execution arm changed before evaluation")
     for name, arm, root, tree, surface in (
         ("baseline", baseline_arm, base_root, base_tree, base_surface),
         ("candidate", candidate_arm, cand_root, cand_tree, cand_surface),
@@ -344,7 +362,12 @@ def run_paired_evaluation(
             environment_id=env_id,
         )
         assert_arm_unchanged(expected, root, phase=f"paired evaluation {name}")
+        for initial, arm_root, _ in snapshots:
+            assert_arm_unchanged(initial, arm_root, phase=f"paired evaluation {name}")
         _assert_frozen(frozen)
+        for path, identity in source_ids.items():
+            if _sha256(_regular(path, "evaluation source")) != identity:
+                raise ValueError("evaluation source changed during evaluation")
         if time.monotonic() > deadline and arms[name]["execution_state"] == "complete":
             arms[name] = _failed(
                 name,
@@ -448,9 +471,18 @@ def validate_paired_evaluation_record(
         or plan.get("repetitions") != spec.repetitions
         or plan.get("effective_settings") != spec.effective_settings
         or plan.get("stochastic") is not spec.stochastic
+        or plan.get("max_elapsed_seconds") != spec.max_elapsed_seconds
+        or plan.get("per_arm_timeout_seconds") != spec.per_arm_timeout_seconds
+        or plan.get("max_provider_turns_per_arm") != spec.max_provider_turns_per_arm
     ):
         raise ValueError("paired evaluation plan does not match frozen spec")
-    root = Path(str(value.get("execution_output_root"))).resolve()
+    if value.get("automatic_promotion") is not False:
+        raise ValueError("paired evaluation cannot enable automatic promotion")
+    raw_root = value.get("execution_output_root")
+    if not isinstance(raw_root, str) or not Path(raw_root).is_absolute():
+        raise ValueError("paired evaluation output root must be absolute")
+    _reject_symlink_components(Path(raw_root), "cached evaluation output")
+    root = Path(raw_root).resolve()
     parent = Path(allowed_output_parent).resolve()
     if not root.is_relative_to(parent) or not root.is_dir():
         raise ValueError(
@@ -463,6 +495,7 @@ def validate_paired_evaluation_record(
     if not isinstance(arms, Mapping) or set(arms) != {"baseline", "candidate"}:
         raise ValueError("paired evaluation must define both arms")
     aggregate_pairs = {}
+    environment_id = _environment_id(spec, value["frozen_inputs"])
     for name, surface, tree in (
         ("baseline", baseline_surface_id, baseline_execution_tree_id),
         ("candidate", candidate_surface_id, candidate_execution_tree_id),
@@ -470,71 +503,111 @@ def validate_paired_evaluation_record(
         arm = arms[name]
         if (
             not isinstance(arm, Mapping)
+            or arm.get("arm") != name
             or arm.get("surface_id") != surface
             or arm.get("execution_tree_id") != tree
         ):
             raise ValueError(f"cached {name} arm identity is stale")
-        cases = arm.get("cases")
-        if arm.get("execution_state") == "complete":
-            request = _read_json(
-                _regular(
-                    root / "requests" / f"{name}.json", "cached evaluation request"
-                ),
+        state = arm.get("execution_state")
+        if state not in {
+            "complete",
+            "failed",
+            "timed_out",
+            "cancelled",
+            "budget_exhausted",
+        }:
+            raise ValueError(f"cached {name} execution state is invalid")
+        if state != "complete":
+            continue
+        inventory = _inventory(
+            root / name,
+            spec.max_evaluation_output_bytes,
+            spec.max_evaluation_output_files,
+        )
+        request = _read_json(
+            _regular(root / "requests" / f"{name}.json", "cached evaluation request"),
+            spec.max_evaluation_output_bytes,
+            "cached evaluation request",
+        )
+        expected_request = {
+            "schema": EVALUATION_REQUEST_SCHEMA,
+            "execution_id": arm.get("execution_id"),
+            "surface_id": surface,
+            "execution_tree_id": tree,
+            "spec_id": spec_id,
+            "case_input_path": str(
+                _frozen_paths(spec, root / "frozen")["case_input_path"]
+            ),
+            "case_ids": spec.case_ids,
+            "repetitions": spec.repetitions,
+            "effective_settings": spec.effective_settings,
+            "environment_id": environment_id,
+            "allowed_output_directory": str(root / name),
+        }
+        if not isinstance(request, Mapping) or any(
+            request.get(key) != expected for key, expected in expected_request.items()
+        ):
+            raise ValueError(f"cached {name} request identity or plan is stale")
+        limits = request.get("remaining_limits")
+        if (
+            not isinstance(limits, Mapping)
+            or set(limits)
+            != {
+                "elapsed_seconds",
+                "max_provider_turns",
+                "max_output_bytes",
+                "max_output_files",
+            }
+            or limits.get("max_provider_turns") != spec.max_provider_turns_per_arm
+            or limits.get("max_output_bytes") != spec.max_evaluation_output_bytes
+            or limits.get("max_output_files") != spec.max_evaluation_output_files
+            or not 0
+            < _finite(limits.get("elapsed_seconds"))
+            <= min(spec.per_arm_timeout_seconds, spec.max_elapsed_seconds)
+        ):
+            raise ValueError(f"cached {name} request limits differ from frozen plan")
+        raw_result = EvaluatorResult.model_validate(
+            _read_json(
+                _regular(root / name / "result.json", "cached evaluator result"),
                 spec.max_evaluation_output_bytes,
-                "cached evaluation request",
+                "cached evaluator result",
             )
-            if (
-                request.get("execution_id") != arm.get("execution_id")
-                or request.get("surface_id") != surface
-                or request.get("execution_tree_id") != tree
-                or request.get("spec_id") != spec_id
-            ):
-                raise ValueError(f"cached {name} request identity is stale")
-            raw_result = EvaluatorResult.model_validate(
-                _read_json(
-                    _regular(root / name / "result.json", "cached evaluator result"),
-                    spec.max_evaluation_output_bytes,
-                    "cached evaluator result",
-                )
-            )
-            if (raw_result.execution_id, raw_result.surface_id, raw_result.spec_id) != (
-                arm.get("execution_id"),
-                surface,
-                spec_id,
-            ):
-                raise ValueError(f"cached {name} evaluator result identity is stale")
-            _validate_budget(raw_result, spec)
-            if not isinstance(cases, list) or [
-                (c.get("case_id"), c.get("repetition"))
-                for c in cases
-                if isinstance(c, Mapping)
-            ] != [
-                (case, repetition)
-                for case in spec.case_ids
-                for repetition in range(1, spec.repetitions + 1)
-            ]:
-                raise ValueError(f"cached {name} cases do not match plan")
-            parsed = [CaseResult.model_validate(case) for case in cases]
-            if [case.model_dump(mode="json") for case in raw_result.cases] != [
-                case.model_dump(mode="json") for case in parsed
-            ]:
-                raise ValueError(f"cached {name} cases differ from evaluator result")
-            aggregates = _aggregate(spec, parsed)
-            if aggregates != arm.get("aggregates"):
-                raise ValueError(f"cached {name} aggregates do not match cases")
-            aggregate_pairs[name] = aggregates
-            for evidence in arm.get("evidence", []):
-                if not isinstance(evidence, Mapping):
-                    raise ValueError("cached evidence record invalid")
-                path = _regular(
-                    root / name / str(evidence.get("path")),
-                    "cached evaluation evidence",
-                )
-                if _sha256(path) != evidence.get(
-                    "sha256"
-                ) or path.stat().st_size != evidence.get("size_bytes"):
-                    raise ValueError("cached evaluation evidence changed")
-    comparison = value.get("comparison")
+        )
+        if (raw_result.execution_id, raw_result.surface_id, raw_result.spec_id) != (
+            arm.get("execution_id"),
+            surface,
+            spec_id,
+        ):
+            raise ValueError(f"cached {name} evaluator result identity is stale")
+        _validate_budget(raw_result, spec)
+        parsed, evidence = _validate_cases(raw_result, spec, root / name)
+        cached_cases = arm.get("cases")
+        if not isinstance(cached_cases, list):
+            raise ValueError(f"cached {name} cases are invalid")  # noqa: TRY004 - invalid serialized protocol value.
+        cached_cases = [CaseResult.model_validate(case) for case in cached_cases]
+        if [case.model_dump(mode="json") for case in parsed] != [
+            case.model_dump(mode="json") for case in cached_cases
+        ]:
+            raise ValueError(f"cached {name} cases differ from evaluator result")
+        aggregates = _aggregate(spec, parsed)
+        cached_aggregates = arm.get("aggregates")
+        if not isinstance(cached_aggregates, Mapping) or aggregates != {
+            key: _finite(value) for key, value in cached_aggregates.items()
+        }:
+            raise ValueError(f"cached {name} aggregates do not match cases")
+        if evidence != arm.get("evidence"):
+            raise ValueError("cached evaluation evidence changed")
+        if (
+            arm.get("environment_id") != environment_id
+            or arm.get("reported_environment_id") != raw_result.environment_id
+            or arm.get("environment_compatible")
+            is not (raw_result.environment_id in (None, environment_id))
+            or arm.get("provider_budget") != raw_result.provider_budget
+            or arm.get("output_file_count") != inventory["file_count"]
+            or arm.get("output_bytes") != inventory["total_bytes"]
+        ):
+            raise ValueError(f"cached {name} execution metadata differs from result")
+        aggregate_pairs[name] = aggregates
     if set(aggregate_pairs) == {"baseline", "candidate"}:
         comparable = all(
             arms[name].get("environment_compatible") is True
@@ -550,8 +623,20 @@ def validate_paired_evaluation_record(
         )
         if not comparable:
             expected["limitations"].append("evaluator environments were not comparable")
-        if comparison != expected:
-            raise ValueError("cached comparison does not match arm results")
+    else:
+        expected = {
+            "state": "inconclusive",
+            "primary_metric": spec.primary_metric,
+            "deltas": {},
+            "regressed_metrics": [],
+            "claim_scope": spec.claim_scope,
+            "limitations": [
+                "one or both evaluator executions were incomplete",
+                *_limitations(spec),
+            ],
+        }
+    if value.get("comparison") != expected:
+        raise ValueError("cached comparison does not match arm results")
     value["paired_evaluation_id"] = declared
     return value
 
@@ -627,7 +712,7 @@ def _run_arm(
             env=env,
             cancel_requested=cancel,
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - record evaluator launch failures as protocol outcomes.
         return _failed(name, surface, tree, "failed", f"evaluator launch failed: {exc}")
     diag = _diagnostics(proc, argv)
     if diag["timed_out"]:
@@ -722,7 +807,7 @@ def _validate_budget(result, spec):
         return
     b = result.provider_budget
     if not isinstance(b, Mapping):
-        raise ValueError("botpipe result requires provider_budget")
+        raise ValueError("botpipe result requires provider_budget")  # noqa: TRY004 - invalid serialized protocol value.
     maximum, used = b.get("max_turns"), b.get("used_turns")
     if (
         isinstance(maximum, bool)
@@ -738,7 +823,7 @@ def _validate_budget(result, spec):
 
 def _aggregate(spec, cases):
     return {
-        m.name: (
+        m.name: _finite(
             sum(c.metrics[m.name] for c in cases)
             if m.aggregation == "sum"
             else sum(c.metrics[m.name] for c in cases) / len(cases)
@@ -754,17 +839,23 @@ def _freeze(spec, spec_path, root):
     eid, cid = _sha256(evaluator), _sha256(cases)
     _check_id(spec.evaluator_content_id, eid, "evaluator")
     _check_id(spec.case_input_content_id, cid, "case input")
+    source_spec_id = _sha256(spec_path)
     targets = _frozen_paths(spec, root)
     shutil.copy2(spec_path, targets["spec_path"])
     shutil.copy2(evaluator, targets["evaluator_path"])
     shutil.copy2(cases, targets["case_input_path"])
-    return {
+    frozen = {
         **targets,
-        "spec_file_id": _sha256(targets["spec_path"]),
+        "spec_file_id": source_spec_id,
         "evaluator_id": eid,
         "case_input_id": cid,
         "evaluator_executable": bool(evaluator.stat().st_mode & stat.S_IXUSR),
     }
+    _assert_frozen(frozen)
+    _, frozen_spec_id = load_evaluation_spec(targets["spec_path"])
+    if frozen_spec_id != _canonical_id(spec.model_dump(mode="json", by_alias=True)):
+        raise ValueError("evaluation specification changed while freezing")
+    return frozen
 
 
 def _frozen_paths(spec, root):
@@ -813,6 +904,9 @@ def _assert_frozen(frozen):
 
 
 def _inventory(root, max_bytes, max_files):
+    _reject_symlink_components(root, "evaluation output")
+    if not root.is_dir():
+        raise ValueError("evaluation output directory is unavailable")
     paths = []
     total = 0
     for p in sorted(root.rglob("*")):
@@ -835,6 +929,7 @@ def _arm_fields(arm, label):
     for attr in ("root", "execution_tree_id", "surface_id"):
         if not hasattr(arm, attr):
             raise ValueError(f"{label} must be a bound ExecutionArm")
+    _reject_symlink_components(Path(arm.root), f"{label} arm")
     root = Path(arm.root).resolve()
     tree = arm.execution_tree_id
     surface = arm.surface_id
@@ -933,24 +1028,34 @@ def _resolve(spec_path, raw, label):
 
 
 def _regular(path, label):
-    if path.is_symlink():
-        raise ValueError(f"{label} must not be a symlink")
+    _reject_symlink_components(path, label)
     p = path.resolve()
     if not p.is_file():
         raise FileNotFoundError(f"{label} must be a regular file: {path}")
     return p
 
 
+def _reject_symlink_components(path, label):
+    path = Path(path).absolute()
+    if any(part.is_symlink() for part in (path, *path.parents)):
+        raise ValueError(f"{label} must not contain a symlink")
+
+
 def _read_json(path, limit, label):
     if path.stat().st_size > limit:
         raise ValueError(f"{label} exceeds byte limit")
-    data = path.read_bytes()
+    with path.open("rb") as stream:
+        data = stream.read(limit + 1)
     if len(data) > limit:
         raise ValueError(f"{label} exceeds byte limit")
     try:
-        return json.loads(data)
+        return json.loads(data, parse_constant=_invalid_json_constant)
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ValueError(f"{label} must be valid UTF-8 JSON") from exc
+
+
+def _invalid_json_constant(value):
+    raise ValueError(f"JSON value must be finite: {value}")
 
 
 def _atomic_json(path, payload):
@@ -972,7 +1077,11 @@ def _canonical_id(payload):
         "sha256:"
         + sha256(
             json.dumps(
-                payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+                payload,
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+                allow_nan=False,
             ).encode()
         ).hexdigest()
     )
@@ -1000,9 +1109,9 @@ def _default_runner():
 
 
 __all__ = [
-    "EVALUATION_SPEC_SCHEMA",
     "EVALUATION_REQUEST_SCHEMA",
     "EVALUATION_RESULT_SCHEMA",
+    "EVALUATION_SPEC_SCHEMA",
     "PAIRED_EVALUATION_SCHEMA",
     "EvaluationSpec",
     "MetricDefinition",

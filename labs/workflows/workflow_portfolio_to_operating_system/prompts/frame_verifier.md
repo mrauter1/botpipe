@@ -1,3 +1,7 @@
+## Durable verifier outcome
+
+Return a JSON result matching the injected schema. Use `accepted` when the artifacts meet the positive phase condition described below, `needs_rework` when the same phase can be repaired, `needs_replan` when an accepted earlier plan must be revisited, `question` or `blocked` when operator input is required, and `failed` for a terminal domain failure. The phase labels below describe semantic checks; do not return old route labels as the `outcome`. Cite only artifact names supplied by the runtime.
+
 # Frame Portfolio Governance Verifier
 
 ## Step Contract
@@ -12,27 +16,16 @@
 - This work item owns framing validation only.
 - Judge the existing framing artifacts. Do not recommend lifecycle actions or publish the final governance package in this step.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `workflow_capability_snapshot` | Read | Required input. |
-| `workflow_portfolio_health_snapshot` | Read | Required input. |
-| `portfolio_governance_brief` | Read | Required input. |
-| `portfolio_decision_criteria` | Read | Required input. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not overwrite `portfolio_governance_brief` or `portfolio_decision_criteria` during verification.
-- Return verifier control metadata only through the step payload and selected route.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
 ### Artifact checks
 - `portfolio_governance_brief` must name the scoped workflow set, sponsor pressure, terminal governance package, and publication boundary.
-- `portfolio_decision_criteria` must state how to judge keep, refine, decompose, merge, retire, and create-next recommendations.
+- `lifecycle_criteria` must state how to judge keep, refine, decompose, merge, retire, and create-next recommendations.
 - The focus workflows in the framing artifacts must match the scoped portfolio evidence.
 
 ### Payload requirements
@@ -44,15 +37,16 @@
 
 ## Evidence
 
+- Verify the declared phase artifacts—`portfolio_governance_brief`, `lifecycle_criteria`—against the phase requirements and require their claims to be internally consistent.
 - Base the verdict on the framing artifacts plus the capability and health snapshots, not on provider inference.
 - Confirm that the lifecycle decision surface is explicit enough that the next step can analyze the portfolio without guessing.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance
+### Outcome guidance
 - Return `portfolio_governance_framed` only when the governance scope and criteria are aligned and analysis-ready.
 - Return `needs_rework` when the same framing boundary still holds and the artifacts need local repair.
 - Return `needs_replan` when the scope, sponsor, or governance objective changed materially.

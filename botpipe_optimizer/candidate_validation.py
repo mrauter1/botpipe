@@ -1,12 +1,19 @@
 """Isolated compilation and checks for frozen workflow candidates."""
 
 from __future__ import annotations
-import json, os, shlex, sys, tempfile
+
+import json
+import os
+import shlex
+import sys
+import tempfile
 from collections.abc import Mapping, Sequence
 from hashlib import sha256
 from pathlib import Path
 from typing import Any, Literal
+
 from pydantic import BaseModel, ConfigDict, Field
+
 from .execution_trees import (
     ExecutionArm,
     FrozenExecutionTree,
@@ -56,7 +63,7 @@ class ValidationResult(BaseModel):
     errors: tuple[str, ...] = ()
     evaluation_comparison: Mapping[str, Any] | None = None
 
-    def with_evaluation(self, comparison: Mapping[str, Any]) -> "ValidationResult":
+    def with_evaluation(self, comparison: Mapping[str, Any]) -> ValidationResult:
         if not self.success:
             raise ValueError("evaluation cannot attach to unsuccessful validation")
         if self.evaluation_comparison is not None:
@@ -80,6 +87,7 @@ def validate_frozen_candidate(
     staging_parent: Path,
     allowed_added_path_prefixes: Sequence[str] = (),
     allowed_added_exact_paths: Sequence[str] = (),
+    allowed_removed_paths: Sequence[str] = (),
     target_test_argv: Sequence[str] | None = None,
     target_test_command: str | None = None,
     interpreter: Path | str = sys.executable,
@@ -89,7 +97,7 @@ def validate_frozen_candidate(
     max_stream_bytes: int = 1024 * 1024,
     termination_grace_seconds: float = 5,
 ) -> ValidationResult:
-    from .candidate_surfaces import validate_surface_manifest
+    from .surface_identity import validate_surface_manifest
 
     verify_frozen_execution_tree(snapshot)
     baseline_surface_manifest = validate_surface_manifest(
@@ -106,6 +114,7 @@ def validate_frozen_candidate(
         baseline_manifest=baseline_surface_manifest,
         allowed_added_path_prefixes=allowed_added_path_prefixes,
         allowed_added_exact_paths=allowed_added_exact_paths,
+        allowed_removed_paths=allowed_removed_paths,
     )
     raw = Path(
         _text(
@@ -118,7 +127,7 @@ def validate_frozen_candidate(
         expected_candidate_root
     ).resolve(strict=True):
         raise ValueError("candidate manifest root must match expected_candidate_root")
-    refs = tuple((_text(x) for x in workflow_refs))
+    refs = tuple(_text(x) for x in workflow_refs)
     if not refs or len(set(refs)) != len(refs):
         raise ValueError("workflow_refs must be unique and non-empty")
     argv = normalize_target_argv(
@@ -130,24 +139,28 @@ def validate_frozen_candidate(
     candidate_id = _text(candidate_surface_manifest.get("surface_id"))
     base = _digests(baseline_surface_manifest)
     cand = _digests(candidate_surface_manifest)
-    changes = tuple(sorted((x for x in cand if x not in base or cand[x] != base[x])))
+    changes = tuple(
+        sorted(x for x in set(base) | set(cand) if base.get(x) != cand.get(x))
+    )
+    removed_paths = tuple(sorted(set(base) - set(cand)))
     parent = Path(staging_parent).resolve()
     parent.mkdir(parents=True, exist_ok=True)
     baseline_arm = candidate_arm = None
     try:
         baseline_arm = materialize_execution_arm(snapshot, parent)
         candidate_arm = materialize_execution_arm(
-            snapshot, parent, candidate_manifest=candidate_surface_manifest
+            snapshot,
+            parent,
+            candidate_manifest=candidate_surface_manifest,
+            removed_paths=removed_paths,
         )
         expected = snapshot_execution_arm(candidate_arm)
         deps = tuple(
-            (
-                Path(x).resolve(strict=True)
-                for x in (
-                    dependency_roots
-                    if dependency_roots is not None
-                    else _dependency_roots(snapshot.root)
-                )
+            Path(x).resolve(strict=True)
+            for x in (
+                dependency_roots
+                if dependency_roots is not None
+                else _dependency_roots(snapshot.root)
             )
         )
         prefixes = _prefixes(candidate_arm.root)
@@ -221,6 +234,7 @@ def validate_frozen_candidate(
             baseline_manifest=current_baseline,
             allowed_added_path_prefixes=allowed_added_path_prefixes,
             allowed_added_exact_paths=allowed_added_exact_paths,
+            allowed_removed_paths=allowed_removed_paths,
         )
         if (
             current_baseline["surface_id"] != baseline_id
@@ -263,7 +277,7 @@ def normalize_target_argv(
     if target_test_argv is not None:
         if isinstance(target_test_argv, (str, bytes)) or not target_test_argv:
             raise ValueError("target_test_argv must be non-empty")
-        result = tuple((_text(x) for x in target_test_argv))
+        result = tuple(_text(x) for x in target_test_argv)
     else:
         if os.name == "nt":
             raise ValueError("target_test_argv required on Windows")
@@ -319,6 +333,17 @@ def _bootstrap(
         )
         data = None
         if result.is_file():
+            if result.is_symlink() or result.stat().st_size > 8 * 1024 * 1024:
+                data = {
+                    "ok": False,
+                    "error": "validation probe result is unsafe or exceeds 8 MiB",
+                }
+                return _check(
+                    process,
+                    phase,
+                    "compile_probe" if phase == "compile" else "python_check",
+                    data,
+                )
             try:
                 raw = json.loads(result.read_text(encoding="utf-8"))
                 data = dict(raw) if isinstance(raw, Mapping) else None
@@ -358,10 +383,8 @@ def _compiled(
         source = value.get("source_path")
         digest = value.get("source_sha256")
         if not all(
-            (
-                isinstance(x, str) and x
-                for x in (reference, value.get("workflow_name"), source, digest)
-            )
+            isinstance(x, str) and x
+            for x in (reference, value.get("workflow_name"), source, digest)
         ):
             return []
         path = Path(source).resolve(strict=True)
@@ -379,21 +402,22 @@ def _compiled(
 
 
 def _dependency_roots(source: Path) -> tuple[Path, ...]:
-    return tuple(
-        sorted(
-            {
-                Path(x).resolve()
-                for x in sys.path
-                if x
-                and Path(x).is_dir()
-                and (
-                    "site-packages" in Path(x).parts or "dist-packages" in Path(x).parts
-                )
-                and (Path(x).resolve() != source.resolve())
-            },
-            key=str,
-        )
-    )
+    # -I -S never executes editable .pth hooks. Explicitly expose the executing
+    # Botpipe installation as a dependency when the project does not own it.
+    # _StagedImports still blocks every project-owned prefix from this layer.
+    import botpipe
+
+    framework_root = Path(botpipe.__file__).resolve().parent.parent
+    roots = {
+        Path(x).resolve()
+        for x in sys.path
+        if x
+        and Path(x).is_dir()
+        and ("site-packages" in Path(x).parts or "dist-packages" in Path(x).parts)
+        and Path(x).resolve() != source.resolve()
+    }
+    roots.add(framework_root)
+    return tuple(sorted(roots, key=str))
 
 
 def _source_roots(root: Path) -> tuple[Path, ...]:
@@ -427,11 +451,11 @@ def _env() -> dict[str, str]:
 def _digests(manifest: Mapping[str, Any]) -> dict[str, str]:
     values = manifest.get("files")
     if not isinstance(values, list):
-        raise ValueError("manifest files required")
+        raise TypeError("manifest files required")
     result = {}
     for value in values:
         if not isinstance(value, Mapping):
-            raise ValueError("manifest file entries must be objects")
+            raise TypeError("manifest file entries must be objects")
         path = _text(value.get("relative_path", value.get("path")))
         digest = _text(value.get("surface_sha256", value.get("sha256")))
         if path in result:
@@ -448,6 +472,8 @@ def _python(argv: Sequence[str], interpreter: str) -> bool:
 
 
 def _failure(check: CheckResult) -> str:
+    if check.result and check.result.get("error"):
+        return f"{check.phase}: {check.result['error']}"
     return (
         f"{check.phase} timed out"
         if check.timed_out

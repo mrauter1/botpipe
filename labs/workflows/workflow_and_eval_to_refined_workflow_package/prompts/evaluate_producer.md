@@ -1,3 +1,7 @@
+## Durable producer result
+
+After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+
 # Evaluate Refined Workflow Producer
 
 ## Step Contract
@@ -6,63 +10,35 @@
 - You are the workflow refinement evaluator for the `evaluate_refined_workflow` step.
 
 ### Purpose
-- Review the candidate workflow surface against the baseline evidence, describe the hypothesized improvement, and produce promotion and rollback guidance without publishing the receipt directly.
-- This step does not run paired evaluation. Only the deterministic publish step may report a measured comparison when `evaluation_spec_path` was supplied; otherwise improvement remains `not_evaluated`.
+- Evaluate the candidate workflow surface against the baseline evidence, describe the expected improvement, and produce promotion and rollback guidance without publishing the receipt directly.
 
 ### Current work item
 - This work item owns evaluation only.
-- Keep the boundary at `refinement_verification_report`, `evaluation_delta_report`, `promotion_record`, and `rollback_plan`.
+- Keep the boundary at `candidate_verification_report`, `candidate_verification_report`, `refinement_summary`, and `refinement_next_action`.
 - Do not mutate the candidate or authoritative workflow surfaces in this step.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `selected_workflow_capability` | Read | Required input. |
-| `selected_workflow_authoring_surface` | Read | Required input. |
-| `baseline_workflow_surface` | Read | Required input. |
-| `baseline_workflow_manifest` | Read | Required input. |
-| `baseline_evaluation_summary` | Read | Required input. |
-| `baseline_evaluation_findings` | Read | Required input. |
-| `baseline_failure_modes` | Read | Required input. |
-| `baseline_refinement_evidence_summary` | Read | Optional optimization evidence summary rendered as workflow-local guidance. |
-| `refinement_strategy` | Read | Required input. |
-| `workflow_change_plan` | Read | Required input. |
-| `regression_guardrails` | Read | Required input. |
-| `candidate_workflow_surface` | Read | Required input. |
-| `candidate_workflow_manifest` | Read | Required input. |
-| `refinement_build_report` | Read | Required input. |
-| `candidate_diff_summary` | Read | Required input. |
-| `refinement_package_checklist` | Read | Required input. |
-| `refinement_verification_report` | Write | Overwrite. |
-| `evaluation_delta_report` | Write | Overwrite. |
-| `promotion_record` | Write | Overwrite. |
-| `rollback_plan` | Write | Overwrite. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not create `workflow_refinement_receipt.json` in this step.
-- Do not modify `candidate_workflow_surface`, `candidate_workflow_manifest.json`, or the authoritative selected workflow package in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
 ### Artifact handling
-- `refinement_verification_report` must define:
+- `candidate_verification_report` must define:
 - what verification evidence exists now,
 - what compile or test command should validate the candidate overlay,
 - whether the candidate appears aligned with the baseline package and accepted plan,
 - what unresolved risks remain.
-- `evaluation_delta_report` must define:
+- `candidate_verification_report` must define:
 - how the candidate changes address the supplied baseline evidence,
 - what before or after differences matter,
 - what evidence still remains unproven.
-- `promotion_record` must define:
+- `refinement_summary` must define:
 - why the candidate is or is not ready for later promotion,
 - which artifacts should gate promotion,
 - how the baseline and candidate manifests define the promotion boundary.
-- `rollback_plan` must define:
+- `refinement_next_action` must define:
 - how to abandon or reverse the candidate publication safely,
 - how to restore confidence in the authoritative selected workflow baseline,
 - what artifacts govern rollback.
@@ -72,22 +48,24 @@
 
 ## Evidence
 
-- Compare the candidate against the copied baseline evidence and the baseline or candidate manifests, not just provider intuition.
+- Treat the earlier `candidate_workflow_manifest` artifact as the provider-authored documentary implementation record.
+- Treat runtime input `candidate_manifest` as the authority for actual changed, added, and removed paths, and `candidate_evaluation` as the authority for overlay validation. Report any conflict with the documentary manifest instead of silently accepting provider claims.
+- Compare the runtime-derived candidate evidence against the copied baseline and accepted plan, not just provider intuition.
 - If optimization evidence is present, call out what remains candidate-only and unproven, and treat `optimization_ablation_results` as stronger evidence than estimated gains.
 - Keep `adversarial_case_candidates` as future eval-suite input unless separate work explicitly materializes them elsewhere.
-- Make the overlay validation path explicit by naming the exact command from `invocation_contract`.
+- Make the overlay validation path explicit by naming the exact command from the runtime input.
 - Keep promotion and rollback guidance concrete enough that publication does not need to infer workflow boundaries or evidence ownership.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance for the verifier
+### Outcome guidance for the verifier
 - `workflow_refinement_evaluated`: the verification package is publication-ready and the workflow can attempt deterministic receipt publication.
 - `needs_rework`: the same refinement boundary still holds, but the candidate needs local repair before publication.
 - `needs_replan`: evaluation showed the accepted refinement boundary or plan changed materially.
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Use `blocked` only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Out Of Scope
 
@@ -102,3 +80,10 @@
 - Do not auto-materialize adversarial eval cases or imply that eval-suite authoring already happened.
 - Do not skip rollback detail for candidate-to-baseline promotion decisions.
 - Do not leave the overlay validation command implicit.
+
+## Optimizer v2 handoff
+
+- `optimizer_handoff`, when present, is a validated accepted receipt, candidate set, candidate, evidence anchor, and baseline surface identity. Preserve its `candidate_id`, `candidate_set_id`, kind, targets, proposed change, risks, and validation plan.
+- Treat the selected candidate as a proposal to materialize inside the bounded candidate workspace. Do not edit authoritative source files or claim that the proposal was already validated.
+- `candidate_evaluation` is derived from frozen execution trees and an isolated validation run. `paired_evaluation`, when present, is the only measured baseline/candidate comparison.
+- Never promote or copy the candidate into the authoritative workflow. Publication records evidence and a next action only.

@@ -1,3 +1,7 @@
+## Durable verifier outcome
+
+Return a JSON result matching the injected schema. Use `accepted` when the artifacts meet the positive phase condition described below, `needs_rework` when the same phase can be repaired, `needs_replan` when an accepted earlier plan must be revisited, `question` or `blocked` when operator input is required, and `failed` for a terminal domain failure. The phase labels below describe semantic checks; do not return old route labels as the `outcome`. Cite only artifact names supplied by the runtime.
+
 # Evaluate Candidate Decomposition Verifier
 
 ## Step Contract
@@ -8,47 +12,23 @@
 ### Purpose
 - Decide whether the candidate decomposition package is publication-ready while still stopping before promotion.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `selected_workflow_decomposition_surface` | Read | Required input. |
-| `baseline_parent_manifest` | Read | Required input. |
-| `decomposition_evidence_manifest` | Read | Required input. |
-| `extraction_strategy` | Read | Required input. |
-| `building_block_interface_contracts` | Read | Required input. |
-| `parent_rewrite_plan` | Read | Required input. |
-| `regression_guardrails` | Read | Required input. |
-| `candidate_decomposition_surface` | Read | Required input. |
-| `candidate_decomposition_manifest` | Read | Required input. |
-| `candidate_building_block_index` | Read | Required input. |
-| `decomposition_build_report` | Read | Required input. |
-| `candidate_diff_summary` | Read | Required input. |
-| `decomposition_verification_report` | Read | Required input. |
-| `composition_migration_guide` | Read | Required input. |
-| `promotion_record` | Read | Required input. |
-| `rollback_plan` | Read | Required input. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not overwrite `decomposition_verification_report`, `composition_migration_guide`, `promotion_record`, or `rollback_plan` during verification.
-- Do not create `workflow_decomposition_receipt.json` in this step.
-- Return verifier control metadata only through the step payload and selected route.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
 ### Artifact checks
 - `decomposition_verification_report` must tie publication readiness to the deterministic candidate manifest and declared building-block index.
-- `composition_migration_guide` must explain how the parent workflow and extracted building blocks should be adopted without hidden execution.
-- `promotion_record` must keep promotion explicit and evidence-gated.
-- `rollback_plan` must keep the baseline parent workflow as the rollback source of truth.
+- `decomposition_summary` must explain how the parent workflow and extracted building blocks should be adopted without hidden execution.
+- `decomposition_summary` must keep promotion explicit and evidence-gated.
+- `decomposition_next_action` must keep the baseline parent workflow as the rollback source of truth.
 
 ### Payload requirements
 - `summary`: concise validation summary.
 - `selected_workflow_name`: the canonical workflow name that remains selected.
-- `candidate_file_count`: the number of files in `candidate_decomposition_surface/`.
+- `candidate_file_count`: the candidate file count supported by runtime input `candidate_manifest` and `candidate_evaluation`, not by the provider-authored decomposition manifest alone.
 - `validated_overlay_command`: the command that publication must validate against the candidate overlay.
 - `authoritative_artifacts`: the evaluation artifacts that publication must treat as authoritative.
 - `building_block_names`: the candidate building blocks that remain in scope for publication.
@@ -58,15 +38,16 @@
 
 ## Evidence
 
-- Base the verdict on the named artifacts plus the candidate boundary artifacts instead of provider inference.
+- Verify the declared phase artifacts—`decomposition_verification_report`, `decomposition_summary`, `decomposition_next_action`—against the phase requirements and require their claims to be internally consistent.
+- Base the verdict on the named artifacts plus runtime input `candidate_manifest` and `candidate_evaluation`. The earlier `candidate_decomposition_manifest` is a documentary index and must not override runtime-derived facts.
 - Confirm that the package is publication-ready only if the candidate remains explicit, candidate-only, and mechanically validatable.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance
+### Outcome guidance
 - Return `candidate_decomposition_evaluated` only when the evaluation package is publication-ready.
 - Return `needs_rework` when the same decomposition boundary still holds and the package needs local repair.
 - Return `needs_replan` when evaluation changed the accepted boundary, package set, or migration posture materially.
@@ -77,3 +58,9 @@
 - Do not overwrite evaluation artifacts during verification.
 - Do not approve hidden execution or implicit promotion.
 - Do not ask for a replan when local repair is sufficient.
+
+## Isolated candidate validation
+
+- The candidate is materialized only in the bounded candidate workspace. `candidate_evaluation` comes from frozen execution-tree compilation and the configured argv validation under its timeout.
+- Use derived changed paths and validation results; do not trust model-authored file counts, hashes, or success claims.
+- Publication may recommend a later promotion review, but this workflow must not copy candidate files into authoritative source or auto-promote them.

@@ -1,13 +1,18 @@
 """Bounded subprocess execution with owned descendant containment."""
 
 from __future__ import annotations
-import subprocess, threading, time
+
+import math
+import subprocess
+import threading
+import time
 from collections import deque
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO
-from botpipe.core.process_containment import ProcessContainment
+
+from botpipe.processes import ProcessContainment
 
 DEFAULT_MAX_STREAM_BYTES = 1024 * 1024
 DEFAULT_TERMINATION_GRACE_SECONDS = 5.0
@@ -43,7 +48,6 @@ class ProcessResult:
 
 
 class _Tail:
-
     def __init__(self, limit: int):
         self.limit = limit
         self.parts: deque[bytes] = deque()
@@ -81,10 +85,16 @@ def run_bounded_process(
     if (
         isinstance(argv, (str, bytes))
         or not argv
-        or any((not isinstance(v, str) or not v or "\x00" in v for v in argv))
+        or any(not isinstance(v, str) or not v or "\x00" in v for v in argv)
     ):
         raise ValueError("argv must be a non-empty sequence of valid strings")
-    if timeout_seconds <= 0 or termination_grace_seconds <= 0:
+    if any(
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+        or value <= 0
+        for value in (timeout_seconds, termination_grace_seconds)
+    ):
         raise ValueError("timeouts must be positive")
     if (
         isinstance(max_stream_bytes, bool)

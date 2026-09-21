@@ -1,79 +1,28 @@
-"""Default devloop workflow."""
+"""Imperative plan, implement, test, and audit workflow."""
 
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, ValidationError
 
-from botpipe import (
-    FAIL,
-    FINISH,
-    Prompt,
-    Route,
-    Session,
-    ValidationResult,
-    Workflow,
-    produce_verify_step,
-    python_step,
-    validation_step,
-)
-from botpipe.core import Artifact
-from botpipe.extensions import SessionPaths
+from botpipe import Artifact, Session, activity, current_run, workflow
 
-from .conventions import DevLoopSessionPathStrategy, phase_dir_key
-from .runtime_artifacts import DevLoopRuntimeArtifacts
+from .conventions import phase_dir_key
 from .reviews import (
+    PROCESS_CRITERIA,
     PhaseCriterion,
     ReviewReport,
-    ReviewRequest,
     StrictModel,
-    begin_review,
-    finish_review,
-    review_issues,
+    validate_review,
 )
-
 
 PHASE_PLAN_VERSION = 1
 AUDIT_RESULT_VERSION = 1
-
-PHASE_STATUS_PLANNED = "planned"
-PHASE_STATUS_IN_PROGRESS = "in_progress"
-PHASE_STATUS_COMPLETED = "completed"
-PHASE_STATUS_BLOCKED = "blocked"
-PHASE_STATUS_DEFERRED = "deferred"
-
-PHASE_STATUSES = {
-    PHASE_STATUS_PLANNED,
-    PHASE_STATUS_IN_PROGRESS,
-    PHASE_STATUS_COMPLETED,
-    PHASE_STATUS_BLOCKED,
-    PHASE_STATUS_DEFERRED,
-}
-
-AUDIT_STATUS_PASSED = "passed"
-AUDIT_STATUS_NEEDS_FOLLOWUP = "needs_followup"
-
-AUDIT_STATUSES = {
-    AUDIT_STATUS_PASSED,
-    AUDIT_STATUS_NEEDS_FOLLOWUP,
-}
-
-AUDIT_SEVERITIES = {
-    "low",
-    "medium",
-    "high",
-    "critical",
-}
-
-FOLLOWUP_STATUS_STARTED = "started"
-FOLLOWUP_STATUS_SKIPPED = "skipped"
-FOLLOWUP_STATUS_FAILED = "failed"
-
-_INACTIVE_PHASE_DIR_KEY = "_inactive"
+PHASE_STATUSES = {"planned", "in_progress", "completed", "blocked", "deferred"}
+AUDIT_SEVERITIES = {"low", "medium", "high", "critical"}
 
 
 class PhaseScope(StrictModel):
@@ -102,20 +51,6 @@ class PhasePlanDocument(StrictModel):
     phases: list[PhasePlanPhase]
 
 
-class Phase(StrictModel):
-    id: str
-    dir_key: str
-    title: str
-    objective: str
-    status: str
-    scope: PhaseScope
-    dependencies: list[str]
-    criteria: list[PhaseCriterion]
-    deliverables: list[str]
-    risks: list[str]
-    rollback: list[str]
-
-
 class AuditGap(StrictModel):
     id: str
     severity: str
@@ -128,1250 +63,757 @@ class AuditResult(StrictModel):
     version: int
     task_id: str
     request_snapshot_ref: str
-    status: str
+    status: Literal["passed", "needs_followup"]
     summary: str
     gaps: list[AuditGap]
 
 
-class FollowupRunResult(StrictModel):
-    status: str
+class DevLoopParams(BaseModel):
+    followup_depth: int = Field(default=0, ge=0)
+    auto_followup_max_depth: int = Field(default=3, ge=0)
+    skip_test_phase: bool = False
+    mode: Literal["devloop", "docloop"] = "devloop"
+
+
+class FollowupRunResult(BaseModel):
+    status: Literal["started", "skipped", "failed"]
     reason: str | None = None
     followup_depth: int
     auto_followup_max_depth: int
-    child_workflow_name: str | None = None
-    child_run_id: str | None = None
     child_status: str | None = None
-    child_terminal: str | None = None
-    child_last_event: str | None = None
-    child_run_folder: str | None = None
-    child_request_file: str | None = None
+    child_audit_result: str | None = None
+
+
+class DevLoopResult(BaseModel):
+    status: Literal["passed", "blocked", "needs_followup"]
+    summary: str
+    phase_plan_path: str
+    audit_result_path: str | None = None
+    followup_result_path: str | None = None
+    completed_phases: list[str] = Field(default_factory=list)
 
 
 class PhasePlanError(ValueError):
-    """Raised when the devloop phase-plan contract is not satisfied."""
+    pass
 
 
 class AuditResultError(ValueError):
-    """Raised when the devloop audit-result contract is not satisfied."""
+    pass
 
 
-def _invalid(message: str, details: Iterable[str] = ()) -> ValidationResult:
-    return ValidationResult.invalid(message, details=tuple(details))
+@activity
+def _write_text(path: str, text: str) -> str:
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(text, encoding="utf-8")
+    return str(target)
 
 
-def _validate_plan_completion(ctx) -> ValidationResult:
-    issues: list[str] = []
-
-    try:
-        phases = _load_phase_plan(
-            _read_artifact_text(ctx.artifacts.phase_plan, "phase plan"),
-            expected_task_id=ctx.task_id,
-            expected_request_snapshot_ref=str(ctx.request.file),
-        )
-    except PhasePlanError as exc:
-        phases = []
-        issues.append(str(exc))
-
-    issues.extend(review_issues(ctx, "plan"))
-
-    if issues:
-        return _invalid("Plan completion gate failed.", issues)
-
-    ctx.state.phases = phases
-    ctx.state.phase_index = -1
-    ctx.state.phase = None
-    ctx.state.phase_dir_key = _INACTIVE_PHASE_DIR_KEY
-    ctx.state.audit_status = None
-    return ValidationResult.valid()
-
-
-def _validate_implement_completion(ctx) -> ValidationResult:
-    issues = review_issues(ctx, "implement")
-    if issues:
-        return _invalid("Implementation completion gate failed.", issues)
-    return ValidationResult.valid()
-
-
-def _validate_test_completion(ctx) -> ValidationResult:
-    issues = review_issues(ctx, "test")
-    if issues:
-        return _invalid("Test completion gate failed.", issues)
-    return ValidationResult.valid()
-
-
-def _validate_phase_item_review(ctx) -> ValidationResult:
-    issues: list[str] = []
-    active_phase = ctx.state.phase
-    active_index = ctx.state.phase_index
-    previous_phases = list(ctx.state.phases)
-    phases: list[Phase] = []
-
-    if active_phase is None:
-        issues.append("phase item review requires an active phase")
-    elif active_index < 0 or active_index >= len(previous_phases):
-        issues.append("phase item review requires a valid active phase index")
-    elif previous_phases[active_index].id != active_phase.id:
-        issues.append("active phase state is inconsistent with the phase index")
-
-    try:
-        document = _load_phase_plan_document(
-            _read_artifact_text(ctx.artifacts.phase_plan, "phase plan"),
-            expected_task_id=ctx.task_id,
-            expected_request_snapshot_ref=str(ctx.request.file),
-            allow_live_statuses=True,
-        )
-        phases = [_phase_from_plan_phase(phase) for phase in document.phases]
-        issues.extend(
-            _phase_item_review_issues(
-                document,
-                phases,
-                previous_phases=previous_phases,
-                active_phase=active_phase,
-                active_index=active_index,
-            )
-        )
-    except PhasePlanError as exc:
-        issues.append(str(exc))
-
-    issues.extend(_non_empty_artifact_issues(ctx.artifacts.phase_item_review, "phase item review"))
-    issues.extend(review_issues(ctx, "review_phase_item"))
-
-    if issues:
-        return _invalid("Phase item review gate failed.", issues)
-
-    ctx.state.phases = phases
-    ctx.state.phase_index = active_index
-    ctx.state.phase = phases[active_index]
-    ctx.state.phase_dir_key = phases[active_index].dir_key
-    return ValidationResult.valid()
-
-
-def _validate_audit_completion(ctx) -> ValidationResult:
-    issues: list[str] = []
-    audit_result: AuditResult | None = None
-
-    try:
-        audit_result = _load_audit_result(
-            _read_artifact_text(
-                ctx.artifacts.audit_result,
-                "audit result",
-                error_cls=AuditResultError,
-            ),
-            expected_task_id=ctx.task_id,
-            expected_request_snapshot_ref=str(ctx.request.file),
-        )
-    except AuditResultError as exc:
-        issues.append(str(exc))
-
-    issues.extend(_non_empty_artifact_issues(ctx.artifacts.gap_report, "gap report"))
-    issues.extend(review_issues(ctx, "audit"))
-
-    if audit_result is not None and audit_result.status == AUDIT_STATUS_NEEDS_FOLLOWUP:
-        issues.extend(_non_empty_artifact_issues(ctx.artifacts.revised_request, "revised request"))
-
-    if issues:
-        return _invalid("Audit completion gate failed.", issues)
-
-    ctx.state.audit_status = audit_result.status if audit_result is not None else None
-    return ValidationResult.valid()
-
-
-class DevLoop(Workflow):
-    """Plan, implement, test, audit, and optionally follow up on a software change."""
-
-    name = "devloop"
-
-    class Params(BaseModel):
-        followup_depth: int = 0
-        auto_followup_max_depth: int = 3
-        skip_test_phase: bool = Field(
-            default=False,
-            description="Skip the per-phase test producer/verifier step while writing explicit skipped-test artifacts.",
-        )
-
-    class State(BaseModel):
-        phases: list[Phase] = Field(default_factory=list)
-        phase_index: int = -1
-        phase: Phase | None = None
-        phase_dir_key: str = _INACTIVE_PHASE_DIR_KEY
-        audit_status: str | None = None
-        review: ReviewRequest | None = None
-
-    plan_session = Session(open=True)
-    phase_session = Session()
-    audit_session = Session(open=True)
-
-    request = Artifact.text(
-        "{{ run.folder }}/request.md",
-        name="request",
-        required=True,
+@activity
+def _write_json(path: str, payload: dict[str, Any]) -> str:
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
-
-    phase_plan = Artifact.json(
-        "{{ task.folder }}/plan/phase_plan.json",
-        schema=PhasePlanDocument,
-        name="phase_plan",
-    )
-    plan_review = Artifact.json(
-        "{{ task.folder }}/plan/review.json",
-        schema=ReviewReport,
-        name="plan_review",
-    )
-    plan_gate_feedback = Artifact.md(
-        "{{ task.folder }}/plan/completion_gate_feedback.md",
-        name="plan_gate_feedback",
-    )
-    phase_item_review = Artifact.md(
-        "{{ task.folder }}/plan/phases/{{ state.phase_dir_key }}/item_review.md",
-        name="phase_item_review",
-    )
-    phase_item_review_report = Artifact.json(
-        "{{ task.folder }}/plan/phases/{{ state.phase_dir_key }}/item_review.json",
-        schema=ReviewReport,
-        name="phase_item_review_report",
-    )
-    phase_item_review_gate_feedback = Artifact.md(
-        "{{ task.folder }}/plan/phases/{{ state.phase_dir_key }}/item_review_gate_feedback.md",
-        name="phase_item_review_gate_feedback",
-    )
-
-    impl_notes = Artifact.md(
-        "{{ task.folder }}/implement/phases/{{ state.phase_dir_key }}/implementation_notes.md",
-        name="impl_notes",
-    )
-    impl_review = Artifact.json(
-        "{{ task.folder }}/implement/phases/{{ state.phase_dir_key }}/review.json",
-        schema=ReviewReport,
-        name="impl_review",
-    )
-    impl_gate_feedback = Artifact.md(
-        "{{ task.folder }}/implement/phases/{{ state.phase_dir_key }}/completion_gate_feedback.md",
-        name="impl_gate_feedback",
-    )
-
-    test_strat = Artifact.md(
-        "{{ task.folder }}/test/phases/{{ state.phase_dir_key }}/test_strategy.md",
-        name="test_strat",
-    )
-    test_review = Artifact.json(
-        "{{ task.folder }}/test/phases/{{ state.phase_dir_key }}/review.json",
-        schema=ReviewReport,
-        name="test_review",
-    )
-    test_gate_feedback = Artifact.md(
-        "{{ task.folder }}/test/phases/{{ state.phase_dir_key }}/completion_gate_feedback.md",
-        name="test_gate_feedback",
-    )
-
-    audit_evidence = Artifact.md(
-        "{{ task.folder }}/audit/evidence.md",
-        name="audit_evidence",
-    )
-    audit_result = Artifact.json(
-        "{{ task.folder }}/audit/audit_result.json",
-        schema=AuditResult,
-        name="audit_result",
-    )
-    gap_report = Artifact.md(
-        "{{ task.folder }}/audit/gap_report.md",
-        name="gap_report",
-    )
-    revised_request = Artifact.md(
-        "{{ task.folder }}/audit/revised_request.md",
-        name="revised_request",
-    )
-    audit_review = Artifact.json(
-        "{{ task.folder }}/audit/review.json",
-        schema=ReviewReport,
-        name="audit_review",
-    )
-    audit_gate_feedback = Artifact.md(
-        "{{ task.folder }}/audit/completion_gate_feedback.md",
-        name="audit_gate_feedback",
-    )
-    followup_result = Artifact.json(
-        "{{ task.folder }}/audit/followup_result.json",
-        schema=FollowupRunResult,
-        name="followup_result",
-    )
-
-    plan = produce_verify_step(
-        producer_prompt=Prompt.file("prompts/plan_producer.md"),
-        before_verifier=begin_review,
-        after_verifier=finish_review,
-        verifier_prompt=Prompt.file("prompts/plan_verifier.md"),
-        session=plan_session,
-        requires=[request],
-        reads=[plan_review, plan_gate_feedback],
-        producer_writes=[phase_plan],
-        verifier_writes=[plan_review],
-        routes={
-            "blocked": Route.blocked(),
-            "review_invalid": Route.hidden("validate_plan_completion", required_writes=()),
-            "plan_ready": Route.to(
-                "validate_plan_completion",
-                required_writes=("phase_plan", "plan_review"),
-            ),
-            "needs_rework": Route.to(
-                "plan",
-                required_writes=("plan_review",),
-            ),
-        },
-    )
-
-    validate_plan_completion = validation_step(
-        _validate_plan_completion,
-        name="validate_plan_completion",
-        feedback=plan_gate_feedback,
-        reads=[phase_plan, plan_review],
-        routes={
-            "plan_checked": "activate_next_phase",
-            "plan_needs_repair": "plan",
-        },
-        success="plan_checked",
-        repair="plan_needs_repair",
-    )
-
-    implement = produce_verify_step(
-        producer_prompt=Prompt.file("prompts/implement_producer.md"),
-        before_verifier=begin_review,
-        after_verifier=finish_review,
-        verifier_prompt=Prompt.file("prompts/implement_verifier.md"),
-        session=phase_session,
-        requires=[phase_plan],
-        reads=[
-            impl_review,
-            impl_gate_feedback,
-            test_review,
-            test_gate_feedback,
-            phase_item_review,
-            phase_item_review_report,
-            phase_item_review_gate_feedback,
-        ],
-        producer_writes=[impl_notes],
-        verifier_writes=[impl_review],
-        routes={
-            "blocked": Route.blocked(),
-            "review_invalid": Route.hidden("validate_implement_completion", required_writes=()),
-            "implemented": Route.to(
-                "validate_implement_completion",
-                required_writes=("impl_notes", "impl_review"),
-            ),
-            "needs_rework": Route.to(
-                "implement",
-                required_writes=("impl_review",),
-            ),
-            "needs_phase_item_review": Route.to(
-                "review_phase_item",
-                required_writes=("impl_review",),
-            ),
-        },
-    )
-
-    review_phase_item = produce_verify_step(
-        producer_prompt=Prompt.file("prompts/phase_item_review_producer.md"),
-        before_verifier=begin_review,
-        after_verifier=finish_review,
-        verifier_prompt=Prompt.file("prompts/phase_item_review_verifier.md"),
-        session=phase_session,
-        requires=[phase_plan],
-        reads=[
-            impl_review,
-            impl_gate_feedback,
-            test_review,
-            test_gate_feedback,
-            phase_item_review_report,
-            phase_item_review_gate_feedback,
-        ],
-        producer_writes=[phase_plan, phase_item_review],
-        verifier_writes=[phase_item_review_report],
-        routes={
-            "blocked": Route.blocked(),
-            "review_invalid": Route.hidden("validate_phase_item_review", required_writes=()),
-            "phase_item_reviewed": Route.to(
-                "validate_phase_item_review",
-                required_writes=(
-                    "phase_plan",
-                    "phase_item_review",
-                    "phase_item_review_report",
-                ),
-            ),
-            "needs_rework": Route.to(
-                "review_phase_item",
-                required_writes=("phase_item_review_report",),
-            ),
-        },
-    )
-
-    validate_phase_item_review = validation_step(
-        _validate_phase_item_review,
-        name="validate_phase_item_review",
-        feedback=phase_item_review_gate_feedback,
-        reads=[phase_plan, phase_item_review, phase_item_review_report],
-        routes={
-            "phase_item_review_checked": "implement",
-            "phase_item_review_needs_repair": "review_phase_item",
-        },
-        success="phase_item_review_checked",
-        repair="phase_item_review_needs_repair",
-    )
-
-    validate_implement_completion = validation_step(
-        _validate_implement_completion,
-        name="validate_implement_completion",
-        feedback=impl_gate_feedback,
-        reads=[impl_review],
-        routes={
-            "implement_checked": "maybe_test",
-            "implement_needs_repair": "implement",
-        },
-        success="implement_checked",
-        repair="implement_needs_repair",
-    )
-
-    @python_step(
-        name="maybe_test",
-        reads=[phase_plan, impl_notes, test_review],
-        writes=[test_strat],
-        routes={
-            "run_tests": "test",
-            "tests_skipped": "activate_next_phase",
-        },
-    )
-    def maybe_test(ctx):
-        if not ctx.params.skip_test_phase:
-            return "run_tests"
-
-        phase_id = ctx.state.phase.id if ctx.state.phase is not None else "unknown"
-        phase_title = ctx.state.phase.title if ctx.state.phase is not None else phase_id
-        ctx.artifacts.test_strat.write_text(
-            "\n".join(
-                (
-                    f"# Test Strategy: {phase_id}",
-                    "",
-                    "## Summary",
-                    f"The test phase for `{phase_title}` was intentionally skipped because "
-                    "`skip_test_phase=true` was set for this run.",
-                    "",
-                    "## Validation scope",
-                    "- No test producer/verifier turn was run for this phase.",
-                    "- Implementation completion was still checked before the skip gate advanced.",
-                    "",
-                    "## Residual risk",
-                    "Skipping this phase removes independent validation for the active phase and should be used only "
-                    "when the caller accepts reduced workflow assurance.",
-                    "",
-                )
-            )
-        )
-        # A previous run may have tested this task-scoped path. A skip must
-        # leave no passing review that a later audit could mistake for this run.
-        ctx.artifacts.test_review.path.unlink(missing_ok=True)
-        return "tests_skipped"
-
-    test = produce_verify_step(
-        producer_prompt=Prompt.file("prompts/test_producer.md"),
-        before_verifier=begin_review,
-        after_verifier=finish_review,
-        verifier_prompt=Prompt.file("prompts/test_verifier.md"),
-        session=phase_session,
-        requires=[phase_plan, impl_notes],
-        reads=[test_review, test_gate_feedback],
-        producer_writes=[test_strat],
-        verifier_writes=[test_review],
-        routes={
-            "blocked": Route.blocked(),
-            "review_invalid": Route.hidden("validate_test_completion", required_writes=()),
-            "phase_passed": Route.to(
-                "validate_test_completion",
-                required_writes=("test_strat", "test_review"),
-            ),
-            "needs_rework": Route.to(
-                "implement",
-                required_writes=("test_review",),
-            ),
-        },
-    )
-
-    validate_test_completion = validation_step(
-        _validate_test_completion,
-        name="validate_test_completion",
-        feedback=test_gate_feedback,
-        reads=[test_review],
-        routes={
-            "test_checked": "activate_next_phase",
-            "test_needs_repair": "test",
-        },
-        success="test_checked",
-        repair="test_needs_repair",
-    )
-
-    audit = produce_verify_step(
-        producer_prompt=Prompt.file("prompts/audit_producer.md"),
-        before_verifier=begin_review,
-        after_verifier=finish_review,
-        verifier_prompt=Prompt.file("prompts/audit_verifier.md"),
-        session=audit_session,
-        requires=[phase_plan, audit_evidence],
-        reads=[audit_review, audit_gate_feedback],
-        producer_writes=[audit_result, gap_report, revised_request],
-        verifier_writes=[audit_review],
-        routes={
-            "blocked": Route.blocked(),
-            "review_invalid": Route.hidden("validate_audit_completion", required_writes=()),
-            "audit_ready": Route.to(
-                "validate_audit_completion",
-                required_writes=(
-                    "audit_result",
-                    "gap_report",
-                    "audit_review",
-                ),
-            ),
-            "audit_needs_repair": Route.to("audit", required_writes=("audit_review",)),
-        },
-    )
-
-    validate_audit_completion = validation_step(
-        _validate_audit_completion,
-        name="validate_audit_completion",
-        feedback=audit_gate_feedback,
-        reads=[audit_result, gap_report, revised_request, audit_review],
-        routes={
-            "audit_checked": "finish_audit",
-            "audit_needs_repair": "audit",
-        },
-        success="audit_checked",
-        repair="audit_needs_repair",
-    )
-
-    extensions = (
-        SessionPaths(DevLoopSessionPathStrategy()),
-        DevLoopRuntimeArtifacts(),
-    )
-
-    @python_step(
-        name="activate_next_phase",
-        reads=[phase_plan],
-        writes=[phase_plan],
-        routes={
-            "phase_selected": "implement",
-            "all_phases_complete": "collect_audit_evidence",
-        },
-    )
-    def activate_next_phase(ctx):
-        if ctx.state.phase is not None:
-            _set_phase_status(ctx, ctx.state.phase.id, PHASE_STATUS_COMPLETED)
-
-        next_index = ctx.state.phase_index + 1
-        if next_index >= len(ctx.state.phases):
-            ctx.state.phase = None
-            ctx.state.phase_dir_key = _INACTIVE_PHASE_DIR_KEY
-            _set_phase_plan_status(ctx, PHASE_STATUS_COMPLETED)
-            return "all_phases_complete"
-
-        phase = ctx.state.phases[next_index]
-        ctx.state.phase_index = next_index
-        ctx.state.phase = phase
-        ctx.state.phase_dir_key = phase.dir_key
-        _set_phase_status(ctx, phase.id, PHASE_STATUS_IN_PROGRESS)
-        ctx.open_session("phase_session", scope=phase.id)
-        return "phase_selected"
-
-    @python_step(
-        name="collect_audit_evidence",
-        reads=[phase_plan],
-        writes=[audit_evidence],
-        routes={"audit_evidence_ready": "audit"},
-    )
-    def collect_audit_evidence(ctx):
-        ctx.open_session("audit_session")
-        ctx.artifacts.audit_evidence.write_text(_build_audit_evidence(ctx))
-        return "audit_evidence_ready"
-
-    @python_step(
-        name="finish_audit",
-        reads=[audit_result],
-        routes={
-            "audit_passed": FINISH,
-            "needs_followup": "start_followup_run",
-        },
-    )
-    def finish_audit(ctx):
-        audit_result = _load_audit_result(
-            _read_artifact_text(
-                ctx.artifacts.audit_result,
-                "audit result",
-                error_cls=AuditResultError,
-            ),
-            expected_task_id=ctx.task_id,
-            expected_request_snapshot_ref=str(ctx.request.file),
-        )
-        ctx.state.audit_status = audit_result.status
-        if audit_result.status == AUDIT_STATUS_NEEDS_FOLLOWUP:
-            return "needs_followup"
-        return "audit_passed"
-
-    @python_step(
-        name="start_followup_run",
-        reads=[audit_result, revised_request],
-        writes=[followup_result],
-        routes={
-            "followup_started": FINISH,
-            "followup_skipped": FINISH,
-            "followup_failed": FAIL,
-        },
-    )
-    def start_followup_run(ctx):
-        followup_depth = _safe_int(getattr(ctx.params, "followup_depth", 0), default=0)
-        max_depth = _safe_int(getattr(ctx.params, "auto_followup_max_depth", 3), default=3)
-
-        if followup_depth >= max_depth:
-            ctx.artifacts.followup_result.write_json(
-                {
-                    "status": FOLLOWUP_STATUS_SKIPPED,
-                    "reason": "auto_followup_max_depth_reached",
-                    "followup_depth": followup_depth,
-                    "auto_followup_max_depth": max_depth,
-                    "child_workflow_name": None,
-                    "child_run_id": None,
-                    "child_status": None,
-                    "child_terminal": None,
-                    "child_last_event": None,
-                    "child_run_folder": None,
-                    "child_request_file": None,
-                }
-            )
-            return "followup_skipped"
-
-        revised_request_text = _read_artifact_text(
-            ctx.artifacts.revised_request,
-            "revised request",
-            error_cls=AuditResultError,
-        ).strip()
-        if not revised_request_text:
-            ctx.artifacts.followup_result.write_json(
-                {
-                    "status": FOLLOWUP_STATUS_FAILED,
-                    "reason": "revised_request_empty",
-                    "followup_depth": followup_depth,
-                    "auto_followup_max_depth": max_depth,
-                    "child_workflow_name": None,
-                    "child_run_id": None,
-                    "child_status": None,
-                    "child_terminal": None,
-                    "child_last_event": None,
-                    "child_run_folder": None,
-                    "child_request_file": None,
-                }
-            )
-            return "followup_failed"
-
-        child_result = ctx.invoke_workflow(
-            "devloop",
-            message=revised_request_text,
-            parameters={
-                "followup_depth": followup_depth + 1,
-                "auto_followup_max_depth": max_depth,
-                "skip_test_phase": ctx.params.skip_test_phase,
-            },
-        )
-
-        payload = _child_followup_payload(
-            child_result,
-            followup_depth=followup_depth,
-            auto_followup_max_depth=max_depth,
-        )
-        ctx.artifacts.followup_result.write_json(payload)
-
-        if payload["child_status"] != "success":
-            return "followup_failed"
-
-        return "followup_started"
-
-    entry = plan
-
-
-def _load_phase_plan(
-    raw: str,
-    *,
-    expected_task_id: str,
-    expected_request_snapshot_ref: str,
-    allow_live_statuses: bool = False,
-) -> list[Phase]:
-    document = _load_phase_plan_document(
-        raw,
-        expected_task_id=expected_task_id,
-        expected_request_snapshot_ref=expected_request_snapshot_ref,
-        allow_live_statuses=allow_live_statuses,
-    )
-    return [_phase_from_plan_phase(phase) for phase in document.phases]
-
-
-def _load_phase_plan_document(
-    raw: str,
-    *,
-    expected_task_id: str,
-    expected_request_snapshot_ref: str,
-    allow_live_statuses: bool = False,
-) -> PhasePlanDocument:
-    payload = _parse_phase_plan_payload(raw)
-    document = _validate_phase_plan_document(payload, allow_live_statuses=allow_live_statuses)
-    _validate_phase_plan_metadata(
-        document,
-        expected_task_id=expected_task_id,
-        expected_request_snapshot_ref=expected_request_snapshot_ref,
-    )
-    return document
-
-
-def _parse_phase_plan_payload(raw: str) -> Mapping[str, Any]:
-    try:
-        payload = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise PhasePlanError(f"phase plan must be valid JSON: {exc.msg}") from exc
-
-    if not isinstance(payload, Mapping):
-        raise PhasePlanError("phase plan must be a JSON object")
-
-    return payload
-
-
-def _validate_phase_plan_document(
-    payload: Mapping[str, Any],
-    *,
-    allow_live_statuses: bool = False,
-) -> PhasePlanDocument:
-    try:
-        document = PhasePlanDocument.model_validate(payload)
-    except ValidationError as exc:
-        raise PhasePlanError(f"phase plan schema validation failed: {exc}") from exc
-
-    if document.version != PHASE_PLAN_VERSION:
-        raise PhasePlanError(
-            f"phase plan version must be {PHASE_PLAN_VERSION}, got {document.version!r}"
-        )
-
-    if allow_live_statuses:
-        if document.status not in PHASE_STATUSES:
-            raise PhasePlanError(
-                f"phase plan root status must be one of {sorted(PHASE_STATUSES)}, got {document.status!r}"
-            )
-    elif document.status != PHASE_STATUS_PLANNED:
-        raise PhasePlanError("phase plan root status must be 'planned' in a new phase plan")
-
-    if not document.phases:
-        raise PhasePlanError("phase plan must define at least one phase")
-
-    all_phase_ids = {
-        _non_empty(phase.phase_id, "phase_id")
-        for phase in document.phases
-    }
-    seen_phase_ids: set[str] = set()
-
-    for index, phase in enumerate(document.phases, start=1):
-        label = f"phases[{index}]"
-        phase_id = _non_empty(phase.phase_id, f"{label}.phase_id")
-
-        if phase_id in seen_phase_ids:
-            raise PhasePlanError(f"duplicate phase_id {phase_id!r}")
-
-        _phase_dir_key_checked(phase_id)
-
-        _non_empty(phase.title, f"{label}.title")
-        _non_empty(phase.objective, f"{label}.objective")
-
-        if allow_live_statuses:
-            if phase.status not in PHASE_STATUSES:
-                raise PhasePlanError(
-                    f"{label}.status must be one of {sorted(PHASE_STATUSES)}, got {phase.status!r}"
-                )
-        elif phase.status != PHASE_STATUS_PLANNED:
-            raise PhasePlanError(f"{label}.status must be 'planned' in a new phase plan")
-
-        _string_list(phase.scope.in_scope, f"{label}.scope.in_scope", allow_empty=False)
-        _string_list(phase.scope.out_of_scope, f"{label}.scope.out_of_scope", allow_empty=True)
-        _string_list(phase.dependencies, f"{label}.dependencies", allow_empty=True)
-        _string_list(phase.deliverables, f"{label}.deliverables", allow_empty=False)
-        _string_list(phase.risks, f"{label}.risks", allow_empty=True)
-        _string_list(phase.rollback, f"{label}.rollback", allow_empty=True)
-
-        if not phase.criteria:
-            raise PhasePlanError(f"{label}.criteria must contain at least one criterion")
-
-        criterion_ids: set[str] = set()
-        for criterion_index, criterion in enumerate(phase.criteria, start=1):
-            criterion_label = f"{label}.criteria[{criterion_index}]"
-            criterion_id = _non_empty(criterion.id, f"{criterion_label}.id")
-            _non_empty(criterion.text, f"{criterion_label}.text")
-
-            if criterion_id in criterion_ids:
-                raise PhasePlanError(f"{label}.criteria contains duplicate id {criterion_id!r}")
-            criterion_ids.add(criterion_id)
-
-        for dependency in phase.dependencies:
-            dependency_id = dependency.strip()
-
-            if dependency_id == phase_id:
-                raise PhasePlanError(
-                    f"{label}.dependencies must not reference itself: {phase_id!r}"
-                )
-
-            if dependency_id in all_phase_ids and dependency_id not in seen_phase_ids:
-                raise PhasePlanError(
-                    f"{label}.dependencies references phase {dependency_id!r}, "
-                    "which is not earlier in phase order"
-                )
-
-        seen_phase_ids.add(phase_id)
-
-    return document
-
-
-def _phase_item_review_issues(
-    document: PhasePlanDocument,
-    phases: Sequence[Phase],
-    *,
-    previous_phases: Sequence[Phase],
-    active_phase: Phase | None,
-    active_index: int,
-) -> list[str]:
-    if active_phase is None or active_index < 0 or active_index >= len(previous_phases):
-        return []
-
-    issues: list[str] = []
-    if active_index >= len(phases):
-        return ["phase item review removed the active phase position"]
-
-    reviewed_active = phases[active_index]
-    if reviewed_active.id != active_phase.id:
-        issues.append(
-            "phase item review must keep the active phase_id unchanged at the active phase position "
-            f"({active_phase.id!r})"
-        )
-
-    if reviewed_active.status != PHASE_STATUS_IN_PROGRESS:
-        issues.append("active phase status must remain 'in_progress' after phase item review")
-
-    previous_ids = {phase.id for phase in previous_phases}
-    for index, previous_phase in enumerate(previous_phases[:active_index]):
-        if index >= len(phases):
-            issues.append(f"phase item review removed prior phase {previous_phase.id!r}")
-            continue
-        reviewed_phase = phases[index]
-        if reviewed_phase.id != previous_phase.id:
-            issues.append(
-                f"phase item review changed prior phase order at index {index}: "
-                f"expected {previous_phase.id!r}, got {reviewed_phase.id!r}"
-            )
-        if previous_phase.status == PHASE_STATUS_COMPLETED and reviewed_phase.status != PHASE_STATUS_COMPLETED:
-            issues.append(f"completed prior phase {previous_phase.id!r} must remain completed")
-
-    for reviewed_phase in phases[:active_index]:
-        if reviewed_phase.id not in previous_ids:
-            issues.append(
-                f"phase item review inserted new phase {reviewed_phase.id!r} before the active phase"
-            )
-
-    expected_status = _aggregate_phase_plan_status([phase.model_dump(mode="python") for phase in phases])
-    if document.status != expected_status:
-        issues.append(
-            f"phase plan root status must be {expected_status!r} for current phase statuses, "
-            f"got {document.status!r}"
-        )
-
-    return issues
-
-
-def _validate_phase_plan_metadata(
-    document: PhasePlanDocument,
-    *,
-    expected_task_id: str,
-    expected_request_snapshot_ref: str,
-) -> None:
-    if document.task_id != expected_task_id:
-        raise PhasePlanError(
-            f"phase plan task_id must be {expected_task_id!r}, got {document.task_id!r}"
-        )
-
-    if document.request_snapshot_ref != expected_request_snapshot_ref:
-        raise PhasePlanError(
-            "phase plan request_snapshot_ref must be "
-            f"{expected_request_snapshot_ref!r}, got {document.request_snapshot_ref!r}"
-        )
-
-
-def _phase_from_plan_phase(phase: PhasePlanPhase) -> Phase:
-    phase_id = phase.phase_id.strip()
-    return Phase(
-        id=phase_id,
-        dir_key=_phase_dir_key_checked(phase_id),
-        title=phase.title.strip(),
-        objective=phase.objective.strip(),
-        status=phase.status,
-        scope=phase.scope,
-        dependencies=[item.strip() for item in phase.dependencies],
-        criteria=[
-            PhaseCriterion(id=criterion.id.strip(), text=criterion.text.strip())
-            for criterion in phase.criteria
-        ],
-        deliverables=[item.strip() for item in phase.deliverables],
-        risks=[item.strip() for item in phase.risks],
-        rollback=[item.strip() for item in phase.rollback],
-    )
-
-
-def _load_audit_result(
-    raw: str,
-    *,
-    expected_task_id: str,
-    expected_request_snapshot_ref: str,
-) -> AuditResult:
-    payload = _parse_audit_result_payload(raw)
-
-    try:
-        result = AuditResult.model_validate(payload)
-    except ValidationError as exc:
-        raise AuditResultError(f"audit result schema validation failed: {exc}") from exc
-
-    if result.version != AUDIT_RESULT_VERSION:
-        raise AuditResultError(
-            f"audit result version must be {AUDIT_RESULT_VERSION}, got {result.version!r}"
-        )
-
-    if result.task_id != expected_task_id:
-        raise AuditResultError(
-            f"audit result task_id must be {expected_task_id!r}, got {result.task_id!r}"
-        )
-
-    if result.request_snapshot_ref != expected_request_snapshot_ref:
-        raise AuditResultError(
-            "audit result request_snapshot_ref must be "
-            f"{expected_request_snapshot_ref!r}, got {result.request_snapshot_ref!r}"
-        )
-
-    if result.status not in AUDIT_STATUSES:
-        raise AuditResultError(
-            f"audit result status must be one of {sorted(AUDIT_STATUSES)}, got {result.status!r}"
-        )
-
-    _non_empty(result.summary, "audit_result.summary", error_cls=AuditResultError)
-
-    seen_gap_ids: set[str] = set()
-    for index, gap in enumerate(result.gaps, start=1):
-        label = f"audit_result.gaps[{index}]"
-        gap_id = _non_empty(gap.id, f"{label}.id", error_cls=AuditResultError)
-        _non_empty(gap.summary, f"{label}.summary", error_cls=AuditResultError)
-        _non_empty(gap.followup, f"{label}.followup", error_cls=AuditResultError)
-        _string_list(
-            gap.evidence,
-            f"{label}.evidence",
-            allow_empty=False,
-            error_cls=AuditResultError,
-        )
-
-        if gap_id in seen_gap_ids:
-            raise AuditResultError(f"audit result contains duplicate gap id {gap_id!r}")
-        seen_gap_ids.add(gap_id)
-
-        if gap.severity not in AUDIT_SEVERITIES:
-            raise AuditResultError(
-                f"{label}.severity must be one of {sorted(AUDIT_SEVERITIES)}, got {gap.severity!r}"
-            )
-
-    if result.status == AUDIT_STATUS_PASSED and result.gaps:
-        raise AuditResultError("audit result status is 'passed' but unresolved gaps were reported")
-
-    if result.status == AUDIT_STATUS_NEEDS_FOLLOWUP and not result.gaps:
-        raise AuditResultError("audit result status is 'needs_followup' but no gaps were reported")
-
-    return result
-
-
-def _parse_audit_result_payload(raw: str) -> Mapping[str, Any]:
-    try:
-        payload = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise AuditResultError(f"audit result must be valid JSON: {exc.msg}") from exc
-
-    if not isinstance(payload, Mapping):
-        raise AuditResultError("audit result must be a JSON object")
-
-    return payload
-
-
-def _non_empty_artifact_issues(artifact, label: str) -> list[str]:
-    if not artifact.exists():
-        return [f"{label} is missing: {artifact.path}"]
-
-    try:
-        text = artifact.read_text()
-    except OSError as exc:
-        return [f"{label} could not be read: {artifact.path}: {exc}"]
-
-    if not text.strip():
-        return [f"{label} is empty: {artifact.path}"]
-
-    return []
-
-
-def _set_phase_status(ctx, phase_id: str, status: str) -> None:
-    payload = dict(_parse_phase_plan_payload(ctx.artifacts.phase_plan.read_text()))
-    phases = payload.get("phases")
-
-    if not isinstance(phases, list):
-        raise PhasePlanError("phase plan must define a phases list before status can be updated")
-
-    matched = False
-    for item in phases:
-        if not isinstance(item, dict):
-            continue
-        if str(item.get("phase_id", "")).strip() != phase_id:
-            continue
-        item["status"] = status
-        matched = True
-        break
-
-    if not matched:
-        raise PhasePlanError(f"cannot update unknown phase_id {phase_id!r}")
-
-    payload["status"] = _aggregate_phase_plan_status(phases)
-    ctx.artifacts.phase_plan.write_text(_dump_json(payload))
-
-    for index, phase in enumerate(ctx.state.phases):
-        if phase.id == phase_id:
-            phase.status = status
-            ctx.state.phases[index] = phase
-            break
-
-    if ctx.state.phase is not None and ctx.state.phase.id == phase_id:
-        ctx.state.phase.status = status
-
-
-def _set_phase_plan_status(ctx, status: str) -> None:
-    payload = dict(_parse_phase_plan_payload(ctx.artifacts.phase_plan.read_text()))
-    payload["status"] = status
-    ctx.artifacts.phase_plan.write_text(_dump_json(payload))
-
-
-def _aggregate_phase_plan_status(phases: Sequence[Mapping[str, Any]]) -> str:
-    statuses = {
-        str(item.get("status", "")).strip()
-        for item in phases
-        if isinstance(item, Mapping)
-    }
-
-    if statuses and statuses <= {PHASE_STATUS_COMPLETED, PHASE_STATUS_DEFERRED}:
-        return PHASE_STATUS_COMPLETED
-    if PHASE_STATUS_BLOCKED in statuses:
-        return PHASE_STATUS_BLOCKED
-    if PHASE_STATUS_IN_PROGRESS in statuses:
-        return PHASE_STATUS_IN_PROGRESS
-    return PHASE_STATUS_PLANNED
-
-
-def _build_audit_evidence(ctx) -> str:
-    lines: list[str] = [
+    return str(target)
+
+
+@activity
+def _collect_audit_evidence(
+    task_folder: str, run_folder: str, request: str, params: dict[str, Any]
+) -> str:
+    task = Path(task_folder)
+    run = Path(run_folder)
+    target = task / "audit" / "evidence.md"
+    lines = [
         "# Devloop Audit Evidence",
         "",
         "## Request",
         "",
-        "```text",
-        ctx.request.text,
-        "```",
+        request,
         "",
-        "## Runtime",
-        "",
-        f"- Task id: `{ctx.task_id}`",
-        f"- Run id: `{ctx.run_id}`",
-        f"- Task folder: `{ctx.task_folder}`",
-        f"- Run folder: `{ctx.run_folder}`",
-        f"- Workflow params: `{json.dumps(ctx.workflow_params, sort_keys=True, ensure_ascii=False)}`",
-        "",
-        "## Phase Plan",
+        "## Parameters",
         "",
         "```json",
-        _read_artifact_text(ctx.artifacts.phase_plan, "phase plan").rstrip(),
+        json.dumps(params, indent=2, sort_keys=True),
         "```",
         "",
     ]
-
-    for phase in ctx.state.phases:
+    for root in (task / "plan", task / "implement", task / "test"):
+        if not root.exists():
+            continue
+        for path in sorted(root.rglob("*")):
+            if not path.is_file():
+                continue
+            lines.extend([f"## {path.relative_to(task)}", "", "```text"])
+            try:
+                lines.append(path.read_text(encoding="utf-8").rstrip())
+            except OSError as exc:
+                lines.append(f"Could not read: {exc}")
+            lines.extend(["```", ""])
+    events = run / "events.jsonl"
+    if events.is_file():
         lines.extend(
             [
-                f"## Phase: {phase.id}",
+                "## Run events",
                 "",
-                f"- Title: {phase.title}",
-                f"- Objective: {phase.objective}",
-                f"- Status: {phase.status}",
-                f"- Directory key: `{phase.dir_key}`",
-                "",
-                "### Acceptance criteria",
-                "",
-                *[f"- {criterion.id}: {criterion.text}" for criterion in phase.criteria],
+                "```text",
+                events.read_text(encoding="utf-8").rstrip(),
+                "```",
                 "",
             ]
         )
-
-        impl_dir = ctx.task_folder / "implement" / "phases" / phase.dir_key
-        test_dir = ctx.task_folder / "test" / "phases" / phase.dir_key
-
-        _append_file_section(
-            lines,
-            impl_dir / "implementation_notes.md",
-            f"Implementation notes for {phase.id}",
-        )
-        _append_file_section(
-            lines,
-            impl_dir / "review.json",
-            f"Implementation review for {phase.id}",
-        )
-        _append_file_section(
-            lines,
-            impl_dir / "completion_gate_feedback.md",
-            f"Implementation completion gate feedback for {phase.id}",
-        )
-        _append_file_section(
-            lines,
-            test_dir / "test_strategy.md",
-            f"Test strategy for {phase.id}",
-        )
-        _append_file_section(
-            lines,
-            test_dir / "review.json",
-            f"Test review for {phase.id}",
-        )
-        _append_file_section(
-            lines,
-            test_dir / "completion_gate_feedback.md",
-            f"Test completion gate feedback for {phase.id}",
-        )
-
-    _append_file_section(lines, ctx.task_folder / "decisions.txt", "Task decisions")
-    _append_file_section(lines, ctx.task_folder / "raw_phase_log.md", "Task raw phase log")
-    _append_file_section(lines, ctx.run_folder / "raw_phase_log.md", "Run raw phase log")
-    _append_file_section(lines, ctx.run_folder / "events.jsonl", "Run events")
-
-    return "\n".join(lines).rstrip() + "\n"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+    return str(target)
 
 
-def _append_file_section(lines: list[str], path: Path, title: str) -> None:
-    lines.extend(
-        [
-            f"## {title}",
-            "",
-            f"Path: `{path}`",
-            "",
-        ]
-    )
+def _process_criteria(stage: str) -> list[PhaseCriterion]:
+    return [
+        PhaseCriterion(id=key, text=value)
+        for key, value in PROCESS_CRITERIA[stage].items()
+    ]
 
-    if not path.exists():
-        lines.extend(["Missing.", ""])
-        return
 
+def _phase_dict(phase: PhasePlanPhase) -> dict[str, Any]:
+    return phase.model_dump(mode="json")
+
+
+def _validate_phase_plan(
+    raw: str, task_id: str, request_ref: str, *, live: bool = False
+) -> PhasePlanDocument:
     try:
-        text = path.read_text(encoding="utf-8").rstrip()
-    except OSError as exc:
-        lines.extend([f"Could not read file: {exc}", ""])
-        return
+        document = PhasePlanDocument.model_validate_json(raw)
+    except ValidationError as exc:
+        raise PhasePlanError(f"phase plan schema validation failed: {exc}") from exc
+    if document.version != PHASE_PLAN_VERSION:
+        raise PhasePlanError(f"phase plan version must be {PHASE_PLAN_VERSION}")
+    if document.task_id != task_id or document.request_snapshot_ref != request_ref:
+        raise PhasePlanError(
+            "phase plan task_id and request_snapshot_ref must match the declared input"
+        )
+    if document.status not in ({"planned"} if not live else PHASE_STATUSES):
+        raise PhasePlanError("phase plan has an invalid root status")
+    if not document.phases:
+        raise PhasePlanError("phase plan must contain at least one phase")
+    ids = [item.phase_id.strip() for item in document.phases]
+    if any(not item for item in ids) or len(ids) != len(set(ids)):
+        raise PhasePlanError("phase ids must be non-empty and unique")
+    seen: set[str] = set()
+    for index, phase in enumerate(document.phases, 1):
+        phase_dir_key(phase.phase_id)
+        if not phase.title.strip() or not phase.objective.strip():
+            raise PhasePlanError(
+                f"phase {phase.phase_id!r} needs a title and objective"
+            )
+        if phase.status not in ({"planned"} if not live else PHASE_STATUSES):
+            raise PhasePlanError(f"phase {phase.phase_id!r} has invalid status")
+        if not phase.scope.in_scope or not phase.criteria or not phase.deliverables:
+            raise PhasePlanError(
+                f"phase {phase.phase_id!r} needs scope, criteria, and deliverables"
+            )
+        criterion_ids = [criterion.id for criterion in phase.criteria]
+        if len(criterion_ids) != len(set(criterion_ids)):
+            raise PhasePlanError(
+                f"phase {phase.phase_id!r} has duplicate criterion IDs"
+            )
+        for dependency in phase.dependencies:
+            if dependency == phase.phase_id or dependency not in seen:
+                raise PhasePlanError(
+                    f"phase {phase.phase_id!r} dependency {dependency!r} must identify an earlier phase"
+                )
+        seen.add(phase.phase_id)
+    return document
 
-    if not text:
-        lines.extend(["Empty.", ""])
-        return
 
-    lines.extend(
-        [
-            "```text",
-            text,
-            "```",
-            "",
-        ]
-    )
+def _validate_audit(raw: str, task_id: str, request_ref: str) -> AuditResult:
+    try:
+        result = AuditResult.model_validate_json(raw)
+    except ValidationError as exc:
+        raise AuditResultError(f"audit result schema validation failed: {exc}") from exc
+    if result.version != AUDIT_RESULT_VERSION:
+        raise AuditResultError(f"audit result version must be {AUDIT_RESULT_VERSION}")
+    if result.task_id != task_id or result.request_snapshot_ref != request_ref:
+        raise AuditResultError(
+            "audit result task_id and request_snapshot_ref must match the request"
+        )
+    if not result.summary.strip():
+        raise AuditResultError("audit summary must be non-empty")
+    if result.status == "passed" and result.gaps:
+        raise AuditResultError("a passed audit cannot contain unresolved gaps")
+    if result.status == "needs_followup" and not result.gaps:
+        raise AuditResultError("needs_followup requires at least one gap")
+    ids: set[str] = set()
+    for gap in result.gaps:
+        if (
+            gap.id in ids
+            or gap.severity not in AUDIT_SEVERITIES
+            or not gap.evidence
+            or not gap.followup.strip()
+        ):
+            raise AuditResultError(
+                "audit gaps need unique ids, valid severity, evidence, and followup"
+            )
+        ids.add(gap.id)
+    return result
 
 
-def _child_followup_payload(
-    child_result,
+def _aggregate_phase_status(phases: list[PhasePlanPhase]) -> str:
+    statuses = {phase.status for phase in phases}
+    if statuses and statuses <= {"completed", "deferred"}:
+        return "completed"
+    if "blocked" in statuses:
+        return "blocked"
+    if "in_progress" in statuses:
+        return "in_progress"
+    return "planned"
+
+
+def _review_id(stage: str, phase_id: str | None, attempt: int) -> str:
+    return f"{stage}:{phase_id or 'root'}:{attempt}"
+
+
+def _review_input(
     *,
-    followup_depth: int,
-    auto_followup_max_depth: int,
-) -> dict[str, object]:
-    last_event = getattr(child_result, "last_event", None)
-    last_event_tag = getattr(last_event, "tag", None)
-    status = getattr(child_result, "status", None)
-
+    request: str,
+    stage: str,
+    review_id: str,
+    criteria: list[PhaseCriterion],
+    phase: PhasePlanPhase | None = None,
+) -> dict[str, Any]:
     return {
-        "status": FOLLOWUP_STATUS_STARTED if status == "success" else FOLLOWUP_STATUS_FAILED,
-        "reason": None if status == "success" else "child_workflow_did_not_succeed",
-        "followup_depth": followup_depth,
-        "auto_followup_max_depth": auto_followup_max_depth,
-        "child_workflow_name": getattr(child_result, "workflow_name", None),
-        "child_run_id": getattr(child_result, "run_id", None),
-        "child_status": status,
-        "child_terminal": getattr(child_result, "terminal", None),
-        "child_last_event": last_event_tag,
-        "child_run_folder": _string_or_none(getattr(child_result, "run_folder", None)),
-        "child_request_file": _string_or_none(getattr(child_result, "request_file", None)),
+        "request": request,
+        "stage": stage,
+        "review_id": review_id,
+        "criteria": [criterion.model_dump(mode="json") for criterion in criteria],
+        "phase": _phase_dict(phase) if phase else None,
     }
 
 
-def _dump_json(payload: Mapping[str, Any]) -> str:
-    return json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+def _blocked(
+    plan_path: Path, report: ReviewReport, phases: list[PhasePlanPhase]
+) -> DevLoopResult:
+    return DevLoopResult(
+        status="blocked",
+        summary=report.summary
+        or "; ".join(report.issues())
+        or "Verifier blocked the workflow.",
+        phase_plan_path=str(plan_path),
+        completed_phases=[
+            phase.phase_id for phase in phases if phase.status == "completed"
+        ],
+    )
 
 
-def _phase_dir_key_checked(phase_id: str) -> str:
-    try:
-        return phase_dir_key(phase_id)
-    except ValueError as exc:
-        raise PhasePlanError(str(exc)) from exc
+PLAN_PRODUCER = """Create a strict phased implementation plan for the supplied request. Inspect the repository and
+any feedback artifacts. Write the declared phase_plan JSON. Preserve the supplied task_id and request_snapshot_ref.
+Each planned phase needs bounded scope, earlier-phase dependencies, concrete criteria, deliverables, risks, and rollback."""
+
+PLAN_VERIFIER = """Independently audit the phase plan against the request and repository. Write the declared review
+artifact and return the structured ReviewReport. Cover exactly the supplied criteria and use the supplied review_id."""
+
+IMPLEMENT_PRODUCER = """Implement only the supplied active phase. Read the current plan and all review feedback.
+Edit the repository, validate the work, and write concrete implementation notes to the declared artifact."""
+
+IMPLEMENT_VERIFIER = """Independently verify the active phase against every supplied criterion. Inspect repository
+state and current evidence. Write the declared review artifact and return ReviewReport. Set repair_target=phase_item
+only when the phase definition itself must change; otherwise repair_target=candidate."""
+
+PHASE_ITEM_PRODUCER = """Repair the active phase definition after an implementation review found it unexecutable.
+Preserve completed phases, order, and the active phase id. Write the revised phase plan and an item review note."""
+
+PHASE_ITEM_VERIFIER = """Verify that the revised plan preserves completed work and phase identity while making the
+active phase executable. Write the review artifact and return ReviewReport covering the supplied process criteria."""
+
+TEST_PRODUCER = """Test the supplied phase against its acceptance criteria and current implementation. Run suitable
+checks, fix only test-harness defects, and write a test strategy containing commands and observed results."""
+
+TEST_VERIFIER = """Independently verify the phase test evidence against every supplied criterion. Write the review
+artifact and return ReviewReport. Failed implementation behavior requires candidate rework."""
+
+AUDIT_PRODUCER = """Perform a final audit of the original request using the completed phase plan and evidence bundle.
+Write audit_result.json, gap_report.md, and revised_request.md. Use passed only when no gaps remain; otherwise write a
+standalone constrained follow-up request and needs_followup. Treat skipped tests/docloop mode as reduced assurance."""
+
+AUDIT_VERIFIER = """Independently verify that audit_result, gap_report, and revised_request accurately reflect the
+request and evidence. A correct needs_followup decision can pass review. Write ReviewReport and cover the supplied
+audit-process criteria using the supplied review_id."""
 
 
-def _read_artifact_text(
-    artifact,
-    label: str,
+@workflow(name="devloop", version="1")
+def devloop(
+    request: str,
     *,
-    error_cls: type[ValueError] = PhasePlanError,
-) -> str:
-    try:
-        return artifact.read_text()
-    except OSError as exc:
-        raise error_cls(f"{label} could not be read: {artifact.path}: {exc}") from exc
+    followup_depth: int = 0,
+    auto_followup_max_depth: int = 3,
+    skip_test_phase: bool = False,
+    mode: Literal["devloop", "docloop"] = "devloop",
+) -> DevLoopResult:
+    params = DevLoopParams(
+        followup_depth=followup_depth,
+        auto_followup_max_depth=auto_followup_max_depth,
+        skip_test_phase=skip_test_phase,
+        mode=mode,
+    )
+    ctx = current_run()
+    # Top-level runs keep the historical task-facing layout. Nested follow-up
+    # runs use their child folder so they cannot overwrite the parent's audit
+    # result or phase evidence while the parent is still returning it.
+    artifact_root = ctx.task_folder if ctx.scope == "root" else ctx.folder
+    request_path = ctx.folder / "request.md"
+    _write_text(str(request_path), request.rstrip() + "\n")
+    request_artifact = Artifact.text(str(request_path), name="request", required=True)
+    plan_path = artifact_root / "plan" / "phase_plan.json"
+    plan_spec = Artifact.json(
+        str(plan_path), name="phase_plan", schema=PhasePlanDocument, required=True
+    )
+    plan_review_spec = Artifact.json(
+        str(artifact_root / "plan" / "review.json"),
+        name="plan_review",
+        schema=ReviewReport,
+        required=True,
+    )
+
+    planner, plan_reviewer = Session(key="devloop-plan"), Session.fresh()
+    plan_feedback: tuple[Any, ...] = ()
+    attempt = 0
+    while True:
+        attempt += 1
+        planned = planner.run(
+            PLAN_PRODUCER,
+            input={
+                "request": request,
+                "task_id": ctx.task_id,
+                "request_snapshot_ref": str(request_path),
+                "mode": params.mode,
+            },
+            reads=(request_artifact.path, *plan_feedback),
+            writes=(plan_spec,),
+        )
+        try:
+            document = _validate_phase_plan(
+                planned.artifacts.phase_plan.read_text(), ctx.task_id, str(request_path)
+            )
+        except PhasePlanError as exc:
+            feedback_path = artifact_root / "plan" / "completion_gate_feedback.md"
+            _write_text(str(feedback_path), f"# Plan completion gate\n\n{exc}\n")
+            plan_feedback = (feedback_path,)
+            continue
+        review_id = _review_id("plan", None, attempt)
+        criteria = _process_criteria("plan")
+        reviewed = plan_reviewer.run(
+            PLAN_VERIFIER,
+            input=_review_input(
+                request=request, stage="plan", review_id=review_id, criteria=criteria
+            ),
+            reads=(planned.artifacts.phase_plan,),
+            writes=(plan_review_spec,),
+            returns=ReviewReport,
+        )
+        review = reviewed.value
+        issues = validate_review(review, review_id, criteria)
+        if review.verdict == "blocked":
+            return _blocked(plan_path, review, document.phases)
+        if not issues:
+            break
+        plan_feedback = (reviewed.artifacts.plan_review,)
+
+    phases = document.phases
+    latest_plan = planned.artifacts.phase_plan
+    completed: list[str] = []
+
+    phase_index = 0
+    while phase_index < len(phases):
+        phase = phases[phase_index]
+        phase.status = "in_progress"
+        document.status = "in_progress"
+        _write_json(str(plan_path), document.model_dump(mode="json"))
+        phase_dir = phase_dir_key(phase.phase_id)
+        phase_session = Session(key=f"devloop-phase:{phase.phase_id}")
+        implementation_feedback: tuple[Any, ...] = ()
+        stage_attempt = 0
+        phase_done = False
+
+        while not phase_done:
+            stage_attempt += 1
+            notes = Artifact.md(
+                str(
+                    artifact_root
+                    / "implement"
+                    / "phases"
+                    / phase_dir
+                    / "implementation_notes.md"
+                ),
+                name="impl_notes",
+                required=True,
+            )
+            impl_review_spec = Artifact.json(
+                str(artifact_root / "implement" / "phases" / phase_dir / "review.json"),
+                name="impl_review",
+                schema=ReviewReport,
+                required=True,
+            )
+            implemented = phase_session.run(
+                IMPLEMENT_PRODUCER,
+                input={
+                    "request": request,
+                    "phase": _phase_dict(phase),
+                    "plan": document.model_dump(mode="json"),
+                },
+                reads=(latest_plan, *implementation_feedback),
+                writes=(notes,),
+            )
+            review_id = _review_id("implement", phase.phase_id, stage_attempt)
+            checked = phase_session.run(
+                IMPLEMENT_VERIFIER,
+                input=_review_input(
+                    request=request,
+                    stage="implement",
+                    review_id=review_id,
+                    criteria=phase.criteria,
+                    phase=phase,
+                ),
+                reads=(latest_plan, implemented.artifacts.impl_notes),
+                writes=(impl_review_spec,),
+                returns=ReviewReport,
+            )
+            report = checked.value
+            issues = validate_review(report, review_id, phase.criteria)
+            if report.verdict == "blocked":
+                phase.status = "blocked"
+                _write_json(str(plan_path), document.model_dump(mode="json"))
+                return _blocked(plan_path, report, phases)
+            if issues:
+                if report.repair_target == "phase_item":
+                    item_review = Artifact.md(
+                        str(
+                            artifact_root
+                            / "plan"
+                            / "phases"
+                            / phase_dir
+                            / "item_review.md"
+                        ),
+                        name="phase_item_review",
+                        required=True,
+                    )
+                    item_report_spec = Artifact.json(
+                        str(
+                            artifact_root
+                            / "plan"
+                            / "phases"
+                            / phase_dir
+                            / "item_review.json"
+                        ),
+                        name="phase_item_review_report",
+                        schema=ReviewReport,
+                        required=True,
+                    )
+                    item_attempt = 0
+                    while True:
+                        item_attempt += 1
+                        revised = phase_session.run(
+                            PHASE_ITEM_PRODUCER,
+                            input={
+                                "request": request,
+                                "active_phase_index": phase_index,
+                                "active_phase": _phase_dict(phase),
+                                "plan": document.model_dump(mode="json"),
+                            },
+                            reads=(latest_plan, checked.artifacts.impl_review),
+                            writes=(plan_spec, item_review),
+                        )
+                        try:
+                            candidate = _validate_phase_plan(
+                                revised.artifacts.phase_plan.read_text(),
+                                ctx.task_id,
+                                str(request_path),
+                                live=True,
+                            )
+                            if phase_index >= len(candidate.phases):
+                                raise PhasePlanError(
+                                    "phase item review removed the active phase"
+                                )
+                            for prior_index in range(phase_index):
+                                if (
+                                    candidate.phases[prior_index].phase_id
+                                    != phases[prior_index].phase_id
+                                ):
+                                    raise PhasePlanError(
+                                        "phase item review changed completed phase order or identity"
+                                    )
+                                if (
+                                    phases[prior_index].status == "completed"
+                                    and candidate.phases[prior_index].status
+                                    != "completed"
+                                ):
+                                    raise PhasePlanError(
+                                        "phase item review demoted a completed phase"
+                                    )
+                            if candidate.phases[phase_index].phase_id != phase.phase_id:
+                                raise PhasePlanError(
+                                    "phase item review changed the active phase id"
+                                )
+                            if candidate.phases[phase_index].status != "in_progress":
+                                raise PhasePlanError(
+                                    "phase item review must keep the active phase in_progress"
+                                )
+                            if candidate.status != _aggregate_phase_status(
+                                candidate.phases
+                            ):
+                                raise PhasePlanError(
+                                    "phase item review root status does not match its phase statuses"
+                                )
+                        except PhasePlanError:
+                            continue
+                        process = _process_criteria("phase_item")
+                        item_review_id = _review_id(
+                            "phase_item", phase.phase_id, item_attempt
+                        )
+                        item_checked = phase_session.run(
+                            PHASE_ITEM_VERIFIER,
+                            input=_review_input(
+                                request=request,
+                                stage="phase_item",
+                                review_id=item_review_id,
+                                criteria=process,
+                                phase=candidate.phases[phase_index],
+                            ),
+                            reads=(
+                                revised.artifacts.phase_plan,
+                                revised.artifacts.phase_item_review,
+                            ),
+                            writes=(item_report_spec,),
+                            returns=ReviewReport,
+                        )
+                        if item_checked.value.verdict == "blocked":
+                            return _blocked(plan_path, item_checked.value, phases)
+                        if not validate_review(
+                            item_checked.value, item_review_id, process
+                        ):
+                            document = candidate
+                            phases = document.phases
+                            phase = phases[phase_index]
+                            latest_plan = revised.artifacts.phase_plan
+                            implementation_feedback = (
+                                item_checked.artifacts.phase_item_review_report,
+                            )
+                            break
+                    continue
+                implementation_feedback = (checked.artifacts.impl_review,)
+                continue
+
+            effective_skip = params.skip_test_phase or params.mode == "docloop"
+            test_dir = artifact_root / "test" / "phases" / phase_dir
+            if effective_skip:
+                reason = (
+                    "docloop mode"
+                    if params.mode == "docloop"
+                    else "skip_test_phase=true"
+                )
+                _write_text(
+                    str(test_dir / "test_strategy.md"),
+                    f"# Test Strategy: {phase.phase_id}\n\nThe test producer/verifier was intentionally skipped ({reason}).\n"
+                    "This is reduced assurance and is not passing test evidence.\n",
+                )
+                phase_done = True
+                continue
+
+            test_strategy = Artifact.md(
+                str(test_dir / "test_strategy.md"), name="test_strat", required=True
+            )
+            test_review_spec = Artifact.json(
+                str(test_dir / "review.json"),
+                name="test_review",
+                schema=ReviewReport,
+                required=True,
+            )
+            tested = phase_session.run(
+                TEST_PRODUCER,
+                input={"request": request, "phase": _phase_dict(phase)},
+                reads=(latest_plan, implemented.artifacts.impl_notes),
+                writes=(test_strategy,),
+            )
+            test_review_id = _review_id("test", phase.phase_id, stage_attempt)
+            test_checked = phase_session.run(
+                TEST_VERIFIER,
+                input=_review_input(
+                    request=request,
+                    stage="test",
+                    review_id=test_review_id,
+                    criteria=phase.criteria,
+                    phase=phase,
+                ),
+                reads=(implemented.artifacts.impl_notes, tested.artifacts.test_strat),
+                writes=(test_review_spec,),
+                returns=ReviewReport,
+            )
+            if test_checked.value.verdict == "blocked":
+                phase.status = "blocked"
+                _write_json(str(plan_path), document.model_dump(mode="json"))
+                return _blocked(plan_path, test_checked.value, phases)
+            test_issues = validate_review(
+                test_checked.value, test_review_id, phase.criteria
+            )
+            if test_issues:
+                implementation_feedback = (test_checked.artifacts.test_review,)
+                continue
+            phase_done = True
+
+        phase.status = "completed"
+        completed.append(phase.phase_id)
+        document.status = (
+            "completed" if phase_index == len(phases) - 1 else "in_progress"
+        )
+        _write_json(str(plan_path), document.model_dump(mode="json"))
+        phase_index += 1
+
+    evidence_path = _collect_audit_evidence(
+        str(artifact_root), str(ctx.folder), request, params.model_dump(mode="json")
+    )
+    evidence = Artifact.md(evidence_path, name="audit_evidence", required=True)
+    audit_result_spec = Artifact.json(
+        str(artifact_root / "audit" / "audit_result.json"),
+        name="audit_result",
+        schema=AuditResult,
+        required=True,
+    )
+    gap_report = Artifact.md(
+        str(artifact_root / "audit" / "gap_report.md"), name="gap_report", required=True
+    )
+    revised_request = Artifact.md(
+        str(artifact_root / "audit" / "revised_request.md"),
+        name="revised_request",
+        required=False,
+    )
+    audit_review_spec = Artifact.json(
+        str(artifact_root / "audit" / "review.json"),
+        name="audit_review",
+        schema=ReviewReport,
+        required=True,
+    )
+    audit_session, audit_verifier = Session(key="devloop-audit"), Session.fresh()
+    audit_feedback: tuple[Any, ...] = ()
+    audit_attempt = 0
+    while True:
+        audit_attempt += 1
+        produced_audit = audit_session.run(
+            AUDIT_PRODUCER,
+            input={
+                "request": request,
+                "task_id": ctx.task_id,
+                "request_snapshot_ref": str(request_path),
+                "mode": params.mode,
+                "skip_test_phase": params.skip_test_phase,
+                "phase_plan": document.model_dump(mode="json"),
+            },
+            reads=(latest_plan, evidence.path, *audit_feedback),
+            writes=(audit_result_spec, gap_report, revised_request),
+        )
+        try:
+            audit_result = _validate_audit(
+                produced_audit.artifacts.audit_result.read_text(),
+                ctx.task_id,
+                str(request_path),
+            )
+        except AuditResultError as exc:
+            feedback_path = artifact_root / "audit" / "completion_gate_feedback.md"
+            _write_text(str(feedback_path), f"# Audit completion gate\n\n{exc}\n")
+            audit_feedback = (feedback_path,)
+            continue
+        audit_criteria = _process_criteria("audit")
+        audit_review_id = _review_id("audit", None, audit_attempt)
+        audit_reads = [
+            produced_audit.artifacts.audit_result,
+            produced_audit.artifacts.gap_report,
+            evidence.path,
+        ]
+        if "revised_request" in produced_audit.artifacts:
+            audit_reads.append(produced_audit.artifacts.revised_request)
+        checked_audit = audit_verifier.run(
+            AUDIT_VERIFIER,
+            input=_review_input(
+                request=request,
+                stage="audit",
+                review_id=audit_review_id,
+                criteria=audit_criteria,
+            ),
+            reads=tuple(audit_reads),
+            writes=(audit_review_spec,),
+            returns=ReviewReport,
+        )
+        if checked_audit.value.verdict == "blocked":
+            return _blocked(plan_path, checked_audit.value, phases)
+        if not validate_review(checked_audit.value, audit_review_id, audit_criteria):
+            break
+        audit_feedback = (checked_audit.artifacts.audit_review,)
+
+    audit_path = produced_audit.artifacts.audit_result.source_path
+    if audit_result.status == "passed":
+        return DevLoopResult(
+            status="passed",
+            summary=audit_result.summary,
+            phase_plan_path=str(plan_path),
+            audit_result_path=str(audit_path),
+            completed_phases=completed,
+        )
+
+    followup_path = artifact_root / "audit" / "followup_result.json"
+    if params.followup_depth >= params.auto_followup_max_depth:
+        followup = FollowupRunResult(
+            status="skipped",
+            reason="auto_followup_max_depth_reached",
+            followup_depth=params.followup_depth,
+            auto_followup_max_depth=params.auto_followup_max_depth,
+        )
+    else:
+        if "revised_request" not in produced_audit.artifacts:
+            raise AuditResultError("needs_followup requires revised_request.md")
+        revised = produced_audit.artifacts.revised_request.read_text().strip()
+        if not revised:
+            raise AuditResultError(
+                "needs_followup requires a non-empty revised_request.md"
+            )
+        child = devloop(
+            revised,
+            followup_depth=params.followup_depth + 1,
+            auto_followup_max_depth=params.auto_followup_max_depth,
+            skip_test_phase=params.skip_test_phase,
+            mode=params.mode,
+        )
+        followup = FollowupRunResult(
+            status="started",
+            followup_depth=params.followup_depth,
+            auto_followup_max_depth=params.auto_followup_max_depth,
+            child_status=child.status,
+            child_audit_result=child.audit_result_path,
+        )
+    _write_json(str(followup_path), followup.model_dump(mode="json"))
+    return DevLoopResult(
+        status="needs_followup",
+        summary=audit_result.summary,
+        phase_plan_path=str(plan_path),
+        audit_result_path=str(audit_path),
+        followup_result_path=str(followup_path),
+        completed_phases=completed,
+    )
 
 
-def _non_empty(
-    value: str,
-    label: str,
-    *,
-    error_cls: type[ValueError] = PhasePlanError,
-) -> str:
-    normalized = value.strip()
-    if not normalized:
-        raise error_cls(f"{label} must be a non-empty string")
-    return normalized
+DevLoop = devloop
+Params = DevLoopParams
 
-
-def _string_list(
-    values: Sequence[str],
-    label: str,
-    *,
-    allow_empty: bool,
-    error_cls: type[ValueError] = PhasePlanError,
-) -> None:
-    if not allow_empty and not values:
-        raise error_cls(f"{label} must contain at least one entry")
-
-    for index, item in enumerate(values, start=1):
-        if not item.strip():
-            raise error_cls(f"{label}[{index}] must be a non-empty string")
-
-
-def _safe_int(value: object, *, default: int) -> int:
-    if isinstance(value, bool) or not isinstance(value, int):
-        return default
-    if value < 0:
-        return default
-    return value
-
-
-def _string_or_none(value: object) -> str | None:
-    if value is None:
-        return None
-    return str(value)
+__all__ = [
+    "AuditGap",
+    "AuditResult",
+    "AuditResultError",
+    "DevLoop",
+    "DevLoopParams",
+    "DevLoopResult",
+    "FollowupRunResult",
+    "Params",
+    "PhasePlanDocument",
+    "PhasePlanError",
+    "PhasePlanPhase",
+    "PhaseScope",
+    "devloop",
+]

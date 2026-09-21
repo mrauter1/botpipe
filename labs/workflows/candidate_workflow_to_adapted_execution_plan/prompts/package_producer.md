@@ -1,3 +1,7 @@
+## Durable producer result
+
+After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+
 # Package Adapted Execution Plan Producer
 
 ## Step Contract
@@ -12,26 +16,10 @@
 - This work item owns terminal packaging only.
 - Keep the boundary at packaging the selected workflow for downstream execution. Do not execute the selected workflow or mutate its package.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `selected_workflow_capability` | Read | Required input. |
-| `adapted_execution_plan_checklist` | Read | Required input. |
-| `adaptation_request_brief` | Read | Required input. |
-| `adaptation_success_criteria` | Read | Required input. |
-| `workflow_fit_assessment` | Read | Required input. |
-| `step_adaptation_matrix` | Read | Required input. |
-| `adapted_execution_plan` | Write | Overwrite. |
-| `proposed_workflow_parameters` | Write | Overwrite. |
-| `adapted_execution_summary` | Write | Overwrite. |
-| `adapted_execution_next_action` | Write | Overwrite. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not modify the earlier framing or analysis artifacts in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -69,20 +57,20 @@
 
 ## Evidence
 
-- Keep the selected workflow name and entry step aligned with `selected_workflow_capability`.
+- Keep the selected workflow name and entry step aligned with `selected_workflow_contract`.
 - Keep `proposed_parameter_keys` aligned with the JSON keys written into `proposed_workflow_parameters`.
 - Make the next action concrete enough that another operator could continue immediately without re-deriving the adaptation logic.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance for the verifier
+### Outcome guidance for the verifier
 - `adapted_execution_plan_ready`: the plan, proposed parameters, summary, and next action are complete and aligned for publication.
 - `needs_rework`: the same selected workflow and adaptation boundary still hold, but the package artifacts need local repair.
 - `needs_replan`: packaging revealed that the selected workflow or execution boundary changed materially.
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Use `blocked` only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Out Of Scope
 

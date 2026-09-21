@@ -1,22 +1,15 @@
-"""Provider-heavy workflow that recreates a codebase as a Botpipe workflow."""
+"""Recreate a codebase as a Botpipe durable-function workflow."""
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from pydantic import BaseModel
 
-from botpipe import FINISH, Prompt, Route, Session, Workflow, produce_verify_step, python_step
-from botpipe.core import Artifact
-from botpipe.stdlib.lifecycle import (
-    open_workflow_sessions,
-    write_invocation_contract,
-    write_publication_receipt,
-    write_workflow_json,
-)
+from botpipe import Artifact, Prompt, Session, activity, current_run, workflow
 
 from .contracts import (
-    BEHAVIOR_DISTILLATION_ROUTE_CONTRACTS,
-    BUILD_VALIDATION_ROUTE_CONTRACTS,
-    WORKFLOW_DESIGN_ROUTE_CONTRACTS,
     BehaviorDistillationPayload,
     BuildValidationPayload,
     WorkflowDesignPayload,
@@ -30,354 +23,298 @@ from .specs import (
 )
 
 
-def _after_distill_behavior(ctx):
-    outcome = ctx.outcome
-    assert outcome is not None
-    ctx.state.behavior_status = outcome.tag
-    return None
+class CodeToWorkflowResult(BaseModel):
+    generated_workflow_name: str
+    generated_workflow_root: str
+    publication_receipt: str
+    behavior_status: str
+    design_status: str
+    build_status: str
 
 
-def _after_design_botpipe_recreation(ctx):
-    outcome = ctx.outcome
-    assert outcome is not None
-    ctx.state.design_status = outcome.tag
-    return None
-
-
-def _after_build_and_validate(ctx):
-    outcome = ctx.outcome
-    assert outcome is not None
-    ctx.state.build_status = outcome.tag
-    return None
-
-
-class CodeToWorkflow(Workflow):
-    """Read the current workspace and generate an equivalent Botpipe workflow."""
-
-    name = "code_to_workflow"
-    Params = Params
-
-    class State(BaseModel):
-        generated_workflow_name: str = ""
-        generated_workflow_root: str = ""
-        behavior_status: str | None = None
-        design_status: str | None = None
-        build_status: str | None = None
-        published: bool = False
-
-    behavior_session = Session.run()
-    behavior_verifier_session = Session.run()
-    authoring_session = Session.run()
-    design_verifier_session = Session.run()
-    build_verifier_session = Session.run()
-
-    request = Artifact("{{ run.folder }}/request.md", name="request")
-    workflow_authoring_guidelines = Artifact(
-        "{{ root }}/docs/workflow_authoring_guidelines.md",
-        name="workflow_authoring_guidelines",
-    )
-    botpipe_workflow_authoring_skill = Artifact.md(
-        "{{ package.folder }}/skills/botpipe-workflow-autoring.md",
-        name="botpipe_workflow_authoring_skill",
-        required=True,
-    )
-    ralph_loop_workflow = Artifact(
-        "{{ package.folder }}/../ralph_loop/workflow.py",
-        name="ralph_loop_workflow",
-    )
-    devloop_workflow = Artifact(
-        "{{ package.folder }}/../devloop/workflow.py",
-        name="devloop_workflow",
-    )
-
-    invocation_contract = Artifact.json(
-        "{{ workflow.folder }}/invocation_contract.json",
-        name="invocation_contract",
-        required=True,
-    )
-    source_manifest = Artifact.json(
-        "{{ workflow.folder }}/source_manifest.json",
-        name="source_manifest",
-        required=True,
-    )
-    trace_corpus = Artifact.json(
-        "{{ workflow.folder }}/trace_corpus.json",
-        name="trace_corpus",
-        required=True,
-    )
-    behavior_inventory = Artifact.json(
-        "{{ workflow.folder }}/behavior_inventory.json",
-        name="behavior_inventory",
-        required=True,
-    )
-    behavior_inventory_report = Artifact.md(
-        "{{ workflow.folder }}/behavior_inventory.md",
-        name="behavior_inventory_report",
-        required=True,
-    )
-    trace_pattern_notes = Artifact.md(
-        "{{ workflow.folder }}/trace_pattern_notes.md",
-        name="trace_pattern_notes",
-        required=True,
-    )
-    behavior_review = Artifact.md(
-        "{{ workflow.folder }}/behavior_review.md",
-        name="behavior_review",
-        required=False,
-    )
-    workflow_design = Artifact.md(
-        "{{ workflow.folder }}/workflow_design.md",
-        name="workflow_design",
-        required=True,
-    )
-    step_contracts = Artifact.json(
-        "{{ workflow.folder }}/step_contracts.json",
-        name="step_contracts",
-        required=True,
-    )
-    prompt_contract_matrix = Artifact.md(
-        "{{ workflow.folder }}/prompt_contract_matrix.md",
-        name="prompt_contract_matrix",
-        required=True,
-    )
-    equivalence_plan = Artifact.md(
-        "{{ workflow.folder }}/equivalence_plan.md",
-        name="equivalence_plan",
-        required=True,
-    )
-    coverage_map = Artifact.json(
-        "{{ workflow.folder }}/coverage_map.json",
-        name="coverage_map",
-        required=True,
-    )
-    design_review = Artifact.md(
-        "{{ workflow.folder }}/design_review.md",
-        name="design_review",
-        required=False,
-    )
-    generated_workflow_root = Artifact.raw(
-        "{{ root }}/.botpipe/workflows/{{ state.generated_workflow_name }}",
-        name="generated_workflow_root",
-        required=True,
-    )
-    generated_flow = Artifact.text(
-        "{{ root }}/.botpipe/workflows/{{ state.generated_workflow_name }}/flow.py",
-        name="generated_flow",
-        required=True,
-    )
-    generated_manifest = Artifact.text(
-        "{{ root }}/.botpipe/workflows/{{ state.generated_workflow_name }}/workflow.toml",
-        name="generated_manifest",
-        required=True,
-    )
-    generated_layout = Artifact.json(
-        "{{ workflow.folder }}/generated_layout.json",
-        name="generated_layout",
-        required=True,
-    )
-    validation_report = Artifact.md(
-        "{{ workflow.folder }}/validation_report.md",
-        name="validation_report",
-        required=True,
-    )
-    build_review = Artifact.md(
-        "{{ workflow.folder }}/build_review.md",
-        name="build_review",
-        required=False,
-    )
-    publication_receipt = Artifact.json(
-        "{{ workflow.folder }}/publication_receipt.json",
-        name="publication_receipt",
-        required=True,
-    )
-
-    distill_behavior = produce_verify_step(
-        producer_prompt=Prompt.file("prompts/distill_behavior_producer.md"),
-        verifier_prompt=Prompt.file("prompts/distill_behavior_verifier.md"),
-        session=behavior_session,
-        verifier_session=behavior_verifier_session,
-        requires=[request, invocation_contract, source_manifest, trace_corpus],
-        reads=[behavior_review],
-        producer_writes=[behavior_inventory, behavior_inventory_report, trace_pattern_notes],
-        verifier_requires=[request, invocation_contract, source_manifest, trace_corpus],
-        verifier_reads=[behavior_review],
-        verifier_writes=[behavior_review],
-        control_schema=BehaviorDistillationPayload,
-        routes=BEHAVIOR_DISTILLATION_ROUTE_CONTRACTS,
-        after_verifier=_after_distill_behavior,
-    )
-    design_botpipe_recreation = produce_verify_step(
-        producer_prompt=Prompt.file("prompts/design_recreation_producer.md"),
-        verifier_prompt=Prompt.file("prompts/design_recreation_verifier.md"),
-        session=authoring_session,
-        verifier_session=design_verifier_session,
-        requires=[
-            request,
-            invocation_contract,
-            source_manifest,
-            behavior_inventory,
-            behavior_inventory_report,
-            trace_pattern_notes,
-        ],
-        reads=[
-            workflow_authoring_guidelines,
-            botpipe_workflow_authoring_skill,
-            ralph_loop_workflow,
-            devloop_workflow,
-            design_review,
-        ],
-        producer_writes=[
-            workflow_design,
-            step_contracts,
-            prompt_contract_matrix,
-            equivalence_plan,
-            coverage_map,
-        ],
-        verifier_requires=[
-            request,
-            invocation_contract,
-            source_manifest,
-            behavior_inventory,
-            behavior_inventory_report,
-            trace_pattern_notes,
-            behavior_review,
-        ],
-        verifier_reads=[
-            workflow_authoring_guidelines,
-            botpipe_workflow_authoring_skill,
-            ralph_loop_workflow,
-            devloop_workflow,
-            design_review,
-        ],
-        verifier_writes=[design_review],
-        control_schema=WorkflowDesignPayload,
-        routes=WORKFLOW_DESIGN_ROUTE_CONTRACTS,
-        after_verifier=_after_design_botpipe_recreation,
-    )
-    build_and_validate = produce_verify_step(
-        producer_prompt=Prompt.file("prompts/build_and_validate_producer.md"),
-        verifier_prompt=Prompt.file("prompts/build_and_validate_verifier.md"),
-        session=authoring_session,
-        verifier_session=build_verifier_session,
-        requires=[
-            request,
-            invocation_contract,
-            source_manifest,
-            trace_corpus,
-            behavior_inventory,
-            behavior_inventory_report,
-            trace_pattern_notes,
-            behavior_review,
-            workflow_design,
-            step_contracts,
-            prompt_contract_matrix,
-            equivalence_plan,
-            coverage_map,
-            design_review,
-        ],
-        reads=[workflow_authoring_guidelines, botpipe_workflow_authoring_skill, build_review],
-        verifier_requires=[
-            request,
-            invocation_contract,
-            source_manifest,
-            trace_corpus,
-            behavior_inventory,
-            behavior_inventory_report,
-            trace_pattern_notes,
-            behavior_review,
-            workflow_design,
-            step_contracts,
-            prompt_contract_matrix,
-            equivalence_plan,
-            coverage_map,
-            design_review,
-        ],
-        verifier_reads=[workflow_authoring_guidelines, botpipe_workflow_authoring_skill, build_review],
-        producer_writes=[
-            generated_workflow_root,
-            generated_flow,
-            generated_manifest,
-            generated_layout,
-            validation_report,
-        ],
-        verifier_writes=[build_review],
-        control_schema=BuildValidationPayload,
-        routes=BUILD_VALIDATION_ROUTE_CONTRACTS,
-        after_verifier=_after_build_and_validate,
-    )
-
-    @python_step(
-        name="bootstrap_capture",
-        requires=[request],
-        writes=[invocation_contract, source_manifest, trace_corpus],
-        routes={
-            "captured": Route.to(
-                "distill_behavior",
-                required_writes=["invocation_contract", "source_manifest", "trace_corpus"],
-            )
+@activity
+def _bootstrap_capture(
+    workspace: str,
+    run_folder: str,
+    generated_workflow_name: str,
+) -> dict[str, str]:
+    root = Path(workspace)
+    folder = Path(run_folder)
+    folder.mkdir(parents=True, exist_ok=True)
+    generated_root = root / ".botpipe" / "workflows" / generated_workflow_name
+    payloads = {
+        "invocation_contract.json": {
+            "generated_workflow_name": generated_workflow_name,
+            "generated_workflow_root": str(generated_root),
+            "source_root": str(root),
+            "equivalence_default": "externally observable behavior",
+            "generated_output_policy": ".botpipe/workflows/<generated_workflow_name>",
         },
+        "source_manifest.json": capture_source_manifest(
+            root, generated_workflow_name=generated_workflow_name
+        ),
+        "trace_corpus.json": collect_trace_corpus(root, exclude_run_dir=folder),
+    }
+    paths: dict[str, str] = {}
+    for filename, payload in payloads.items():
+        path = folder / filename
+        path.write_text(
+            json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+        paths[filename] = str(path)
+    return paths
+
+
+@activity
+def _publish(workspace: str, run_folder: str, generated_workflow_name: str) -> str:
+    payload = validate_publication_inputs(
+        root=Path(workspace),
+        workflow_folder=Path(run_folder),
+        generated_workflow_name=generated_workflow_name,
     )
-    def bootstrap_capture(ctx):
-        generated_workflow_name = derive_generated_workflow_name(ctx.root, ctx.params.generated_workflow_name)
-        generated_workflow_root = ctx.root / ".botpipe" / "workflows" / generated_workflow_name
-        next_state = ctx.state.model_copy(
-            update={
-                "generated_workflow_name": generated_workflow_name,
-                "generated_workflow_root": str(generated_workflow_root),
-                "behavior_status": None,
-                "design_status": None,
-                "build_status": None,
-                "published": False,
-            }
-        )
-        ctx.state = next_state
-        open_workflow_sessions(
-            ctx,
-            "behavior_session",
-            "behavior_verifier_session",
-            "authoring_session",
-            "design_verifier_session",
-            "build_verifier_session",
-        )
-        write_invocation_contract(
-            ctx,
-            {
-                "generated_workflow_name": generated_workflow_name,
-                "generated_workflow_root": str(generated_workflow_root),
-                "source_root": str(ctx.root),
-                "equivalence_default": "externally observable behavior",
-                "generated_output_policy": ".botpipe/workflows/<generated_workflow_name>",
-            },
-        )
-        write_workflow_json(
-            ctx,
-            "source_manifest.json",
-            capture_source_manifest(ctx.root, generated_workflow_name=generated_workflow_name),
-        )
-        write_workflow_json(
-            ctx,
-            "trace_corpus.json",
-            collect_trace_corpus(ctx.root, exclude_run_dir=ctx.run_folder),
-        )
-        return "captured"
-
-    @python_step(
-        name="publish_generated_workflow",
-        requires=[generated_flow, generated_manifest, generated_layout, validation_report, coverage_map, behavior_inventory],
-        writes=[publication_receipt],
-        routes={"published": FINISH},
+    path = Path(run_folder) / "publication_receipt.json"
+    path.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
-    def publish_generated_workflow(ctx):
-        payload = validate_publication_inputs(
-            root=ctx.root,
-            workflow_folder=ctx.workflow_folder,
-            generated_workflow_name=ctx.state.generated_workflow_name,
+    return str(path)
+
+
+def _read_specs(folder: Path) -> tuple[Artifact, Artifact, Artifact]:
+    return (
+        Artifact.json(
+            str(folder / "invocation_contract.json"),
+            name="invocation_contract",
+            required=True,
+        ),
+        Artifact.json(
+            str(folder / "source_manifest.json"), name="source_manifest", required=True
+        ),
+        Artifact.json(
+            str(folder / "trace_corpus.json"), name="trace_corpus", required=True
+        ),
+    )
+
+
+@workflow(name="code_to_workflow", version="1")
+def code_to_workflow(
+    request: str, generated_workflow_name: str | None = None
+) -> CodeToWorkflowResult:
+    ctx = current_run()
+    name = derive_generated_workflow_name(
+        ctx.workspace,
+        Params(generated_workflow_name=generated_workflow_name).generated_workflow_name,
+    )
+    generated_root = ctx.workspace / ".botpipe" / "workflows" / name
+    _bootstrap_capture(str(ctx.workspace), str(ctx.folder), name)
+    invocation_contract, source_manifest, trace_corpus = _read_specs(ctx.folder)
+
+    behavior_session = Session(key="behavior-producer")
+    behavior_verifier = Session(key="behavior-verifier")
+    authoring_session = Session(key="authoring-producer")
+    design_verifier = Session(key="design-verifier")
+    build_verifier = Session(key="build-verifier")
+
+    behavior_inventory = Artifact.json("behavior_inventory.json", required=True)
+    behavior_report = Artifact.md(
+        "behavior_inventory.md", name="behavior_inventory_report", required=True
+    )
+    trace_notes = Artifact.md("trace_pattern_notes.md", required=True)
+    behavior_review = Artifact.md("behavior_review.md", required=True)
+    design_review = Artifact.md("design_review.md", required=True)
+    build_review = Artifact.md("build_review.md", required=True)
+
+    behavior_feedback = ()
+    while True:
+        distilled = behavior_session.run(
+            Prompt.file("prompts/distill_behavior_producer.md"),
+            input={"request": request, "generated_workflow_name": name},
+            reads=(
+                invocation_contract.path,
+                source_manifest.path,
+                trace_corpus.path,
+                *behavior_feedback,
+            ),
+            writes=(behavior_inventory, behavior_report, trace_notes),
         )
-        write_publication_receipt(ctx, "publication_receipt.json", payload)
-        ctx.state.published = True
-        return "published"
+        behavior_check = behavior_verifier.run(
+            Prompt.file("prompts/distill_behavior_verifier.md"),
+            input={"request": request, "generated_workflow_name": name},
+            reads=(
+                invocation_contract.path,
+                source_manifest.path,
+                trace_corpus.path,
+                distilled.artifacts.behavior_inventory,
+                distilled.artifacts.behavior_inventory_report,
+                distilled.artifacts.trace_pattern_notes,
+            ),
+            writes=(behavior_review,),
+            returns=BehaviorDistillationPayload,
+        )
+        if behavior_check.value.verdict == "behavior_distilled":
+            break
+        behavior_feedback = (behavior_check.artifacts.behavior_review,)
 
-    entry = bootstrap_capture
+    pending_design_feedback: tuple = ()
+    while True:
+        design_feedback = pending_design_feedback
+        pending_design_feedback = ()
+        replan_behavior = False
+        while True:
+            workflow_design = Artifact.md("workflow_design.md", required=True)
+            step_contracts = Artifact.json("step_contracts.json", required=True)
+            prompt_matrix = Artifact.md("prompt_contract_matrix.md", required=True)
+            equivalence_plan = Artifact.md("equivalence_plan.md", required=True)
+            coverage_map = Artifact.json("coverage_map.json", required=True)
+            designed = authoring_session.run(
+                Prompt.file("prompts/design_recreation_producer.md"),
+                input={"request": request, "generated_workflow_name": name},
+                reads=(
+                    invocation_contract.path,
+                    source_manifest.path,
+                    distilled.artifacts.behavior_inventory,
+                    distilled.artifacts.behavior_inventory_report,
+                    distilled.artifacts.trace_pattern_notes,
+                    behavior_check.artifacts.behavior_review,
+                    *design_feedback,
+                ),
+                writes=(
+                    workflow_design,
+                    step_contracts,
+                    prompt_matrix,
+                    equivalence_plan,
+                    coverage_map,
+                ),
+            )
+            design_check = design_verifier.run(
+                Prompt.file("prompts/design_recreation_verifier.md"),
+                input={"request": request, "generated_workflow_name": name},
+                reads=(
+                    invocation_contract.path,
+                    source_manifest.path,
+                    distilled.artifacts.behavior_inventory,
+                    distilled.artifacts.behavior_inventory_report,
+                    distilled.artifacts.trace_pattern_notes,
+                    behavior_check.artifacts.behavior_review,
+                    *tuple(designed.artifacts.values()),
+                    *design_feedback,
+                ),
+                writes=(design_review,),
+                returns=WorkflowDesignPayload,
+            )
+            if design_check.value.verdict == "design_accepted":
+                break
+            if design_check.value.verdict == "needs_replan":
+                replan_behavior = True
+                break
+            design_feedback = (design_check.artifacts.design_review,)
+
+        if replan_behavior:
+            behavior_feedback = (design_check.artifacts.design_review,)
+            while True:
+                distilled = behavior_session.run(
+                    Prompt.file("prompts/distill_behavior_producer.md"),
+                    input={"request": request, "generated_workflow_name": name},
+                    reads=(
+                        invocation_contract.path,
+                        source_manifest.path,
+                        trace_corpus.path,
+                        *behavior_feedback,
+                    ),
+                    writes=(behavior_inventory, behavior_report, trace_notes),
+                )
+                behavior_check = behavior_verifier.run(
+                    Prompt.file("prompts/distill_behavior_verifier.md"),
+                    input={"request": request, "generated_workflow_name": name},
+                    reads=tuple(distilled.artifacts.values()),
+                    writes=(behavior_review,),
+                    returns=BehaviorDistillationPayload,
+                )
+                if behavior_check.value.verdict == "behavior_distilled":
+                    break
+                behavior_feedback = (behavior_check.artifacts.behavior_review,)
+            continue
+
+        build_feedback = ()
+        needs_redesign = False
+        while True:
+            generated_flow = Artifact.text(
+                str(generated_root / "flow.py"), name="generated_flow", required=True
+            )
+            generated_manifest = Artifact.text(
+                str(generated_root / "workflow.toml"),
+                name="generated_manifest",
+                required=True,
+            )
+            generated_layout = Artifact.json("generated_layout.json", required=True)
+            validation_report = Artifact.md("validation_report.md", required=True)
+            built = authoring_session.run(
+                Prompt.file("prompts/build_and_validate_producer.md"),
+                input={
+                    "request": request,
+                    "generated_workflow_name": name,
+                    "output_root": str(generated_root),
+                },
+                reads=(
+                    invocation_contract.path,
+                    source_manifest.path,
+                    trace_corpus.path,
+                    distilled.artifacts.behavior_inventory,
+                    distilled.artifacts.behavior_inventory_report,
+                    distilled.artifacts.trace_pattern_notes,
+                    behavior_check.artifacts.behavior_review,
+                    *tuple(designed.artifacts.values()),
+                    design_check.artifacts.design_review,
+                    *build_feedback,
+                ),
+                writes=(
+                    generated_flow,
+                    generated_manifest,
+                    generated_layout,
+                    validation_report,
+                ),
+            )
+            build_check = build_verifier.run(
+                Prompt.file("prompts/build_and_validate_verifier.md"),
+                input={
+                    "request": request,
+                    "generated_workflow_name": name,
+                    "output_root": str(generated_root),
+                },
+                reads=(
+                    invocation_contract.path,
+                    source_manifest.path,
+                    trace_corpus.path,
+                    distilled.artifacts.behavior_inventory,
+                    distilled.artifacts.behavior_inventory_report,
+                    distilled.artifacts.trace_pattern_notes,
+                    behavior_check.artifacts.behavior_review,
+                    *tuple(designed.artifacts.values()),
+                    design_check.artifacts.design_review,
+                    *tuple(built.artifacts.values()),
+                    *build_feedback,
+                ),
+                writes=(build_review,),
+                returns=BuildValidationPayload,
+            )
+            if build_check.value.verdict == "build_validated":
+                receipt = _publish(str(ctx.workspace), str(ctx.folder), name)
+                return CodeToWorkflowResult(
+                    generated_workflow_name=name,
+                    generated_workflow_root=str(generated_root),
+                    publication_receipt=receipt,
+                    behavior_status=behavior_check.value.verdict,
+                    design_status=design_check.value.verdict,
+                    build_status=build_check.value.verdict,
+                )
+            if build_check.value.verdict == "needs_replan":
+                pending_design_feedback = (build_check.artifacts.build_review,)
+                needs_redesign = True
+                break
+            build_feedback = (build_check.artifacts.build_review,)
+        if needs_redesign:
+            continue
 
 
-__all__ = ["CodeToWorkflow"]
+CodeToWorkflow = code_to_workflow
+
+__all__ = ["CodeToWorkflow", "CodeToWorkflowResult", "code_to_workflow"]

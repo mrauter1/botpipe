@@ -1,232 +1,51 @@
-# `workflow_idea_to_workflow_package`
+# Workflow Idea To Workflow Package
 
-`workflow_idea_to_workflow_package` is the repository's first explicit workflow-builder package. It turns an ambiguous workflow idea into a concrete Botpipe workflow package plus design, verification, promotion, and rollback evidence.
+Compare candidate additions, design a workflow package, build it, verify it, and publish evidence.
 
-## Problem and value
+Canonical name: `workflow_idea_to_workflow_package`
+Aliases: `workflow-builder`, `workflow-idea-builder`
 
-- Problem solved: turn a valuable workflow idea or reusable recipe concept into a package another team can discover, inspect, run, and extend.
-- Why it matters: the repo previously had only `botpipe init workflow <name>` plus manual discipline, not a credible builder workflow.
-- Likely sponsors: framework owners, internal platform teams, engineering productivity groups, or consulting organizations building repeatable delivery playbooks.
-- Classification: end-to-end workflow. The trigger is a workflow idea; the terminal result is a workflow package and evidence pack.
-- Why Botpipe fits: the work spans candidate analysis, explicit design, repository edits, and verification evidence across multiple durable artifacts.
-- Why one-shot is insufficient: the package needs comparison, design, build, evaluation, and a deterministic publish gate with rework versus replan logic.
+## Durable function design
+
+`workflow.py` exports one ordinary Python function decorated with `@workflow`. Python controls phase order, optional passes, loops, and nested workflows. Each phase runs a producer and verifier through durable `Session` operations. Producers return `LabPhaseDraft`; each verifier returns a package-specific `LabPhaseOutcome` subclass from `contracts.py`, so domain evidence is typed before control flow consumes it.
+
+Every declared output is a required `Artifact`. Botpipe snapshots the provider-written file before the operation completes, and later phases read those immutable handles. A verifier may cite only captured artifact names. The final typed `LabWorkflowResult` carries the accepted handles in `artifacts`, convenience snapshot paths in `artifact_paths`, and unique candidate identifiers. When phases reuse an artifact name, the later accepted handle wins.
 
 ## Invocation
 
-- Lab path: `labs/workflows/workflow_idea_to_workflow_package/`
-- Discovery: lab workflow; copy or reference the workflow folder explicitly before running it by name.
-- Run:
+```python
+from botpipe import Botpipe
+from labs.workflows.workflow_idea_to_workflow_package import Params, workflow_callable
 
-```bash
-botpipe run workflow_idea_to_workflow_package <task-id> \
-  --message "We need a workflow for release readiness reviews." \
-  -wf package_name release_candidate_to_go_no_go \
-  -wf workflow_kind end_to_end \
-  -wf aliases release-go-no-go \
-  -wf target_test_command "pytest -q"
+client = Botpipe(workspace=".")
+result = client.run(
+    workflow_callable, Params(...), request="Describe the requested outcome"
+)
 ```
 
-Params:
+Parameters are validated by the package-local Pydantic `Params` model before any operation starts. `request` contains the human-readable task or evidence request.
 
-- `package_name` required
-- `package_title` optional
-- `workflow_kind` required: `end_to_end` or `building_block`
-- `aliases` optional and repeatable
-- `target_test_command` optional, default `pytest`
+## Phases and evidence
 
-## Candidate additions considered
+| Phase | Required produced artifacts |
+| --- | --- |
+| `frame_candidate` | `workflow_idea_brief.md`, `candidate_selection_criteria.md` |
+| `design_package` | `workflow_design.md`, `workflow_contract.json` |
+| `build_package` | `workflow_package_manifest.json`, `implementation_notes.md` |
+| `evaluate_package` | `workflow_evaluation.md`, `workflow_package_summary.json`, `workflow_next_action.md` |
 
-| Candidate | Why it matters | Trade-off | Decision |
-| --- | --- | --- | --- |
-| `workflow_idea_to_workflow_package` | Creates the missing workflow-builder as real infrastructure | Framework-first, so it must still ship concrete package outputs and tests | Chosen |
-| `release_candidate_to_go_no_go` | Concrete release decision workflow for engineering teams | Better once the repo has a strong authoring workflow to build it through | Deferred |
-| `incident_to_hardening_program` | High-value incident response and prevention workflow | Also valuable, but less foundational than the builder gap in cycle 1 | Deferred |
+The build manifest identifies its generated callable with an explicit repo-relative
+`file.py:function` reference. The file must be the selected shape's entry file:
+the single workflow file for `single`, or `flow.py` for `flow_specs` and `package`.
+Catalog lookup belongs to later discovery, after the generated package is
+materialized and validated, and cannot replace this entry reference.
 
-## Framework improvement candidates considered
+Producer and verifier prompts remain phase-specific. `accepted` advances, while `needs_rework` repeats the phase with structured feedback and its previous artifact snapshots. `needs_replan` returns control to the phase's declared target through a workflow-owned Python loop. `question` and `blocked` suspend with `ask()` and retry the phase with the operator's `input_answer`; `failed` rejects the phase. No route table executes these outcomes.
 
-| Candidate | Benefits | Trade-offs | Decision |
-| --- | --- | --- | --- |
-| Step-owned narrow control contracts | Keeps machine-readable contracts close to steps and visible in compiled workflow metadata | Requires additive validation and engine plumbing | Chosen |
-| Prompt front matter for machine-readable contracts | Co-locates metadata near prompts | Mixes runtime-only control data into provider-facing assets and duplicates state | Rejected |
-| Runtime-owned side tables or hidden branches | Small initial diff | Hides workflow meaning in runtime logic and violates the authoring doctrine | Rejected |
+## Inspection and replay
 
-## Meaningful design decisions
+The journal records prompt reads, provider results, typed outcomes, usage, artifact dependencies, and operation timing. Replay uses the committed typed results and artifact snapshots. Source inspection reports dynamic topology and does not claim that unvisited Python branches executed.
 
-### 1. Package shape
+## Validation
 
-- Alternatives considered:
-- ship only a reusable helper or scaffold recipe
-- ship a domain workflow first
-- ship the workflow-builder itself
-- Selected: ship the workflow-builder itself as an end-to-end workflow package
-- Why: the repository had no credible builder capability, so shipping the builder is the highest-leverage addition.
-
-### 2. Input capture strategy
-
-- Alternatives considered:
-- read workflow parameters from `run.json` in every step
-- use an explicit `before(ctx)` hook on the first step
-- use a deterministic bootstrap step that writes an invocation artifact and seeds workflow state
-- Selected: deterministic bootstrap step
-- Why: it creates an authoritative run-local input artifact, opens sessions mechanically, and gives later artifact templates stable `state.package_name` access without hidden runtime behavior.
-
-### 3. Generated package output strategy
-
-- Alternatives considered:
-- hidden generator helper or runtime subsystem
-- only a directory-level output with no explicit index
-- direct repository file creation plus a build report that enumerates concrete generated files
-- Selected: direct repository file creation plus explicit build report
-- Why: it reuses the current scaffold contract, keeps outputs inspectable, and avoids introducing a new framework layer.
-
-## Implementation candidates considered
-
-| Candidate | Description | Trade-off | Decision |
-| --- | --- | --- | --- |
-| Hidden generator layer | Add a reusable framework generator that writes packages from a spec | Too much new machinery for one cycle | Rejected |
-| Direct package creation from accepted design | Use the existing package scaffold contract and write files directly from the workflow | More explicit artifacts to manage, but much easier to inspect | Chosen |
-| Child-workflow composition around `botpipe init workflow` | Invoke the scaffold command and patch the results in later steps | Adds command coupling and obscures the actual file contract | Rejected |
-
-## Workflow contract
-
-### Objective
-
-Turn a workflow idea into a concrete Botpipe workflow package with prompts, docs, tests, and promotion/rollback evidence.
-
-### Global deterministic responsibilities
-
-- Bootstrap the run-local invocation contract.
-- Compare candidates and explicitly include the workflow-builder.
-- Hold package design, build, and evaluation as separate work items with explicit rework/replan routes.
-- Keep runtime-injected control contracts narrow and mechanical.
-- Require promotion and rollback evidence before publication.
-
-### Provider-owned cognitive responsibilities
-
-- Analyze candidate workflows.
-- Author the design artifacts.
-- Create package files, prompts, docs, and tests.
-- Gather verification evidence and recommend publication.
-
-### Work-item boundary doctrine
-
-- `frame_candidate`: candidate comparison and selection only.
-- `design_package`: authoritative package contract only.
-- `build_package`: repository file creation and updates only.
-- `evaluate_package`: evidence gathering and promotion/rollback recommendation only.
-- `needs_rework`: same accepted design or work-item boundary still holds.
-- `needs_replan`: the selected addition, topology, artifact graph, or verification surface changed materially.
-
-### Role topology
-
-- `workflow strategist` / `workflow critic`
-- `workflow author` / `package verifier`
-- `package builder` / `build verifier`
-- `evaluator` / `release verifier`
-- deterministic `bootstrap` and `publish_package` `python_step`s
-
-### Control flow
-
-1. `bootstrap`
-2. `frame_candidate`
-3. `design_package`
-4. `build_package`
-5. `evaluate_package`
-6. `publish_package`
-
-### Route grammar
-
-Helper routes:
-
-- `question` when provider questions are allowed by the interaction policy
-- question routes use `outcome.route_fields.questions`; blocked and failed routes use nullable `outcome.route_fields.reason`
-
-Application routes:
-
-- `inputs_prepared`
-- `candidate_selected`
-- `design_accepted`
-- `package_built`
-- `evaluation_passed`
-- `needs_rework`
-- `needs_replan`
-- `package_published`
-
-Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
-
-### Artifact contract
-
-Stable workflow-local artifacts:
-
-- `invocation_contract.json`
-- `candidate_comparison.md`
-- `selected_workflow_brief.md`
-- `workflow_package_spec.md`
-- `step_contracts.json`
-- `prompt_contract_matrix.md`
-- `verification_plan.md`
-- `build_report.md`
-- `verification_report.md`
-- `promotion_record.md`
-- `rollback_plan.md`
-- `publish_receipt.json`
-
-Generated package roots:
-
-- `labs/workflows/<package_name>/`
-- `<package_folder>/README.md`
-- `tests/runtime/test_<package_name>.py`
-
-### Runtime-injected control contract
-
-The runtime injects only:
-
-- `expected_output_schema`
-- `available_routes`
-- step-local `Route.to(...)` metadata
-
-Payload models used by the package:
-
-- `CandidateSelectionPayload`
-- `WorkflowDesignPayload`
-- `WorkflowBuildPayload`
-- `WorkflowEvaluationPayload`
-
-### Prompt templates
-
-The package includes explicit prompt templates for:
-
-- `prompts/frame_producer.md`
-- `prompts/frame_verifier.md`
-- `prompts/design_producer.md`
-- `prompts/design_verifier.md`
-- `prompts/build_producer.md`
-- `prompts/build_verifier.md`
-- `prompts/evaluate_producer.md`
-- `prompts/evaluate_verifier.md`
-
-Each prompt names the role, purpose, current work item, required reads, required writes, legal routes, evidence requirements, and forbidden actions.
-
-### Verification and evidence contract
-
-- The package must be discoverable through workflow discovery.
-- The compiled workflow must expose step-owned control contracts on the pair steps.
-- A scripted-provider test must exercise the workflow end to end and prove it can emit a compilable generated package.
-
-### Rework / replan / block / fail policy
-
-- `needs_rework` loops locally on frame, design, or build, or routes evaluation back to build when the accepted design still stands.
-- `needs_replan` returns from design to frame, from build to design, or from evaluation to design when the contract changed materially.
-- When the workflow explicitly authors `blocked`, use it when missing prerequisites.
-- When the workflow explicitly authors `failed`, use it when irrecoverable contradictions.
-
-### Recursive self-improvement policy
-
-- The package can generate candidate workflow packages, including self-improvement candidates.
-- Promotion remains evidence-gated through `verification_report`, `promotion_record`, `rollback_plan`, and `publish_receipt`.
-
-## Evidence
-
-- Lab implementation: `labs/workflows/workflow_idea_to_workflow_package/`
-- Workflow-specific test: `tests/runtime/test_workflow_builder_package.py`
-- Scripted exercise proves discovery, compilation, execution, artifact generation, and a compilable generated package.
+`tests/test_labs.py` imports and resolves every labs manifest, stages every package with `FakeProvider`, checks typed accepted outcomes, and verifies that all required artifacts were captured.

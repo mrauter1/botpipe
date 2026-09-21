@@ -1,3 +1,7 @@
+## Durable verifier outcome
+
+Return a JSON result matching the injected schema. Use `accepted` when the artifacts meet the positive phase condition described below, `needs_rework` when the same phase can be repaired, `needs_replan` when an accepted earlier plan must be revisited, `question` or `blocked` when operator input is required, and `failed` for a terminal domain failure. The phase labels below describe semantic checks; do not return old route labels as the `outcome`. Cite only artifact names supplied by the runtime.
+
 # Design Eval Cases Verifier
 
 ## Step Contract
@@ -8,25 +12,10 @@
 ### Purpose
 - Decide whether the benchmark, edge, and adversarial coverage, the proposed manifest, and the evaluation rubric are explicit enough for terminal suite packaging.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `selected_workflow_capability` | Read | Required input. |
-| `evaluation_request_brief` | Read | Required input. |
-| `evaluation_dimensions` | Read | Required input. |
-| `benchmark_case_matrix` | Read | Required input. |
-| `edge_case_matrix` | Read | Required input. |
-| `adversarial_case_matrix` | Read | Required input. |
-| `eval_case_manifest` | Read | Required input. |
-| `eval_rubric` | Read | Required input. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not overwrite the case-matrix artifacts, `eval_case_manifest`, or `eval_rubric` during verification.
-- Return verifier control metadata only through the step payload and selected route.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -34,7 +23,7 @@
 - The three matrix artifacts must all exist and each must contribute at least one explicit case for its named category.
 - `eval_case_manifest` must be valid JSON with cases that use only the legal case kinds `benchmark`, `edge`, and `adversarial`.
 - The manifest must make case ids, prompts, expected artifacts, and any workflow parameters explicit.
-- `expected_artifacts` must stay within the selected workflow's artifact surface from `selected_workflow_capability`.
+- `expected_artifacts` must stay within the selected workflow's artifact surface from `selected_workflow_contract`.
 - `eval_rubric` must define concrete evaluation guidance rather than generic prose.
 
 ### Payload requirements
@@ -47,15 +36,16 @@
 
 ## Evidence
 
+- Verify the declared phase artifacts—`benchmark_case_matrix`, `edge_case_matrix`, `adversarial_case_matrix`, `eval_case_manifest`, `eval_rubric`—against the phase requirements and require their claims to be internally consistent.
 - Base the verdict on the authored matrices, manifest, rubric, and selected-workflow capability snapshot instead of unverifiable assumptions.
 - Confirm that category coverage, expected-artifact coverage, and workflow-parameter assumptions are explicit enough for terminal suite packaging.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance
+### Outcome guidance
 - Return `eval_cases_designed` only when category coverage, the manifest, and the rubric are coherent and packaging-ready.
 - Return `needs_rework` when the same case-design boundary still holds and the artifacts need local repair.
 - Return `needs_replan` when the selected workflow, evaluation objective, or acceptance boundary changed materially.
@@ -67,6 +57,8 @@
 - Do not ask for a replan when local repair is sufficient.
 - Do not approve a manifest that still hides case ids, case kinds, expected artifacts, or workflow-parameter assumptions.
 
-## Optimizer handoff
+## Optimizer v2 evaluation-case handoff
 
-When `invocation_contract.optimization_selection` is present, implement its selected `evaluation_case` proposal using the cited evidence and captured baseline. Keep the proposal's scope and validation plan visible. These are development cases because their failure evidence was exposed during authoring. Publish a new suite; never edit the evaluator or cases of an existing frozen comparison.
+- `optimizer_handoff`, when present, contains one validated `evaluation_case` candidate. Turn every supplied case description into concrete typed cases without changing the candidate identity or treating development cases as withheld evaluation evidence.
+- `validated_eval_case_manifest` is the callable-validated manifest. Preserve its ordered case IDs, workflow parameters, and expected artifacts.
+- `evaluation_suite_id` is derived from that validated manifest and `source_candidate_id`; copy both exactly into the package payload and JSON summary. Do not execute the selected workflow or claim measured improvement.

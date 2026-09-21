@@ -1,7 +1,15 @@
 """Standard-library bootstrap for isolated candidate checks."""
 
 from __future__ import annotations
-import hashlib, importlib.machinery, json, os, runpy, sys, traceback
+
+import hashlib
+import importlib.machinery
+import inspect
+import json
+import os
+import runpy
+import sys
+import traceback
 from pathlib import Path
 
 
@@ -36,18 +44,26 @@ def main() -> int:
     try:
         environment = _environment(deps)
         if config["mode"] == "compile":
-            from botpipe.core.compiler import compile_workflow
-            from botpipe.runtime.loader import resolve_workflow_reference
+            from botpipe.discovery import resolve_workflow
+            from botpipe.runtime import Workflow
 
             compiled = []
             for reference in config["workflow_refs"]:
-                resolved = resolve_workflow_reference(root, reference)
-                plan = compile_workflow(resolved.workflow_cls)
-                source = resolved.source_path
+                resolved = resolve_workflow(reference, workspace=root)
+                if not isinstance(resolved, Workflow):
+                    raise TypeError(
+                        "Candidate reference must resolve to a @workflow callable"
+                    )
+                source = Path(inspect.getsourcefile(resolved.fn)).resolve(strict=True)
+                # Import + signature/schema inspection validate this concrete source;
+                # dynamic branches are only exercised by the requested test command.
+                inspect.signature(resolved.fn)
                 compiled.append(
                     {
                         "requested_reference": reference,
-                        "workflow_name": plan.workflow_name,
+                        "workflow_name": resolved.name,
+                        "workflow_version": resolved.version,
+                        "callable_signature": str(inspect.signature(resolved.fn)),
                         "source_path": (
                             None if source is None else str(source.resolve())
                         ),
@@ -70,7 +86,7 @@ def main() -> int:
             Path(__file__).resolve(),
         )
         payload["module_origins"] = origins
-    except BaseException as exc:
+    except BaseException as exc:  # noqa: BLE001 - subprocess diagnostic boundary includes SystemExit
         if isinstance(exc, SystemExit):
             code = (
                 0 if exc.code is None else exc.code if isinstance(exc.code, int) else 1
@@ -87,7 +103,7 @@ def main() -> int:
                     Path(__file__).resolve(),
                 )
                 payload["module_origins"] = origins
-            except BaseException as origin:
+            except BaseException as origin:  # noqa: BLE001 - preserve the original failed probe
                 code = 1
                 payload = _error(origin)
         else:
@@ -162,6 +178,10 @@ def _run(argv: list[str]) -> int:
         or Path(argv[0]).resolve() == Path(sys.executable).resolve()
     ):
         raise ValueError("Python check must start with pytest or interpreter")
+    if len(argv) >= 3 and argv[1] == "-c":
+        sys.argv = ["-c", *argv[3:]]
+        exec(compile(argv[2], "<candidate-check>", "exec"), {"__name__": "__main__"})  # noqa: S102 - explicitly requested Python command
+        return 0
     if len(argv) >= 3 and argv[1] == "-m":
         sys.argv = [argv[2], *argv[3:]]
         runpy.run_module(argv[2], run_name="__main__", alter_sys=True)

@@ -1,3 +1,7 @@
+## Durable producer result
+
+After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+
 # Frame Evaluation Target Producer
 
 ## Step Contract
@@ -13,23 +17,10 @@
 - Keep the boundary at the selected workflow, the evaluation objective, the evaluation dimensions, and the publication boundary for this building block.
 - Do not design concrete cases or package the terminal suite in this step.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `selected_workflow_capability` | Read | Required input. |
-| `framework_architecture_doc` | Read | Required input. |
-| `framework_authoring_doc` | Read | Required input. |
-| `workflow_authoring_guidelines` | Read | Required input. |
-| `evaluation_request_brief` | Write | Overwrite. |
-| `evaluation_dimensions` | Write | Overwrite. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- You may inspect the selected workflow's linked doc or source file when the capability snapshot says they exist, but `selected_workflow_capability` remains the authoritative selected-workflow contract.
-- Do not create `benchmark_case_matrix`, `edge_case_matrix`, `adversarial_case_matrix`, `eval_case_manifest`, `eval_rubric`, `workflow_eval_suite`, `workflow_eval_suite_summary`, or `workflow_eval_next_action` in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -53,20 +44,20 @@
 
 ## Evidence
 
-- Anchor the framing in the selected-workflow capability snapshot and the run-local invocation contract.
+- Anchor the framing in the selected-workflow capability snapshot and the runtime input.
 - Keep the runtime/provider boundary crisp: the runtime injects the compact human-readable step contract, while prompt templates own the operational guidance and raw provider output never re-enters prompts.
 - Make the acceptance surface specific enough that the next step can design cases and a rubric without silently widening the selected workflow boundary.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance for the verifier
+### Outcome guidance for the verifier
 - `evaluation_target_framed`: the selected workflow, evaluation objective, and acceptance dimensions are explicit enough for case design.
 - `needs_rework`: the same framing boundary still holds, but the brief or evaluation dimensions need local repair.
 - `needs_replan`: the selected workflow, evaluation objective, or publication boundary changed materially and framing must restart.
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Use `blocked` only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Out Of Scope
 
@@ -81,6 +72,8 @@
 - Do not hide the framing only in provider prose; the durable output must live in the named artifacts.
 - Do not invent new runtime-owned metadata or a provider-facing packet abstraction.
 
-## Optimizer handoff
+## Optimizer v2 evaluation-case handoff
 
-When `invocation_contract.optimization_selection` is present, implement its selected `evaluation_case` proposal using the cited evidence and captured baseline. Keep the proposal's scope and validation plan visible. These are development cases because their failure evidence was exposed during authoring. Publish a new suite; never edit the evaluator or cases of an existing frozen comparison.
+- `optimizer_handoff`, when present, contains one validated `evaluation_case` candidate. Turn every supplied case description into concrete typed cases without changing the candidate identity or treating development cases as withheld evaluation evidence.
+- `validated_eval_case_manifest` is the callable-validated manifest. Preserve its ordered case IDs, workflow parameters, and expected artifacts.
+- `evaluation_suite_id` is derived from that validated manifest and `source_candidate_id`; copy both exactly into the package payload and JSON summary. Do not execute the selected workflow or claim measured improvement.

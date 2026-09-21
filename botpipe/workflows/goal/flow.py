@@ -1,22 +1,4 @@
-"""Persistent subgoal-based goal workflow: Botpipe equivalent of Codex /goal.
-
-Command-equivalent inputs:
-- /goal <objective>       -> action="set", objective="..."
-- /goal                   -> action="status"
-- /goal clear             -> action="clear"
-- /goal pause             -> action="pause"
-- /goal resume            -> action="resume"
-- /goal edit <objective>  -> action="edit", objective="..."
-- replan current goal     -> action="replan"
-
-Design:
-- goal.json is the durable parent objective.
-- subgoals.json is the plan-of-record.
-- exactly one active subgoal is selected at a time.
-- each subgoal has its own verifier criteria.
-- completion of all subgoals is necessary but not sufficient: final_goal_audit
-  independently verifies the original parent objective.
-"""
+"""Persistent subgoal workflow equivalent to the ``/goal`` command family."""
 
 from __future__ import annotations
 
@@ -26,89 +8,59 @@ from pathlib import Path
 from typing import Any, Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from botpipe import (
-    Event,
-    FAIL,
-    FINISH,
-    Prompt,
-    Route,
+    Artifact,
+    OutputValidationError,
     Session,
-    Workflow,
-    produce_verify_step,
-    python_step,
-    step,
+    activity,
+    ask,
+    current_run,
+    workflow,
 )
-from botpipe.core import Artifact
-from botpipe.core.extensions import RunBinding, StepFinish, StepStart, TerminalFinish
-
 
 GoalStatus = Literal[
-    "active",
-    "paused",
-    "blocked",
-    "usage_limited",
-    "budget_limited",
-    "complete",
+    "active", "paused", "blocked", "usage_limited", "budget_limited", "complete"
 ]
-
 PlanningStatus = Literal["unplanned", "planned", "stale"]
-
-GoalAction = Literal[
-    "set",
-    "status",
-    "pause",
-    "resume",
-    "clear",
-    "edit",
-    "replan",
-]
-
+GoalAction = Literal["set", "status", "pause", "resume", "clear", "edit", "replan"]
 SubgoalStatus = Literal[
-    "pending",
-    "active",
-    "needs_rework",
-    "blocked",
-    "complete",
-    "skipped",
+    "pending", "active", "needs_rework", "blocked", "complete", "skipped"
 ]
 
 
 class GoalWorkflowInput(BaseModel):
     action: GoalAction = "set"
     objective: str | None = None
-
     replace_existing: bool = False
     allow_replace_completed: bool = True
-
     token_budget: int | None = Field(default=None, gt=0)
     max_goal_turns: int | None = Field(default=None, ge=1)
 
 
 class GoalRecord(BaseModel):
-    schema: Literal["botpipe.goal/v2"] = "botpipe.goal/v2"
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
 
+    schema_id: Literal["botpipe.goal/v2"] = Field(
+        default="botpipe.goal/v2", alias="schema"
+    )
     thread_id: str
     goal_id: str
     objective: str
     status: GoalStatus
     planning_status: PlanningStatus = "unplanned"
-
     token_budget: int | None = None
     tokens_used: int = 0
     time_used_seconds: int = 0
     max_goal_turns: int | None = None
     turns_completed: int = 0
-
     active_subgoal_id: str | None = None
     completed_subgoal_count: int = 0
     total_subgoal_count: int = 0
-
     created_at: str
     updated_at: str
     last_reason: str | None = None
-
     completion_summary: str | None = None
     completed_at: str | None = None
 
@@ -118,25 +70,19 @@ class SubgoalRecord(BaseModel):
     title: str
     description: str
     status: SubgoalStatus = "pending"
-
     verifier_criteria: list[str] = Field(default_factory=list)
     dependencies: list[str] = Field(default_factory=list)
     priority: int = 100
-
     evidence_artifacts: list[str] = Field(default_factory=list)
     suggested_commands: list[str] = Field(default_factory=list)
-
     turns_completed: int = 0
     tokens_used: int = 0
     time_used_seconds: int = 0
-
     last_verifier_route: str | None = None
     last_reason: str | None = None
-
     blocker_fingerprint: str | None = None
     blocker_reason: str | None = None
     consecutive_blocked_turns: int = 0
-
     completion_summary: str | None = None
     criteria_results: dict[str, str] = Field(default_factory=dict)
     evidence: list[str] = Field(default_factory=list)
@@ -144,28 +90,28 @@ class SubgoalRecord(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _migrate_legacy_required_artifacts(cls, value: object) -> object:
-        if isinstance(value, dict) and "evidence_artifacts" not in value and "required_artifacts" in value:
+    def migrate_required_artifacts(cls, value: object) -> object:
+        if (
+            isinstance(value, dict)
+            and "evidence_artifacts" not in value
+            and "required_artifacts" in value
+        ):
             value = dict(value)
             value["evidence_artifacts"] = value.get("required_artifacts")
         return value
 
 
 class SubgoalPlan(BaseModel):
-    schema: Literal["botpipe.goal.subgoals/v1"] = "botpipe.goal.subgoals/v1"
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+
+    schema_id: Literal["botpipe.goal.subgoals/v1"] = Field(
+        default="botpipe.goal.subgoals/v1", alias="schema"
+    )
     goal_id: str = ""
     active_subgoal_id: str | None = None
     subgoals: list[SubgoalRecord] = Field(default_factory=list)
     created_at: str = ""
     updated_at: str = ""
-
-
-class GoalWorkflowState(BaseModel):
-    goal_id: str | None = None
-    status: GoalStatus | Literal["missing", "cleared"] = "missing"
-    planning_status: PlanningStatus | Literal["missing"] = "missing"
-    active_subgoal_id: str | None = None
-    last_reason: str | None = None
 
 
 class GoalWorkflowOutput(BaseModel):
@@ -185,172 +131,249 @@ class GoalWorkflowOutput(BaseModel):
     final_report_path: str | None = None
 
 
-class ReasonRouteFields(BaseModel):
+class PlanDecision(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    verdict: Literal["accepted", "needs_rework"]
     reason: str | None = None
-    evidence: str | None = None
-
-
-class PlanAcceptedFields(BaseModel):
-    reason: str | None = None
-    coverage_summary: str
+    coverage_summary: str = ""
     risks: list[str] = Field(default_factory=list)
 
 
-class SubgoalCompleteFields(BaseModel):
-    reason: str | None = None
-    completion_summary: str
+class SubgoalDecision(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    verdict: Literal["complete", "continue", "needs_rework", "blocked"]
+    reason: str
+    completion_summary: str | None = None
     criteria_results: dict[str, str] = Field(default_factory=dict)
     evidence: list[str] = Field(default_factory=list)
-
-
-class SubgoalBlockedFields(BaseModel):
-    reason: str
-    blocker_fingerprint: str
+    blocker_fingerprint: str | None = None
     blocked_criteria: list[str] = Field(default_factory=list)
-    evidence: list[str] = Field(default_factory=list)
 
 
-class FinalCompleteFields(BaseModel):
-    reason: str | None = None
-    completion_summary: str
-    evidence: list[str] = Field(default_factory=list)
-
-
-class FinalNeedsReworkFields(BaseModel):
+class FinalDecision(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    verdict: Literal["complete", "needs_rework", "replan"]
     reason: str
+    completion_summary: str | None = None
+    evidence: list[str] = Field(default_factory=list)
     subgoal_ids: list[str] = Field(default_factory=list)
-    evidence: list[str] = Field(default_factory=list)
-
-
-class FinalReplanFields(BaseModel):
-    reason: str
     missing_requirements: list[str] = Field(default_factory=list)
-    evidence: list[str] = Field(default_factory=list)
 
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _clean_text(value: object) -> str | None:
-    if not isinstance(value, str):
+def _json_write(path: Path, value: BaseModel | dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = (
+        value.model_dump(mode="json", by_alias=True)
+        if isinstance(value, BaseModel)
+        else value
+    )
+    path.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+
+
+@activity
+def _read_goal(path: str) -> GoalRecord | None:
+    target = Path(path)
+    if not target.is_file():
         return None
-    value = value.strip()
-    return value or None
+    return GoalRecord.model_validate_json(target.read_text(encoding="utf-8"))
 
 
-def _goal_exists(ctx) -> bool:
-    return ctx.artifacts.goal.exists()
+@activity
+def _read_plan(path: str) -> SubgoalPlan | None:
+    target = Path(path)
+    if not target.is_file():
+        return None
+    return SubgoalPlan.model_validate_json(target.read_text(encoding="utf-8"))
 
 
-def _subgoals_exist(ctx) -> bool:
-    return ctx.artifacts.subgoals.exists()
-
-
-def _load_goal(ctx) -> GoalRecord:
-    return GoalRecord.model_validate(ctx.artifacts.goal.read_json())
-
-
-def _load_plan(ctx) -> SubgoalPlan:
-    return SubgoalPlan.model_validate(ctx.artifacts.subgoals.read_json())
-
-
-def _write_goal(ctx, goal: GoalRecord) -> None:
+@activity
+def _save_state(
+    goal_path: str, goal: GoalRecord, plan_path: str, plan: SubgoalPlan | None
+) -> tuple[GoalRecord, SubgoalPlan | None]:
+    goal = goal.model_copy(deep=True)
     goal.updated_at = _now()
-    ctx.artifacts.goal.write_model(goal)
-    _sync_state(ctx, goal)
+    _json_write(Path(goal_path), goal)
+    if plan is not None:
+        plan = plan.model_copy(deep=True)
+        plan.updated_at = _now()
+        if not plan.created_at:
+            plan.created_at = plan.updated_at
+        _json_write(Path(plan_path), plan)
+    return goal, plan
 
 
-def _write_plan(ctx, plan: SubgoalPlan) -> None:
-    plan.updated_at = _now()
-    if not plan.created_at:
-        plan.created_at = _now()
-    ctx.artifacts.subgoals.write_model(plan)
-
-
-def _sync_state(ctx, goal: GoalRecord | None) -> None:
-    if goal is None:
-        ctx.state.goal_id = None
-        ctx.state.status = "missing"
-        ctx.state.planning_status = "missing"
-        ctx.state.active_subgoal_id = None
-        ctx.state.last_reason = None
-        return
-
-    ctx.state.goal_id = goal.goal_id
-    ctx.state.status = goal.status
-    ctx.state.planning_status = goal.planning_status
-    ctx.state.active_subgoal_id = goal.active_subgoal_id
-    ctx.state.last_reason = goal.last_reason
-
-
-def _input_objective(ctx) -> str | None:
-    options = _workflow_options(ctx)
-    objective = _clean_text(getattr(options, "objective", None))
-    if objective is not None:
-        return objective
-    return _clean_text(ctx.message)
-
-
-def _workflow_options(ctx) -> GoalWorkflowInput:
-    workflow_input = getattr(ctx, "input", None)
-    if workflow_input is not None:
-        return workflow_input
-
-    params = getattr(ctx, "params", None)
-    if params is not None:
-        return params
-
-    return GoalWorkflowInput()
-
-
-def _new_goal(ctx, objective: str) -> GoalRecord:
-    options = _workflow_options(ctx)
+@activity
+def _new_goal(
+    task_id: str, objective: str, token_budget: int | None, max_goal_turns: int | None
+) -> GoalRecord:
+    timestamp = _now()
     return GoalRecord(
-        thread_id=ctx.task_id,
+        thread_id=task_id,
         goal_id=uuid4().hex,
         objective=objective,
         status="active",
-        planning_status="unplanned",
-        token_budget=getattr(options, "token_budget", None),
-        max_goal_turns=getattr(options, "max_goal_turns", None),
-        created_at=_now(),
-        updated_at=_now(),
+        token_budget=token_budget,
+        max_goal_turns=max_goal_turns,
+        created_at=timestamp,
+        updated_at=timestamp,
     )
 
 
-def _event_fields(ctx) -> dict[str, Any]:
-    outcome = ctx.outcome
-    fields = getattr(outcome, "route_fields", None)
-    if isinstance(fields, dict):
-        return dict(fields)
-
-    event_source = getattr(ctx.event, "_source", None)
-    if isinstance(event_source, dict):
-        fields = event_source.get("route_fields")
-        if isinstance(fields, dict):
-            return dict(fields)
-
-    return {}
+@activity(retry_safe=True)
+def _timestamp() -> str:
+    return _now()
 
 
-def _list_from_field(value: object) -> list[str]:
-    if not isinstance(value, list):
-        return []
-    return [item.strip() for item in value if isinstance(item, str) and item.strip()]
+@activity
+def _clear_state(goal_path: str, plan_path: str) -> None:
+    Path(goal_path).unlink(missing_ok=True)
+    Path(plan_path).unlink(missing_ok=True)
 
 
-def _goal_status_markdown(goal: GoalRecord | None, plan: SubgoalPlan | None = None) -> str:
+@activity
+def _write_report(path: str, text: str) -> str:
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(text.rstrip() + "\n", encoding="utf-8")
+    return str(target)
+
+
+def _find(plan: SubgoalPlan, item_id: str | None) -> SubgoalRecord | None:
+    return next((item for item in plan.subgoals if item.id == item_id), None)
+
+
+def _refresh(goal: GoalRecord, plan: SubgoalPlan) -> None:
+    goal.total_subgoal_count = len(plan.subgoals)
+    goal.completed_subgoal_count = sum(
+        item.status == "complete" for item in plan.subgoals
+    )
+
+
+def _validate_plan(plan: SubgoalPlan, goal: GoalRecord) -> str | None:
+    if not plan.subgoals:
+        return "subgoals.json must contain at least one subgoal"
+    ids = [item.id.strip() for item in plan.subgoals]
+    if any(not item for item in ids) or len(ids) != len(set(ids)):
+        return "subgoal ids must be non-empty and unique"
+    known = set(ids)
+    for item in plan.subgoals:
+        if (
+            not item.title.strip()
+            or not item.description.strip()
+            or not item.verifier_criteria
+        ):
+            return (
+                f"subgoal {item.id!r} needs a title, description, and verifier criteria"
+            )
+        if item.id in item.dependencies or any(
+            dep not in known for dep in item.dependencies
+        ):
+            return f"subgoal {item.id!r} has an invalid dependency"
+    visiting: set[str] = set()
+    visited: set[str] = set()
+    by_id = {item.id: item for item in plan.subgoals}
+
+    def visit(item_id: str) -> bool:
+        if item_id in visiting:
+            return False
+        if item_id in visited:
+            return True
+        visiting.add(item_id)
+        if not all(visit(dep) for dep in by_id[item_id].dependencies):
+            return False
+        visiting.remove(item_id)
+        visited.add(item_id)
+        return True
+
+    if not all(visit(item_id) for item_id in ids):
+        return "subgoal dependency cycle detected"
+    plan.goal_id = goal.goal_id
+    return None
+
+
+def _select(plan: SubgoalPlan) -> SubgoalRecord | None:
+    completed = {item.id for item in plan.subgoals if item.status == "complete"}
+    active = _find(plan, plan.active_subgoal_id)
+    if (
+        active
+        and active.status in {"pending", "active", "needs_rework"}
+        and set(active.dependencies) <= completed
+    ):
+        return active
+    candidates = [
+        item
+        for item in plan.subgoals
+        if item.status in {"pending", "active", "needs_rework"}
+        and set(item.dependencies) <= completed
+    ]
+    return min(candidates, key=lambda item: (item.priority, item.id), default=None)
+
+
+def _usage_tokens(usage: Any) -> int:
+    if not isinstance(usage, dict):
+        return 0
+    for key in ("total_tokens", "tokens", "token_count"):
+        value = usage.get(key)
+        if isinstance(value, int):
+            return max(0, value)
+    input_tokens = usage.get("input_tokens")
+    output_tokens = usage.get("output_tokens")
+    if isinstance(input_tokens, int) or isinstance(output_tokens, int):
+        cached = usage.get("cached_input_tokens")
+        uncached_input = max(0, int(input_tokens or 0) - int(cached or 0))
+        return uncached_input + max(0, int(output_tokens or 0))
+    return sum(
+        _usage_tokens(value) for value in usage.values() if isinstance(value, dict)
+    )
+
+
+def _charge(goal: GoalRecord, subgoal: SubgoalRecord | None, *results: Any) -> None:
+    tokens = sum(_usage_tokens(getattr(result, "usage", None)) for result in results)
+    goal.tokens_used += tokens
+    if subgoal is not None:
+        subgoal.tokens_used += tokens
+
+
+def _goal_turn(
+    session: Session,
+    prompt: str,
+    goal_record: GoalRecord,
+    plan: SubgoalPlan | None,
+    goal_path: Path,
+    plan_path: Path,
+    *,
+    subgoal: SubgoalRecord | None = None,
+    **kwargs: Any,
+):
+    """Persist usage from an exhausted output-contract repair before failing."""
+    try:
+        return session.run(prompt, **kwargs)
+    except OutputValidationError as exc:
+        tokens = _usage_tokens(getattr(exc, "usage", {}))
+        goal_record.tokens_used += tokens
+        if subgoal is not None:
+            subgoal.tokens_used += tokens
+        _save_state(str(goal_path), goal_record, str(plan_path), plan)
+        raise
+
+
+def _limited(goal: GoalRecord) -> str | None:
+    if goal.token_budget is not None and goal.tokens_used >= goal.token_budget:
+        return "Goal token budget reached."
+    if goal.max_goal_turns is not None and goal.turns_completed >= goal.max_goal_turns:
+        return f"Maximum goal turns reached: {goal.max_goal_turns}."
+    return None
+
+
+def _status_text(goal: GoalRecord | None, plan: SubgoalPlan | None) -> str:
     if goal is None:
         return "# Goal Status\n\nNo goal is currently set.\n"
-
-    token_budget = "none" if goal.token_budget is None else str(goal.token_budget)
-    remaining = (
-        "unbounded"
-        if goal.token_budget is None
-        else str(max(0, goal.token_budget - goal.tokens_used))
-    )
-
     lines = [
         "# Goal Status",
         "",
@@ -358,1636 +381,560 @@ def _goal_status_markdown(goal: GoalRecord | None, plan: SubgoalPlan | None = No
         f"- Status: `{goal.status}`",
         f"- Planning status: `{goal.planning_status}`",
         f"- Objective: {goal.objective}",
-        f"- Active subgoal id: `{goal.active_subgoal_id or '(none)'}`",
+        f"- Active subgoal: `{goal.active_subgoal_id or '(none)'}`",
         f"- Completed subgoals: {goal.completed_subgoal_count}/{goal.total_subgoal_count}",
         f"- Tokens used: {goal.tokens_used}",
-        f"- Token budget: {token_budget}",
-        f"- Tokens remaining: {remaining}",
-        f"- Time used seconds: {goal.time_used_seconds}",
-        f"- Goal turns completed: {goal.turns_completed}",
-        f"- Max goal turns: {goal.max_goal_turns if goal.max_goal_turns is not None else 'none'}",
-        f"- Last reason: {goal.last_reason or '(none)'}",
+        f"- Token budget: {goal.token_budget or 'none'}",
+        f"- Goal turns: {goal.turns_completed}/{goal.max_goal_turns or 'unbounded'}",
         "",
     ]
-
-    if plan is not None and plan.subgoals:
+    if plan:
         lines.extend(["## Subgoals", ""])
-        for subgoal in plan.subgoals:
-            deps = ", ".join(subgoal.dependencies) or "none"
-            lines.append(
-                f"- `{subgoal.id}` [{subgoal.status}] {subgoal.title} "
-                f"(deps: {deps}, blocked turns: {subgoal.consecutive_blocked_turns})"
-            )
-        lines.append("")
-
-        active = _find_subgoal(plan, plan.active_subgoal_id or goal.active_subgoal_id)
-        if active is not None:
-            lines.extend(
-                [
-                    "## Active Subgoal",
-                    "",
-                    f"- Id: `{active.id}`",
-                    f"- Title: {active.title}",
-                    f"- Status: `{active.status}`",
-                    f"- Description: {active.description}",
-                    f"- Last reason: {active.last_reason or '(none)'}",
-                    "",
-                    "### Verifier Criteria",
-                    "",
-                ]
-            )
-            lines.extend(f"- {criterion}" for criterion in active.verifier_criteria)
-            lines.extend(
-                [
-                    "",
-                    "### Evidence Artifact References",
-                    "",
-                    "These are planner-supplied references for provider and verifier inspection, not Botpipe runtime-required writes.",
-                    "",
-                ]
-            )
-            if active.evidence_artifacts:
-                lines.extend(f"- `{artifact}`" for artifact in active.evidence_artifacts)
-            else:
-                lines.append("- none declared")
-            lines.extend(["", "### Suggested Commands", ""])
-            if active.suggested_commands:
-                lines.extend(f"- `{command}`" for command in active.suggested_commands)
-            else:
-                lines.append("- none declared")
-            if active.evidence:
-                lines.extend(["", "### Latest Accepted Evidence", ""])
-                lines.extend(f"- `{item}`" for item in active.evidence)
-            lines.append("")
-
-    return "\n".join(lines)
+        lines.extend(
+            f"- `{item.id}` [{item.status}] {item.title}" for item in plan.subgoals
+        )
+    return "\n".join(lines) + "\n"
 
 
-def _run_artifacts_markdown(ctx) -> str:
-    artifacts = [
-        ("goal", ctx.artifacts.goal),
-        ("subgoals", ctx.artifacts.subgoals),
-        ("status_report", ctx.artifacts.status_report),
-        ("run_context", ctx.artifacts.run_context),
-        ("plan_audit", ctx.artifacts.plan_audit),
-        ("subgoal_progress", ctx.artifacts.subgoal_progress),
-        ("subgoal_audit", ctx.artifacts.subgoal_audit),
-        ("goal_summary", ctx.artifacts.goal_summary),
-        ("goal_audit", ctx.artifacts.goal_audit),
-        ("final_report", ctx.artifacts.final_report),
-    ]
-    lines = ["## Workflow Artifacts", ""]
-    for name, artifact in artifacts:
-        state = "present" if name in {"status_report", "run_context"} or artifact.exists() else "missing"
-        lines.append(f"- `{name}`: `{artifact.path}` ({state})")
-    return "\n".join(lines)
-
-
-def _run_context_markdown(ctx, *, heading: str) -> str:
-    goal = _load_goal(ctx) if _goal_exists(ctx) else None
-    plan = _load_plan(ctx) if _subgoals_exist(ctx) else None
-
-    lines = [
-        "# Run Context",
-        "",
-        f"- Phase: {heading}",
-        f"- Updated at: {_now()}",
-        f"- Workflow folder: `{ctx.workflow_folder}`",
-        "",
-    ]
-
+def _output(
+    goal_path: Path,
+    plan_path: Path,
+    status_path: Path,
+    final_path: Path,
+    goal: GoalRecord | None,
+    fallback: Literal["missing", "cleared"] = "missing",
+) -> GoalWorkflowOutput:
     if goal is None:
-        lines.extend(["## Parent Goal", "", "No goal is currently set.", ""])
-        return "\n".join(lines)
-
-    lines.extend(
-        [
-            "## Parent Goal",
-            "",
-            f"- Goal id: `{goal.goal_id}`",
-            f"- Status: `{goal.status}`",
-            f"- Planning status: `{goal.planning_status}`",
-            f"- Objective: {goal.objective}",
-            f"- Active subgoal id: `{goal.active_subgoal_id or '(none)'}`",
-            f"- Completed subgoals: {goal.completed_subgoal_count}/{goal.total_subgoal_count}",
-            f"- Last reason: {goal.last_reason or '(none)'}",
-            "",
-        ]
+        return GoalWorkflowOutput(
+            status=fallback,
+            goal_path=str(goal_path),
+            subgoals_path=str(plan_path),
+            status_report_path=str(status_path) if status_path.exists() else None,
+            final_report_path=str(final_path) if final_path.exists() else None,
+        )
+    return GoalWorkflowOutput(
+        status=goal.status,
+        goal_id=goal.goal_id,
+        objective=goal.objective,
+        planning_status=goal.planning_status,
+        active_subgoal_id=goal.active_subgoal_id,
+        completed_subgoal_count=goal.completed_subgoal_count,
+        total_subgoal_count=goal.total_subgoal_count,
+        tokens_used=goal.tokens_used,
+        token_budget=goal.token_budget,
+        time_used_seconds=goal.time_used_seconds,
+        goal_path=str(goal_path),
+        subgoals_path=str(plan_path),
+        status_report_path=str(status_path) if status_path.exists() else None,
+        final_report_path=str(final_path) if final_path.exists() else None,
     )
 
-    if plan is None or not plan.subgoals:
-        lines.extend(["## Subgoal Plan", "", "No subgoal plan is present.", ""])
-        return "\n".join(lines)
 
-    active = _find_subgoal(plan, plan.active_subgoal_id or goal.active_subgoal_id)
-    if active is not None:
-        lines.extend(
-            [
-                "## Active Subgoal",
-                "",
-                f"- Id: `{active.id}`",
-                f"- Title: {active.title}",
-                f"- Status: `{active.status}`",
-                f"- Description: {active.description}",
-                f"- Last verifier route: `{active.last_verifier_route or '(none)'}`",
-                f"- Last reason: {active.last_reason or '(none)'}",
-                "",
-                "### Acceptance Criteria",
-                "",
-            ]
-        )
-        lines.extend(f"- {criterion}" for criterion in active.verifier_criteria)
-        lines.extend(
-            [
-                "",
-                "### Evidence Artifact References",
-                "",
-            ]
-        )
-        if active.evidence_artifacts:
-            lines.extend(f"- `{artifact}`" for artifact in active.evidence_artifacts)
-        else:
-            lines.append("- none declared")
-        lines.extend(["", "### Suggested Commands", ""])
-        if active.suggested_commands:
-            lines.extend(f"- `{command}`" for command in active.suggested_commands)
-        else:
-            lines.append("- none declared")
-        lines.append("")
-
-    completed = [item for item in plan.subgoals if item.status == "complete"]
-    if completed:
-        lines.extend(["## Completed Subgoals", ""])
-        for item in completed:
-            summary = item.completion_summary or item.last_reason or "complete"
-            lines.append(f"- `{item.id}` {item.title}: {summary}")
-        lines.append("")
-
-    latest_evidence: list[str] = []
-    for item in plan.subgoals:
-        for evidence in item.evidence:
-            if evidence not in latest_evidence:
-                latest_evidence.append(evidence)
-    if latest_evidence:
-        lines.extend(["## Evidence Index", ""])
-        lines.extend(f"- `{evidence}`" for evidence in latest_evidence[:30])
-        if len(latest_evidence) > 30:
-            lines.append(f"- ... {len(latest_evidence) - 30} more evidence entries")
-        lines.append("")
-
-    lines.extend(
-        [
-            "## Workflow Artifacts",
-            "",
-            f"- Goal: `{ctx.artifacts.goal.path}`",
-            f"- Subgoals: `{ctx.artifacts.subgoals.path}`",
-            f"- Status: `{ctx.artifacts.status_report.path}`",
-            f"- Plan audit: `{ctx.artifacts.plan_audit.path}`",
-            f"- Subgoal progress: `{ctx.artifacts.subgoal_progress.path}`",
-            f"- Subgoal audit: `{ctx.artifacts.subgoal_audit.path}`",
-            f"- Goal summary: `{ctx.artifacts.goal_summary.path}`",
-            f"- Goal audit: `{ctx.artifacts.goal_audit.path}`",
-            "",
-        ]
-    )
-    return "\n".join(lines)
-
-
-def _write_status_report(ctx, heading: str = "Goal Status") -> None:
-    goal = _load_goal(ctx) if _goal_exists(ctx) else None
-    plan = _load_plan(ctx) if _subgoals_exist(ctx) else None
-    text = _goal_status_markdown(goal, plan)
-    if heading != "Goal Status":
-        text = text.replace("# Goal Status", f"# {heading}", 1)
-    text = f"{text.rstrip()}\n\n{_run_artifacts_markdown(ctx)}\n"
-    ctx.artifacts.status_report.write_text(text)
-    ctx.artifacts.run_context.write_text(_run_context_markdown(ctx, heading=heading))
-
-
-def _subgoal_ids(plan: SubgoalPlan) -> set[str]:
-    return {item.id for item in plan.subgoals}
-
-
-def _find_subgoal(plan: SubgoalPlan, subgoal_id: str | None) -> SubgoalRecord | None:
-    if subgoal_id is None:
-        return None
-    for item in plan.subgoals:
-        if item.id == subgoal_id:
-            return item
-    return None
-
-
-def _completed_ids(plan: SubgoalPlan) -> set[str]:
-    return {item.id for item in plan.subgoals if item.status == "complete"}
-
-
-def _dependency_cycle_error(plan: SubgoalPlan) -> str | None:
-    graph = {item.id: list(item.dependencies) for item in plan.subgoals}
-    visiting: set[str] = set()
-    visited: set[str] = set()
-
-    def visit(node: str, path: list[str]) -> str | None:
-        if node in visiting:
-            return f"Subgoal dependency cycle detected: {' -> '.join([*path, node])}"
-        if node in visited:
-            return None
-
-        visiting.add(node)
-        for dep in graph.get(node, []):
-            error = visit(dep, [*path, node])
-            if error is not None:
-                return error
-        visiting.remove(node)
-        visited.add(node)
-        return None
-
-    for node in graph:
-        error = visit(node, [])
-        if error is not None:
-            return error
-    return None
-
-
-def _refresh_goal_counts(goal: GoalRecord, plan: SubgoalPlan) -> None:
-    goal.total_subgoal_count = len(plan.subgoals)
-    goal.completed_subgoal_count = len([item for item in plan.subgoals if item.status == "complete"])
-
-
-def _validate_plan(plan: SubgoalPlan, goal: GoalRecord) -> str | None:
-    if not plan.subgoals:
-        return "subgoals.json must contain at least one subgoal."
-
-    all_ids = _subgoal_ids(plan)
-    seen: set[str] = set()
-
-    for subgoal in plan.subgoals:
-        if not subgoal.id.strip():
-            return "Every subgoal must have a non-empty id."
-        if subgoal.id in seen:
-            return f"Duplicate subgoal id: {subgoal.id}"
-        seen.add(subgoal.id)
-
-        if not subgoal.title.strip():
-            return f"Subgoal {subgoal.id!r} must have a non-empty title."
-        if not subgoal.description.strip():
-            return f"Subgoal {subgoal.id!r} must have a non-empty description."
-        if not subgoal.verifier_criteria:
-            return f"Subgoal {subgoal.id!r} must declare verifier_criteria."
-
-        for dep in subgoal.dependencies:
-            if dep == subgoal.id:
-                return f"Subgoal {subgoal.id!r} depends on itself."
-            if dep not in all_ids:
-                return f"Subgoal {subgoal.id!r} depends on unknown subgoal {dep!r}."
-
-    cycle_error = _dependency_cycle_error(plan)
-    if cycle_error is not None:
-        return cycle_error
-
-    plan.goal_id = goal.goal_id
-    return None
-
-
-def _select_next(plan: SubgoalPlan) -> SubgoalRecord | None:
-    completed = _completed_ids(plan)
-
-    active = _find_subgoal(plan, plan.active_subgoal_id)
-    if (
-        active is not None
-        and active.status in {"active", "needs_rework", "pending"}
-        and all(dep in completed for dep in active.dependencies)
-    ):
-        return active
-
-    candidates = [
-        item
-        for item in plan.subgoals
-        if item.status in {"pending", "active", "needs_rework"}
-        and all(dep in completed for dep in item.dependencies)
-    ]
-    if not candidates:
-        return None
-
-    return sorted(candidates, key=lambda item: (item.priority, item.id))[0]
-
-
-def _has_incomplete_subgoals(plan: SubgoalPlan) -> bool:
-    return any(item.status != "complete" for item in plan.subgoals)
-
-
-def _all_remaining_paths_blocked(plan: SubgoalPlan) -> bool:
-    if not _has_incomplete_subgoals(plan):
-        return False
-    completed = _completed_ids(plan)
-    selectable = [
-        item
-        for item in plan.subgoals
-        if item.status in {"pending", "active", "needs_rework"}
-        and all(dep in completed for dep in item.dependencies)
-    ]
-    if selectable:
-        return False
-    return any(item.status == "blocked" for item in plan.subgoals)
-
-
-def _usage_tokens(provider_usage: Any) -> int:
-    if provider_usage is None:
-        return 0
-    total = 0
-    for attr in ("producer", "verifier", "llm", "repair"):
-        total += _token_delta(getattr(provider_usage, attr, None))
-    return total
-
-
-def _token_delta(token_usage: Any) -> int:
-    if token_usage is None:
-        return 0
-
-    input_tokens = getattr(token_usage, "input_tokens", None)
-    output_tokens = getattr(token_usage, "output_tokens", None)
-    cached_input_tokens = getattr(token_usage, "cached_input_tokens", None)
-    total_tokens = getattr(token_usage, "total_tokens", None)
-
-    if input_tokens is not None or output_tokens is not None:
-        non_cached = max(0, int(input_tokens or 0) - int(cached_input_tokens or 0))
-        output = max(0, int(output_tokens or 0))
-        return non_cached + output
-
-    return max(0, int(total_tokens or 0))
-
-
-def _patch_usage_files(workflow_folder: Path, *, tokens: int, elapsed_seconds: int) -> None:
-    if tokens <= 0 and elapsed_seconds <= 0:
-        return
-
-    goal_path = workflow_folder / "goal.json"
-    subgoals_path = workflow_folder / "subgoals.json"
-
-    if not goal_path.exists():
-        return
-
-    goal_payload = json.loads(goal_path.read_text(encoding="utf-8"))
-    active_subgoal_id = goal_payload.get("active_subgoal_id")
-
-    goal_payload["tokens_used"] = int(goal_payload.get("tokens_used") or 0) + max(0, tokens)
-    goal_payload["time_used_seconds"] = int(goal_payload.get("time_used_seconds") or 0) + max(0, elapsed_seconds)
-
-    if goal_payload.get("status") == "active":
-        budget = goal_payload.get("token_budget")
-        if isinstance(budget, int) and budget > 0 and goal_payload["tokens_used"] >= budget:
-            goal_payload["status"] = "budget_limited"
-            goal_payload["last_reason"] = "Goal token budget reached."
-
-    goal_payload["updated_at"] = _now()
-    goal_path.write_text(json.dumps(goal_payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-
-    if subgoals_path.exists() and isinstance(active_subgoal_id, str) and active_subgoal_id:
-        plan_payload = json.loads(subgoals_path.read_text(encoding="utf-8"))
-        for subgoal in plan_payload.get("subgoals", []):
-            if isinstance(subgoal, dict) and subgoal.get("id") == active_subgoal_id:
-                subgoal["tokens_used"] = int(subgoal.get("tokens_used") or 0) + max(0, tokens)
-                subgoal["time_used_seconds"] = int(subgoal.get("time_used_seconds") or 0) + max(0, elapsed_seconds)
-                break
-        plan_payload["updated_at"] = _now()
-        subgoals_path.write_text(json.dumps(plan_payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-
-
-class GoalUsageAccounting:
-    """Workflow extension that accounts provider usage into goal.json/subgoals.json.
-
-    It only patches usage fields and only transitions an active parent goal to
-    budget_limited. It never demotes complete/blocked/paused goals.
-    """
-
-    def __init__(self, tracked_steps: set[str] | frozenset[str] | None = None) -> None:
-        self.tracked_steps = frozenset(
-            tracked_steps
-            or {
-                "plan_subgoals",
-                "work_subgoal",
-                "final_goal_audit",
-                "wrap_up_budget_limited",
-            }
-        )
-
-    def bind(self, binding: RunBinding) -> "_BoundGoalUsageAccounting":
-        return _BoundGoalUsageAccounting(binding, self.tracked_steps)
-
-
-class _BoundGoalUsageAccounting:
-    def __init__(self, binding: RunBinding, tracked_steps: frozenset[str]) -> None:
-        self.binding = binding
-        self.tracked_steps = tracked_steps
-        self.started_at_by_key: dict[str, datetime] = {}
-
-    def before_step(self, event: StepStart) -> None:
-        if event.step_name in self.tracked_steps:
-            self.started_at_by_key[self._key(event)] = datetime.now(timezone.utc)
-
-    def after_step(self, event: StepFinish) -> None:
-        if event.step_name not in self.tracked_steps:
-            return
-        try:
-            started = self.started_at_by_key.pop(self._key(event), None)
-            elapsed = 0 if started is None else max(
-                0,
-                int((datetime.now(timezone.utc) - started).total_seconds()),
-            )
-            tokens = _usage_tokens(event.provider_usage)
-            _patch_usage_files(self.binding.workflow_folder, tokens=tokens, elapsed_seconds=elapsed)
-
-            usage_path = self.binding.workflow_folder / "usage.jsonl"
-            usage_path.parent.mkdir(parents=True, exist_ok=True)
-            usage_path.open("a", encoding="utf-8").write(
-                json.dumps(
-                    {
-                        "at": _now(),
-                        "step": event.step_name,
-                        "final_route": event.final_route,
-                        "tokens": tokens,
-                        "elapsed_seconds": elapsed,
-                    },
-                    ensure_ascii=False,
-                )
-                + "\n"
-            )
-        except Exception:
-            return
-
-    def on_terminal(self, event: TerminalFinish) -> None:
-        return None
-
-    @staticmethod
-    def _key(event: StepStart | StepFinish) -> str:
-        return event.step_execution_id or f"{event.step_name}:{event.visit or 0}"
-
-
-def _after_subgoal_verifier(ctx) -> None:
-    outcome = ctx.outcome
-    if outcome is None:
-        return
-
-    goal = _load_goal(ctx)
-    plan = _load_plan(ctx)
-    active = _find_subgoal(plan, plan.active_subgoal_id or goal.active_subgoal_id)
-    if active is None:
-        return
-
-    fields = _event_fields(ctx)
-    tag = outcome.tag
-
-    goal.turns_completed += 1
-    active.turns_completed += 1
-    active.last_verifier_route = tag
-    active.last_reason = _clean_text(fields.get("reason")) or _clean_text(getattr(outcome, "reason", None))
-
-    if tag == "complete":
-        active.status = "complete"
-        active.completion_summary = _clean_text(fields.get("completion_summary"))
-        active.criteria_results = dict(fields.get("criteria_results") or {})
-        active.evidence = _list_from_field(fields.get("evidence"))
-        active.completed_at = _now()
-        active.consecutive_blocked_turns = 0
-        active.blocker_fingerprint = None
-        active.blocker_reason = None
-
-    elif tag == "blocked":
-        fingerprint = _clean_text(fields.get("blocker_fingerprint")) or "unspecified-blocker"
-        reason = _clean_text(fields.get("reason")) or "Blocked."
-
-        if active.blocker_fingerprint == fingerprint:
-            active.consecutive_blocked_turns += 1
-        else:
-            active.blocker_fingerprint = fingerprint
-            active.consecutive_blocked_turns = 1
-
-        active.blocker_reason = reason
-        active.status = "active"
-
-    elif tag == "needs_rework":
-        active.status = "needs_rework"
-        active.consecutive_blocked_turns = 0
-        active.blocker_fingerprint = None
-        active.blocker_reason = None
-
+PLAN = """Decompose the supplied durable parent goal into the smallest sufficient set of auditable subgoals.
+Inspect the repository and feedback. Write subgoals.json using the declared SubgoalPlan schema. Every subgoal needs
+a stable id, bounded description, concrete verifier criteria, coherent earlier dependencies, priority, evidence
+references, and useful suggested commands. Preserve still-valid completed work when replanning."""
+
+PLAN_REVIEW = """Independently audit the supplied subgoal plan against the original parent objective and repository.
+Accept only when all requirements are covered, every subgoal is coherent and auditable, and dependencies are acyclic.
+Write plan_audit.md and return a structured accepted or needs_rework verdict."""
+
+WORK = """Work only on the supplied active subgoal. Reconstruct state from goal.json, subgoals.json, status, prior
+progress, prior audit, repository files, and declared evidence. Implement and validate the subgoal without broadening
+it. Write subgoal_progress.md with changes, evidence, commands, results, remaining work, and blockers."""
+
+VERIFY = """Independently verify only the supplied active subgoal against every verifier criterion. Use current,
+credible evidence and targeted checks. Write subgoal_audit.md. Return complete, continue, needs_rework, or blocked;
+blocked requires a stable blocker_fingerprint. Do not infer parent-goal completion from this review."""
+
+FINAL = """Prepare a final completion packet for the original parent objective. Use all completed subgoals as
+supporting evidence, inspect the current repository, identify risks and validation, and write goal_summary.md."""
+
+FINAL_VERIFY = """Independently audit the original parent objective requirement by requirement. Completed subgoals
+are supporting evidence only. Write goal_audit.md and return complete, needs_rework with affected subgoal_ids, or
+replan with missing requirements. Require current credible evidence for every completion claim."""
+
+
+def _options(
+    value: GoalWorkflowInput | dict[str, Any] | str | None,
+    *,
+    action: GoalAction | None,
+    objective: str | None,
+    replace_existing: bool,
+    allow_replace_completed: bool,
+    token_budget: int | None,
+    max_goal_turns: int | None,
+) -> GoalWorkflowInput:
+    if isinstance(value, GoalWorkflowInput):
+        base = value.model_dump()
+    elif isinstance(value, dict):
+        base = dict(value)
+    elif isinstance(value, str):
+        base = {"objective": value}
     else:
-        active.status = "active"
-        active.consecutive_blocked_turns = 0
-        active.blocker_fingerprint = None
-        active.blocker_reason = None
-
-    _refresh_goal_counts(goal, plan)
-    goal.status = "active"
-    goal.last_reason = active.last_reason
-    goal.active_subgoal_id = active.id
-    plan.active_subgoal_id = active.id
-
-    _write_plan(ctx, plan)
-    _write_goal(ctx, goal)
-
-
-def _after_final_goal_verifier(ctx) -> None:
-    outcome = ctx.outcome
-    if outcome is None:
-        return
-
-    goal = _load_goal(ctx)
-    plan = _load_plan(ctx)
-    fields = _event_fields(ctx)
-    tag = outcome.tag
-
-    if tag == "complete":
-        goal.status = "active"
-        goal.completion_summary = _clean_text(fields.get("completion_summary"))
-        goal.last_reason = _clean_text(fields.get("reason")) or "Final audit proved parent goal completion."
-
-    elif tag == "needs_rework":
-        requested_ids = set(_list_from_field(fields.get("subgoal_ids")))
-        if not requested_ids:
-            requested_ids = {item.id for item in plan.subgoals if item.status == "complete"}
-        for item in plan.subgoals:
-            if item.id in requested_ids:
-                item.status = "needs_rework"
-                item.last_reason = _clean_text(fields.get("reason")) or "Final audit found incomplete subgoal work."
-                item.completed_at = None
-        goal.status = "active"
-        goal.planning_status = "planned"
-        goal.last_reason = _clean_text(fields.get("reason")) or "Final audit requires subgoal rework."
-
-    elif tag == "replan":
-        goal.status = "active"
-        goal.planning_status = "stale"
-        goal.active_subgoal_id = None
-        plan.active_subgoal_id = None
-        goal.last_reason = _clean_text(fields.get("reason")) or "Final audit found missing parent-goal requirements."
-
-    _refresh_goal_counts(goal, plan)
-    _write_plan(ctx, plan)
-    _write_goal(ctx, goal)
+        base = {}
+    explicit = {
+        "action": action,
+        "objective": objective,
+        "token_budget": token_budget,
+        "max_goal_turns": max_goal_turns,
+    }
+    base.update({key: item for key, item in explicit.items() if item is not None})
+    if "replace_existing" not in base:
+        base["replace_existing"] = replace_existing
+    if "allow_replace_completed" not in base:
+        base["allow_replace_completed"] = allow_replace_completed
+    return GoalWorkflowInput.model_validate(base)
 
 
-class GoalWorkflow(Workflow):
-    name = "goal"
-    State = GoalWorkflowState
-    Params = GoalWorkflowInput
-    Input = GoalWorkflowInput
-    Output = GoalWorkflowOutput
-
-    goal_session = Session.task()
-    subgoal_session = Session.fresh()
-    planning_verifier_session = Session.fresh()
-    subgoal_verifier_session = Session.fresh()
-    final_verifier_session = Session.fresh()
-
-    goal = Artifact.json(
-        "{{ workflow.folder }}/goal.json",
-        schema=GoalRecord,
-        name="goal",
-        required=False,
+@workflow(name="goal", version="1")
+def goal(
+    input: GoalWorkflowInput | dict[str, Any] | str | None = None,
+    *,
+    action: GoalAction | None = None,
+    objective: str | None = None,
+    replace_existing: bool = False,
+    allow_replace_completed: bool = True,
+    token_budget: int | None = None,
+    max_goal_turns: int | None = None,
+) -> GoalWorkflowOutput:
+    options = _options(
+        input,
+        action=action,
+        objective=objective,
+        replace_existing=replace_existing,
+        allow_replace_completed=allow_replace_completed,
+        token_budget=token_budget,
+        max_goal_turns=max_goal_turns,
     )
-    subgoals = Artifact.json(
-        "{{ workflow.folder }}/subgoals.json",
-        schema=SubgoalPlan,
-        name="subgoals",
-        required=False,
+    ctx = current_run()
+    folder = ctx.task_folder / "goal"
+    goal_path, plan_path = folder / "goal.json", folder / "subgoals.json"
+    status_path, final_path = folder / "status.md", folder / "final_report.md"
+    goal_record = _read_goal(str(goal_path))
+    plan = _read_plan(str(plan_path))
+
+    if options.action == "status":
+        _write_report(str(status_path), _status_text(goal_record, plan))
+        return _output(goal_path, plan_path, status_path, final_path, goal_record)
+    if options.action == "clear":
+        _clear_state(str(goal_path), str(plan_path))
+        _write_report(str(status_path), "# Goal cleared")
+        return _output(goal_path, plan_path, status_path, final_path, None, "cleared")
+    if options.action == "pause":
+        if goal_record is not None and goal_record.status != "complete":
+            goal_record.status, goal_record.last_reason = "paused", "Paused by user."
+            goal_record, plan = _save_state(
+                str(goal_path), goal_record, str(plan_path), plan
+            )
+        _write_report(str(status_path), _status_text(goal_record, plan))
+        return _output(goal_path, plan_path, status_path, final_path, goal_record)
+
+    if options.action in {"resume", "edit", "replan"} and goal_record is None:
+        objective_answer = ask(
+            "No goal exists. What objective should be set?", returns=str
+        )
+        options = options.model_copy(
+            update={"action": "set", "objective": objective_answer}
+        )
+
+    if options.action == "resume":
+        if goal_record.status == "complete":
+            return _output(goal_path, plan_path, status_path, final_path, goal_record)
+        goal_record.status = "active"
+        goal_record.last_reason = "Resumed by user."
+        if options.token_budget is not None:
+            goal_record.token_budget = options.token_budget
+        if options.max_goal_turns is not None:
+            goal_record.max_goal_turns = options.max_goal_turns
+        if goal_record.planning_status != "planned" or plan is None:
+            goal_record.planning_status = "stale"
+    elif options.action in {"edit", "replan"}:
+        if goal_record.status == "complete":
+            return _output(goal_path, plan_path, status_path, final_path, goal_record)
+        if options.action == "edit":
+            edited = (options.objective or "").strip() or ask(
+                "What is the revised objective?", returns=str
+            )
+            goal_record.objective = edited
+        goal_record.status, goal_record.planning_status = "active", "stale"
+        goal_record.active_subgoal_id = None
+        goal_record.last_reason = (
+            "Objective edited; plan is stale."
+            if options.action == "edit"
+            else "Replan requested."
+        )
+        if options.token_budget is not None:
+            goal_record.token_budget = options.token_budget
+        if options.max_goal_turns is not None:
+            goal_record.max_goal_turns = options.max_goal_turns
+    elif options.action == "set":
+        requested = (options.objective or "").strip() or ask(
+            "What objective should this goal pursue?", returns=str
+        )
+        if (
+            goal_record is not None
+            and goal_record.status != "complete"
+            and not options.replace_existing
+        ):
+            replace = ask(
+                "An active goal exists. Replace it? Return true or false.", returns=bool
+            )
+            if not replace:
+                _write_report(str(status_path), _status_text(goal_record, plan))
+                return _output(
+                    goal_path, plan_path, status_path, final_path, goal_record
+                )
+        if (
+            goal_record is not None
+            and goal_record.status == "complete"
+            and not options.allow_replace_completed
+        ):
+            return _output(goal_path, plan_path, status_path, final_path, goal_record)
+        goal_record = _new_goal(
+            ctx.task_id, requested, options.token_budget, options.max_goal_turns
+        )
+        plan = None
+
+    goal_record, plan = _save_state(str(goal_path), goal_record, str(plan_path), plan)
+    _write_report(str(status_path), _status_text(goal_record, plan))
+    goal_spec = Artifact.json(
+        str(goal_path), name="goal", schema=GoalRecord, required=True
     )
-    status_report = Artifact.md(
-        "{{ workflow.folder }}/status.md",
-        name="status_report",
-        required=False,
+    plan_spec = Artifact.json(
+        str(plan_path), name="subgoals", schema=SubgoalPlan, required=True
     )
-    run_context = Artifact.md(
-        "{{ workflow.folder }}/run_context.md",
-        name="run_context",
-        required=False,
-    )
+    status_spec = Artifact.md(str(status_path), name="status_report")
     plan_audit = Artifact.md(
-        "{{ workflow.folder }}/plan_audit.md",
-        name="plan_audit",
-        required=False,
+        str(folder / "plan_audit.md"), name="plan_audit", required=True
     )
-    subgoal_progress = Artifact.md(
-        "{{ workflow.folder }}/subgoal_progress.md",
-        name="subgoal_progress",
-        required=False,
+    progress = Artifact.md(
+        str(folder / "subgoal_progress.md"), name="subgoal_progress", required=True
     )
     subgoal_audit = Artifact.md(
-        "{{ workflow.folder }}/subgoal_audit.md",
-        name="subgoal_audit",
-        required=False,
+        str(folder / "subgoal_audit.md"), name="subgoal_audit", required=True
     )
     goal_summary = Artifact.md(
-        "{{ workflow.folder }}/goal_summary.md",
-        name="goal_summary",
-        required=False,
+        str(folder / "goal_summary.md"), name="goal_summary", required=True
     )
     goal_audit = Artifact.md(
-        "{{ workflow.folder }}/goal_audit.md",
-        name="goal_audit",
-        required=False,
+        str(folder / "goal_audit.md"), name="goal_audit", required=True
     )
-    final_report = Artifact.md(
-        "{{ workflow.folder }}/final_report.md",
-        name="final_report",
-        required=False,
-    )
+    goal_session = Session.task(key="goal-main")
+    latest_plan_audit = None
+    latest_subgoal_audit = None
 
-    extensions = (GoalUsageAccounting(),)
-
-    @python_step(
-        name="initialize_goal",
-        writes=[goal, subgoals, status_report, run_context],
-        routes={
-            "plan": "plan_subgoals",
-            "select": "select_next_subgoal",
-            "budget_limited": "wrap_up_budget_limited",
-            "paused": FINISH,
-            "cleared": FINISH,
-            "status": FINISH,
-            "question": Route.question(),
-            "failed": FAIL,
-        },
-    )
-    def initialize_goal(ctx):
-        options = _workflow_options(ctx)
-        action = getattr(options, "action", "set")
-        existing = _load_goal(ctx) if _goal_exists(ctx) else None
-
-        if action == "status":
-            _sync_state(ctx, existing)
-            _write_status_report(ctx)
-            return "status"
-
-        if action == "clear":
-            if ctx.artifacts.goal.exists():
-                ctx.artifacts.goal.path.unlink()
-            if ctx.artifacts.subgoals.exists():
-                ctx.artifacts.subgoals.path.unlink()
-            _sync_state(ctx, None)
-            ctx.state.status = "cleared"
-            ctx.artifacts.status_report.write_text("# Goal cleared\n")
-            ctx.artifacts.run_context.write_text("# Run Context\n\nGoal cleared.\n")
-            return "cleared"
-
-        if action == "pause":
-            if existing is None:
-                _sync_state(ctx, None)
-                _write_status_report(ctx)
-                return "status"
-            if existing.status == "complete":
-                _sync_state(ctx, existing)
-                _write_status_report(ctx, heading="Goal Already Complete")
-                return "status"
-            existing.status = "paused"
-            existing.last_reason = "Paused by user."
-            _write_goal(ctx, existing)
-            _write_status_report(ctx)
-            return "paused"
-
-        if action == "resume":
-            if existing is None:
-                return Event(
-                    "question",
-                    reason="No goal exists to resume.",
-                    question="No goal is currently set. Provide a new objective with action='set'.",
-                )
-            if existing.status == "complete":
-                return Event(
-                    "question",
-                    reason="Completed goals cannot be resumed.",
-                    question="The current goal is complete. Provide a new objective with action='set'.",
-                )
-
-            if getattr(options, "token_budget", None) is not None:
-                existing.token_budget = options.token_budget
-            if getattr(options, "max_goal_turns", None) is not None:
-                existing.max_goal_turns = options.max_goal_turns
-
-            existing.status = "active"
-            existing.last_reason = "Resumed by user."
-            if existing.token_budget is not None and existing.tokens_used >= existing.token_budget:
-                existing.status = "budget_limited"
-                existing.last_reason = "Goal token budget is already exhausted."
-
-            _write_goal(ctx, existing)
-            _write_status_report(ctx)
-            if existing.status == "budget_limited":
-                return "budget_limited"
-            return "select" if existing.planning_status == "planned" and _subgoals_exist(ctx) else "plan"
-
-        if action == "replan":
-            if existing is None:
-                return Event(
-                    "question",
-                    reason="No goal exists to replan.",
-                    question="No goal is currently set. Provide a new objective with action='set'.",
-                )
-            if existing.status == "complete":
-                return Event(
-                    "question",
-                    reason="Completed goals cannot be replanned.",
-                    question="The current goal is complete. Provide a new objective with action='set'.",
-                )
-            if getattr(options, "token_budget", None) is not None:
-                existing.token_budget = options.token_budget
-            if getattr(options, "max_goal_turns", None) is not None:
-                existing.max_goal_turns = options.max_goal_turns
-            existing.status = "active"
-            existing.planning_status = "stale"
-            existing.active_subgoal_id = None
-            existing.last_reason = "Replan requested by user."
-            _write_goal(ctx, existing)
-            _write_status_report(ctx, heading="Goal Replan Requested")
-            return "plan"
-
-        if action == "edit":
-            if existing is None:
-                return Event(
-                    "question",
-                    reason="No goal exists to edit.",
-                    question="No goal is currently set. Provide a new objective with action='set'.",
-                )
-            if existing.status == "complete":
-                return Event(
-                    "question",
-                    reason="Completed goals cannot be edited.",
-                    question="The current goal is complete. Provide a new objective with action='set'.",
-                )
-            objective = _input_objective(ctx)
-            if objective is None:
-                return Event(
-                    "question",
-                    reason="Missing edited objective.",
-                    question="Provide the new objective for action='edit'.",
-                )
-
-            existing.objective = objective
-            existing.status = "active"
-            existing.planning_status = "stale"
-            existing.active_subgoal_id = None
-            existing.last_reason = "Objective edited by user; prior subgoal plan is stale."
-            if getattr(options, "token_budget", None) is not None:
-                existing.token_budget = options.token_budget
-            if getattr(options, "max_goal_turns", None) is not None:
-                existing.max_goal_turns = options.max_goal_turns
-
-            _write_goal(ctx, existing)
-            _write_status_report(ctx, heading="Goal Objective Updated")
-            ctx.open_session("goal_session")
-            return "plan"
-
-        if action != "set":
-            return Event(
-                "question",
-                reason=f"Unsupported goal action: {action!r}.",
-                question="Use action='set', 'status', 'pause', 'resume', 'clear', 'edit', or 'replan'.",
+    while True:
+        limit = _limited(goal_record)
+        if limit:
+            goal_record.status, goal_record.last_reason = "budget_limited", limit
+            goal_record, plan = _save_state(
+                str(goal_path), goal_record, str(plan_path), plan
             )
-
-        objective = _input_objective(ctx)
-        if objective is None:
-            return Event(
-                "question",
-                reason="Missing goal objective.",
-                question="Provide the objective to pursue, equivalent to `/goal <objective>`.",
+            _write_report(
+                str(final_path),
+                f"# Goal Budget Limited\n\n{limit}\n\n{_status_text(goal_record, plan)}",
             )
+            return _output(goal_path, plan_path, status_path, final_path, goal_record)
 
-        replace_existing = bool(getattr(options, "replace_existing", False))
-        allow_replace_completed = bool(getattr(options, "allow_replace_completed", True))
-
-        if existing is not None:
-            if existing.status == "complete":
-                if not allow_replace_completed:
-                    return Event(
-                        "question",
-                        reason="A completed goal already exists.",
-                        question="Set allow_replace_completed=True or clear the existing goal.",
+        if goal_record.planning_status != "planned" or plan is None:
+            planning_feedback: tuple[Any, ...] = ()
+            while True:
+                proposed = _goal_turn(
+                    goal_session,
+                    PLAN,
+                    goal_record,
+                    plan,
+                    goal_path,
+                    plan_path,
+                    input={"goal": goal_record.model_dump(mode="json")},
+                    reads=(goal_spec.path, status_spec.path, *planning_feedback),
+                    writes=(plan_spec,),
+                )
+                _charge(goal_record, None, proposed)
+                if _limited(goal_record):
+                    break
+                try:
+                    candidate = SubgoalPlan.model_validate_json(
+                        proposed.artifacts.subgoals.read_text()
                     )
-            elif not replace_existing:
-                return Event(
-                    "question",
-                    reason="A non-complete goal already exists.",
-                    question=(
-                        "A goal already exists and is not complete. Re-run with "
-                        "replace_existing=True to replace it, or use action='resume', "
-                        "action='pause', action='clear', action='edit', action='replan', "
-                        "or action='status'."
-                    ),
+                    error = _validate_plan(candidate, goal_record)
+                except Exception as exc:
+                    error = str(exc)
+                    candidate = None
+                if error:
+                    planning_feedback = (proposed.artifacts.subgoals,)
+                    if _limited(goal_record):
+                        break
+                    continue
+                reviewed = _goal_turn(
+                    Session.fresh(),
+                    PLAN_REVIEW,
+                    goal_record,
+                    plan,
+                    goal_path,
+                    plan_path,
+                    input={
+                        "goal": goal_record.model_dump(mode="json"),
+                        "plan": candidate.model_dump(mode="json"),
+                    },
+                    reads=(goal_spec.path, proposed.artifacts.subgoals),
+                    writes=(plan_audit,),
+                    returns=PlanDecision,
                 )
-
-        new_goal = _new_goal(ctx, objective)
-        _write_goal(ctx, new_goal)
-        if ctx.artifacts.subgoals.exists():
-            ctx.artifacts.subgoals.path.unlink()
-        _write_status_report(ctx, heading="Goal Started")
-        ctx.open_session("goal_session")
-        return "plan"
-
-    plan_subgoals = produce_verify_step(
-        name="plan_subgoals",
-        session=goal_session,
-        verifier_session=planning_verifier_session,
-        requires=[goal],
-        reads=[status_report, run_context, plan_audit],
-        producer_writes=[subgoals],
-        verifier_writes=[plan_audit],
-        producer_prompt=Prompt.inline(
-            """
-            Decompose the active parent goal into a minimal, sufficient set of
-            auditable subgoals.
-
-            This planner runs in the main goal session. Use that continuity for
-            parent-goal intent, but treat the durable artifacts as the source of
-            truth.
-
-            Read:
-            - {{ workflow.folder }}/goal.json
-            - {{ workflow.folder }}/run_context.md, if present, for current
-              durable state and latest evidence
-            - {{ workflow.folder }}/status.md, if present
-            - existing repository state and relevant files
-            - existing {{ workflow.folder }}/subgoals.json, if present
-            - existing {{ workflow.folder }}/plan_audit.md, if present
-
-            If plan_audit.md exists and rejected the prior plan, address every
-            required fix before rewriting subgoals.json.
-
-            Write {{ workflow.folder }}/subgoals.json matching the declared
-            SubgoalPlan schema.
-
-            Requirements for every subgoal:
-            - id: stable, path-safe identifier
-            - title
-            - description
-            - verifier_criteria: concrete criteria proving this subgoal is done
-            - dependencies: ids of subgoals that must be complete first
-            - priority: lower values run earlier
-            - evidence_artifacts, if applicable: paths the producer and
-              verifier should inspect as evidence; these are not Botpipe
-              runtime-required writes
-            - suggested_commands, if applicable
-
-            Planning rules:
-            - Subgoals must be collectively sufficient for the parent goal.
-            - Do not redefine the parent goal into an easier task.
-            - Do not create busywork.
-            - Do not split merely by file unless file boundaries match real
-              acceptance criteria.
-            - Prefer reviewable units: a verifier should be able to judge each
-              subgoal against one coherent outcome without auditing many
-              unrelated behavior surfaces at once.
-            - Put validation/evidence work inside the subgoal it proves unless
-              the validation is cross-cutting enough to deserve its own
-              auditable subgoal.
-            - Prefer the smallest plan that is still complete and auditable.
-            - Use pending status for new subgoals.
-            - When replanning, preserve completed subgoals only if they still
-              satisfy the current parent objective and do not hide missing work.
-            """.strip()
-        ),
-        verifier_prompt=Prompt.inline(
-            """
-            Audit the proposed subgoal plan.
-
-            Read:
-            - {{ workflow.folder }}/goal.json
-            - {{ workflow.folder }}/subgoals.json
-            - {{ workflow.folder }}/run_context.md, if present
-            - {{ workflow.folder }}/status.md, if present
-            - relevant repository state and referenced files
-
-            Accept only if:
-            - every explicit parent-goal requirement is covered by at least one
-              subgoal
-            - each subgoal has concrete verifier criteria
-            - dependencies are coherent and acyclic
-            - no subgoal is vague, duplicative, unverifiable, or irrelevant
-            - each subgoal is a reviewable unit with clear scope boundaries
-            - the plan does not shrink or redefine the parent goal
-            - the plan is sufficient to reach the requested end state
-
-            Write {{ workflow.folder }}/plan_audit.md with:
-            - coverage analysis
-            - rejected/accepted decision
-            - missing requirements, if any
-            - required fixes, if any
-            """.strip()
-        ),
-        routes={
-            "accepted": Route.to(
-                "activate_plan",
-                summary="The subgoal plan covers the parent goal and is auditable.",
-                required_writes=["subgoals", "plan_audit"],
-                route_fields_schema=PlanAcceptedFields,
-            ),
-            "needs_rework": Route.to(
-                "planning_gate",
-                summary="The subgoal plan is incomplete, vague, or invalid.",
-                required_writes=["subgoals", "plan_audit"],
-                route_fields_schema=ReasonRouteFields,
-            ),
-            "question": Route.question(summary="Planning requires user input."),
-        },
-    )
-
-    @python_step(
-        name="planning_gate",
-        requires=[goal],
-        writes=[goal, status_report, run_context],
-        routes={
-            "replan": "plan_subgoals",
-            "budget_limited": "wrap_up_budget_limited",
-        },
-    )
-    def planning_gate(ctx):
-        goal = _load_goal(ctx)
-
-        if goal.status == "budget_limited":
-            _write_status_report(ctx, heading="Goal Budget Limited")
-            return "budget_limited"
-
-        if goal.token_budget is not None and goal.tokens_used >= goal.token_budget:
-            goal.status = "budget_limited"
-            goal.last_reason = "Goal token budget reached during planning."
-            _write_goal(ctx, goal)
-            _write_status_report(ctx, heading="Goal Budget Limited")
-            return "budget_limited"
-
-        if goal.max_goal_turns is not None and goal.turns_completed >= goal.max_goal_turns:
-            goal.status = "budget_limited"
-            goal.last_reason = f"Maximum goal turns reached during planning: {goal.max_goal_turns}."
-            _write_goal(ctx, goal)
-            _write_status_report(ctx, heading="Goal Turn Limited")
-            return "budget_limited"
-
-        goal.status = "active"
-        goal.planning_status = "stale"
-        _write_goal(ctx, goal)
-        _write_status_report(ctx, heading="Planning Rework")
-        return "replan"
-
-    @python_step(
-        name="activate_plan",
-        requires=[goal, subgoals],
-        writes=[goal, subgoals, status_report, run_context],
-        routes={
-            "selected": "select_next_subgoal",
-            "needs_rework": "plan_subgoals",
-            "budget_limited": "wrap_up_budget_limited",
-            "question": Route.question(),
-        },
-    )
-    def activate_plan(ctx):
-        goal = _load_goal(ctx)
-        plan = _load_plan(ctx)
-
-        if goal.status == "budget_limited":
-            _write_status_report(ctx, heading="Goal Budget Limited")
-            return "budget_limited"
-
-        if goal.token_budget is not None and goal.tokens_used >= goal.token_budget:
-            goal.status = "budget_limited"
-            goal.last_reason = "Goal token budget reached before plan activation."
-            _write_goal(ctx, goal)
-            _write_status_report(ctx, heading="Goal Budget Limited")
-            return "budget_limited"
-
-        error = _validate_plan(plan, goal)
-        if error is not None:
-            return Event("needs_rework", reason=error)
-
-        goal.status = "active"
-        goal.planning_status = "planned"
-        goal.active_subgoal_id = None
-        plan.active_subgoal_id = None
-        _refresh_goal_counts(goal, plan)
-
-        _write_plan(ctx, plan)
-        _write_goal(ctx, goal)
-        _write_status_report(ctx, heading="Subgoal Plan Activated")
-        return "selected"
-
-    @python_step(
-        name="select_next_subgoal",
-        requires=[goal, subgoals],
-        writes=[goal, subgoals, status_report, run_context],
-        routes={
-            "selected": "prepare_subgoal_session",
-            "all_done": "final_goal_audit",
-            "blocked": "mark_parent_blocked",
-            "replan": "plan_subgoals",
-            "budget_limited": "wrap_up_budget_limited",
-        },
-    )
-    def select_next_subgoal(ctx):
-        goal = _load_goal(ctx)
-        plan = _load_plan(ctx)
-
-        if goal.status == "budget_limited":
-            return "budget_limited"
-
-        if goal.token_budget is not None and goal.tokens_used >= goal.token_budget:
-            goal.status = "budget_limited"
-            goal.last_reason = "Goal token budget reached."
-            _write_goal(ctx, goal)
-            _write_status_report(ctx, heading="Goal Budget Limited")
-            return "budget_limited"
-
-        if goal.max_goal_turns is not None and goal.turns_completed >= goal.max_goal_turns:
-            goal.status = "budget_limited"
-            goal.last_reason = f"Maximum goal turns reached: {goal.max_goal_turns}."
-            _write_goal(ctx, goal)
-            _write_status_report(ctx, heading="Goal Turn Limited")
-            return "budget_limited"
-
-        if goal.planning_status != "planned" or not plan.subgoals:
-            goal.planning_status = "stale"
-            _write_goal(ctx, goal)
-            return "replan"
+                _charge(goal_record, None, reviewed)
+                if reviewed.value.verdict == "accepted":
+                    plan = candidate
+                    latest_plan_audit = reviewed.artifacts.plan_audit
+                    break
+                planning_feedback = (reviewed.artifacts.plan_audit,)
+                if _limited(goal_record):
+                    break
+            if plan is None or _limited(goal_record):
+                continue
+            goal_record.planning_status = "planned"
+            goal_record.status = "active"
+            goal_record.active_subgoal_id = None
+            plan.active_subgoal_id = None
+            _refresh(goal_record, plan)
+            goal_record, plan = _save_state(
+                str(goal_path), goal_record, str(plan_path), plan
+            )
 
         if all(item.status == "complete" for item in plan.subgoals):
-            goal.active_subgoal_id = None
-            plan.active_subgoal_id = None
-            _refresh_goal_counts(goal, plan)
-            _write_plan(ctx, plan)
-            _write_goal(ctx, goal)
-            _write_status_report(ctx, heading="All Subgoals Complete")
-            return "all_done"
+            summary_turn = _goal_turn(
+                goal_session,
+                FINAL,
+                goal_record,
+                plan,
+                goal_path,
+                plan_path,
+                input={
+                    "goal": goal_record.model_dump(mode="json"),
+                    "plan": plan.model_dump(mode="json"),
+                },
+                reads=(
+                    goal_spec.path,
+                    plan_spec.path,
+                    status_spec.path,
+                    progress.path,
+                    subgoal_audit.path,
+                    plan_audit.path,
+                ),
+                writes=(goal_summary,),
+            )
+            _charge(goal_record, None, summary_turn)
+            limit = _limited(goal_record)
+            if limit:
+                goal_record.status, goal_record.last_reason = "budget_limited", limit
+                goal_record, plan = _save_state(
+                    str(goal_path), goal_record, str(plan_path), plan
+                )
+                _write_report(
+                    str(final_path),
+                    f"# Goal Budget Limited\n\n{limit}\n\n{_status_text(goal_record, plan)}",
+                )
+                return _output(
+                    goal_path, plan_path, status_path, final_path, goal_record
+                )
+            final_turn = _goal_turn(
+                Session.fresh(),
+                FINAL_VERIFY,
+                goal_record,
+                plan,
+                goal_path,
+                plan_path,
+                input={
+                    "goal": goal_record.model_dump(mode="json"),
+                    "plan": plan.model_dump(mode="json"),
+                },
+                reads=(
+                    goal_spec.path,
+                    plan_spec.path,
+                    summary_turn.artifacts.goal_summary,
+                    progress.path,
+                    subgoal_audit.path,
+                ),
+                writes=(goal_audit,),
+                returns=FinalDecision,
+            )
+            _charge(goal_record, None, final_turn)
+            decision = final_turn.value
+            if decision.verdict == "complete":
+                goal_record.status = "complete"
+                goal_record.completed_at = _timestamp()
+                goal_record.completion_summary = (
+                    decision.completion_summary or decision.reason
+                )
+                goal_record.active_subgoal_id = plan.active_subgoal_id = None
+                _refresh(goal_record, plan)
+                goal_record, plan = _save_state(
+                    str(goal_path), goal_record, str(plan_path), plan
+                )
+                _write_report(
+                    str(final_path),
+                    f"# Goal Complete\n\n## Objective\n\n{goal_record.objective}\n\n"
+                    f"## Completion Summary\n\n{goal_record.completion_summary}\n",
+                )
+                _write_report(str(status_path), _status_text(goal_record, plan))
+                return _output(
+                    goal_path, plan_path, status_path, final_path, goal_record
+                )
+            if decision.verdict == "replan":
+                goal_record.planning_status = "stale"
+                goal_record.last_reason = decision.reason
+                plan.active_subgoal_id = goal_record.active_subgoal_id = None
+                goal_record, plan = _save_state(
+                    str(goal_path), goal_record, str(plan_path), plan
+                )
+                continue
+            requested = set(decision.subgoal_ids) or {item.id for item in plan.subgoals}
+            for item in plan.subgoals:
+                if item.id in requested:
+                    item.status, item.completed_at, item.last_reason = (
+                        "needs_rework",
+                        None,
+                        decision.reason,
+                    )
+            goal_record.last_reason = decision.reason
+            goal_record, plan = _save_state(
+                str(goal_path), goal_record, str(plan_path), plan
+            )
+            continue
 
-        selected = _select_next(plan)
+        selected = _select(plan)
         if selected is None:
-            if _all_remaining_paths_blocked(plan):
-                goal.status = "blocked"
-                goal.last_reason = "No selectable incomplete subgoals remain; remaining paths are blocked."
-                _write_goal(ctx, goal)
-                _write_status_report(ctx, heading="Goal Blocked")
-                return "blocked"
-            goal.planning_status = "stale"
-            goal.last_reason = "No selectable subgoal exists; plan appears inconsistent or incomplete."
-            _write_goal(ctx, goal)
-            return "replan"
+            goal_record.status = "blocked"
+            goal_record.last_reason = "No selectable incomplete subgoals remain."
+            goal_record.active_subgoal_id = plan.active_subgoal_id = None
+            goal_record, plan = _save_state(
+                str(goal_path), goal_record, str(plan_path), plan
+            )
+            _write_report(
+                str(final_path), f"# Goal Blocked\n\n{goal_record.last_reason}\n"
+            )
+            return _output(goal_path, plan_path, status_path, final_path, goal_record)
 
         selected.status = "active"
-        goal.status = "active"
-        goal.active_subgoal_id = selected.id
-        plan.active_subgoal_id = selected.id
-        goal.last_reason = f"Selected subgoal {selected.id}: {selected.title}"
-
-        _refresh_goal_counts(goal, plan)
-        _write_plan(ctx, plan)
-        _write_goal(ctx, goal)
-        _write_status_report(ctx, heading="Subgoal Selected")
-        return "selected"
-
-    @python_step(
-        name="prepare_subgoal_session",
-        requires=[goal, subgoals],
-        writes=[status_report, run_context],
-        routes={
-            "ready": "work_subgoal",
-            "replan": "plan_subgoals",
-            "budget_limited": "wrap_up_budget_limited",
-            "failed": FAIL,
-        },
-    )
-    def prepare_subgoal_session(ctx):
-        goal = _load_goal(ctx)
-        plan = _load_plan(ctx)
-
-        if goal.status == "budget_limited":
-            _write_status_report(ctx, heading="Goal Budget Limited")
-            return "budget_limited"
-
-        active_id = plan.active_subgoal_id or goal.active_subgoal_id
-        active = _find_subgoal(plan, active_id)
-        if active is None:
-            goal.planning_status = "stale"
-            goal.active_subgoal_id = None
-            plan.active_subgoal_id = None
-            goal.last_reason = "No active subgoal exists while preparing a subgoal session."
-            _write_plan(ctx, plan)
-            _write_goal(ctx, goal)
-            _write_status_report(ctx, heading="Subgoal Session Missing Active Work")
-            return "replan"
-
-        ctx.open_session("subgoal_session", key=f"{goal.goal_id}:{active.id}")
-        _write_status_report(ctx, heading="Subgoal Session Prepared")
-        return "ready"
-
-    work_subgoal = produce_verify_step(
-        name="work_subgoal",
-        session=subgoal_session,
-        verifier_session=subgoal_verifier_session,
-        requires=[goal, subgoals],
-        reads=[status_report, run_context, plan_audit, subgoal_progress, subgoal_audit],
-        producer_writes=[subgoal_progress],
-        verifier_writes=[subgoal_audit],
-        producer_prompt=Prompt.inline(
-            """
-            Work on the currently active subgoal only.
-
-            This provider session is scoped to the active subgoal. It will not
-            contain conversation history from planning, final audits, or other
-            subgoals. Reconstruct the run state from artifacts and current
-            repository contents before acting.
-
-            Read:
-            - {{ workflow.folder }}/goal.json
-            - {{ workflow.folder }}/subgoals.json
-            - {{ workflow.folder }}/run_context.md for the current durable
-              state, active subgoal contract, completed subgoals, and evidence
-              index
-            - {{ workflow.folder }}/status.md for the active subgoal, run
-              status, known workflow artifacts, verifier criteria, evidence
-              artifact references, and suggested commands
-            - {{ workflow.folder }}/plan_audit.md, if present
-            - prior {{ workflow.folder }}/subgoal_progress.md
-            - prior {{ workflow.folder }}/subgoal_audit.md
-            - every evidence_artifact declared for the active subgoal, if it
-              exists; if an important evidence artifact is absent, record that
-              as evidence for verifier judgment rather than treating it as a
-              Botpipe runtime failure
-            - relevant repository files and command output
-
-            Rules:
-            - Keep the parent goal in view, but only implement the active subgoal.
-            - Do not mark the parent goal complete.
-            - Do not broaden the subgoal beyond its verifier criteria.
-            - If prior audit found rework, address every listed issue first.
-            - Work from current artifacts and repository state, not provider
-              memory.
-            - Prefer targeted inspection and validation that proves the active
-              subgoal. Avoid rerunning broad expensive checks unless needed to
-              prove freshness or risk.
-
-            Update {{ workflow.folder }}/subgoal_progress.md with:
-            - active subgoal id and title
-            - changes made
-            - artifacts created, modified, or inspected
-            - evidence inspected
-            - commands/tests run and results
-            - criteria addressed
-            - remaining work
-            - blockers, if any
-            """.strip()
-        ),
-        verifier_prompt=Prompt.inline(
-            """
-            Verify the active subgoal only.
-
-            This verifier session may be fresh. Reconstruct context from the
-            artifacts and repository state. Do not rely on producer memory.
-
-            Read:
-            - {{ workflow.folder }}/goal.json
-            - {{ workflow.folder }}/subgoals.json
-            - {{ workflow.folder }}/run_context.md for current durable state
-              and the evidence index
-            - {{ workflow.folder }}/status.md for active-subgoal criteria,
-              run status, known workflow artifacts, evidence_artifacts, and
-              suggested commands
-            - {{ workflow.folder }}/plan_audit.md, if present
-            - {{ workflow.folder }}/subgoal_progress.md
-            - prior {{ workflow.folder }}/subgoal_audit.md, if present
-            - every evidence_artifact declared for the active subgoal, if it
-              exists
-            - relevant files, tests, command output, and artifacts
-
-            Use the active subgoal's verifier_criteria as the acceptance
-            contract. Do not mark complete unless every criterion is proven by
-            current-state evidence. Do not substitute parent-goal progress for
-            subgoal completion.
-
-            Freshness policy:
-            - Accept existing evidence when it is current, credible, and
-              sufficient for the active criteria.
-            - Run targeted checks when evidence is missing, stale, inconsistent,
-              or too weak.
-            - Do not blindly repeat expensive full validation when narrower
-              checks or existing fresh evidence prove the criteria.
-
-            Routes:
-            - complete: every active-subgoal criterion is proven complete.
-            - continue: meaningful progress was made but more work remains.
-            - needs_rework: work is wrong, incomplete, or failed validation.
-            - blocked: a concrete external blocker prevents this subgoal.
-              Use the same blocker_fingerprint if the same blocker repeats.
-            - question: user input is strictly required.
-
-            Write {{ workflow.folder }}/subgoal_audit.md with:
-            - decision
-            - criteria-by-criteria audit
-            - evidence inspected
-            - exact remaining work or rework
-            - blocker fingerprint and blocker reason when blocked
-            """.strip()
-        ),
-        routes={
-            "complete": Route.to(
-                "subgoal_gate",
-                summary="The active subgoal is fully complete.",
-                required_writes=["subgoal_progress", "subgoal_audit"],
-                route_fields_schema=SubgoalCompleteFields,
-            ),
-            "continue": Route.to(
-                "subgoal_gate",
-                summary="The active subgoal remains active.",
-                required_writes=["subgoal_progress", "subgoal_audit"],
-                route_fields_schema=ReasonRouteFields,
-            ),
-            "needs_rework": Route.to(
-                "subgoal_gate",
-                summary="The active subgoal needs rework.",
-                required_writes=["subgoal_progress", "subgoal_audit"],
-                route_fields_schema=ReasonRouteFields,
-            ),
-            "blocked": Route.to(
-                "subgoal_gate",
-                summary="The active subgoal may be blocked.",
-                required_writes=["subgoal_progress", "subgoal_audit"],
-                route_fields_schema=SubgoalBlockedFields,
-            ),
-            "question": Route.question(summary="Subgoal verification requires user input."),
-        },
-        after_verifier=_after_subgoal_verifier,
-    )
-
-    @python_step(
-        name="subgoal_gate",
-        requires=[goal, subgoals],
-        writes=[goal, subgoals, status_report, run_context],
-        routes={
-            "continue": "select_next_subgoal",
-            "budget_limited": "wrap_up_budget_limited",
-        },
-    )
-    def subgoal_gate(ctx):
-        goal = _load_goal(ctx)
-        plan = _load_plan(ctx)
-        active = _find_subgoal(plan, plan.active_subgoal_id or goal.active_subgoal_id)
-
-        if goal.status == "budget_limited":
-            return "budget_limited"
-
-        if goal.token_budget is not None and goal.tokens_used >= goal.token_budget:
-            goal.status = "budget_limited"
-            goal.last_reason = "Goal token budget reached."
-            _write_goal(ctx, goal)
-            _write_status_report(ctx, heading="Goal Budget Limited")
-            return "budget_limited"
-
-        if goal.max_goal_turns is not None and goal.turns_completed >= goal.max_goal_turns:
-            goal.status = "budget_limited"
-            goal.last_reason = f"Maximum goal turns reached: {goal.max_goal_turns}."
-            _write_goal(ctx, goal)
-            _write_status_report(ctx, heading="Goal Turn Limited")
-            return "budget_limited"
-
-        if active is not None:
-            if active.status == "complete":
-                goal.active_subgoal_id = None
-                plan.active_subgoal_id = None
-            elif active.consecutive_blocked_turns >= 3:
-                active.status = "blocked"
-                active.last_reason = (
-                    active.blocker_reason
-                    or "Same blocker repeated for at least three consecutive subgoal turns."
-                )
-                goal.active_subgoal_id = None
-                plan.active_subgoal_id = None
-
-        _refresh_goal_counts(goal, plan)
-        goal.status = "active"
-        _write_plan(ctx, plan)
-        _write_goal(ctx, goal)
-        _write_status_report(ctx, heading="Subgoal Gate")
-        return "continue"
-
-    final_goal_audit = produce_verify_step(
-        name="final_goal_audit",
-        session=goal_session,
-        verifier_session=final_verifier_session,
-        requires=[goal, subgoals],
-        reads=[status_report, run_context, subgoal_progress, subgoal_audit, plan_audit],
-        producer_writes=[goal_summary],
-        verifier_writes=[goal_audit],
-        producer_prompt=Prompt.inline(
-            """
-            Prepare a final parent-goal completion packet.
-
-            All subgoals are currently marked complete. This does not prove the
-            parent goal is complete. This producer uses the main goal session,
-            but current artifacts remain the source of truth. Read:
-            - {{ workflow.folder }}/goal.json
-            - {{ workflow.folder }}/subgoals.json
-            - {{ workflow.folder }}/run_context.md
-            - {{ workflow.folder }}/status.md
-            - {{ workflow.folder }}/plan_audit.md
-            - {{ workflow.folder }}/subgoal_progress.md
-            - {{ workflow.folder }}/subgoal_audit.md
-            - relevant current repository files and test output
-
-            Write {{ workflow.folder }}/goal_summary.md with:
-            - original parent objective
-            - each subgoal and its completion evidence
-            - remaining risks
-            - commands/tests that prove final state
-            - any missing work suspected
-            """.strip()
-        ),
-        verifier_prompt=Prompt.inline(
-            """
-            Independently audit the original parent goal.
-
-            Completion is still unproven even if every subgoal is marked
-            complete. Use subgoal evidence as supporting evidence, not proof by
-            itself. The verifier session may be fresh, so reconstruct the run
-            state from artifacts and current repository contents.
-
-            Read:
-            - {{ workflow.folder }}/goal.json
-            - {{ workflow.folder }}/subgoals.json
-            - {{ workflow.folder }}/run_context.md
-            - {{ workflow.folder }}/status.md
-            - {{ workflow.folder }}/plan_audit.md
-            - {{ workflow.folder }}/goal_summary.md
-            - {{ workflow.folder }}/subgoal_progress.md
-            - {{ workflow.folder }}/subgoal_audit.md
-            - relevant source files, artifacts, tests, command output, and specs
-
-            Freshness policy:
-            - Use subgoal evidence as supporting evidence only when it is
-              current, credible, and sufficient for the parent objective.
-            - Run targeted checks for gaps, contradictions, or high-risk claims.
-            - Do not rerun broad expensive validation solely because this is the
-              final audit; rerun it when freshness or risk requires it.
-
-            Routes:
-            - complete: the original parent objective is fully satisfied.
-            - needs_rework: existing subgoal work is incomplete or wrong.
-              Include subgoal_ids when known.
-            - replan: the subgoal plan missed requirements or the parent goal
-              needs additional subgoals.
-            - question: user input is strictly required.
-
-            Write {{ workflow.folder }}/goal_audit.md with:
-            - parent-goal requirement-by-requirement audit
-            - evidence inspected
-            - subgoals accepted/rejected as evidence
-            - missing requirements or rework
-            - final route decision
-            """.strip()
-        ),
-        routes={
-            "complete": Route.to(
-                "finish_goal",
-                summary="The parent goal is fully complete.",
-                required_writes=["goal_summary", "goal_audit"],
-                route_fields_schema=FinalCompleteFields,
-            ),
-            "needs_rework": Route.to(
-                "final_goal_gate",
-                summary="Completed subgoal work does not actually satisfy the parent goal.",
-                required_writes=["goal_summary", "goal_audit"],
-                route_fields_schema=FinalNeedsReworkFields,
-            ),
-            "replan": Route.to(
-                "final_goal_gate",
-                summary="The subgoal plan missed parent-goal requirements.",
-                required_writes=["goal_summary", "goal_audit"],
-                route_fields_schema=FinalReplanFields,
-            ),
-            "question": Route.question(summary="Final audit requires user input."),
-        },
-        after_verifier=_after_final_goal_verifier,
-    )
-
-    @python_step(
-        name="final_goal_gate",
-        requires=[goal, subgoals],
-        writes=[goal, subgoals, status_report, run_context],
-        routes={
-            "replan": "plan_subgoals",
-            "rework": "select_next_subgoal",
-            "budget_limited": "wrap_up_budget_limited",
-        },
-    )
-    def final_goal_gate(ctx):
-        goal = _load_goal(ctx)
-        plan = _load_plan(ctx)
-
-        if goal.status == "budget_limited":
-            return "budget_limited"
-
-        if goal.token_budget is not None and goal.tokens_used >= goal.token_budget:
-            goal.status = "budget_limited"
-            goal.last_reason = "Goal token budget reached during final audit."
-            _write_goal(ctx, goal)
-            _write_status_report(ctx, heading="Goal Budget Limited")
-            return "budget_limited"
-
-        if goal.planning_status == "stale":
-            _write_status_report(ctx, heading="Goal Requires Replan")
-            return "replan"
-
-        _refresh_goal_counts(goal, plan)
-        goal.status = "active"
-        _write_plan(ctx, plan)
-        _write_goal(ctx, goal)
-        _write_status_report(ctx, heading="Goal Requires Rework")
-        return "rework"
-
-    @python_step(
-        name="finish_goal",
-        requires=[goal, subgoals],
-        reads=[goal_summary, goal_audit],
-        writes=[goal, subgoals, final_report],
-        routes={"done": FINISH},
-    )
-    def finish_goal(ctx):
-        goal = _load_goal(ctx)
-        plan = _load_plan(ctx)
-
-        fields = _event_fields(ctx)
-        goal.status = "complete"
-        goal.completed_at = goal.completed_at or _now()
-        goal.completion_summary = (
-            _clean_text(fields.get("completion_summary"))
-            or goal.completion_summary
-            or "Final audit proved the parent goal complete."
+        goal_record.active_subgoal_id = plan.active_subgoal_id = selected.id
+        _refresh(goal_record, plan)
+        goal_record, plan = _save_state(
+            str(goal_path), goal_record, str(plan_path), plan
         )
-        goal.active_subgoal_id = None
-        plan.active_subgoal_id = None
-        _refresh_goal_counts(goal, plan)
-
-        _write_plan(ctx, plan)
-        _write_goal(ctx, goal)
-
-        token_budget = goal.token_budget if goal.token_budget is not None else "none"
-        lines = [
-            "# Goal Complete",
-            "",
-            f"Goal id: `{goal.goal_id}`",
-            "",
-            "## Objective",
-            "",
-            goal.objective,
-            "",
-            "## Completion Summary",
-            "",
-            goal.completion_summary or "(see goal audit)",
-            "",
-            "## Subgoals",
-            "",
-        ]
-        for subgoal in plan.subgoals:
-            lines.append(f"- `{subgoal.id}` [{subgoal.status}] {subgoal.title}")
-        lines.extend(
-            [
-                "",
-                "## Usage",
-                "",
-                f"- Tokens used: {goal.tokens_used}",
-                f"- Token budget: {token_budget}",
-                f"- Time used seconds: {goal.time_used_seconds}",
-                f"- Goal turns completed: {goal.turns_completed}",
-                "",
-                "## Evidence",
-                "",
-                f"- Goal summary: `{ctx.artifacts.goal_summary.path}`",
-                f"- Goal audit: `{ctx.artifacts.goal_audit.path}`",
-                f"- Run context: `{ctx.artifacts.run_context.path}`",
-                f"- Subgoal plan: `{ctx.artifacts.subgoals.path}`",
-                f"- Subgoal progress: `{ctx.artifacts.subgoal_progress.path}`",
-                f"- Subgoal audit: `{ctx.artifacts.subgoal_audit.path}`",
-                "",
-            ]
+        selected = _find(plan, goal_record.active_subgoal_id)
+        assert selected is not None
+        _write_report(str(status_path), _status_text(goal_record, plan))
+        session = Session.task(key=f"goal:{goal_record.goal_id}:{selected.id}")
+        work_reads: list[Any] = [goal_spec.path, plan_spec.path, status_spec.path]
+        if latest_plan_audit is not None:
+            work_reads.append(latest_plan_audit)
+        if latest_subgoal_audit is not None:
+            work_reads.append(latest_subgoal_audit)
+        work_turn = _goal_turn(
+            session,
+            WORK,
+            goal_record,
+            plan,
+            goal_path,
+            plan_path,
+            subgoal=selected,
+            input={
+                "goal": goal_record.model_dump(mode="json"),
+                "subgoal": selected.model_dump(mode="json"),
+            },
+            reads=tuple(work_reads),
+            writes=(progress,),
         )
-        ctx.artifacts.final_report.write_text("\n".join(lines))
-        return "done"
-
-    @python_step(
-        name="mark_parent_blocked",
-        requires=[goal, subgoals],
-        writes=[goal, subgoals, final_report],
-        routes={"done": FINISH},
-    )
-    def mark_parent_blocked(ctx):
-        goal = _load_goal(ctx)
-        plan = _load_plan(ctx)
-
-        goal.status = "blocked"
-        goal.active_subgoal_id = None
-        plan.active_subgoal_id = None
-        goal.last_reason = goal.last_reason or "No selectable incomplete subgoals remain; remaining paths are blocked."
-
-        _write_plan(ctx, plan)
-        _write_goal(ctx, goal)
-
-        blocked = [item for item in plan.subgoals if item.status == "blocked"]
-        lines = [
-            "# Goal Blocked",
-            "",
-            f"Goal id: `{goal.goal_id}`",
-            "",
-            "## Objective",
-            "",
-            goal.objective,
-            "",
-            "## Blocked Subgoals",
-            "",
+        _charge(goal_record, selected, work_turn)
+        limit = _limited(goal_record)
+        if limit:
+            goal_record.status, goal_record.last_reason = "budget_limited", limit
+            goal_record, plan = _save_state(
+                str(goal_path), goal_record, str(plan_path), plan
+            )
+            _write_report(
+                str(final_path),
+                f"# Goal Budget Limited\n\n{limit}\n\n{_status_text(goal_record, plan)}",
+            )
+            return _output(goal_path, plan_path, status_path, final_path, goal_record)
+        verify_reads: list[Any] = [
+            goal_spec.path,
+            plan_spec.path,
+            work_turn.artifacts.subgoal_progress,
         ]
-        if blocked:
-            for item in blocked:
-                lines.append(f"- `{item.id}` {item.title}: {item.blocker_reason or item.last_reason or 'blocked'}")
+        if latest_subgoal_audit is not None:
+            verify_reads.append(latest_subgoal_audit)
+        verify_turn = _goal_turn(
+            Session.fresh(),
+            VERIFY,
+            goal_record,
+            plan,
+            goal_path,
+            plan_path,
+            subgoal=selected,
+            input={
+                "goal": goal_record.model_dump(mode="json"),
+                "subgoal": selected.model_dump(mode="json"),
+            },
+            reads=tuple(verify_reads),
+            writes=(subgoal_audit,),
+            returns=SubgoalDecision,
+        )
+        _charge(goal_record, selected, verify_turn)
+        goal_record.turns_completed += 1
+        selected.turns_completed += 1
+        selected.last_verifier_route = verify_turn.value.verdict
+        selected.last_reason = verify_turn.value.reason
+        decision = verify_turn.value
+        latest_subgoal_audit = verify_turn.artifacts.subgoal_audit
+        if decision.verdict == "complete":
+            selected.status = "complete"
+            selected.completion_summary = decision.completion_summary or decision.reason
+            selected.criteria_results = decision.criteria_results
+            selected.evidence = decision.evidence
+            selected.completed_at = _timestamp()
+            selected.blocker_fingerprint = selected.blocker_reason = None
+            selected.consecutive_blocked_turns = 0
+            goal_record.active_subgoal_id = plan.active_subgoal_id = None
+        elif decision.verdict == "blocked":
+            fingerprint = decision.blocker_fingerprint or "unspecified-blocker"
+            selected.consecutive_blocked_turns = (
+                selected.consecutive_blocked_turns + 1
+                if selected.blocker_fingerprint == fingerprint
+                else 1
+            )
+            selected.blocker_fingerprint, selected.blocker_reason = (
+                fingerprint,
+                decision.reason,
+            )
+            if selected.consecutive_blocked_turns >= 3:
+                selected.status = "blocked"
+                goal_record.active_subgoal_id = plan.active_subgoal_id = None
+        elif decision.verdict == "needs_rework":
+            selected.status = "needs_rework"
+            selected.consecutive_blocked_turns = 0
         else:
-            lines.append("- No specific blocked subgoal recorded.")
-        lines.extend(
-            [
-                "",
-                "## Usage",
-                "",
-                f"- Tokens used: {goal.tokens_used}",
-                f"- Token budget: {goal.token_budget if goal.token_budget is not None else 'none'}",
-                f"- Time used seconds: {goal.time_used_seconds}",
-                "",
-            ]
+            selected.status = "active"
+            selected.consecutive_blocked_turns = 0
+        _refresh(goal_record, plan)
+        goal_record, plan = _save_state(
+            str(goal_path), goal_record, str(plan_path), plan
         )
-        ctx.artifacts.final_report.write_text("\n".join(lines))
-        return "done"
 
-    wrap_up_budget_limited = step(
-        Prompt.inline(
-            """
-            The active parent goal has reached its token budget or deterministic
-            turn limit.
 
-            Do not start new substantive work. Wrap up this goal run:
-            - summarize useful progress
-            - identify completed subgoals
-            - identify remaining subgoals
-            - identify blockers
-            - give the next concrete step for a future resumed/replaced goal
+GoalWorkflow = goal
+Params = GoalWorkflowInput
 
-            Read:
-            - {{ workflow.folder }}/goal.json
-            - {{ workflow.folder }}/subgoals.json, if present
-            - {{ workflow.folder }}/run_context.md, if present
-            - {{ workflow.folder }}/subgoal_progress.md, if present
-            - {{ workflow.folder }}/subgoal_audit.md, if present
-            - {{ workflow.folder }}/goal_audit.md, if present
-
-            Write {{ workflow.folder }}/final_report.md.
-            """.strip()
-        ),
-        name="wrap_up_budget_limited",
-        session=goal_session,
-        requires=[goal],
-        reads=[subgoals, run_context, subgoal_progress, subgoal_audit, goal_audit],
-        writes=[final_report],
-        routes={
-            "done": Route.to(
-                FINISH,
-                summary="Budget-limited wrap-up is written.",
-                required_writes=["final_report"],
-                route_fields_schema=ReasonRouteFields,
-            )
-        },
-    )
-
-    entry = initialize_goal
-
-    @staticmethod
-    def build_output(state: GoalWorkflowState, ctx) -> GoalWorkflowOutput:
-        goal_handle = ctx.artifacts["goal"]
-        subgoals_handle = ctx.artifacts["subgoals"]
-        status_handle = ctx.artifacts["status_report"]
-        final_handle = ctx.artifacts["final_report"]
-
-        if goal_handle.exists():
-            goal = GoalRecord.model_validate_json(goal_handle.read_text())
-            return GoalWorkflowOutput(
-                status=goal.status,
-                goal_id=goal.goal_id,
-                objective=goal.objective,
-                planning_status=goal.planning_status,
-                active_subgoal_id=goal.active_subgoal_id,
-                completed_subgoal_count=goal.completed_subgoal_count,
-                total_subgoal_count=goal.total_subgoal_count,
-                tokens_used=goal.tokens_used,
-                token_budget=goal.token_budget,
-                time_used_seconds=goal.time_used_seconds,
-                goal_path=str(goal_handle.path),
-                subgoals_path=str(subgoals_handle.path),
-                status_report_path=str(status_handle.path) if status_handle.exists() else None,
-                final_report_path=str(final_handle.path) if final_handle.exists() else None,
-            )
-
-        return GoalWorkflowOutput(
-            status=state.status,
-            planning_status=state.planning_status,
-            active_subgoal_id=state.active_subgoal_id,
-            goal_path=str(goal_handle.path),
-            subgoals_path=str(subgoals_handle.path),
-            status_report_path=str(status_handle.path) if status_handle.exists() else None,
-            final_report_path=str(final_handle.path) if final_handle.exists() else None,
-        )
+__all__ = [
+    "FinalDecision",
+    "GoalRecord",
+    "GoalWorkflow",
+    "GoalWorkflowInput",
+    "GoalWorkflowOutput",
+    "Params",
+    "PlanDecision",
+    "SubgoalDecision",
+    "SubgoalPlan",
+    "SubgoalRecord",
+    "goal",
+]

@@ -1,166 +1,245 @@
 # Optimizer
 
-Botpipe's optimizer turns recorded workflow runs into evidence-bound recommendations. It does not edit, execute, or promote the selected workflow. A separate refinement run materializes one selected candidate, validates its exact files, and can optionally compare it with the baseline by running a frozen evaluator once per arm.
+Botpipe's optimizer turns durable run observations into evidence-bound change
+proposals. It does not edit, execute, or promote the selected workflow. Concrete
+work happens in the refinement or evaluation-suite workflows, and any measured
+comparison is an explicit optional refinement step.
 
 ## Diagnose a workflow
 
-Run the bundled optimizer workflow with the workflow to inspect:
-
 ```bash
-botpipe run labs/workflows/workflow_run_traces_to_optimization_candidates \
-  "Diagnose recent runs and recommend the next useful action" \
-  --task optimizer-review-1 \
-  -wf selected_workflow release_review \
-  -wf task_title "Diagnose release review" \
-  -wf objective reliability
+botpipe run workflow_run_traces_to_optimization_candidates \
+  --input '[{"selected_workflow":"ralph_loop","task_title":"Diagnose Ralph","objective":"reliability"},"Diagnose recent runs and recommend the next useful action"]' \
+  --task-id optimizer-review-1 --workspace .
 ```
 
-`selected_workflow` accepts the same named, file, module, and explicit-class references as `botpipe run`. By default the optimizer considers the latest 25 completed or paused runs for that workflow. Use `run_refs` for an explicit historical investigation, `run_statuses` to restrict run status, and `route_tags` to focus the observations while retaining necessary context.
+`selected_workflow` accepts a catalog name, `module:function`, or
+`file.py:function`. By default the workflow considers the latest 25 matching
+runs. `run_refs` selects exact run IDs or `task/run` references;
+`run_statuses` filters automatic history selection; `route_tags` is retained as
+a compatibility name for filtering observed operation outcomes. It is not a
+static route-table query.
 
-The objectives rank observed burden:
+The three objectives rank observed burden:
 
-| Objective | Eligible evidence | Ordering |
-|---|---|---|
-| `reliability` | Explicit runtime failure or rework | Distinct affected runs, then deterministic ties |
-| `token_usage` | Complete, positive dispatch usage | Known reported token total |
-| `latency` | Complete, positive recorded time | Recorded elapsed seconds |
+| Objective | Eligible observations | Ordering |
+| --- | --- | --- |
+| `reliability` | Explicit failed/interrupted operations or typed rework/replan outcomes | Distinct affected runs, then deterministic ties |
+| `token_usage` | Complete, positive provider usage | Sum of reported token counts |
+| `latency` | Complete, positive physical provider-dispatch timing | Sum of provider-dispatch seconds |
 
-These rankings do not estimate probability, monetary cost, reducibility, or future benefit. If no eligible evidence exists, the workflow makes no model call and publishes a `collect_evidence` or `no_change` action.
+These rankings do not estimate causality, probability, price, reducibility, or
+future benefit. Provider-dispatch seconds are additive observed provider burden,
+not end-to-end wall latency. Token counts remain literal reported counts even
+when provider/model profiles differ; neither measure is normalized across
+profiles. Python has dynamic topology: declared source describes what may run,
+while only journaled operations prove what did run. Runs are grouped only when
+recorded workflow identity and exact surface provenance permit it. Missing
+historical provenance stays unknown.
 
-## Defaults and limits
+Failed provider attempts remain visible in per-dispatch profile evidence. When
+a later attempt completes the operation, the earlier attempt is not promoted to
+a direct operation failure for reliability ranking. A missing provider, effective
+model, or effort fact makes that exact dispatch noncomparable; separate unknown
+dispatches never form a shared profile.
+
+If no observation is eligible, the workflow makes zero provider calls and
+publishes a typed empty `CandidateSet` whose next action is `collect_evidence`
+or `no_change`. Otherwise it makes one proposal followed by one independent
+review in the normal path. Schema repair, bounded rework, or an explicitly
+authorized retry can consume additional dispatches.
+
+## Limits
 
 | Parameter | Default | Meaning |
-|---|---:|---|
-| `history_limit` | 25 | Runs considered before evidence admission |
-| `top_k_steps` | 1 | Total shortlisted steps in the selected group |
-| `max_candidates` | 3 | Total accepted candidates |
-| `max_provider_turns` | 6 | Shared transport-dispatch cap, including retries and repair |
-| `provider_turn_timeout_seconds` | 600 | Maximum time for one provider dispatch |
-| `max_analysis_seconds` | 1800 | Overall recommendation deadline |
-| `max_evidence_bytes` | 50 MiB | Admitted metadata, trace, provenance, topology, and copied raw evidence |
-| `max_output_bytes` | 10 MiB | Accepted candidate and supporting-artifact bytes |
+| --- | ---: | --- |
+| `history_limit` | 25 | Runs selected before evidence admission |
+| `top_k_steps` | 1 | Total shortlisted observed operations in the selected evidence group |
+| `max_candidates` | 3 | Total candidates accepted in one `CandidateSet` |
+| `max_provider_turns` | 6 | Shared dispatch cap, including repair and retry |
+| `provider_turn_timeout_seconds` | 600 | Maximum time for one dispatch |
+| `max_analysis_seconds` | 1800 | Non-extending recommendation deadline |
+| `max_evidence_bytes` | 50 MiB | Admitted source and run-inspection records |
+| `max_snapshot_bytes` | 50 MiB | Serialized evidence snapshot, shared by capture, publication, and loading |
+| `max_output_bytes` | 10 MiB | Accepted candidate, review, and supporting records |
 
-`include_adversarial_generation`, `include_token_optimization`, and `include_workflow_level_candidates` restrict allowed candidate kinds. They do not add automatic model stages. The normal evidence-backed path uses one producer turn and one independent verifier turn, with bounded retry or repair only when needed.
+The snapshot limit is independent of input admission: profiles and diagnostics
+can expand accepted input during serialization. Producers check it before model
+calls, publication checks it before selecting a receipt, and consumers use the
+same bound. Pass the same override to producers and consumers when raising it.
 
-Budget reservations are persisted before dispatch. Resume keeps consumed turns and the non-extending deadline. A stale evidence snapshot, changed baseline, changed invocation, clock rollback, or incompatible budget rejects resume and requires a new analysis.
+The workflow enforces provider limits with
+`provider_budget(*, max_turns, max_seconds, turn_timeout_seconds)`. Its journaled
+counter is shared by child and parallel scopes. Reservations occur before the
+actual provider effect, so interrupted attempts remain charged. Resume keeps
+both consumed turns and the original absolute deadline; paused time counts and
+the deadline never extends.
 
-Core run metadata and traces receive budget priority across the selected runs. Oversized optional topology or Git files become explicit evidence gaps and do not exclude those runs. Git diagnostics also yield to trace-linked raw evidence. Invalid or non-finite durations remain unavailable for latency ranking.
+`include_adversarial_generation`, `include_token_optimization`, and
+`include_workflow_level_candidates` restrict allowed candidate kinds. They do
+not add fixed specialist stages.
 
-## Outputs
+## Records and publication
 
-The optimizer's canonical outputs live in its workflow folder:
+The workflow returns `OptimizationWorkflowResult`, containing the
+`EvidenceSnapshot`, `CandidateSet`, optional `CandidateReview`, accepted
+`PublicationReceipt`, and final provider-budget snapshot. The run folder has
+one canonical commit marker:
 
-- `workflow_optimization_evidence.json`: admitted runs, observations, coverage gaps, comparable groups, metrics, and shortlist
-- `workflow_optimization_candidates.json`: typed candidate set or an explicit evidence/no-change action
-- `workflow_optimization_candidate_review.json`: independent review when a proposal was made
-- `workflow_optimization_report.md`: deterministic human-readable projection
-- `workflow_refinement_evidence.json`: deterministic handoff for downstream work
-- `optimization_publication_receipt.json`: final commit record for the accepted recommendation, or an incomplete status and stop reason
+- `optimization_publication_receipt.json`
 
-The recommendation receipt always reports `improvement = not_evaluated`. Expected effects and validation plans are hypotheses until a concrete candidate is validated and, when requested, compared against the baseline.
+It selects an immutable, content-addressed directory under
+`optimization_publications/publication_<sha256>/`. That generation contains:
+
+- `workflow_optimization_evidence.json`
+- `baseline_surface_manifest.json`
+- `workflow_optimization_candidates.json`
+- `workflow_optimization_candidate_review.json` when a proposal was reviewed
+- `workflow_optimization_report.md`
+- `workflow_refinement_evidence.json`
+- `workflow_optimization_supporting.md` when the producer supplied it
+- an immutable copy of `optimization_publication_receipt.json`
+
+`CandidateSet` is strict and content-addressed. Each candidate names one kind
+(`producer_prompt`, `verifier_rubric`, `tokens`, `workflow`, or
+`evaluation_case`), target paths, cited observation IDs, a proposed change,
+expected effect, risks, and a falsifiable validation plan. Deterministic code
+owns evidence grouping, metrics, identities, byte counts, and publication. The
+producer cannot author those facts, and the independent reviewer cannot alter
+them.
+
+Publication serializes and validates the complete generation, including its
+aggregate recommendation byte budget, before writing it. It durably installs
+the generation and then atomically replaces the root receipt as the commit
+point. A failed or interrupted attempt can leave an unreferenced generation,
+but it cannot change the previously accepted receipt or any file that receipt
+names. Retrying identical input reuses the same generation. Concurrent
+publishers may race to select the latest root receipt, while each accepted
+generation and its own receipt remain complete and loadable.
+
+Ordinary workflow artifacts otherwise use the durable journal and immutable
+`ArtifactHandle`s; Botpipe does not create duplicate generic receipt files for
+every operation. Every recommendation receipt reports
+`improvement = not_evaluated`.
+Downstream code uses `load_optimization_candidate(...)`, which verifies the
+same-directory receipt and referenced byte counts, hashes, evidence, baseline,
+candidate set, review, and handoff identities before returning a selection.
 
 ## Hand off one candidate
 
-Choose exactly one `candidate_id` from an accepted receipt. Prompt, rubric, token, and workflow candidates enter the refinement workflow:
+Choose one `candidate_id` from an accepted receipt. Prompt, rubric, token, and
+workflow candidates enter refinement:
 
 ```bash
-botpipe run labs/workflows/workflow_and_eval_to_refined_workflow_package \
-  "Materialize and validate the selected optimizer candidate" \
-  --task refinement-1 \
-  -wf selected_workflow release_review \
-  -wf task_title "Refine release review" \
-  -wf optimization_receipt_path .botpipe/tasks/optimizer-review-1/.../optimization_publication_receipt.json \
-  -wf candidate_id candidate-abc123
+botpipe run workflow_and_eval_to_refined_workflow_package \
+  --input '[{"selected_workflow":"ralph_loop","task_title":"Refine Ralph","optimization_receipt_path":"/absolute/run/optimization_publication_receipt.json","candidate_id":"candidate_..."},"Materialize and validate the selected candidate"]' \
+  --task-id refinement-1 --workspace .
 ```
 
-The refinement entry point also retains its legacy pair, `evaluation_summary_path` plus `evaluation_findings_path`. Supply one complete input form. Mixing the optimizer handoff with the legacy pair, omitting half of either pair, selecting an unknown candidate, or changing the selected workflow fails before refinement.
+Refinement accepts exactly one complete primary input:
 
-An `evaluation_case` candidate does not enter workflow refinement. Pass it to `workflow_to_eval_suite`, which validates workflow parameters, stable case IDs, and expected artifacts and publishes a new evaluation-suite identity. Cases created from diagnosed failures are development cases; they do not modify a frozen comparison suite.
+- `optimization_receipt_path` plus `candidate_id`; or
+- `evaluation_summary_path` plus `evaluation_findings_path`.
 
-Concrete validation captures the project and any selected installed package layer, builds private baseline and candidate execution trees, overlays only allowed candidate paths, and compiles/tests the staged candidate. The validation receipt derives changes and results from those trees. It does not trust model-authored file counts, hashes, or success claims.
+The pairs are mutually exclusive. Refinement accepts candidate kinds
+`producer_prompt`, `verifier_rubric`, `tokens`, and `workflow`.
+`evaluation_case` goes instead to `workflow_to_eval_suite`, whose optional
+`optimization_receipt_path` and `candidate_id` must also be supplied together.
+That path validates callable inputs, stable case IDs, and artifact expectations
+and creates a new evaluation-suite identity.
 
-Python validation supports flat and conventional `src/` layouts, including namespace packages. Project-owned imports resolve only inside staging, even when an installed package has the same name. Environment metadata comes from the interpreter executing the isolated check and its actual import paths.
+Candidate preparation snapshots and hashes the authoritative files, permits
+changes and removals to captured files and additions only inside allowed
+package roots, then builds isolated baseline and candidate execution trees.
+Compilation and Python checks load project modules only from the staged tree.
+The external test command is an argv sequence executed without a shell; legacy
+`target_test_command` uses POSIX parsing and is mutually exclusive with
+`target_test_argv`. Results and change metadata are recomputed from frozen
+identities. Validation never mutates authoritative sources and never promotes a
+candidate automatically.
+
+The native helper boundary is:
+
+```python
+from botpipe_optimizer.candidates import (
+    candidate_surface_manifest,
+    freeze_candidate_workspace,
+    prepare_candidate_workspace,
+    validate_candidate,
+)
+
+workspace = prepare_candidate_workspace(repo_root, relative_paths, destination)
+bundle = freeze_candidate_workspace(
+    workspace,
+    owned_parent,
+    boundary=package_boundary,
+    selected_package_root=installed_package_root,
+    selected_package_import_path=import_path,
+    execution_source_root=repo_root,
+)
+manifest = candidate_surface_manifest(workspace, bundle)
+validation = validate_candidate(
+    workspace,
+    bundle,
+    workflow_refs=["package.module:function"],
+    staging_parent=owned_parent,
+    target_test_argv=["pytest", "-q"],
+)
+```
+
+`prepare_candidate_workspace` accepts `max_files` and `max_bytes` bounds.
+`freeze_candidate_workspace` must run before editing and accepts the same tree
+bounds. `validate_candidate` accepts positive compile/check/test timeouts and
+bounded diagnostic streams. The older
+`evaluate_candidate_workspace(workspace, argv, timeout=...)` remains a
+convenience for one isolated external check with source-mutation checks.
 
 ## Optional paired evaluation
 
-Set `evaluation_spec_path` on the refinement run to request measured comparison. Omit it to skip paired execution. The harness freezes the spec, evaluator, cases, ordered case IDs, repetitions, settings, metrics, thresholds, and limits before either arm starts. It launches exactly one evaluator subprocess for the baseline and one for the candidate in separate execution trees and never promotes a candidate automatically.
+Set `evaluation_spec_path` on refinement to run the same frozen evaluation plan
+against isolated baseline and candidate trees. Omit it to skip comparison. The
+harness freezes the specification, evaluator, cases, ordered case IDs,
+repetitions, settings, metrics, thresholds, and limits before launching exactly
+one evaluator subprocess per arm.
 
-Resume reuses a completed comparison only after verifying its frozen specification, evaluator, and case bytes and the evaluator's executable mode. Missing or changed frozen inputs or identities require a new refinement run; they never cause a silent evaluator relaunch.
+The evaluator receives absolute `BOTPIPE_EVAL_REQUEST` and
+`BOTPIPE_EVAL_RESULT` paths. It must atomically write one strict
+`botpipe.optimizer.eval_result/v1` record with exactly one result for every
+planned `(case_id, repetition)` pair. IDs must match; metrics must be finite;
+evidence paths must be regular files in the allowed output directory. Missing,
+stale, duplicate, oversized, timed-out, cancelled, or identity-mismatched output
+is incomplete and cannot produce an improvement claim.
 
-An evaluation spec uses this shape:
+The harness reports `improved`, `regressed`, `no_material_change`, or
+`inconclusive` from the frozen primary and guardrail thresholds. Development
+cases remain labeled as such. Botpipe-backed evaluators require a symmetric
+provider budget per arm; external evaluators receive process and output limits
+but make no claim about hidden internal model calls. There is no third arm,
+search loop, or automatic promotion.
 
-```json
-{
-  "schema": "botpipe.optimizer.evaluation_spec/v1",
-  "evaluator_argv": ["python", "{evaluator_path}"],
-  "evaluator_path": "evaluate.py",
-  "evaluator_content_id": "sha256:...",
-  "case_input_path": "cases.json",
-  "case_input_content_id": "sha256:...",
-  "case_ids": ["case-001", "case-002"],
-  "repetitions": 1,
-  "effective_settings": {},
-  "metrics": [
-    {
-      "name": "quality",
-      "unit": "score",
-      "direction": "higher_is_better",
-      "aggregation": "mean",
-      "minimum_improvement": 0.1,
-      "maximum_regression": 0.0
-    }
-  ],
-  "primary_metric": "quality",
-  "guardrail_metrics": [],
-  "claim_scope": "development_cases",
-  "evaluator_kind": "external",
-  "max_elapsed_seconds": 1200,
-  "per_arm_timeout_seconds": 600,
-  "max_evaluation_output_bytes": 52428800,
-  "max_evaluation_output_files": 10000
-}
-```
+Library consumers can call `load_evaluation_spec(path)`,
+`run_paired_evaluation(...)`, and `validate_paired_evaluation_record(...)` from
+`botpipe_optimizer.paired_evaluation`.
+Validation of a saved complete record rechecks the frozen specification,
+surface/execution-tree IDs, output parent, and optional invocation identity
+without rerunning either evaluator.
 
-The evaluator receives absolute `BOTPIPE_EVAL_REQUEST` and `BOTPIPE_EVAL_RESULT` paths. The request identifies the opaque execution, surface, execution tree, frozen spec and case input, ordered case/repetition plan, effective settings, output directory, and remaining limits. The evaluator atomically writes one strict result:
+## Migration from the graph-runtime optimizer
 
-```json
-{
-  "schema": "botpipe.optimizer.eval_result/v1",
-  "execution_id": "...",
-  "surface_id": "...",
-  "spec_id": "...",
-  "cases": [
-    {
-      "case_id": "case-001",
-      "repetition": 1,
-      "outcome": "scored",
-      "metrics": {"quality": 0.85},
-      "evidence_paths": [],
-      "usage_availability": "not_attempted",
-      "elapsed_seconds": 1.2
-    }
-  ]
-}
-```
+- Static step/route topology is replaced by callable source identity plus the
+  runtime operations actually observed. `route_tags` now filters recorded
+  outcome labels only.
+- Filesystem checkpoints are not resumed by this major version. Start a new
+  durable-function run; incompatible or changed evidence/baseline identities
+  fail closed.
+- `max_candidates_per_pass` maps to the total `max_candidates` cap with a
+  warning; conflicting values fail. `optimization_depth=cheap|standard` maps to
+  budget defaults only, and `ablation` remains planning-only.
+- Old receipts remain historical evidence and are not upgraded into v2 proof.
+  Revalidate a candidate to obtain current identities and results.
+- `workflow_refinement_evidence.json` remains the canonical optimizer handoff.
+  Other provider and activity completion is represented by the journal and
+  immutable artifacts, not legacy per-stage receipt duplication.
 
-There must be exactly one result for every planned `(case_id, repetition)` pair, in order. Required metrics must be finite numbers. Evidence must be regular, non-symlink files inside the allowed output directory. A crash, timeout, cancellation, exhausted budget, nonzero exit, stale or missing result, identity mismatch, duplicate or unknown case pair, NaN/infinity, missing metric, oversized output, or source mutation makes the comparison incomplete and cannot produce `improved`.
-
-Metrics support `mean` and `sum`. Improvement is normalized so positive is better regardless of metric direction. Any primary or guardrail regression beyond its threshold yields `regressed`; otherwise meeting the primary minimum yields `improved`; otherwise the result is `no_material_change`. Incompatible settings or incomplete evidence yields `inconclusive`. Development cases remain labeled `development_cases`; a separate withheld suite may use `evaluation_cases`.
-
-For `evaluator_kind = "botpipe"`, set `max_provider_turns_per_arm`. The evaluator must initialize and reuse the supplied budget across all cases, retries, and repair calls and report its budget record. External evaluators receive the process deadline and output limits but cannot claim an internal provider-turn cap.
-
-## Migration
-
-- `max_candidates_per_pass` is deprecated. Use `max_candidates`, which is one total cap. Conflicting values fail.
-- `optimization_depth` is deprecated. `cheap` maps to 6 turns/1800 seconds and `standard` to 12/3600 while retaining the same single proposal/review topology. `ablation` is planning-only. Supply `evaluation_spec_path` for a measured comparison.
-- v1 receipts and candidate artifacts remain historical evidence. They are not upgraded into v2 proof; validate the candidate again to produce current identities and results.
-- Incompatible in-progress checkpoints fail with a restart instruction. The optimizer does not refresh a changed evidence or baseline anchor during resume.
-- `workflow_refinement_evidence.json` remains the downstream handoff name, now as a deterministic v2 projection tied to the evidence, candidate set, and baseline IDs.
-
-The complete normative requirements and acceptance cases are in [Optimizer v2 requirements](requirements/optimizer-v2.md).
-
-## Provider and process limits
-
-Optimizer runs activate a persistent provider budget. Each initial call, retry, and repair reserves a turn before dispatch; resuming a run preserves the consumed turns and original deadline. Built-in Codex and Claude transports support cancellation and bounded process-tree cleanup. Custom providers must explicitly declare `supports_cancellation = True` and honor task cancellation before they can run with this guarantee. Providers without that contract fail before dispatch.
-
-Concrete validation accepts `target_test_argv` as an argument list, without a shell. The default is `["pytest", "-q"]`. Explicit legacy `target_test_command` strings use POSIX parsing and require conversion to an argument list on Windows. Compilation defaults to 60 seconds and each test invocation to 600 seconds; positive explicit overrides are supported. Diagnostic output is bounded and retained when a check fails.
+See the [adapted optimizer v2 requirements](requirements/optimizer-v2.md) and
+[acceptance inventory](optimizer-acceptance.md).

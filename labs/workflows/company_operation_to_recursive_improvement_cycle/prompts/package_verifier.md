@@ -1,3 +1,7 @@
+## Durable verifier outcome
+
+Return a JSON result matching the injected schema. Use `accepted` when the artifacts meet the positive phase condition described below, `needs_rework` when the same phase can be repaired, `needs_replan` when an accepted earlier plan must be revisited, `question` or `blocked` when operator input is required, and `failed` for a terminal domain failure. The phase labels below describe semantic checks; do not return old route labels as the `outcome`. Cite only artifact names supplied by the runtime.
+
 # Package Recursive Improvement Cycle Verifier
 
 ## Step Contract
@@ -12,30 +16,10 @@
 - This work item verifies recursive-improvement packaging only.
 - Keep the boundary at checking the package artifacts against the analyzed company pressure and priority set.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `workflow_capability_snapshot` | Read | Required input. |
-| `workflow_portfolio_health_snapshot` | Read | Required input. |
-| `company_operation_snapshot` | Read | Required input. |
-| `recursive_improvement_cycle_checklist` | Read | Required input. |
-| `company_operation_brief` | Read | Required input. |
-| `recursive_improvement_criteria` | Read | Required input. |
-| `company_pressure_map` | Read | Required input. |
-| `recursive_improvement_priority_matrix` | Read | Required input. |
-| `recursive_improvement_candidates` | Read | Required input. |
-| `recursive_improvement_cycle` | Read | Required input. |
-| `recursive_improvement_summary` | Read | Required input. |
-| `recursive_improvement_next_actions` | Read | Required input. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Write verifier control metadata only through the selected route and payload.
-- Do not overwrite `recursive_improvement_cycle`, `recursive_improvement_summary`, or `recursive_improvement_next_actions` during verification.
-- Do not create `recursive_improvement_cycle_receipt.json` in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -52,15 +36,16 @@
 
 ## Evidence
 
+- Verify the declared phase artifacts—`recursive_improvement_cycle`, `recursive_improvement_summary`, `recursive_improvement_next_actions`—against the phase requirements and require their claims to be internally consistent.
 - Reject summary drift, invalid priority categories, missing authoritative artifacts, or hidden downstream execution.
 - Reject packaging that mutates the scoped company context or invents runtime-owned automation.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance
+### Outcome guidance
 - `recursive_improvement_cycle_ready`: the cycle package, summary, and next actions are aligned and publication-ready.
 - `needs_rework`: the same packaging boundary still holds, but the package artifacts need local repair.
 - `needs_replan`: packaging revealed that the ranked improvement set changed materially.

@@ -1,3 +1,7 @@
+## Durable producer result
+
+After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+
 # Frame Refinement Request Producer
 
 ## Step Contract
@@ -13,28 +17,10 @@
 - Keep the boundary at the selected workflow, the copied baseline evidence, the accepted refinement objective, and the candidate-only publication boundary for this building block.
 - Do not design file-level edits or create the candidate workflow surface in this step.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `selected_workflow_capability` | Read | Required input. |
-| `selected_workflow_authoring_surface` | Read | Required input. |
-| `baseline_workflow_manifest` | Read | Required input. |
-| `baseline_evaluation_summary` | Read | Required input. |
-| `baseline_evaluation_findings` | Read | Required input. |
-| `baseline_failure_modes` | Read | Required input. |
-| `baseline_refinement_evidence_summary` | Read | Optional optimization evidence summary rendered as workflow-local guidance. |
-| `framework_architecture_doc` | Read | Required input. |
-| `framework_authoring_doc` | Read | Required input. |
-| `workflow_authoring_guidelines` | Read | Required input. |
-| `refinement_request_brief` | Write | Overwrite. |
-| `refinement_acceptance_criteria` | Write | Overwrite. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not create `refinement_strategy`, `workflow_change_plan`, `regression_guardrails`, `candidate_workflow_surface`, `candidate_workflow_manifest.json`, `refinement_build_report`, `candidate_diff_summary`, `refinement_verification_report`, `evaluation_delta_report`, `promotion_record`, `rollback_plan`, or `workflow_refinement_receipt.json` in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -46,7 +32,7 @@
 - the candidate-only publication boundary for this building block,
 - why the workflow must stop before promotion or baseline mutation,
 - which selected-workflow files or surfaces are likely in scope.
-- `refinement_acceptance_criteria` must define:
+- `refinement_success_criteria` must define:
 - the baseline weaknesses the refinement must address,
 - the selected workflow boundary that must remain fixed,
 - the minimum evidence expected from planning, implementation, and evaluation,
@@ -58,22 +44,22 @@
 
 ## Evidence
 
-- Anchor the request in `selected_workflow_capability`, `selected_workflow_authoring_surface`, `baseline_workflow_manifest`, and the copied baseline evidence artifacts.
-- If `baseline_refinement_evidence_summary` contains optimization candidates, treat them as candidate-only input rather than proof of measured improvement.
+- Anchor the request in `selected_workflow_contract`, `candidate_surface`, `frozen_candidate`, and the copied baseline evidence artifacts.
+- If `optimizer_handoff or legacy_evaluation` contains optimization candidates, treat them as candidate-only input rather than proof of measured improvement.
 - Treat `optimization_ablation_results`, when present, as stronger evidence than candidate estimates.
 - Keep the runtime/provider boundary crisp: the runtime injects the compact human-readable step contract, while prompt templates own the operational guidance and raw provider output never re-enters prompts.
 - Make the acceptance surface specific enough that the next step can choose file-level changes and regression guardrails without widening the selected workflow boundary.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance for the verifier
+### Outcome guidance for the verifier
 - `refinement_request_framed`: the selected workflow, baseline evidence, and acceptance boundary are explicit enough for concrete change planning.
 - `needs_rework`: the same framing boundary still holds, but the brief or acceptance criteria need local repair.
 - `needs_replan`: the selected workflow, evidence interpretation, or publication boundary changed materially and framing must restart.
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Use `blocked` only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Out Of Scope
 
@@ -88,3 +74,10 @@
 - Do not present optimization candidates as proven wins without separate ablation or rerun evidence.
 - Do not hide the framing only in provider prose; the durable output must live in the named artifacts.
 - Do not invent new runtime-owned metadata or a provider-facing packet abstraction.
+
+## Optimizer v2 handoff
+
+- `optimizer_handoff`, when present, is a validated accepted receipt, candidate set, candidate, evidence anchor, and baseline surface identity. Preserve its `candidate_id`, `candidate_set_id`, kind, targets, proposed change, risks, and validation plan.
+- Treat the selected candidate as a proposal to materialize inside the bounded candidate workspace. Do not edit authoritative source files or claim that the proposal was already validated.
+- `candidate_evaluation` is derived from frozen execution trees and an isolated validation run. `paired_evaluation`, when present, is the only measured baseline/candidate comparison.
+- Never promote or copy the candidate into the authoritative workflow. Publication records evidence and a next action only.

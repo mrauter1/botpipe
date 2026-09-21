@@ -1,3 +1,7 @@
+## Durable producer result
+
+After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+
 # Prepare Decision Package Producer
 
 ## Step Contract
@@ -12,35 +16,17 @@
 - This work item owns final package assembly only.
 - Keep the work-item boundary at the final decision packet and communications draft. Do not change the release criteria or invent new evidence.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `decision_package_checklist` | Read | Required input. |
-| `release_scope_brief` | Read | Required input. |
-| `decision_criteria` | Read | Required input. |
-| `release_inventory` | Read | Required input. |
-| `test_evidence_pack` | Read | Required input. |
-| `operational_readiness` | Read | Required input. |
-| `rollback_readiness` | Read | Required input. |
-| `blocking_issues` | Read | Required input. |
-| `go_no_go_assessment` | Read | Required input. |
-| `risk_register` | Read | Required input. |
-| `decision_summary` | Read | Required input. |
-| `release_decision_package` | Write | Overwrite. |
-| `release_communications_draft` | Write | Overwrite. |
-
-### Artifact Notes
-- Do not modify `decision_summary` or create the publication receipt in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
 ### Artifact handling
 - `release_decision_package` must assemble the final recommendation, scope summary, decision criteria, evidence highlights, blockers, rollback posture, ranked risks, and next actions into one operator-facing package.
 - `release_communications_draft` must be stakeholder-ready, consistent with `decision_summary`, and explicit about the recommendation, key caveats, and immediate next steps.
-- Use the bundled checklist to confirm the final package covers the required sections.
+- Confirm that the final package covers every required section named below.
 
 ### Expected outcome
 - Produce a final decision package that another team can act on immediately and that the publish step can reference mechanically.
@@ -51,16 +37,16 @@
 - Make blockers and conditions explicit instead of burying them in prose.
 - Preserve the exact recommendation vocabulary: `go`, `conditional_go`, or `no_go`.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance for the verifier
+### Outcome guidance for the verifier
 - `decision_package_ready`: the package and communications draft are complete and aligned to the assessed recommendation.
 - `needs_rework`: the same package boundary still holds, but the final package needs local repair.
 - `needs_replan`: package assembly shows that the assessment itself must change materially before publication.
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only for genuine missing prerequisites or irrecoverable contradictions.
+- Use `blocked` only when a missing prerequisite or irreconcilable contradiction prevents safe progress.
 
 ## Out Of Scope
 

@@ -1,178 +1,142 @@
-"""Optimizer-v2 evidence capture and deterministic observed-burden ranking."""
+"""Bounded, content-addressed evidence snapshots over durable journal operations."""
 
 from __future__ import annotations
 
 import json
-import math
-import os
-import shutil
-import stat
 from collections import defaultdict
-from collections.abc import Mapping, Sequence
-from datetime import datetime
+from collections.abc import Iterable, Mapping
 from hashlib import sha256
-from pathlib import Path, PurePosixPath
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from botpipe.core.statuses import route_is_rework
+from botpipe.dispatches import known_token_total, normalize_usage
 
-EVIDENCE_SNAPSHOT_SCHEMA = "botpipe.workflow_optimization.evidence/v2"
-DEFAULT_MAX_EVIDENCE_BYTES = 50 * 1024 * 1024
-Objective = Literal["reliability", "token_usage", "latency"]
+from .optimization import RunObservation, SourceManifest, load_run_observation
+
+type Objective = Literal["reliability", "token_usage", "latency"]
+type Availability = Literal["known_total", "partial", "unknown", "not_attempted"]
+type EffortState = Literal["known_value", "known_unset", "absent"]
+type SelectionBasis = Literal[
+    "distinct_affected_runs",
+    "sum_of_reported_token_counts",
+    "sum_of_provider_dispatch_seconds",
+]
+
+DEFAULT_MAX_SNAPSHOT_BYTES = 50 * 1024 * 1024
 
 
-class _Record(BaseModel):
+class EvidenceRecord(BaseModel):
     model_config = ConfigDict(
-        extra="forbid", frozen=True, populate_by_name=True, serialize_by_alias=True
+        extra="forbid",
+        frozen=True,
+        populate_by_name=True,
+        serialize_by_alias=True,
     )
 
 
-class SelectionPolicy(_Record):
+class SelectionPolicy(EvidenceRecord):
     explicit_run_refs: bool
     route_tags: tuple[str, ...] = ()
-    denominator: Literal["full_captured_group", "focused_subset"]
     selected_run_count: int = Field(ge=0)
     admitted_run_count: int = Field(ge=0)
     focused_observation_count: int = Field(ge=0)
     captured_observation_count: int = Field(ge=0)
 
 
-class EvidenceIssue(_Record):
+class EvidenceIssue(EvidenceRecord):
     run_ref: str | None = None
     observation_id: str | None = None
     dimension: str
     reason: str
-    detail: str | None = None
 
 
-class ExcludedRun(_Record):
+class ExcludedRun(EvidenceRecord):
     run_ref: str
     reason: str
-    bytes: int | None = Field(default=None, ge=0)
+    bytes: int = Field(ge=0)
 
 
-class RawEvidenceReference(_Record):
-    role: str
-    source_path: str | None = None
-    recorded_sha256: str | None = None
-    recorded_bytes: int | None = Field(default=None, ge=0)
-    verification: Literal[
-        "verified",
-        "missing_metadata",
-        "invalid_path",
-        "missing",
-        "not_regular",
-        "symlink_escape",
-        "digest_mismatch",
-        "byte_count_mismatch",
-        "budget_omitted",
-        "concurrently_changed",
-        "copy_failed",
-    ]
-    snapshot_path: str | None = None
-    snapshot_sha256: str | None = None
-    snapshot_bytes: int | None = Field(default=None, ge=0)
-
-
-class UsageAttempt(_Record):
+class ProviderDispatchEvidence(EvidenceRecord):
     dispatch_id: str
-    phase: str
-    attempt: int | None = Field(default=None, ge=1)
+    attempt: int | None = None
+    generation: int | None = None
+    outcome: str
+    usage_availability: Availability
+    usage: dict[str, float]
+    known_total_tokens: int | None = Field(default=None, ge=0)
+    elapsed_seconds: float | None = Field(default=None, ge=0)
     provider: str | None = None
     model: str | None = None
     effort: str | None = None
-    outcome: str | None = None
-    availability: Literal["known_total", "partial", "unknown"]
-    total_source: Literal["reported", "derived", "unavailable"]
-    input_tokens: int | None = Field(default=None, ge=0)
-    output_tokens: int | None = Field(default=None, ge=0)
-    total_tokens: int | None = Field(default=None, ge=0)
-    cached_input_tokens: int | None = Field(default=None, ge=0)
-    reasoning_tokens: int | None = Field(default=None, ge=0)
-    elapsed_seconds: float | None = Field(default=None, ge=0)
+    effort_state: EffortState
+    profile_id: str
+    profile_comparable: bool
+    policy_fingerprint: str | None = None
 
 
-class Observation(_Record):
-    observation_id: str
+class Observation(EvidenceRecord):
+    observation_id: str = Field(pattern=r"^observation_[0-9a-f]{64}$")
+    operation_id: str
     run_ref: str
-    sequence: int = Field(ge=0)
-    execution_identity: str
-    identity_source: Literal["step_execution_id", "sequence_fallback"]
-    visit: int | None = Field(default=None, ge=0)
+    group_id: str
     step_id: str
     step_kind: str
-    scope: str | None = None
-    item_id: str | None = None
-    lane_id: str | None = None
-    lineage: Literal["known", "unknown"]
-    route: str | None = None
-    target_step: str | None = None
+    scope: str
+    status: str
     outcome: str | None = None
-    runtime_control: str | None = None
-    provider: str | None = None
-    source_hook: str | None = None
-    redirect: str | None = None
     focused: bool
     direct_failure: bool
     rework_rejection: bool
-    rework_cycle: bool = False
-    associated_next_observation_id: str | None = None
-    raw_references: tuple[RawEvidenceReference, ...] = ()
-    attempts: tuple[UsageAttempt, ...] = ()
-    usage_availability: Literal["known_total", "partial", "unknown", "not_attempted"]
-    known_total_tokens: int = Field(ge=0)
+    attempted_dispatch_count: int = Field(ge=0)
+    usage_availability: Availability
+    known_total_tokens: int | None = Field(default=None, ge=0)
+    elapsed_available: bool
     elapsed_seconds: float | None = Field(default=None, ge=0)
-    elapsed_available: bool = False
-
-    @property
-    def raw_content_citable(self) -> bool:
-        return any(item.verification == "verified" for item in self.raw_references)
+    dispatches: tuple[ProviderDispatchEvidence, ...] = ()
 
 
-class RunEvidence(_Record):
+class RunEvidence(EvidenceRecord):
     run_ref: str
-    task_id: str
+    task_id: str | None = None
     run_id: str
-    status: str | None = None
-    terminal: str | None = None
-    completed_at: str | None = None
+    status: str
     workflow_identity: str
-    surface_manifest_id: str | None = None
-    topology_id: str | None = None
-    parameter_digest: str | None = None
-    configuration_digest: str | None = None
-    provider_policy_identity: str | None = None
-    case_identity: str | None = None
+    workflow_surface_id: str | None = None
+    orchestration_id: str | None = None
     provenance_state: Literal["known", "unknown", "mixed"]
-    structural_group_id: str | None = None
-    observation_ids: tuple[str, ...] = ()
+    structural_group_id: str
+    observation_ids: tuple[str, ...]
 
 
-class EvidenceGroup(_Record):
+class EvidenceGroup(EvidenceRecord):
     group_id: str
     workflow_identity: str
-    surface_manifest_id: str
-    topology_id: str
+    workflow_surface_id: str | None = None
+    orchestration_id: str | None = None
     run_refs: tuple[str, ...]
     current_match: bool
-    latest_completion: str | None = None
-    latest_run_ref: str | None = None
 
 
-class ResourceBreakdown(_Record):
+class StepProfileMetric(EvidenceRecord):
+    profile_id: str
+    profile_comparable: bool
     provider: str | None = None
     model: str | None = None
     effort: str | None = None
-    attempted_dispatches: int = Field(ge=0)
-    known_total_tokens: int = Field(ge=0)
+    effort_state: EffortState
+    dispatch_count: int = Field(ge=0)
+    distinct_run_count: int = Field(ge=0)
+    failed_dispatch_count: int = Field(ge=0)
+    complete_usage: bool
+    known_total_tokens: int | None = Field(default=None, ge=0)
+    complete_elapsed: bool
+    total_elapsed_seconds: float | None = Field(default=None, ge=0)
 
 
-class StepMetric(_Record):
+class StepMetric(EvidenceRecord):
     metric_id: str
     group_id: str
-    group_scope: Literal["structural_group", "single_run"]
     step_id: str
     step_kind: str
     observation_count: int = Field(ge=0)
@@ -181,19 +145,18 @@ class StepMetric(_Record):
     direct_failure_run_count: int = Field(ge=0)
     rework_rejection_count: int = Field(ge=0)
     rework_run_count: int = Field(ge=0)
-    rework_cycle_count: int = Field(ge=0)
     attempted_dispatch_count: int = Field(ge=0)
     complete_usage: bool
-    known_total_tokens: int = Field(ge=0)
+    known_total_tokens: int | None = Field(default=None, ge=0)
     complete_elapsed: bool
-    total_elapsed_seconds: float = Field(ge=0)
-    resource_breakdowns: tuple[ResourceBreakdown, ...] = ()
-    parameter_digests: tuple[str, ...] = ()
-    configuration_digests: tuple[str, ...] = ()
-    case_identities: tuple[str, ...] = ()
+    total_elapsed_seconds: float | None = Field(default=None, ge=0)
+    profile_breakdowns: tuple[StepProfileMetric, ...] = ()
+    profile_comparison: Literal["none"] = "none"
+    heterogeneous_profiles: bool = False
+    incomplete_profile_identity: bool = False
 
 
-class StepRanking(_Record):
+class StepRanking(EvidenceRecord):
     rank: int = Field(ge=1)
     metric_id: str
     group_id: str
@@ -203,1584 +166,659 @@ class StepRanking(_Record):
     rework_run_count: int = Field(ge=0)
     distinct_run_count: int = Field(ge=0)
     observation_count: int = Field(ge=0)
-    attempted_dispatch_count: int = Field(ge=0)
-    known_total_tokens: int = Field(ge=0)
-    total_elapsed_seconds: float = Field(ge=0)
+    known_total_tokens: int | None = Field(default=None, ge=0)
+    total_elapsed_seconds: float | None = Field(default=None, ge=0)
+    selection_basis: SelectionBasis
+    profile_comparison: Literal["none"] = "none"
+    heterogeneous_profiles: bool = False
+    incomplete_profile_identity: bool = False
 
 
-class EvidenceBudget(_Record):
+class EvidenceBudget(EvidenceRecord):
     max_bytes: int = Field(gt=0)
     admitted_bytes: int = Field(ge=0)
     omitted_bytes: int = Field(ge=0)
     budget_limited: bool
-    omitted_observation_ids: tuple[str, ...] = ()
 
 
-class EvidenceSnapshot(_Record):
-    schema_version: Literal["botpipe.workflow_optimization.evidence/v2"] = Field(
-        default=EVIDENCE_SNAPSHOT_SCHEMA, alias="schema"
+class EvidenceSnapshot(EvidenceRecord):
+    schema_version: Literal["botpipe.workflow_optimization.evidence/v3"] = Field(
+        default="botpipe.workflow_optimization.evidence/v3",
+        alias="schema",
     )
-    snapshot_id: str
+    snapshot_id: str = Field(pattern=r"^evidence_[0-9a-f]{64}$")
     selected_workflow: str
-    baseline_surface_manifest_id: str | None = None
+    baseline_surface_manifest_id: str
     objective: Objective
+    selection_basis: SelectionBasis
+    profile_comparison: Literal["none"] = "none"
     selection: SelectionPolicy
     runs: tuple[RunEvidence, ...]
     excluded_runs: tuple[ExcludedRun, ...] = ()
     issues: tuple[EvidenceIssue, ...] = ()
     observations: tuple[Observation, ...]
-    groups: tuple[EvidenceGroup, ...] = ()
+    groups: tuple[EvidenceGroup, ...]
     selected_group_id: str | None = None
     recommendation_basis: Literal[
         "current_verified",
         "historical_verified",
-        "historical_unverified",
         "no_comparable_evidence",
     ]
-    step_metrics: tuple[StepMetric, ...] = ()
-    shortlist: tuple[StepRanking, ...] = ()
+    step_metrics: tuple[StepMetric, ...]
+    shortlist: tuple[StepRanking, ...]
     measure_first: tuple[str, ...] = ()
     next_action: Literal["propose_changes", "collect_evidence", "no_change"]
     budget: EvidenceBudget
 
     @model_validator(mode="after")
-    def _check_id(self) -> "EvidenceSnapshot":
-        if self.snapshot_id != _snapshot_digest(self.model_dump(mode="json")):
+    def identity_matches(self):
+        if self.snapshot_id != _content_id("evidence", self, {"snapshot_id"}):
             raise ValueError("snapshot_id does not match canonical evidence content")
         return self
 
-    def verify_identity(self) -> bool:
-        return self.snapshot_id == _snapshot_digest(self.model_dump(mode="json"))
-
-    def verify_raw_evidence(
-        self, raw_root: Path, *, max_bytes: int | None = None
-    ) -> bool:
-        """Reopen and verify every copied raw artifact before later use."""
-        _verify_snapshot_raw(
-            self,
-            raw_root,
-            max_bytes=self.budget.max_bytes if max_bytes is None else max_bytes,
-        )
-        return True
-
-    def citable_observation_ids(
-        self, *, require_raw_content: bool = False
-    ) -> frozenset[str]:
+    def citable_observation_ids(self) -> frozenset[str]:
         return frozenset(
             item.observation_id
             for item in self.observations
-            if not require_raw_content or item.raw_content_citable
+            if item.group_id == self.selected_group_id and item.focused
         )
-
-
-class _Draft(BaseModel):
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-    observation: dict[str, Any]
-    raw: dict[str, Any]
-
-
-class _Captured(BaseModel):
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-    run_dir: Path
-    run_json: dict[str, Any]
-    trace: list[dict[str, Any]]
-    watermark: dict[Path, tuple[int, int, int, int]]
-    core_bytes: int
-    provenance: dict[str, Any]
-    drafts: list[_Draft]
 
 
 def capture_evidence_snapshot(
-    root: Path,
     selected_workflow: str,
-    run_dirs: Sequence[Path],
-    snapshot_dir: Path,
+    inspections: Iterable[Mapping[str, Any] | RunObservation],
     *,
-    route_tags: Sequence[str] = (),
+    source_manifest: SourceManifest,
     objective: Objective = "reliability",
     top_k_steps: int = 1,
-    max_evidence_bytes: int = DEFAULT_MAX_EVIDENCE_BYTES,
+    max_evidence_bytes: int = 50 * 1024 * 1024,
+    max_snapshot_bytes: int = DEFAULT_MAX_SNAPSHOT_BYTES,
     explicit_run_refs: bool = False,
+    route_tags: tuple[str, ...] = (),
     current_workflow_identity: str | None = None,
-    current_surface_manifest_id: str | None = None,
-    current_topology_id: str | None = None,
+    current_surface_id: str | None = None,
+    current_orchestration_id: str | None = None,
+    baseline_surface_manifest_id: str | None = None,
 ) -> EvidenceSnapshot:
-    """Capture stable evidence once, group comparable runs, and rank observed burden."""
-    repo_root = root.resolve()
-    if not selected_workflow.strip():
-        raise ValueError("selected_workflow must be non-empty")
+    """Normalize, bound, group, and rank journal observations without estimating missing data."""
+    if top_k_steps <= 0 or max_evidence_bytes <= 0 or max_snapshot_bytes <= 0:
+        raise ValueError(
+            "top_k_steps, max_evidence_bytes, and max_snapshot_bytes must be positive"
+        )
     if objective not in {"reliability", "token_usage", "latency"}:
-        raise ValueError("objective must be reliability, token_usage, or latency")
-    if top_k_steps <= 0 or max_evidence_bytes <= 0:
-        raise ValueError("top_k_steps and max_evidence_bytes must be positive")
-    routes = tuple(
-        dict.fromkeys(_required_text(value, "route_tags") for value in route_tags)
-    )
-    destination = snapshot_dir.resolve()
-    remaining = max_evidence_bytes
-    admitted_bytes = omitted_bytes = 0
+        raise ValueError("unsupported optimizer objective")
+    supplied = tuple(inspections)
+    routes = tuple(dict.fromkeys(route_tags))
+    admitted: list[RunObservation] = []
     excluded: list[ExcludedRun] = []
-    issues: list[EvidenceIssue] = []
-    captured: list[_Captured] = []
-
-    for source in run_dirs:
-        run_dir = source.resolve()
-        try:
-            run_dir.relative_to(repo_root)
-        except ValueError:
-            if explicit_run_refs:
-                raise ValueError(
-                    f"explicit run directory is outside the capture root: {run_dir}"
-                )
-            excluded.append(
-                ExcludedRun(run_ref=run_dir.name, reason="run_outside_capture_root")
+    admitted_bytes = len(_canonical(source_manifest))
+    omitted_bytes = 0
+    if admitted_bytes > max_evidence_bytes:
+        raise ValueError("selected workflow manifest exceeds max_evidence_bytes")
+    for raw in supplied:
+        run = raw if isinstance(raw, RunObservation) else load_run_observation(raw)
+        if run.workflow_name and run.workflow_name != selected_workflow:
+            raise ValueError(
+                f"run {run.run_id} belongs to {run.workflow_name}, not {selected_workflow}"
             )
-            continue
-        run_ref = _path_run_ref(run_dir)
-        if (
-            run_dir.parent.name != "runs"
-            or run_dir.parent.parent.name != f"wf_{selected_workflow}"
-        ):
-            if explicit_run_refs:
-                raise ValueError(
-                    f"explicit run directory has the wrong workflow identity: {run_dir}"
-                )
-            excluded.append(
-                ExcludedRun(run_ref=run_ref, reason="wrong_selected_workflow")
-            )
-            continue
-        required = [run_dir / "run.json", run_dir / "trace.jsonl"]
-        missing = next((item.name for item in required if not item.is_file()), None)
-        if missing:
-            if explicit_run_refs:
-                raise ValueError(f"explicit run {run_ref} is missing {missing}")
+        size = len(_canonical(run))
+        if admitted_bytes + size > max_evidence_bytes:
             excluded.append(
                 ExcludedRun(
-                    run_ref=run_ref, reason=f"missing_{missing.replace('.', '_')}"
+                    run_ref=run.run_ref, reason="input_limit_exceeded", bytes=size
                 )
-            )
-            continue
-        try:
-            watermark = {item: _watermark(item) for item in required}
-            size = sum(mark[2] for mark in watermark.values())
-        except OSError as exc:
-            excluded.append(
-                ExcludedRun(run_ref=run_ref, reason="unreadable_core_input")
-            )
-            issues.append(
-                EvidenceIssue(
-                    run_ref=run_ref,
-                    dimension="core",
-                    reason="unreadable",
-                    detail=_error_detail(exc),
-                )
-            )
-            continue
-        if size > remaining:
-            excluded.append(
-                ExcludedRun(run_ref=run_ref, reason="input_limit_exceeded", bytes=size)
             )
             omitted_bytes += size
             continue
-        try:
-            run_json, trace = _read_json(required[0]), _read_jsonl(required[1])
-        except (OSError, ValueError, json.JSONDecodeError) as exc:
-            if explicit_run_refs:
-                raise ValueError(
-                    f"explicit run {run_ref} has invalid core input"
-                ) from exc
-            excluded.append(
-                ExcludedRun(run_ref=run_ref, reason="invalid_core_input", bytes=size)
-            )
-            issues.append(
-                EvidenceIssue(
-                    run_ref=run_ref,
-                    dimension="core",
-                    reason="invalid",
-                    detail=_error_detail(exc),
-                )
-            )
-            continue
-        schemas = {
-            record.get("schema") for record in trace if record.get("schema") is not None
-        }
-        if run_json.get("schema") not in {
-            None,
-            "botpipe.run_metadata/v1",
-        } or not schemas.issubset({"botpipe.runtime_trace/v1"}):
-            if explicit_run_refs:
-                raise ValueError(
-                    f"explicit run {run_ref} has an unsupported core schema"
-                )
-            excluded.append(
-                ExcludedRun(
-                    run_ref=run_ref, reason="unsupported_core_schema", bytes=size
-                )
-            )
-            continue
-        task_id, run_id = run_ref.split("/", 1)
-        if (
-            _text(run_json.get("task_id")) != task_id
-            or _text(run_json.get("run_id")) != run_id
-        ):
-            if explicit_run_refs:
-                raise ValueError(
-                    f"explicit run {run_ref} has mismatched recorded identity"
-                )
-            excluded.append(
-                ExcludedRun(run_ref=run_ref, reason="wrong_run_identity", bytes=size)
-            )
-            continue
-        if _text(run_json.get("workflow_name")) != selected_workflow:
-            if explicit_run_refs:
-                raise ValueError(
-                    f"explicit run {run_ref} belongs to a different workflow"
-                )
-            excluded.append(
-                ExcludedRun(
-                    run_ref=run_ref, reason="wrong_selected_workflow", bytes=size
-                )
-            )
-            continue
-        status = (_text(run_json.get("status")) or "").lower()
-        if status in {"running", "active", "in_progress", "resuming"}:
-            if explicit_run_refs:
-                raise ValueError(
-                    f"explicit run {run_ref} is active; pause or complete it before evidence capture"
-                )
-            excluded.append(
-                ExcludedRun(run_ref=run_ref, reason="active_run_excluded", bytes=size)
-            )
-            continue
-        captured.append(
-            _Captured(
-                run_dir=run_dir,
-                run_json=run_json,
-                trace=trace,
-                watermark=watermark,
-                core_bytes=size,
-                provenance=_provenance(
-                    run_ref, run_json, trace, None, selected_workflow
-                ),
-                drafts=[],
-            )
-        )
-        remaining -= size
+        admitted.append(run)
         admitted_bytes += size
 
-    stable: list[_Captured] = []
-    for item in captured:
-        if _core_unchanged(item):
-            stable.append(item)
-        else:
-            excluded.append(
-                ExcludedRun(
-                    run_ref=item.provenance["run_ref"],
-                    reason="concurrently_changed",
-                    bytes=item.core_bytes,
-                )
-            )
-            issues.append(
-                EvidenceIssue(
-                    run_ref=item.provenance["run_ref"],
-                    dimension="core",
-                    reason="concurrently_changed",
-                )
-            )
-            admitted_bytes -= item.core_bytes
-            remaining += item.core_bytes
-
-    # Reserve the complete core sample before spending on optional topology.
-    # Git only supplies diagnostics and is checked after trace-linked raw evidence.
-    enriched: list[_Captured] = []
-    for item in stable:
-        run_ref = item.provenance["run_ref"]
-        graph, spent, omitted = _optional_input(
-            item.run_dir / "static_step_graph.json",
-            run_ref,
-            "topology",
-            remaining,
-            issues,
+    observations: list[Observation] = []
+    issues: list[EvidenceIssue] = []
+    run_records: list[RunEvidence] = []
+    groups: dict[str, list[str]] = defaultdict(list)
+    group_versions: dict[str, str | None] = {}
+    group_workflow_ids: dict[str, str] = {}
+    group_orchestration_ids: dict[str, str | None] = {}
+    group_order: list[str] = []
+    for run in admitted:
+        known = (
+            run.provenance_state == "known"
+            and bool(run.workflow_identity)
+            and bool(run.surface_id)
+            and bool(run.orchestration_id)
         )
-        if not _core_unchanged(item):
-            excluded.append(
-                ExcludedRun(
-                    run_ref=run_ref,
-                    reason="concurrently_changed",
-                    bytes=item.core_bytes,
-                )
+        group_key = (
+            json.dumps(
+                [run.workflow_identity, run.surface_id, run.orchestration_id],
+                separators=(",", ":"),
             )
-            issues.append(
-                EvidenceIssue(
-                    run_ref=run_ref, dimension="core", reason="concurrently_changed"
-                )
-            )
-            admitted_bytes -= item.core_bytes
-            remaining += item.core_bytes
-            continue
-        remaining -= spent
-        admitted_bytes += spent
-        omitted_bytes += omitted
-        item.provenance = _provenance(
-            run_ref, item.run_json, item.trace, graph, selected_workflow
+            if known
+            else f"{run.provenance_state}:{run.run_id}"
         )
-        item.drafts = _observations(run_ref, item.trace, graph, routes, issues)
-        enriched.append(item)
-    stable = enriched
-
-    # Explicit identity/status errors above must not create or mutate output.
-    destination.mkdir(parents=True, exist_ok=True)
-    raw_cache: dict[tuple[Path, str, int], tuple[str, str, int]] = {}
-    normalized: dict[str, Observation] = {}
-    omitted_ids: set[str] = set()
-    for item, draft in _raw_order(stable):
-        refs = []
-        for role, value in sorted(draft.raw.items()):
-            ref, spent, omitted = _copy_raw(
-                item.run_dir,
-                destination,
-                item.provenance["run_ref"],
-                role,
-                value,
-                remaining,
-                raw_cache,
+        group_id = "group_" + sha256(group_key.encode()).hexdigest()
+        if group_id not in groups:
+            group_order.append(group_id)
+        groups[group_id].append(run.run_ref)
+        group_versions[group_id] = run.surface_id if known else None
+        group_workflow_ids[group_id] = (
+            run.workflow_identity or run.workflow_name or selected_workflow
+        )
+        group_orchestration_ids[group_id] = run.orchestration_id if known else None
+        ids: list[str] = []
+        for operation in run.operations:
+            observation_payload = {
+                "run_ref": run.run_ref,
+                "operation_id": operation.operation_id,
+                "group_id": group_id,
+                "step_id": operation.name,
+                "step_kind": operation.kind,
+            }
+            observation_id = (
+                "observation_" + sha256(_canonical(observation_payload)).hexdigest()
             )
-            refs.append(ref)
-            remaining -= spent
-            admitted_bytes += spent
-            omitted_bytes += omitted
-            if ref.verification != "verified":
+            ids.append(observation_id)
+            usage_state, tokens, dispatch_count = _usage(
+                operation.kind,
+                operation.usage,
+                operation.dispatches,
+                operation.attempts,
+            )
+            elapsed_available, elapsed_seconds = _elapsed(operation)
+            dispatch_evidence = tuple(
+                _dispatch_evidence(
+                    dispatch,
+                    observation_id=observation_id,
+                    dispatch_ordinal=dispatch_ordinal,
+                )
+                for dispatch_ordinal, dispatch in enumerate(operation.dispatches)
+            )
+            direct_failure = operation.status in {
+                "failed",
+                "interrupted",
+                "budget_exceeded",
+                "cancelled",
+            }
+            observation = Observation(
+                observation_id=observation_id,
+                operation_id=operation.operation_id,
+                run_ref=run.run_ref,
+                group_id=group_id,
+                step_id=operation.name,
+                step_kind=operation.kind,
+                scope=operation.scope,
+                status=operation.status,
+                outcome=operation.outcome,
+                focused=not routes or operation.outcome in routes,
+                direct_failure=direct_failure,
+                rework_rejection=operation.outcome
+                in {"needs_rework", "rejected", "needs_replan"},
+                attempted_dispatch_count=dispatch_count,
+                usage_availability=usage_state,
+                known_total_tokens=tokens,
+                elapsed_available=elapsed_available,
+                elapsed_seconds=elapsed_seconds,
+                dispatches=dispatch_evidence,
+            )
+            observations.append(observation)
+            if run.provenance_state != "known":
                 issues.append(
                     EvidenceIssue(
-                        run_ref=item.provenance["run_ref"],
-                        observation_id=draft.observation["observation_id"],
-                        dimension="raw_content",
-                        reason=ref.verification,
+                        run_ref=run.run_ref,
+                        observation_id=observation_id,
+                        dimension="provenance",
+                        reason=f"{run.provenance_state}_workflow_surface",
                     )
                 )
-            if ref.verification == "budget_omitted":
-                omitted_ids.add(draft.observation["observation_id"])
-        normalized[draft.observation["observation_id"]] = Observation.model_validate(
-            {**draft.observation, "raw_references": refs}
+            if operation.kind == "provider" and usage_state != "known_total":
+                issues.append(
+                    EvidenceIssue(
+                        run_ref=run.run_ref,
+                        observation_id=observation_id,
+                        dimension="token_usage",
+                        reason=f"{usage_state}_dispatch_usage",
+                    )
+                )
+            if not elapsed_available:
+                issues.append(
+                    EvidenceIssue(
+                        run_ref=run.run_ref,
+                        observation_id=observation_id,
+                        dimension="latency",
+                        reason="elapsed_time_unavailable",
+                    )
+                )
+        run_records.append(
+            RunEvidence(
+                run_ref=run.run_ref,
+                task_id=run.task_id,
+                run_id=run.run_id,
+                status=run.status,
+                workflow_identity=run.workflow_identity
+                or run.workflow_name
+                or selected_workflow,
+                workflow_surface_id=run.surface_id if known else None,
+                orchestration_id=run.orchestration_id if known else None,
+                provenance_state=run.provenance_state,
+                structural_group_id=group_id,
+                observation_ids=tuple(ids),
+            )
         )
 
-    for item in stable:
-        _, spent, omitted = _optional_input(
-            item.run_dir / "git_tracking.jsonl",
-            item.provenance["run_ref"],
-            "git",
-            remaining,
-            issues,
+    group_records = tuple(
+        EvidenceGroup(
+            group_id=group_id,
+            workflow_identity=group_workflow_ids[group_id],
+            workflow_surface_id=group_versions[group_id],
+            orchestration_id=group_orchestration_ids[group_id],
+            run_refs=tuple(sorted(refs)),
+            current_match=bool(
+                current_workflow_identity
+                and current_surface_id
+                and (current_orchestration_id or source_manifest.workflow_version)
+                and group_workflow_ids[group_id] == current_workflow_identity
+                and group_versions[group_id] == current_surface_id
+                and group_orchestration_ids[group_id]
+                == (current_orchestration_id or source_manifest.workflow_version)
+            ),
         )
-        remaining -= spent
-        admitted_bytes += spent
-        omitted_bytes += omitted
-
-    observations = _lineage(
-        [
-            normalized[d.observation["observation_id"]]
-            for item in stable
-            for d in item.drafts
-        ]
+        for group_id, refs in sorted(groups.items())
     )
-    groups, runs = _groups(
-        stable,
-        observations,
-        current_workflow_identity,
-        current_surface_manifest_id,
-        current_topology_id,
+    selected_group = next(
+        (item.group_id for item in group_records if item.current_match), None
     )
-    selected_group, basis, sets = _analysis_sets(
-        groups, runs, observations, explicit_run_refs
-    )
-    metrics = _metrics(sets, runs)
+    if selected_group is None:
+        selected_group = next(
+            (group_id for group_id in group_order if group_versions[group_id]), None
+        )
+    comparable = [
+        item
+        for item in observations
+        if item.group_id == selected_group and item.focused
+    ]
+    metrics = _metrics(comparable)
     shortlist, measure_first = _rank(metrics, objective, top_k_steps)
-    if basis == "historical_unverified":
-        action = "collect_evidence"
-    elif shortlist:
-        action = "propose_changes"
-    elif observations or issues or excluded:
-        action = "collect_evidence"
+    if shortlist:
+        next_action = "propose_changes"
+    elif objective == "reliability" and comparable:
+        next_action = "no_change"
     else:
-        action = "no_change"
+        next_action = "collect_evidence"
+    basis = (
+        "no_comparable_evidence"
+        if selected_group is None
+        else "current_verified"
+        if any(item.current_match for item in group_records)
+        else "historical_verified"
+    )
+    baseline_id = baseline_surface_manifest_id or baseline_surface_id(source_manifest)
     payload = {
-        "schema": EVIDENCE_SNAPSHOT_SCHEMA,
-        "snapshot_id": "",
+        "schema": "botpipe.workflow_optimization.evidence/v3",
+        "snapshot_id": "evidence_" + "0" * 64,
         "selected_workflow": selected_workflow,
-        "baseline_surface_manifest_id": current_surface_manifest_id,
+        "baseline_surface_manifest_id": baseline_id,
         "objective": objective,
-        "selection": {
-            "explicit_run_refs": explicit_run_refs,
-            "route_tags": routes,
-            "denominator": "focused_subset" if routes else "full_captured_group",
-            "selected_run_count": len(run_dirs),
-            "admitted_run_count": len(runs),
-            "focused_observation_count": sum(o.focused for o in observations),
-            "captured_observation_count": len(observations),
-        },
-        "runs": [item.model_dump(mode="json") for item in runs],
-        "excluded_runs": [item.model_dump(mode="json") for item in excluded],
-        "issues": [item.model_dump(mode="json") for item in issues],
-        "observations": [item.model_dump(mode="json") for item in observations],
-        "groups": [item.model_dump(mode="json") for item in groups],
+        "selection_basis": _selection_basis(objective),
+        "profile_comparison": "none",
+        "selection": SelectionPolicy(
+            explicit_run_refs=explicit_run_refs,
+            route_tags=routes,
+            selected_run_count=len(supplied),
+            admitted_run_count=len(admitted),
+            focused_observation_count=sum(item.focused for item in observations),
+            captured_observation_count=len(observations),
+        ),
+        "runs": tuple(run_records),
+        "excluded_runs": tuple(excluded),
+        "issues": tuple(issues),
+        "observations": tuple(observations),
+        "groups": group_records,
         "selected_group_id": selected_group,
         "recommendation_basis": basis,
-        "step_metrics": [item.model_dump(mode="json") for item in metrics],
-        "shortlist": [item.model_dump(mode="json") for item in shortlist],
+        "step_metrics": metrics,
+        "shortlist": shortlist,
         "measure_first": measure_first,
-        "next_action": action,
-        "budget": {
-            "max_bytes": max_evidence_bytes,
-            "admitted_bytes": admitted_bytes,
-            "omitted_bytes": omitted_bytes,
-            "budget_limited": bool(
-                omitted_ids
-                or any(item.reason == "budget_omitted" for item in issues)
-                or any(item.reason == "input_limit_exceeded" for item in excluded)
-            ),
-            "omitted_observation_ids": sorted(omitted_ids),
-        },
+        "next_action": next_action,
+        "budget": EvidenceBudget(
+            max_bytes=max_evidence_bytes,
+            admitted_bytes=admitted_bytes,
+            omitted_bytes=omitted_bytes,
+            budget_limited=bool(excluded),
+        ),
     }
-    payload["snapshot_id"] = _snapshot_digest(payload)
-    return EvidenceSnapshot.model_validate(payload)
-
-
-def _core_unchanged(item: _Captured) -> bool:
-    try:
-        return all(_watermark(path) == mark for path, mark in item.watermark.items())
-    except OSError:
-        return False
-
-
-def _optional_input(
-    path: Path,
-    run_ref: str,
-    dimension: str,
-    remaining: int,
-    issues: list[EvidenceIssue],
-):
-    """Read one stable optional file without changing core-run eligibility."""
-
-    def issue(reason, detail=None):
-        issues.append(
-            EvidenceIssue(
-                run_ref=run_ref, dimension=dimension, reason=reason, detail=detail
-            )
-        )
-
-    try:
-        if not stat.S_ISREG(path.stat(follow_symlinks=False).st_mode):
-            raise ValueError("optional evidence must be a regular non-symlink file")
-        mark = _watermark(path)
-        size = mark[2]
-        if dimension == "git" and size == 0:
-            issue("missing_or_empty")
-            return None, 0, 0
-        if size > remaining:
-            issue(
-                "budget_omitted",
-                f"{path.name}: {size} bytes exceed remaining evidence budget",
-            )
-            return None, 0, size
-        data = _read_regular_bounded(path, max(1, size), path.name).decode("utf-8")
-        if _watermark(path) != mark:
-            issue("concurrently_changed")
-            return None, 0, 0
-        if dimension == "git":
-            value = [json.loads(line) for line in data.splitlines() if line.strip()]
-            if any(not isinstance(record, dict) for record in value):
-                raise ValueError("Git log entries must be JSON objects")
-        else:
-            value = json.loads(data)
-            if not isinstance(value, dict):
-                raise ValueError("topology must be a JSON object")
-        return value, size, 0
-    except FileNotFoundError:
-        issue("missing_or_empty" if dimension == "git" else "missing")
-    except (OSError, ValueError) as exc:
-        issue("invalid", _error_detail(exc))
-    return None, 0, 0
-
-
-def write_evidence_snapshot(snapshot: EvidenceSnapshot, path: Path) -> Path:
-    if not snapshot.verify_identity():
-        raise ValueError("cannot write evidence snapshot with invalid identity")
-    target = path.resolve()
-    target.parent.mkdir(parents=True, exist_ok=True)
-    temporary = target.with_name(f".{target.name}.tmp-{os.getpid()}")
-    temporary.write_text(
-        json.dumps(snapshot.model_dump(mode="json"), indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-    temporary.replace(target)
-    return target
-
-
-def read_evidence_snapshot(
-    path: Path,
-    *,
-    raw_root: Path | None = None,
-    max_bytes: int = DEFAULT_MAX_EVIDENCE_BYTES,
-) -> EvidenceSnapshot:
-    source = path.resolve(strict=True)
-    if path.is_symlink() or path.absolute() != source:
-        raise ValueError("evidence snapshot must be a regular file")
-    content = _read_regular_bounded(source, max_bytes, "evidence snapshot")
-    snapshot = EvidenceSnapshot.model_validate_json(content)
-    if any(
-        ref.verification == "verified"
-        for obs in snapshot.observations
-        for ref in obs.raw_references
-    ):
-        root = raw_root
-        if root is None:
-            conventional = source.parent / "evidence_snapshot"
-            root = conventional if conventional.is_dir() else source.parent
-        snapshot.verify_raw_evidence(root, max_bytes=max_bytes)
+    provisional = EvidenceSnapshot.model_construct(**payload)
+    payload["snapshot_id"] = _content_id("evidence", provisional, {"snapshot_id"})
+    snapshot = EvidenceSnapshot.model_validate(payload)
+    evidence_snapshot_bytes(snapshot, max_snapshot_bytes=max_snapshot_bytes)
     return snapshot
 
 
-def _verify_snapshot_raw(
-    snapshot: EvidenceSnapshot, raw_root: Path, *, max_bytes: int
-) -> None:
-    if max_bytes <= 0:
-        raise ValueError("raw evidence byte limit must be positive")
-    root_path = Path(raw_root)
-    if root_path.is_symlink():
-        raise ValueError("raw evidence root must not be a symlink")
-    root = root_path.resolve(strict=True)
-    if not root.is_dir():
-        raise ValueError("raw evidence root must be a directory")
-    verified: dict[str, RawEvidenceReference] = {}
-    for observation in snapshot.observations:
-        for reference in observation.raw_references:
-            if reference.verification != "verified":
-                continue
-            relative = PurePosixPath(reference.snapshot_path or "")
-            if relative.is_absolute() or not relative.parts or ".." in relative.parts:
-                raise ValueError("verified raw evidence has an invalid snapshot path")
-            prior = verified.setdefault(relative.as_posix(), reference)
-            if (
-                prior.snapshot_sha256 != reference.snapshot_sha256
-                or prior.snapshot_bytes != reference.snapshot_bytes
-            ):
-                raise ValueError("verified raw evidence metadata is inconsistent")
-    total = 0
-    for relative, reference in sorted(verified.items()):
-        candidate = root.joinpath(*PurePosixPath(relative).parts)
-        try:
-            resolved = candidate.resolve(strict=True)
-            resolved.relative_to(root)
-        except (FileNotFoundError, ValueError) as exc:
-            raise ValueError(
-                f"verified raw evidence is missing or escaped: {relative}"
-            ) from exc
-        if candidate.is_symlink() or candidate.absolute() != resolved:
-            raise ValueError(
-                f"verified raw evidence is not a regular contained file: {relative}"
-            )
-        expected_bytes = reference.snapshot_bytes
-        expected_sha = reference.snapshot_sha256
-        if expected_bytes is None or expected_sha is None:
-            raise ValueError("verified raw evidence lacks digest metadata")
-        content = _read_regular_bounded(
-            resolved,
-            min(max_bytes - total, expected_bytes) + 1,
-            "verified raw evidence",
-        )
-        total += len(content)
-        if total > max_bytes:
-            raise ValueError("verified raw evidence exceeds byte limit")
-        if (
-            len(content) != expected_bytes
-            or sha256(content).hexdigest() != expected_sha
-        ):
-            raise ValueError(f"verified raw evidence changed after capture: {relative}")
-
-
-def _read_regular_bounded(path: Path, limit: int, label: str) -> bytes:
-    if limit <= 0:
-        raise ValueError(f"{label} byte limit must be positive")
-    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
-    try:
-        descriptor = os.open(path, flags)
-    except OSError as exc:
-        raise ValueError(f"{label} must be a regular file") from exc
-    try:
-        info = os.fstat(descriptor)
-        if not stat.S_ISREG(info.st_mode):
-            raise ValueError(f"{label} must be a regular file")
-        chunks = []
-        remaining = limit + 1
-        while remaining:
-            chunk = os.read(descriptor, min(remaining, 1024 * 1024))
-            if not chunk:
-                break
-            chunks.append(chunk)
-            remaining -= len(chunk)
-        content = b"".join(chunks)
-        if len(content) > limit:
-            raise ValueError(f"{label} exceeds byte limit")
-        return content
-    finally:
-        os.close(descriptor)
-
-
-def _observations(
-    run_ref: str,
-    trace: Sequence[Mapping[str, Any]],
-    graph: Mapping[str, Any] | None,
-    routes: Sequence[str],
-    issues: list[EvidenceIssue],
-) -> list[_Draft]:
-    finished = [
-        r
-        for r in trace
-        if r.get("event_type") == "step_finished"
-        and isinstance(r.get("step_name"), str)
-        and isinstance(r.get("sequence"), int)
-    ]
-    dispatch = [
-        r
-        for r in trace
-        if str(r.get("event_type", "")).startswith("provider_dispatch_")
-    ]
-    semantic = [
-        r for r in trace if str(r.get("event_type", "")).startswith("provider_attempt_")
-    ]
-    sequential = _legacy_sequential(graph)
-    result: list[_Draft] = []
-    seen: set[str] = set()
-    for record in finished:
-        sequence, step = int(record["sequence"]), str(record["step_name"])
-        execution = _text(record.get("step_execution_id"))
-        identity = execution or f"sequence:{sequence}"
-        observation_id = f"{run_ref}:{identity}"
-        if observation_id in seen:
-            observation_id += f":sequence:{sequence}"
-            issues.append(
-                EvidenceIssue(
-                    run_ref=run_ref, dimension="execution_identity", reason="duplicate"
-                )
-            )
-        seen.add(observation_id)
-        scope, item_id = _text(record.get("scope")), _text(record.get("item_id"))
-        if scope is not None or item_id is not None:
-            lane, lineage = (
-                _hash({"run": run_ref, "scope": scope, "item": item_id}),
-                "known",
-            )
-        elif sequential:
-            lane, lineage = _hash({"run": run_ref, "legacy": "sequential"}), "known"
-        else:
-            lane, lineage = None, "unknown"
-        route = _route(record)
-        target = _text(record.get("target_step")) or _target(graph, step, route)
-        matching = _events(dispatch, record, identity, sequence)
-        attempts = (
-            _attempts(matching)
-            if matching
-            else (
-                _attempts(_events(semantic, record, identity, sequence))
-                or _legacy_attempts(record)
-            )
-        )
-        availability, tokens = _usage(attempts)
-        elapsed = _elapsed(record)
-        result.append(
-            _Draft(
-                observation={
-                    "observation_id": observation_id,
-                    "run_ref": run_ref,
-                    "sequence": sequence,
-                    "execution_identity": identity,
-                    "identity_source": (
-                        "step_execution_id" if execution else "sequence_fallback"
-                    ),
-                    "visit": _nn(record.get("visit")),
-                    "step_id": step,
-                    "step_kind": _text(record.get("step_kind")) or "unknown",
-                    "scope": scope,
-                    "item_id": item_id,
-                    "lane_id": lane,
-                    "lineage": lineage,
-                    "route": route,
-                    "target_step": target,
-                    "outcome": _outcome(record),
-                    "runtime_control": _text(record.get("runtime_control")),
-                    "provider": _text(record.get("provider")),
-                    "source_hook": _text(record.get("source_hook")),
-                    "redirect": _text(record.get("redirect"))
-                    or _text(record.get("redirect_step")),
-                    "focused": not routes or route in routes,
-                    "direct_failure": _failure(record, route),
-                    "rework_rejection": bool(route and route_is_rework(route)),
-                    "attempts": attempts,
-                    "usage_availability": availability,
-                    "known_total_tokens": tokens,
-                    "elapsed_seconds": elapsed,
-                    "elapsed_available": elapsed is not None,
-                },
-                raw=(
-                    dict(record.get("raw_output_refs"))
-                    if isinstance(record.get("raw_output_refs"), Mapping)
-                    else {}
-                ),
-            )
-        )
-    return result
-
-
-def _lineage(observations: Sequence[Observation]) -> list[Observation]:
-    lanes: dict[str, list[Observation]] = defaultdict(list)
+def _metrics(observations: list[Observation]) -> tuple[StepMetric, ...]:
+    grouped: dict[tuple[str, str, str], list[Observation]] = defaultdict(list)
     for item in observations:
-        if item.lane_id:
-            lanes[item.lane_id].append(item)
-    updates: dict[str, dict[str, Any]] = {}
-    for lane in lanes.values():
-        lane.sort(
-            key=lambda x: (
-                x.sequence,
-                x.visit if x.visit is not None else -1,
-                x.observation_id,
-            )
-        )
-        for before, after in zip(lane, lane[1:]):
-            matched = before.target_step == after.step_id
-            updates[before.observation_id] = {
-                "associated_next_observation_id": (
-                    after.observation_id if matched else None
-                ),
-                "rework_cycle": bool(
-                    before.rework_rejection
-                    and before.target_step == before.step_id == after.step_id
-                    and (
-                        (after.visit > before.visit)
-                        if before.visit is not None and after.visit is not None
-                        else after.sequence > before.sequence
-                    )
-                ),
-            }
-    return [
-        item.model_copy(update=updates.get(item.observation_id, {}))
-        for item in observations
-    ]
-
-
-def _groups(
-    captured: Sequence[_Captured],
-    observations: Sequence[Observation],
-    current_workflow: str | None,
-    current_surface: str | None,
-    current_topology: str | None,
-) -> tuple[list[EvidenceGroup], list[RunEvidence]]:
-    obs_ids: dict[str, list[str]] = defaultdict(list)
-    for item in observations:
-        obs_ids[item.run_ref].append(item.observation_id)
-    buckets: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
-    for item in captured:
-        p = item.provenance
-        if (
-            p["provenance_state"] == "known"
-            and p["surface_manifest_id"]
-            and p["topology_id"]
-        ):
-            buckets[
-                (p["workflow_identity"], p["surface_manifest_id"], p["topology_id"])
-            ].append(p)
-    groups, by_run = [], {}
-    for (workflow, surface, topology), members in sorted(buckets.items()):
-        group_id = (
-            "group-"
-            + _hash({"workflow": workflow, "surface": surface, "topology": topology})[
-                :20
-            ]
-        )
-        for member in members:
-            by_run[member["run_ref"]] = group_id
-        latest = max(
-            ((m["completed_at"] or "", m["run_ref"]) for m in members), default=("", "")
-        )
-        groups.append(
-            EvidenceGroup(
-                group_id=group_id,
-                workflow_identity=workflow,
-                surface_manifest_id=surface,
-                topology_id=topology,
-                run_refs=tuple(sorted(m["run_ref"] for m in members)),
-                current_match=workflow == current_workflow
-                and surface == current_surface
-                and topology == current_topology,
-                latest_completion=latest[0] or None,
-                latest_run_ref=latest[1] or None,
-            )
-        )
-    runs = [
-        RunEvidence(
-            **item.provenance,
-            structural_group_id=by_run.get(item.provenance["run_ref"]),
-            observation_ids=tuple(obs_ids[item.provenance["run_ref"]]),
-        )
-        for item in captured
-    ]
-    return groups, runs
-
-
-def _analysis_sets(
-    groups: Sequence[EvidenceGroup],
-    runs: Sequence[RunEvidence],
-    observations: Sequence[Observation],
-    explicit: bool,
-):
-    current = [g for g in groups if g.current_match]
-    if current:
-        chosen = max(
-            current, key=lambda g: (g.latest_completion or "", g.latest_run_ref or "")
-        )
-        refs = set(chosen.run_refs)
-        return (
-            chosen.group_id,
-            "current_verified",
-            [
-                (
-                    chosen.group_id,
-                    "structural_group",
-                    [o for o in observations if o.run_ref in refs],
-                )
-            ],
-        )
-    if not explicit:
-        return None, "no_comparable_evidence", []
-    known, unknown = {
-        r.structural_group_id for r in runs if r.structural_group_id
-    }, any(r.structural_group_id is None for r in runs)
-    if len(known) == 1 and not unknown:
-        group_id = next(iter(known))
-        return (
-            group_id,
-            "historical_verified",
-            [(group_id, "structural_group", list(observations))],
-        )
-    return (
-        None,
-        "historical_unverified",
-        [
-            (
-                f"run:{r.run_ref}",
-                "single_run",
-                [o for o in observations if o.run_ref == r.run_ref],
-            )
-            for r in runs
-        ],
-    )
-
-
-def _metrics(sets, runs: Sequence[RunEvidence]) -> list[StepMetric]:
-    run_map = {r.run_ref: r for r in runs}
+        grouped[(item.group_id, item.step_id, item.step_kind)].append(item)
     result = []
-    for group_id, scope, observations in sets:
-        by_step: dict[str, list[Observation]] = defaultdict(list)
-        for item in observations:
-            if item.focused:
-                by_step[item.step_id].append(item)
-        for step, values in sorted(by_step.items()):
-            attempts = [a for o in values for a in o.attempts]
-            breakdown: dict[
-                tuple[str | None, str | None, str | None], list[UsageAttempt]
-            ] = defaultdict(list)
-            for attempt in attempts:
-                breakdown[(attempt.provider, attempt.model, attempt.effort)].append(
-                    attempt
-                )
-            refs = {o.run_ref for o in values}
-            result.append(
-                StepMetric(
-                    metric_id="metric-" + _hash({"group": group_id, "step": step})[:20],
-                    group_id=group_id,
-                    group_scope=scope,
-                    step_id=step,
-                    step_kind=values[0].step_kind,
-                    observation_count=len(values),
-                    distinct_run_count=len(refs),
-                    direct_failure_count=sum(o.direct_failure for o in values),
-                    direct_failure_run_count=len(
-                        {o.run_ref for o in values if o.direct_failure}
-                    ),
-                    rework_rejection_count=sum(o.rework_rejection for o in values),
-                    rework_run_count=len(
-                        {o.run_ref for o in values if o.rework_rejection}
-                    ),
-                    rework_cycle_count=sum(o.rework_cycle for o in values),
-                    attempted_dispatch_count=len(attempts),
-                    complete_usage=all(
-                        a.availability == "known_total" for a in attempts
-                    ),
-                    known_total_tokens=sum(
-                        a.total_tokens or 0
-                        for a in attempts
-                        if a.availability == "known_total"
-                    ),
-                    complete_elapsed=all(o.elapsed_available for o in values),
-                    total_elapsed_seconds=sum(o.elapsed_seconds or 0 for o in values),
-                    resource_breakdowns=tuple(
-                        ResourceBreakdown(
-                            provider=k[0],
-                            model=k[1],
-                            effort=k[2],
-                            attempted_dispatches=len(items),
-                            known_total_tokens=sum(
-                                a.total_tokens or 0
-                                for a in items
-                                if a.availability == "known_total"
-                            ),
-                        )
-                        for k, items in sorted(
-                            breakdown.items(),
-                            key=lambda x: tuple(v or "" for v in x[0]),
-                        )
-                    ),
-                    parameter_digests=tuple(
-                        sorted(
-                            {
-                                run_map[r].parameter_digest
-                                for r in refs
-                                if run_map[r].parameter_digest
-                            }
-                        )
-                    ),
-                    configuration_digests=tuple(
-                        sorted(
-                            {
-                                run_map[r].configuration_digest
-                                for r in refs
-                                if run_map[r].configuration_digest
-                            }
-                        )
-                    ),
-                    case_identities=tuple(
-                        sorted(
-                            {
-                                run_map[r].case_identity
-                                for r in refs
-                                if run_map[r].case_identity
-                            }
-                        )
-                    ),
-                )
+    for (group_id, step_id, kind), values in sorted(grouped.items()):
+        dispatches = [item for item in values if item.step_kind == "provider"]
+        dispatch_facts = [
+            (item, dispatch) for item in dispatches for dispatch in item.dispatches
+        ]
+        complete_usage = bool(dispatches) and all(
+            item.usage_availability == "known_total" for item in dispatches
+        )
+        complete_elapsed = bool(dispatches) and all(
+            item.elapsed_available for item in dispatches
+        )
+        direct_failure_runs = {item.run_ref for item in values if item.direct_failure}
+        rework_runs = {item.run_ref for item in values if item.rework_rejection}
+        profile_breakdowns = _profile_metrics(dispatch_facts)
+        incomplete_profile_identity = (bool(dispatches) and not dispatch_facts) or any(
+            not item.profile_comparable for item in profile_breakdowns
+        )
+        result.append(
+            StepMetric(
+                metric_id="metric_"
+                + sha256(f"{group_id}:{kind}:{step_id}".encode()).hexdigest(),
+                group_id=group_id,
+                step_id=step_id,
+                step_kind=kind,
+                observation_count=len(values),
+                distinct_run_count=len({item.run_ref for item in values}),
+                direct_failure_count=len(direct_failure_runs),
+                direct_failure_run_count=len(direct_failure_runs),
+                rework_rejection_count=len(rework_runs),
+                rework_run_count=len(rework_runs),
+                attempted_dispatch_count=sum(
+                    item.attempted_dispatch_count for item in dispatches
+                ),
+                complete_usage=complete_usage,
+                known_total_tokens=(
+                    sum(item.known_total_tokens or 0 for item in dispatches)
+                    if complete_usage
+                    else None
+                ),
+                complete_elapsed=complete_elapsed,
+                total_elapsed_seconds=(
+                    sum(item.elapsed_seconds or 0 for item in dispatches)
+                    if complete_elapsed
+                    else None
+                ),
+                profile_breakdowns=profile_breakdowns,
+                profile_comparison="none",
+                heterogeneous_profiles=len(profile_breakdowns) > 1,
+                incomplete_profile_identity=incomplete_profile_identity,
             )
-    return result
+        )
+    return tuple(result)
 
 
-def _rank(metrics: Sequence[StepMetric], objective: Objective, top_k: int):
+def _profile_metrics(
+    dispatches: list[tuple[Observation, ProviderDispatchEvidence]],
+) -> tuple[StepProfileMetric, ...]:
+    grouped: dict[str, list[tuple[Observation, ProviderDispatchEvidence]]] = (
+        defaultdict(list)
+    )
+    for observation, dispatch in dispatches:
+        grouped[dispatch.profile_id].append((observation, dispatch))
+    result = []
+    for profile_id, values in sorted(grouped.items()):
+        first = values[0][1]
+        complete_usage = all(
+            item.usage_availability == "known_total"
+            and item.known_total_tokens is not None
+            for _, item in values
+        )
+        complete_elapsed = all(item.elapsed_seconds is not None for _, item in values)
+        result.append(
+            StepProfileMetric(
+                profile_id=profile_id,
+                profile_comparable=first.profile_comparable,
+                provider=first.provider,
+                model=first.model,
+                effort=first.effort,
+                effort_state=first.effort_state,
+                dispatch_count=len(values),
+                distinct_run_count=len({item.run_ref for item, _ in values}),
+                failed_dispatch_count=sum(
+                    dispatch.outcome
+                    in {"failed", "timed_out", "interrupted", "cancelled"}
+                    for _, dispatch in values
+                ),
+                complete_usage=complete_usage,
+                known_total_tokens=(
+                    sum(item.known_total_tokens or 0 for _, item in values)
+                    if complete_usage
+                    else None
+                ),
+                complete_elapsed=complete_elapsed,
+                total_elapsed_seconds=(
+                    sum(item.elapsed_seconds or 0 for _, item in values)
+                    if complete_elapsed
+                    else None
+                ),
+            )
+        )
+    return tuple(result)
+
+
+def _rank(metrics: tuple[StepMetric, ...], objective: Objective, top_k: int):
     if objective == "reliability":
         eligible = [
-            m for m in metrics if m.direct_failure_count or m.rework_rejection_count
+            item
+            for item in metrics
+            if item.direct_failure_count or item.rework_rejection_count
         ]
         eligible.sort(
-            key=lambda m: (
-                -m.direct_failure_run_count,
-                -m.rework_run_count,
-                m.step_id,
-                m.group_id,
+            key=lambda item: (
+                -item.direct_failure_run_count,
+                -item.rework_run_count,
+                item.step_id,
+                item.group_id,
             )
         )
         measure = ()
     elif objective == "token_usage":
-        eligible = [m for m in metrics if m.complete_usage and m.known_total_tokens > 0]
-        eligible.sort(key=lambda m: (-m.known_total_tokens, m.step_id, m.group_id))
-        measure = tuple(sorted(m.metric_id for m in metrics if not m.complete_usage))
+        eligible = [
+            item
+            for item in metrics
+            if item.complete_usage and (item.known_total_tokens or 0) > 0
+        ]
+        eligible.sort(
+            key=lambda item: (
+                -(item.known_total_tokens or 0),
+                item.step_id,
+                item.group_id,
+            )
+        )
+        measure = tuple(item.metric_id for item in metrics if not item.complete_usage)
     else:
         eligible = [
-            m for m in metrics if m.complete_elapsed and m.total_elapsed_seconds > 0
+            item
+            for item in metrics
+            if item.complete_elapsed and (item.total_elapsed_seconds or 0) > 0
         ]
-        eligible.sort(key=lambda m: (-m.total_elapsed_seconds, m.step_id, m.group_id))
-        measure = tuple(sorted(m.metric_id for m in metrics if not m.complete_elapsed))
-    rankings = [
+        eligible.sort(
+            key=lambda item: (
+                -(item.total_elapsed_seconds or 0),
+                item.step_id,
+                item.group_id,
+            )
+        )
+        measure = tuple(item.metric_id for item in metrics if not item.complete_elapsed)
+    rankings = tuple(
         StepRanking(
-            rank=i,
-            metric_id=m.metric_id,
-            group_id=m.group_id,
-            step_id=m.step_id,
+            rank=index,
+            metric_id=item.metric_id,
+            group_id=item.group_id,
+            step_id=item.step_id,
             objective=objective,
-            direct_failure_run_count=m.direct_failure_run_count,
-            rework_run_count=m.rework_run_count,
-            distinct_run_count=m.distinct_run_count,
-            observation_count=m.observation_count,
-            attempted_dispatch_count=m.attempted_dispatch_count,
-            known_total_tokens=m.known_total_tokens,
-            total_elapsed_seconds=m.total_elapsed_seconds,
+            direct_failure_run_count=item.direct_failure_run_count,
+            rework_run_count=item.rework_run_count,
+            distinct_run_count=item.distinct_run_count,
+            observation_count=item.observation_count,
+            known_total_tokens=item.known_total_tokens,
+            total_elapsed_seconds=item.total_elapsed_seconds,
+            selection_basis=_selection_basis(objective),
+            profile_comparison="none",
+            heterogeneous_profiles=item.heterogeneous_profiles,
+            incomplete_profile_identity=item.incomplete_profile_identity,
         )
-        for i, m in enumerate(eligible[:top_k], 1)
-    ]
-    return rankings, measure
-
-
-def _provenance(
-    run_ref: str,
-    run_json: Mapping[str, Any],
-    trace: Sequence[Mapping[str, Any]],
-    graph: Mapping[str, Any] | None,
-    workflow: str,
-) -> dict[str, Any]:
-    root = _map(run_json.get("provenance")) or _map(run_json.get("workflow_provenance"))
-    starts = [
-        r for r in trace if r.get("event_type") in {"run_started", "workflow_started"}
-    ]
-    ends = [
-        r for r in trace if r.get("event_type") in {"run_finished", "workflow_finished"}
-    ]
-    trace_start = (_map(starts[0].get("provenance")) or starts[0]) if starts else {}
-    trace_end = (_map(ends[-1].get("provenance")) or ends[-1]) if ends else {}
-    start, end = {**_map(root.get("start")), **trace_start}, {
-        **_map(root.get("end")),
-        **trace_end,
-    }
-    sources = [start, end, root]
-
-    def val(*names):
-        for source in sources:
-            for name in names:
-                if _text(source.get(name)):
-                    return _text(source.get(name))
-        for name in names:
-            if _text(run_json.get(name)):
-                return _text(run_json.get(name))
-        return None
-
-    recorded_workflow_id = val("workflow_identity")
-    # A historical workflow name identifies what was invoked, not the exact
-    # resolved workflow origin.  Keep identity-less legacy runs distinct so
-    # they cannot become a verified structural cohort by coincidence.
-    workflow_id = recorded_workflow_id or f"unknown:{run_ref}"
-    surface = val("workflow_surface_manifest_id", "surface_manifest_id")
-    topology = val("topology_id", "normalized_topology_id") or (
-        "topology-" + _hash(_normalized_topology(graph)) if graph else None
+        for index, item in enumerate(eligible[:top_k], 1)
     )
-    mixed = any(
-        _first(start, names)
-        and _first(end, names)
-        and _first(start, names) != _first(end, names)
-        for names in (
-            ("workflow_identity",),
-            ("workflow_surface_manifest_id", "surface_manifest_id"),
-            ("topology_id", "normalized_topology_id"),
-        )
+    return rankings, tuple(sorted(measure))
+
+
+def _selection_basis(objective: Objective) -> SelectionBasis:
+    if objective == "reliability":
+        return "distinct_affected_runs"
+    if objective == "token_usage":
+        return "sum_of_reported_token_counts"
+    return "sum_of_provider_dispatch_seconds"
+
+
+def _dispatch_evidence(
+    dispatch: Any, *, observation_id: str, dispatch_ordinal: int
+) -> ProviderDispatchEvidence:
+    effort_state: EffortState = (
+        "absent"
+        if not dispatch.effort_present
+        else "known_unset"
+        if dispatch.effort is None
+        else "known_value"
     )
-    mixed = (
-        mixed
-        or start.get("source_identity_matched") is False
-        or end.get("source_identity_matched") is False
+    comparable = bool(dispatch.provider and dispatch.model and dispatch.effort_present)
+    profile_key = (
+        [dispatch.provider, dispatch.model, effort_state, dispatch.effort]
+        if comparable
+        # Dispatch IDs are only physical identities inside their source run.  Scope
+        # an incomplete profile to this exact captured dispatch so two old or
+        # partially recorded runs cannot accidentally form an "unknown" cohort.
+        else ["unknown", observation_id, dispatch_ordinal, dispatch.dispatch_id]
     )
-    mixed = mixed or any(
-        _text(source.get("provenance_status")) in {"mixed", "mixed_or_unavailable"}
-        for source in (start, end, root)
+    profile_id = "profile_" + sha256(_canonical(profile_key)).hexdigest()
+    token_total = known_token_total(dispatch.usage, provider=dispatch.provider)
+    availability = dispatch.usage_availability
+    if availability not in {"known_total", "partial", "unknown", "not_attempted"}:
+        availability = "unknown"
+    if availability == "known_total" and token_total is None:
+        availability = "partial" if dispatch.usage else "unknown"
+    return ProviderDispatchEvidence(
+        dispatch_id=dispatch.dispatch_id,
+        attempt=dispatch.attempt,
+        generation=dispatch.generation,
+        outcome=dispatch.outcome,
+        usage_availability=availability,
+        usage=dict(dispatch.usage),
+        known_total_tokens=token_total if availability == "known_total" else None,
+        elapsed_seconds=dispatch.elapsed_seconds,
+        provider=dispatch.provider,
+        model=dispatch.model,
+        effort=dispatch.effort,
+        effort_state=effort_state,
+        profile_id=profile_id,
+        profile_comparable=comparable,
+        policy_fingerprint=dispatch.policy_fingerprint,
     )
-    task_id, run_id = run_ref.split("/", 1)
-    workflow_input = _map(run_json.get("workflow_input"))
-    return {
-        "run_ref": run_ref,
-        "task_id": task_id,
-        "run_id": run_id,
-        "status": _text(run_json.get("status")),
-        "terminal": _text(run_json.get("terminal")),
-        "completed_at": _text(run_json.get("completed_at"))
-        or _text(run_json.get("updated_at")),
-        "workflow_identity": workflow_id,
-        "surface_manifest_id": surface,
-        "topology_id": topology,
-        "parameter_digest": val("parameter_digest", "workflow_parameter_digest"),
-        "configuration_digest": val("configuration_digest", "config_digest"),
-        "provider_policy_identity": val(
-            "provider_policy_identity", "provider_policy_id"
-        ),
-        "case_identity": val("case_identity", "case_id", "case_mix_digest")
-        or _text(workflow_input.get("case_id"))
-        or _text(run_json.get("evaluation_case_id")),
-        "provenance_state": (
-            "mixed"
-            if mixed
-            else (
-                "known" if recorded_workflow_id and surface and topology else "unknown"
-            )
-        ),
-    }
 
 
-def _attempts(events: Sequence[Mapping[str, Any]]) -> tuple[UsageAttempt, ...]:
-    groups: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
-    for i, event in enumerate(events):
-        fallback = f"legacy:{_text(event.get('phase')) or _text(event.get('turn_kind')) or 'unknown'}:{_positive(event.get('attempt')) or 1}"
-        groups[
-            _text(event.get("dispatch_id"))
-            or _text(event.get("provider_attempt_id"))
-            or fallback
-        ].append(event)
-    result = []
-    for dispatch_id, life in sorted(groups.items()):
-        final, first = (
-            next(
-                (
-                    e
-                    for e in reversed(life)
-                    if str(e.get("event_type", "")).endswith(("finished", "failed"))
-                ),
-                life[-1],
-            ),
-            life[0],
-        )
-        usage = _map(final.get("token_usage")) or _map(final.get("usage"))
-        availability, source, total, inp, out = _usage_values(usage)
-        result.append(
-            UsageAttempt(
-                dispatch_id=dispatch_id,
-                phase=_text(final.get("phase"))
-                or _text(first.get("phase"))
-                or "unknown",
-                attempt=_positive(final.get("attempt"))
-                or _positive(first.get("attempt")),
-                provider=_text(final.get("provider")) or _text(first.get("provider")),
-                model=_text(final.get("model")) or _text(first.get("model")),
-                effort=_text(final.get("effort")) or _text(first.get("effort")),
-                outcome=_text(final.get("outcome")),
-                availability=availability,
-                total_source=source,
-                input_tokens=inp,
-                output_tokens=out,
-                total_tokens=total,
-                cached_input_tokens=_nn(usage.get("cached_input_tokens")),
-                reasoning_tokens=_nn(usage.get("reasoning_tokens")),
-                elapsed_seconds=_elapsed(final),
-            )
-        )
-    return tuple(result)
-
-
-def _legacy_attempts(record: Mapping[str, Any]) -> tuple[UsageAttempt, ...]:
-    usage = _map(record.get("provider_usage"))
-    result = []
-    phases = [(k, v) for k, v in usage.items() if isinstance(v, Mapping)]
-    for phase, value in phases or ([("legacy", usage)] if usage else []):
-        availability, source, total, inp, out = _usage_values(value)
-        result.append(
-            UsageAttempt(
-                dispatch_id=f"legacy:{record.get('sequence')}:{phase}",
-                phase=str(phase),
-                availability=availability,
-                total_source=source,
-                input_tokens=inp,
-                output_tokens=out,
-                total_tokens=total,
-                cached_input_tokens=_nn(value.get("cached_input_tokens")),
-                reasoning_tokens=_nn(value.get("reasoning_tokens")),
-            )
-        )
-    present = {str(phase) for phase, _ in phases}
-    for phase, field in (
-        ("producer", "producer_attempted"),
-        ("verifier", "verifier_attempted"),
-    ):
-        if record.get(field) is True and phase not in present:
-            result.append(
-                UsageAttempt(
-                    dispatch_id=f"legacy:{record.get('sequence')}:{phase}",
-                    phase=phase,
-                    availability="unknown",
-                    total_source="unavailable",
+def _usage(
+    kind: str, usage: Mapping[str, float], dispatches: tuple[Any, ...], attempts: int
+) -> tuple[Availability, int | None, int]:
+    if kind != "provider":
+        return "not_attempted", None, 0
+    if dispatches:
+        if all(item.usage_availability == "known_total" for item in dispatches):
+            totals = [
+                known_token_total(item.usage, provider=item.provider)
+                for item in dispatches
+            ]
+            if all(item is not None for item in totals):
+                return (
+                    "known_total",
+                    sum(item for item in totals if item is not None),
+                    len(dispatches),
                 )
-            )
-    if not result and record.get("provider_attempted") is True:
-        result.append(
-            UsageAttempt(
-                dispatch_id=f"legacy:{record.get('sequence')}:unknown",
-                phase="legacy",
-                availability="unknown",
-                total_source="unavailable",
-            )
-        )
-    return tuple(result)
+        if any(item.usage for item in dispatches):
+            return "partial", None, len(dispatches)
+        return "unknown", None, len(dispatches)
+    if attempts != 1:
+        return "unknown", None, attempts
+    state, tokens = _legacy_usage(usage)
+    return state, tokens, 1
 
 
-def _copy_raw(
-    run_dir: Path,
-    destination: Path,
-    run_ref: str,
-    role: str,
-    value: Any,
-    remaining: int,
-    cache,
-):
-    if not isinstance(value, Mapping):
-        return (
-            RawEvidenceReference(
-                role=role, source_path=_text(value), verification="missing_metadata"
-            ),
-            0,
-            0,
-        )
-    path, digest, size = (
-        _text(value.get("path")),
-        _text(value.get("sha256")),
-        _nn(value.get("bytes")),
-    )
-    base = {
-        "role": role,
-        "source_path": path,
-        "recorded_sha256": digest,
-        "recorded_bytes": size,
-    }
-    if path is None or digest is None or size is None:
-        return RawEvidenceReference(**base, verification="missing_metadata"), 0, 0
-    relative = PurePosixPath(path)
-    if relative.is_absolute() or ".." in relative.parts or not relative.parts:
-        return RawEvidenceReference(**base, verification="invalid_path"), 0, 0
-    source = run_dir.joinpath(*relative.parts)
-    try:
-        resolved = source.resolve(strict=True)
-    except FileNotFoundError:
-        return RawEvidenceReference(**base, verification="missing"), 0, 0
-    try:
-        resolved.relative_to(run_dir)
-    except ValueError:
-        return RawEvidenceReference(**base, verification="symlink_escape"), 0, 0
-    if source.is_symlink() or source.absolute() != resolved or not resolved.is_file():
-        return RawEvidenceReference(**base, verification="not_regular"), 0, 0
-    source_watermark = _watermark(resolved)
-    if source_watermark[2] != size:
-        return RawEvidenceReference(**base, verification="byte_count_mismatch"), 0, 0
-    if size > remaining:
-        return RawEvidenceReference(**base, verification="budget_omitted"), 0, size
-    actual = _sha(resolved)
-    if actual != digest:
-        return RawEvidenceReference(**base, verification="digest_mismatch"), 0, 0
-    key = (resolved, actual, size)
-    if key in cache:
-        rel, saved_digest, saved_size = cache[key]
-        return (
-            RawEvidenceReference(
-                **base,
-                verification="verified",
-                snapshot_path=rel,
-                snapshot_sha256=saved_digest,
-                snapshot_bytes=saved_size,
-            ),
-            0,
-            0,
-        )
-    target = (
-        destination
-        / "raw"
-        / sha256(run_ref.encode()).hexdigest()[:16]
-        / f"{actual}{Path(relative.name).suffix}"
-    )
-    target.parent.mkdir(parents=True, exist_ok=True)
-    temporary = target.with_name(f".{target.name}.tmp-{os.getpid()}")
-    try:
-        shutil.copyfile(resolved, temporary)
-        copied = _read_regular_bounded(temporary, size + 1, "copied raw evidence")
-        if (
-            _watermark(resolved) != source_watermark
-            or len(copied) != size
-            or sha256(copied).hexdigest() != actual
-        ):
-            return (
-                RawEvidenceReference(**base, verification="concurrently_changed"),
-                0,
-                0,
-            )
-        temporary.replace(target)
-    except (OSError, ValueError):
-        return RawEvidenceReference(**base, verification="copy_failed"), 0, 0
-    finally:
-        temporary.unlink(missing_ok=True)
-    rel = target.relative_to(destination).as_posix()
-    cache[key] = (rel, actual, size)
-    return (
-        RawEvidenceReference(
-            **base,
-            verification="verified",
-            snapshot_path=rel,
-            snapshot_sha256=actual,
-            snapshot_bytes=size,
-        ),
-        size,
-        0,
-    )
+def _legacy_usage(usage: Mapping[str, float]) -> tuple[Availability, int | None]:
+    values, availability = normalize_usage(usage, final=True)
+    return availability, known_token_total(values)
 
 
-def _raw_order(captured: Sequence[_Captured]):
-    values = [(item, draft) for item in captured for draft in item.drafts]
-    focus: dict[str, list[int]] = defaultdict(list)
-    for _, draft in values:
-        o = draft.observation
-        if o["focused"] and o["lane_id"]:
-            focus[o["lane_id"]].append(o["sequence"])
-
-    def key(pair):
-        o = pair[1].observation
-        if o["focused"]:
-            tier, distance = 0, 0
-        elif o["lane_id"] in focus:
-            tier, distance = 1, min(abs(o["sequence"] - s) for s in focus[o["lane_id"]])
-        else:
-            tier, distance = 2, 0
-        return tier, distance, o["run_ref"], o["sequence"], o["observation_id"]
-
-    return sorted(values, key=key)
-
-
-def _usage_values(usage):
-    inp, out, total = (
-        _nn(usage.get("input_tokens")),
-        _nn(usage.get("output_tokens")),
-        _nn(usage.get("total_tokens")),
-    )
-    if total is not None:
-        return "known_total", "reported", total, inp, out
-    if inp is not None and out is not None:
-        return "known_total", "derived", inp + out, inp, out
-    if (
-        inp is not None
-        or out is not None
-        or _nn(usage.get("cached_input_tokens")) is not None
-        or _nn(usage.get("reasoning_tokens")) is not None
-    ):
-        return "partial", "unavailable", None, inp, out
-    return "unknown", "unavailable", None, None, None
-
-
-def _usage(attempts):
-    if not attempts:
-        return "not_attempted", 0
-    total = sum(
-        a.total_tokens or 0 for a in attempts if a.availability == "known_total"
-    )
-    if all(a.availability == "known_total" for a in attempts):
-        return "known_total", total
-    if any(a.availability in {"known_total", "partial"} for a in attempts):
-        return "partial", total
-    return "unknown", 0
-
-
-def _events(events, record, identity, sequence):
-    matched = [e for e in events if _text(e.get("step_execution_id")) == identity]
-    return matched or [
-        e
-        for e in events
-        if e.get("sequence") == sequence
-        and e.get("step_name") == record.get("step_name")
-    ]
-
-
-def _failure(record, route):
-    if _text(record.get("runtime_control")) == "fail":
-        return True
-    semantics = (
-        _text(record.get("route_semantics"))
-        or _text(record.get("outcome_semantics"))
-        or ""
-    ).lower()
-    if semantics in {"failure", "failed", "blocked", "rejection", "rework"}:
-        return True
-    return bool(
-        route
-        and (
-            route_is_rework(route) or route.lower() in {"failed", "failure", "blocked"}
-        )
-    )
-
-
-def _legacy_sequential(graph):
-    if not graph or not isinstance(graph.get("steps"), list) or not graph["steps"]:
-        return False
-    ambiguous = {"worklist", "parallel", "branch", "branch_group", "map"}
-    return not any(
-        isinstance(s, Mapping)
-        and (
-            str(s.get("kind", "")).lower() in ambiguous
-            or any(k in s for k in ("scope", "worklist", "branches", "group_kind"))
-        )
-        for s in graph["steps"]
-    )
-
-
-def _target(graph, step, route):
-    if not graph or not route:
-        return None
-    target = _text(
-        _map(_map(_map(graph.get("transitions")).get("steps")).get(step)).get(route)
-    )
-    return None if target in {"FINISH", "FAIL", "AWAIT_INPUT"} else target
-
-
-def _normalized_topology(graph):
-    steps = [
-        {
-            k: s[k]
-            for k in sorted(s)
-            if k not in {"created_at", "updated_at", "path", "root"}
-        }
-        for s in graph.get("steps", [])
-        if isinstance(s, Mapping)
-    ]
-    return {
-        "steps": sorted(steps, key=lambda s: str(s.get("name", ""))),
-        "transitions": graph.get("transitions", {}),
-    }
-
-
-def _route(record):
-    for key in ("final_route", "candidate_route", "route"):
-        if _text(record.get(key)):
-            return _text(record.get(key))
-    for key in ("outcome", "event"):
-        if _text(_map(record.get(key)).get("tag")):
-            return _text(_map(record.get(key)).get("tag"))
-    control = _text(record.get("runtime_control"))
-    return f"runtime_control:{control}" if control else None
-
-
-def _outcome(record):
-    value = record.get("outcome")
-    return _text(_map(value).get("tag")) if isinstance(value, Mapping) else _text(value)
-
-
-def _elapsed(record):
-    for field, divisor in (("elapsed_seconds", 1), ("elapsed_ms", 1000)):
-        value = record.get(field)
-        if isinstance(value, (int, float)) and not isinstance(value, bool):
-            try:
-                elapsed = float(value) / divisor
-            except OverflowError:
-                continue
-            if math.isfinite(elapsed) and elapsed >= 0:
-                return elapsed
-    start, end = _text(record.get("started_at")), _text(record.get("ended_at"))
-    if start and end:
-        try:
-            return max(
-                0.0,
-                (
-                    datetime.fromisoformat(end.replace("Z", "+00:00"))
-                    - datetime.fromisoformat(start.replace("Z", "+00:00"))
-                ).total_seconds(),
-            )
-        except ValueError:
-            pass
-    return None
-
-
-def _snapshot_digest(payload):
-    copy = dict(payload)
-    copy.pop("snapshot_id", None)
-    return "evidence-" + _hash(copy)
-
-
-def _hash(value):
-    return sha256(
+def evidence_snapshot_bytes(
+    snapshot: EvidenceSnapshot, *, max_snapshot_bytes: int
+) -> bytes:
+    """Serialize and bound the exact evidence representation used for publication."""
+    if max_snapshot_bytes <= 0:
+        raise ValueError("max_snapshot_bytes must be positive")
+    content = (
         json.dumps(
-            value, sort_keys=True, separators=(",", ":"), ensure_ascii=False
-        ).encode()
-    ).hexdigest()
+            snapshot.model_dump(mode="json", by_alias=True), indent=2, sort_keys=True
+        )
+        + "\n"
+    ).encode()
+    if len(content) > max_snapshot_bytes:
+        raise ValueError("evidence snapshot exceeds max_snapshot_bytes")
+    return content
 
 
-def _read_json(path):
-    value = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(value, dict):
-        raise ValueError(f"{path.name} must contain a JSON object")
-    return value
+def _elapsed(operation: Any) -> tuple[bool, float | None]:
+    if operation.kind == "provider" and operation.dispatches:
+        if all(item.elapsed_seconds is not None for item in operation.dispatches):
+            return True, sum(item.elapsed_seconds for item in operation.dispatches)
+        return False, None
+    return False, None
 
 
-def _read_jsonl(path):
-    result = []
-    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-        if not line.strip():
-            continue
-        value = json.loads(line)
-        if not isinstance(value, dict):
-            raise ValueError(f"{path.name}:{number} must contain a JSON object")
-        result.append(value)
-    return result
+def _canonical(value: Any) -> bytes:
+    if isinstance(value, BaseModel):
+        value = value.model_dump(mode="json")
+    elif hasattr(value, "to_dict"):
+        value = value.to_dict()
+    elif hasattr(value, "__dataclass_fields__"):
+        from dataclasses import asdict
+
+        value = asdict(value)
+    return json.dumps(
+        value, sort_keys=True, separators=(",", ":"), default=str, allow_nan=False
+    ).encode()
 
 
-def _watermark(path):
-    s = path.stat()
-    return s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns
+def baseline_surface_id(value: SourceManifest | Mapping[str, Any]) -> str:
+    return "baseline_" + sha256(_canonical(value)).hexdigest()
 
 
-def _sha(path):
-    digest = sha256()
-    with path.open("rb") as stream:
-        while chunk := stream.read(1024 * 1024):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def _path_run_ref(run_dir):
-    return f"{run_dir.parent.parent.parent.name}/{run_dir.name}"
-
-
-def _map(value):
-    return value if isinstance(value, Mapping) else {}
-
-
-def _text(value):
-    return value if isinstance(value, str) and value else None
-
-
-def _required_text(value, field):
-    result = _text(value)
-    if result is None:
-        raise ValueError(f"{field} entries must be non-empty strings")
-    return result
-
-
-def _nn(value):
-    return (
-        value
-        if isinstance(value, int) and not isinstance(value, bool) and value >= 0
-        else None
-    )
-
-
-def _positive(value):
-    return (
-        value
-        if isinstance(value, int) and not isinstance(value, bool) and value > 0
-        else None
-    )
-
-
-def _first(source, names):
-    return next(
-        (_text(source.get(name)) for name in names if _text(source.get(name))), None
-    )
-
-
-def _error_detail(exc):
-    if isinstance(exc, json.JSONDecodeError):
-        return f"JSONDecodeError at line {exc.lineno}, column {exc.colno}"
-    if isinstance(exc, ValueError):
-        return str(exc)
-    return type(exc).__name__
+def _content_id(prefix: str, value: BaseModel, exclude: set[str]) -> str:
+    payload = value.model_dump(mode="json")
+    for key in exclude:
+        payload.pop(key, None)
+    return f"{prefix}_{sha256(_canonical(payload)).hexdigest()}"
 
 
 __all__ = [
-    "DEFAULT_MAX_EVIDENCE_BYTES",
-    "EVIDENCE_SNAPSHOT_SCHEMA",
+    "Availability",
     "EvidenceBudget",
     "EvidenceGroup",
     "EvidenceIssue",
     "EvidenceSnapshot",
     "ExcludedRun",
+    "Objective",
     "Observation",
-    "RawEvidenceReference",
-    "ResourceBreakdown",
+    "ProviderDispatchEvidence",
     "RunEvidence",
     "SelectionPolicy",
     "StepMetric",
+    "StepProfileMetric",
     "StepRanking",
-    "UsageAttempt",
+    "DEFAULT_MAX_SNAPSHOT_BYTES",
+    "baseline_surface_id",
     "capture_evidence_snapshot",
-    "read_evidence_snapshot",
-    "write_evidence_snapshot",
+    "evidence_snapshot_bytes",
 ]

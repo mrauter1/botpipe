@@ -1,3 +1,7 @@
+## Durable producer result
+
+After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+
 # Analyze Recursive Improvement Pressures Producer
 
 ## Step Contract
@@ -12,24 +16,10 @@
 - This work item owns recursive-improvement analysis only.
 - Keep the boundary at evidence-backed priority analysis. Do not publish the final cycle package or execute downstream workflows in this step.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `workflow_capability_snapshot` | Read | Required input. |
-| `workflow_portfolio_health_snapshot` | Read | Required input. |
-| `company_operation_snapshot` | Read | Required input. |
-| `company_operation_brief` | Read | Required input. |
-| `recursive_improvement_criteria` | Read | Required input. |
-| `company_pressure_map` | Write | Overwrite. |
-| `recursive_improvement_priority_matrix` | Write | Overwrite. |
-| `recursive_improvement_candidates` | Write | Overwrite. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not create `recursive_improvement_cycle`, `recursive_improvement_summary`, `recursive_improvement_next_actions`, or `recursive_improvement_cycle_receipt.json` in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -52,20 +42,20 @@
 
 ## Evidence
 
-- Anchor every candidate in `workflow_portfolio_health_snapshot` and `company_operation_snapshot`, and use `workflow_capability_snapshot` when you discuss package-level or composition-level implications.
+- Anchor every candidate in `observed_company_runs` and `runtime input`, and use `workflow_catalog` when you discuss package-level or composition-level implications.
 - Keep scoped task ids and workflow names explicit.
 - Keep the package boundary explicit: this workflow analyzes and prioritizes, but it does not auto-run follow-on work.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance for the verifier
+### Outcome guidance for the verifier
 - `recursive_improvement_pressures_analyzed`: the pressure map, priority matrix, and candidate manifest are explicit and aligned.
 - `needs_rework`: the same analysis boundary still holds, but one or more analysis artifacts need local repair.
 - `needs_replan`: the company scope, evidence boundary, or recursive-improvement objective changed materially and framing must be revisited.
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Use `blocked` only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Out Of Scope
 

@@ -1,3 +1,7 @@
+## Durable producer result
+
+After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+
 # Package Candidate Workflow Set Producer
 
 ## Step Contract
@@ -12,26 +16,10 @@
 - This work item owns candidate-set packaging only.
 - Keep the boundary at packaging the ranked candidate set and strategy-ready handoff. Do not choose the final front-door route or execute any downstream workflow.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `workflow_capability_snapshot` | Read | Required input. |
-| `candidate_set_checklist` | Read | Required input. |
-| `candidate_request_brief` | Read | Required input. |
-| `candidate_selection_criteria` | Read | Required input. |
-| `workflow_candidate_matrix` | Read | Required input. |
-| `workflow_gap_analysis` | Read | Required input. |
-| `candidate_route_posture` | Read | Required input. |
-| `candidate_workflow_set` | Write | Overwrite. |
-| `candidate_workflow_set_summary` | Write | Overwrite. |
-| `candidate_next_action` | Write | Overwrite. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not modify earlier framing or analysis artifacts in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -54,7 +42,7 @@
 - `authoritative_artifacts`
 - `next_action`
 - `ready_for_strategy_selection`
-- `candidate_next_action` must state exactly what the downstream strategy layer should decide next, which candidate workflows deserve immediate consideration, and which task-specific facts should be carried forward.
+- `candidate_workflow_next_action` must state exactly what the downstream strategy layer should decide next, which candidate workflows deserve immediate consideration, and which task-specific facts should be carried forward.
 
 ### Expected outcome
 - Leave the workflow with a terminal candidate-workflow-set package that is inspectable, machine-readable, and ready for downstream strategy selection without auto-running or auto-selecting the final route.
@@ -65,16 +53,16 @@
 - The summary must still show the builder baseline when it exists and at least three compared candidates when the portfolio size permits.
 - The next action must be concrete enough that another workflow or operator could continue immediately.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance for the verifier
+### Outcome guidance for the verifier
 - `candidate_workflow_set_ready`: the package, summary, and next-action artifact are complete and strategy-ready.
 - `needs_rework`: the same ranked candidate set still stands, but the package or summary needs local repair.
 - `needs_replan`: packaging revealed that the ranked candidates, posture, or downstream handoff changed materially.
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Use `blocked` only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Out Of Scope
 

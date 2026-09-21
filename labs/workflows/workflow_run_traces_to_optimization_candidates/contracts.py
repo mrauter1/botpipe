@@ -1,31 +1,26 @@
-from pydantic import BaseModel, ConfigDict, Field
-from botpipe import Route, SELF
+"""Typed optimizer-v2 workflow result."""
+
+from __future__ import annotations
+
+from typing import Literal
+
+from pydantic import BaseModel
+
+from botpipe_optimizer.evidence import EvidenceSnapshot
+from botpipe_optimizer.records import CandidateReview, CandidateSet, PublicationReceipt
 
 
-class RecommendationControl(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-    selected_workflow: str = Field(min_length=1)
-    candidate_set_id: str = Field(min_length=1)
-    review_id: str = Field(min_length=1)
-    summary: str = Field(min_length=1)
+class OptimizationWorkflowResult(BaseModel):
+    workflow_name: Literal["workflow_run_traces_to_optimization_candidates"] = (
+        "workflow_run_traces_to_optimization_candidates"
+    )
+    outcome: Literal["completed"] = "completed"
+    summary: str
+    evidence_snapshot: EvidenceSnapshot
+    candidate_set: CandidateSet
+    review: CandidateReview | None = None
+    receipt: PublicationReceipt
+    provider_budget: dict[str, object]
 
 
-RECOMMENDATION_ROUTES = {
-    "recommendations_reviewed": Route.to(
-        "publish_recommendation",
-        summary="Independent verifier accepted the exact CandidateSet.",
-        required_writes=(
-            "workflow_optimization_candidates",
-            "workflow_optimization_candidate_review",
-        ),
-    ),
-    "recommendation_rework": Route.to(
-        SELF,
-        summary="Independent verifier requested bounded rework.",
-        required_writes=(
-            "workflow_optimization_candidates",
-            "workflow_optimization_candidate_review",
-        ),
-    ),
-}
-__all__ = ["RecommendationControl", "RECOMMENDATION_ROUTES"]
+__all__ = ["OptimizationWorkflowResult"]

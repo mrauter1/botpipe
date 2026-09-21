@@ -1,3 +1,7 @@
+## Durable verifier outcome
+
+Return a JSON result matching the injected schema. Use `accepted` when the artifacts meet the positive phase condition described below, `needs_rework` when the same phase can be repaired, `needs_replan` when an accepted earlier plan must be revisited, `question` or `blocked` when operator input is required, and `failed` for a terminal domain failure. The phase labels below describe semantic checks; do not return old route labels as the `outcome`. Cite only artifact names supplied by the runtime.
+
 # Package Adapted Execution Plan Verifier
 
 ## Step Contract
@@ -8,25 +12,10 @@
 ### Purpose
 - Decide whether the terminal adapted-execution package is complete, machine-readable, and ready for deterministic publication.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `selected_workflow_capability` | Read | Required input. |
-| `adapted_execution_plan_checklist` | Read | Required input. |
-| `adaptation_request_brief` | Read | Required input. |
-| `adaptation_success_criteria` | Read | Required input. |
-| `workflow_fit_assessment` | Read | Required input. |
-| `step_adaptation_matrix` | Read | Required input. |
-| `adapted_execution_plan` | Read | Required input. |
-| `proposed_workflow_parameters` | Read | Required input. |
-| `adapted_execution_summary` | Read | Required input. |
-| `adapted_execution_next_action` | Read | Required input. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -48,12 +37,16 @@
 - `ready_for_execution`: must be `true` when the route is `adapted_execution_plan_ready`.
 - `replan_reason`: required only when the route is `needs_replan`.
 
-## Routes
+## Evidence
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Verify the declared phase artifacts—`adapted_execution_plan`, `proposed_workflow_parameters`, `adapted_execution_summary`, `adapted_execution_next_action`—against the phase requirements and require their claims to be internally consistent.
 
-### Route guidance
+## Phase decision criteria
+
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
+
+### Outcome guidance
 - Return `adapted_execution_plan_ready` only when the plan, proposed-parameter artifact, summary, and next-action artifact are aligned and publication-safe.
 - Return `needs_rework` when the same selected workflow and adaptation boundary still hold and the artifacts need local repair.
 - Return `needs_replan` when packaging reveals that the selected workflow or execution boundary changed materially.

@@ -1,3 +1,7 @@
+## Durable producer result
+
+After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+
 # Analyze Portfolio Operating Model Producer
 
 ## Step Contract
@@ -12,29 +16,16 @@
 - This work item owns lifecycle analysis only.
 - Keep the boundary at evidence-backed lifecycle recommendations and change candidates. Do not publish the final governance package in this step.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `workflow_capability_snapshot` | Read | Required input. |
-| `workflow_portfolio_health_snapshot` | Read | Required input. |
-| `portfolio_governance_brief` | Read | Required input. |
-| `portfolio_decision_criteria` | Read | Required input. |
-| `workflow_lifecycle_matrix` | Write | Overwrite. |
-| `portfolio_gap_analysis` | Write | Overwrite. |
-| `portfolio_change_candidates` | Write | Overwrite. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not create `workflow_portfolio_operating_system`, `portfolio_operating_summary`, or `portfolio_next_actions` in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
 ### Artifact handling
-- `workflow_lifecycle_matrix` must give every analyzed current workflow an explicit lifecycle posture chosen from `keep`, `refine`, `decompose`, `merge`, or `retire`, plus evidence-backed priority and rationale.
-- `portfolio_gap_analysis` must explain coverage gaps, overlap, fragility, and why create-next recommendations are or are not justified this cycle.
+- `lifecycle_recommendations` must give every analyzed current workflow an explicit lifecycle posture chosen from `keep`, `refine`, `decompose`, `merge`, or `retire`, plus evidence-backed priority and rationale.
+- `portfolio_health_analysis` must explain coverage gaps, overlap, fragility, and why create-next recommendations are or are not justified this cycle.
 - `portfolio_change_candidates` must be valid JSON and define `change_candidates` with objects that include:
 - `candidate_id`,
 - `action`,
@@ -54,16 +45,16 @@
 - Keep create-next recommendations explicit and rare; only recommend them when the scoped evidence shows a real missing capability or compounding leverage.
 - Keep merge and retire guidance explicit even when the answer is "none this cycle".
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance for the verifier
+### Outcome guidance for the verifier
 - `portfolio_operating_model_analyzed`: the lifecycle matrix, gap analysis, and change-candidate manifest are aligned and ready for packaging.
 - `needs_rework`: the same lifecycle-analysis boundary still holds, but one or more analysis artifacts need local repair.
 - `needs_replan`: the focus set, criteria, or evidence boundary changed materially and framing must be revisited.
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only for genuine intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Use `blocked` only for genuine intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Out Of Scope
 

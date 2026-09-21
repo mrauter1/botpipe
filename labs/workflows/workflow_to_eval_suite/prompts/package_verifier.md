@@ -1,3 +1,7 @@
+## Durable verifier outcome
+
+Return a JSON result matching the injected schema. Use `accepted` when the artifacts meet the positive phase condition described below, `needs_rework` when the same phase can be repaired, `needs_replan` when an accepted earlier plan must be revisited, `question` or `blocked` when operator input is required, and `failed` for a terminal domain failure. The phase labels below describe semantic checks; do not return old route labels as the `outcome`. Cite only artifact names supplied by the runtime.
+
 # Package Workflow Eval Suite Verifier
 
 ## Step Contract
@@ -8,30 +12,10 @@
 ### Purpose
 - Decide whether the terminal eval-suite package is complete, machine-readable, and ready for deterministic publication of the validated manifest and receipt.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `selected_workflow_capability` | Read | Required input. |
-| `eval_suite_checklist` | Read | Required input. |
-| `evaluation_request_brief` | Read | Required input. |
-| `evaluation_dimensions` | Read | Required input. |
-| `benchmark_case_matrix` | Read | Required input. |
-| `edge_case_matrix` | Read | Required input. |
-| `adversarial_case_matrix` | Read | Required input. |
-| `eval_case_manifest` | Read | Required input. |
-| `eval_rubric` | Read | Required input. |
-| `workflow_eval_suite` | Read | Required input. |
-| `workflow_eval_suite_summary` | Read | Required input. |
-| `workflow_eval_next_action` | Read | Required input. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not overwrite `workflow_eval_suite`, `workflow_eval_suite_summary`, or `workflow_eval_next_action` during verification.
-- Do not create `validated_eval_case_manifest.json` or `workflow_eval_suite_receipt.json` in this step.
-- Return verifier control metadata only through the step payload and selected route.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -57,15 +41,16 @@
 
 ## Evidence
 
+- Verify the declared phase artifacts—`workflow_eval_suite`, `workflow_eval_suite_summary`, `workflow_eval_next_action`—against the phase requirements and require their claims to be internally consistent.
 - Base the verdict on the package artifacts, upstream design artifacts, and selected-workflow capability snapshot instead of implied workflow behavior.
 - Confirm that the suite package is publication-safe, machine-readable, and still leaves manifest validation and receipt publication to the next deterministic step.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance
+### Outcome guidance
 - Return `workflow_eval_suite_ready` only when the suite package, summary, and next-action artifact are aligned and publication-safe.
 - Return `needs_rework` when the same evaluation-suite boundary still holds and the artifacts need local repair.
 - Return `needs_replan` when packaging reveals that the evaluation surface changed materially.
@@ -76,3 +61,9 @@
 - Do not approve packaging that renames the selected workflow or entry step.
 - Do not approve packaging that implies the selected workflow already ran.
 - Do not ask for a replan when local repair is sufficient.
+
+## Optimizer v2 evaluation-case handoff
+
+- `optimizer_handoff`, when present, contains one validated `evaluation_case` candidate. Turn every supplied case description into concrete typed cases without changing the candidate identity or treating development cases as withheld evaluation evidence.
+- `validated_eval_case_manifest` is the callable-validated manifest. Preserve its ordered case IDs, workflow parameters, and expected artifacts.
+- `evaluation_suite_id` is derived from that validated manifest and `source_candidate_id`; copy both exactly into the package payload and JSON summary. Do not execute the selected workflow or claim measured improvement.

@@ -1,3 +1,7 @@
+## Durable producer result
+
+After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+
 # Package Improvement Pressure Producer
 
 ## Step Contract
@@ -13,27 +17,10 @@
 - Keep the boundary at ranked opportunities, explicit next actions, and the terminal diagnostic package for this building block.
 - Do not auto-run refinement, portfolio governance, or selected-workflow execution in this step.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `selected_workflow_capability` | Read | Required input. |
-| `selected_workflow_run_history` | Read | Required input. |
-| `failure_mode_diagnostic_checklist` | Read | Required input. |
-| `diagnostic_scope_brief` | Read | Required input. |
-| `run_history_scope` | Read | Required input. |
-| `failure_mode_map` | Read | Required input. |
-| `failure_mode_manifest` | Read | Required input. |
-| `recurring_weak_points` | Read | Required input. |
-| `improvement_opportunities` | Write | Overwrite. |
-| `improvement_opportunities_summary` | Write | Overwrite. |
-| `diagnostic_next_actions` | Write | Overwrite. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not create `failure_mode_diagnostic_receipt.json` in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -61,16 +48,16 @@
 - Tie every opportunity to explicit failure-mode IDs and evidence-backed leverage.
 - Keep the boundary explicit: this workflow publishes diagnostics and next actions only.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance for the verifier
+### Outcome guidance for the verifier
 - `improvement_pressure_packaged`: the ranked package, machine-readable summary, and next-action artifact are aligned and ready for publication.
 - `needs_rework`: the same packaging boundary still holds, but the package artifacts need local repair.
 - `needs_replan`: the ranked package no longer matches the mapped failure surface and the workflow must revisit failure-mode mapping.
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Use `blocked` only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Out Of Scope
 

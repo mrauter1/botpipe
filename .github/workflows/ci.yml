@@ -18,34 +18,77 @@ jobs:
       - name: Install package
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e .
-          python -m pip install pytest
+          python -m pip install -e '.[test]' build
 
       - name: Run tests
         run: python -m pytest -q
 
-      - name: Build distributable
+      - name: Check minimum Pydantic compatibility
         run: |
-          python -m pip install build
-          python -m build
+          python -m pip install 'pydantic==2.12.0'
+          python -m pytest -q tests/test_codec_state.py tests/test_codec_corrections.py tests/test_ingress_and_limits.py tests/test_input_acceptance.py tests/test_source_records.py tests/test_source_record_integration.py tests/test_callable_identity.py tests/test_callable_graph.py tests/test_callable_code_identity.py tests/test_prompt_source_context.py tests/test_portable_source_records.py tests/test_source_context.py tests/test_source_capture.py tests/test_source_anchor_runtime.py tests/test_exception_source_records.py tests/test_flag_state.py tests/test_provider_checkpoints.py tests/test_journal_reads.py tests/test_mutable_replay.py
+
+      - name: Build distributions
+        run: python -m build
+
+      - name: Smoke test installed wheel
+        run: |
+          python -m venv /tmp/botpipe-wheel
+          /tmp/botpipe-wheel/bin/pip install dist/*.whl
+          cd /tmp
+          /tmp/botpipe-wheel/bin/botpipe workflows list
 
   optimizer-windows:
     runs-on: windows-latest
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
       - name: Install package and tests
-        run: python -m pip install -e . pytest
-
-      - name: Check optimizer containment and portable contracts
+        run: python -m pip install -e '.[test]'
+      - name: Check native containment and portable optimizer contracts
         run: >-
           python -m pytest -q
-          tests/unit/optimizer/test_candidate_validation_v2.py
-          tests/unit/optimizer/test_paired_evaluation.py
-          tests/unit/optimizer/test_publication_safety.py
-          tests/unit/test_provider_dispatch_budget.py
+          tests/test_artifacts.py
+          tests/test_artifact_integration.py
+          tests/test_artifact_reconciliation.py
+          tests/test_artifact_attempts.py
+          tests/test_artifact_rollback.py
+          tests/test_codec_corrections.py
+          tests/test_runtime_corrections.py
+          tests/test_mutable_replay.py
+          tests/test_input_acceptance.py
+          tests/test_source_records.py
+          tests/test_source_record_integration.py
+          tests/test_callable_identity.py
+          tests/test_callable_graph.py
+          tests/test_callable_code_identity.py
+          tests/test_prompt_source_context.py
+          tests/test_portable_source_records.py
+          tests/test_source_context.py
+          tests/test_source_capture.py
+          tests/test_source_anchor_runtime.py
+          tests/test_exception_source_records.py
+          tests/test_flag_state.py
+          tests/test_provider_checkpoints.py
+          tests/test_journal_reads.py
+          tests/test_sessions.py
+          tests/test_workflow_builder_materialization.py
+          tests/test_codec_state.py
+          tests/test_ingress_and_limits.py
+          tests/test_recovery_integration.py
+          tests/test_recovery_outcomes.py
+          tests/test_publication_generations.py
+          tests/test_evidence_profiles.py
+          tests/test_checkpoint_recovery.py
+          tests/test_provider_response_contract.py
+          tests/test_storage.py
+          tests/test_budgets.py
+          tests/test_dispatches.py
+          tests/test_processes.py
+          tests/test_candidate_v2.py
+          tests/test_execution_isolation.py
+          tests/test_paired_evaluation.py
+          tests/test_paired_resume.py
+          tests/test_provenance.py

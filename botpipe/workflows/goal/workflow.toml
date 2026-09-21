@@ -1,4 +1,6 @@
 name = "goal"
+function = "goal"
+version = "1"
 title = "Goal"
 description = "Persistent subgoal-based long-running objective workflow equivalent to Codex /goal."
 aliases = []

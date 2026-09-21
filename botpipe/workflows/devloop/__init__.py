@@ -1,7 +1,5 @@
 """Default devloop workflow package."""
 
-from .workflow import DevLoop
+from .workflow import DevLoop, DevLoopParams, DevLoopResult, Params, devloop
 
-Params = DevLoop.Params
-
-__all__ = ["DevLoop", "Params"]
+__all__ = ["DevLoop", "DevLoopParams", "DevLoopResult", "Params", "devloop"]

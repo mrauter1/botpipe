@@ -1,3 +1,7 @@
+## Durable verifier outcome
+
+Return a JSON result matching the injected schema. Use `accepted` when the artifacts meet the positive phase condition described below, `needs_rework` when the same phase can be repaired, `needs_replan` when an accepted earlier plan must be revisited, `question` or `blocked` when operator input is required, and `failed` for a terminal domain failure. The phase labels below describe semantic checks; do not return old route labels as the `outcome`. Cite only artifact names supplied by the runtime.
+
 # Frame Decomposition Request Verifier
 
 ## Step Contract
@@ -8,29 +12,17 @@
 ### Purpose
 - Decide whether the selected workflow, evidence bundle, and accepted decomposition boundary are explicit enough to support concrete extraction planning.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `selected_workflow_decomposition_surface` | Read | Required input. |
-| `baseline_parent_manifest` | Read | Required input. |
-| `decomposition_evidence_manifest` | Read | Required input. |
-| `decomposition_request_brief` | Read | Required input. |
-| `decomposition_acceptance_criteria` | Read | Required input. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not overwrite `decomposition_request_brief` or `decomposition_acceptance_criteria` during verification.
-- Return verifier control metadata only through the step payload and selected route.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
 ### Artifact checks
 - `decomposition_request_brief` must keep the selected workflow fixed, cite the copied evidence bundle, and explain why this building block stops at candidate publication instead of promotion.
-- `decomposition_acceptance_criteria` must define the accepted decomposition boundary, the minimum evidence expected from later steps, and the difference between local repair and material replan.
-- The framing must stay consistent with `selected_workflow_decomposition_surface` and `baseline_parent_manifest`; do not accept a renamed or implicitly swapped workflow.
+- `decomposition_success_criteria` must define the accepted decomposition boundary, the minimum evidence expected from later steps, and the difference between local repair and material replan.
+- The framing must stay consistent with `selected_workflow_contract` and `candidate_surface`; do not accept a renamed or implicitly swapped workflow.
 
 ### Payload requirements
 - `summary`: concise validation summary.
@@ -41,15 +33,16 @@
 
 ## Evidence
 
+- Verify the declared phase artifacts—`decomposition_request_brief`, `decomposition_success_criteria`—against the phase requirements and require their claims to be internally consistent.
 - Base the verdict on the framing artifacts plus the captured selected-workflow and evidence artifacts instead of provider inference.
 - Confirm that the artifacts make the decomposition boundary explicit enough for deterministic planning without widening the parent workflow surface.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance
+### Outcome guidance
 - Return `decomposition_request_framed` only when the request and acceptance boundary are explicit enough for planning.
 - Return `needs_rework` when the same boundary still holds and the artifacts need local repair.
 - Return `needs_replan` when the selected workflow, evidence interpretation, or publication boundary changed materially.

@@ -1,18 +1,21 @@
 """Strict, content-addressed optimizer v2 recommendation records."""
 
 from __future__ import annotations
-import hashlib, json
-from typing import Annotated, Literal, TypeAlias
+
+import hashlib
+import json
+from typing import Annotated, Literal
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 CANDIDATE_SET_SCHEMA = "botpipe.workflow_optimization.candidate_set/v2"
 CANDIDATE_REVIEW_SCHEMA = "botpipe.workflow_optimization.candidate_review/v2"
 RECOMMENDATION_RECEIPT_SCHEMA = "botpipe.workflow_optimization.publication_receipt/v2"
 REFINEMENT_HANDOFF_SCHEMA = "botpipe.workflow_refinement_evidence/v2"
-CandidateKind: TypeAlias = Literal[
+type CandidateKind = Literal[
     "producer_prompt", "verifier_rubric", "tokens", "workflow", "evaluation_case"
 ]
-NextAction: TypeAlias = Literal["implement_candidate", "collect_evidence", "no_change"]
+type NextAction = Literal["implement_candidate", "collect_evidence", "no_change"]
 
 
 class StrictRecord(BaseModel):
@@ -39,7 +42,7 @@ def canonical_record_bytes(
 def content_id(
     prefix: str, value: BaseModel | dict[str, object], *, exclude: set[str]
 ) -> str:
-    return f"{prefix}_{hashlib.sha256(canonical_record_bytes(value,exclude=exclude)).hexdigest()}"
+    return f"{prefix}_{hashlib.sha256(canonical_record_bytes(value, exclude=exclude)).hexdigest()}"
 
 
 class ValidationPlan(StrictRecord):
@@ -133,7 +136,7 @@ class EvaluationCaseCandidate(CandidateBase):
     payload: EvaluationCasePayload
 
 
-Candidate: TypeAlias = Annotated[
+type Candidate = Annotated[
     ProducerPromptCandidate
     | VerifierRubricCandidate
     | TokenCandidate

@@ -1,3 +1,7 @@
+## Durable verifier outcome
+
+Return a JSON result matching the injected schema. Use `accepted` when the artifacts meet the positive phase condition described below, `needs_rework` when the same phase can be repaired, `needs_replan` when an accepted earlier plan must be revisited, `question` or `blocked` when operator input is required, and `failed` for a terminal domain failure. The phase labels below describe semantic checks; do not return old route labels as the `outcome`. Cite only artifact names supplied by the runtime.
+
 # Map Failure Modes Verifier
 
 ## Step Contract
@@ -8,24 +12,10 @@
 ### Purpose
 - Decide whether the failure-mode map, machine-readable manifest, and recurring weak points are evidence-backed, non-duplicative, and ready for ranked improvement packaging.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `selected_workflow_capability` | Read | Required input. |
-| `selected_workflow_run_history` | Read | Required input. |
-| `diagnostic_scope_brief` | Read | Required input. |
-| `run_history_scope` | Read | Required input. |
-| `failure_mode_map` | Read | Required input. |
-| `failure_mode_manifest` | Read | Required input. |
-| `recurring_weak_points` | Read | Required input. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not overwrite `failure_mode_map`, `failure_mode_manifest`, or `recurring_weak_points` during verification.
-- Return verifier control metadata only through the step payload and selected route.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -44,15 +34,16 @@
 
 ## Evidence
 
-- Base the verdict on the artifacts plus `selected_workflow_run_history`; do not accept unsupported causal claims or clusters that are not tied to the captured evidence.
+- Verify the declared phase artifacts—`failure_mode_map`, `failure_mode_manifest`, `recurring_weak_points`—against the phase requirements and require their claims to be internally consistent.
+- Base the verdict on the artifacts plus `observed_run_history`; do not accept unsupported causal claims or clusters that are not tied to the captured evidence.
 - Confirm that the failure modes are specific enough for ranked improvement packaging and that the recurring weak points are not just restatements of the same symptom.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance
+### Outcome guidance
 - Return `failure_modes_mapped` only when the clusters, manifest, and recurring weak points are explicit and packaging-ready.
 - Return `needs_rework` when the same boundary still holds and the artifacts need local repair.
 - Return `needs_replan` when the selected workflow boundary or evidence window changed materially.

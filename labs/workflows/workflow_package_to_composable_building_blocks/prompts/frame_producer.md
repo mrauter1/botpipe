@@ -1,3 +1,7 @@
+## Durable producer result
+
+After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+
 # Frame Decomposition Request Producer
 
 ## Step Contract
@@ -13,24 +17,10 @@
 - Keep the boundary at the selected workflow, the copied baseline parent workflow surface, the copied evidence manifest, and the candidate-only publication boundary for this building block.
 - Do not design file-level edits, new package contents, or the candidate decomposition surface in this step.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `selected_workflow_decomposition_surface` | Read | Required input. |
-| `baseline_parent_manifest` | Read | Required input. |
-| `decomposition_evidence_manifest` | Read | Required input. |
-| `framework_architecture_doc` | Read | Required input. |
-| `framework_authoring_doc` | Read | Required input. |
-| `workflow_authoring_guidelines` | Read | Required input. |
-| `decomposition_request_brief` | Write | Overwrite. |
-| `decomposition_acceptance_criteria` | Write | Overwrite. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not create `extraction_strategy`, `building_block_interface_contracts`, `parent_rewrite_plan`, `regression_guardrails`, `candidate_decomposition_surface`, `candidate_building_block_index.json`, `candidate_decomposition_manifest.json`, `decomposition_build_report`, `candidate_diff_summary`, `decomposition_verification_report`, `composition_migration_guide`, `promotion_record`, `rollback_plan`, or `workflow_decomposition_receipt.json` in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -42,7 +32,7 @@
 - the candidate-only publication boundary for this building block,
 - why the workflow must stop before promotion or baseline mutation,
 - which reusable extraction opportunities appear strongest.
-- `decomposition_acceptance_criteria` must define:
+- `decomposition_success_criteria` must define:
 - the selected workflow boundary that must remain fixed,
 - the expected parent rewrite scope,
 - the expected building-block package surface,
@@ -55,20 +45,20 @@
 
 ## Evidence
 
-- Anchor the request in `selected_workflow_decomposition_surface`, `baseline_parent_manifest`, and `decomposition_evidence_manifest`.
+- Anchor the request in `selected_workflow_contract`, `candidate_surface`, and `runtime input`.
 - Keep the runtime/provider boundary crisp: the runtime injects the compact human-readable step contract, while prompt templates own the operational guidance and raw provider output never re-enters prompts.
 - Make the acceptance surface specific enough that the next step can choose extraction boundaries, interface contracts, and parent rewrite changes without widening the selected workflow boundary.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance for the verifier
+### Outcome guidance for the verifier
 - `decomposition_request_framed`: the selected workflow, evidence bundle, and acceptance boundary are explicit enough for extraction planning.
 - `needs_rework`: the same framing boundary still holds, but the brief or acceptance criteria need local repair.
 - `needs_replan`: the selected workflow, evidence interpretation, or publication boundary changed materially and framing must restart.
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Use `blocked` only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Out Of Scope
 

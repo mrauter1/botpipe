@@ -1,54 +1,11 @@
-# `workflow_portfolio_to_operating_system` Prompts
+# Durable phase prompts
 
-## Shared README Boundary
+Each phase has a producer and verifier prompt. Python workflow code declares their order, immutable reads, and exact artifact writes. The runtime appends the input payload, artifact destinations, and typed JSON schema.
 
-- This README keeps the family-wide prompt contract in one place so individual prompt files can stay step-local.
-- Prompt files still own the step role, purpose, current work-item boundary, exact artifact read/write set, and any evidence or route guidance that changes the local decision.
-- Keep provider-facing operational guidance in prompt files, but keep repeated family-wide reminders here.
-- The runtime injects a compact human-readable step contract with required inputs, writable artifacts, route-specific required writes, expected output payload requirements, available routes, route metadata, optional route handoff, and optional retry feedback.
-- Provider raw output is runtime telemetry. It is persisted for logs, traces, extension events, debugging, and replay, but it is not rendered into provider prompts.
-- Provider prose is control metadata unless it is written into a declared artifact.
-- Verifier prompts return one JSON object through the selected route and step payload; they do not mutate artifacts unless the step contract says otherwise.
+The producer writes every declared artifact and returns a `LabPhaseDraft` with a summary, evidence notes, and any stable candidate identifiers. The verifier reads immutable artifact snapshots and returns `LabPhaseOutcome`:
 
-## Keep In Each Prompt
+- `accepted` when the phase-specific success condition is met;
+- `needs_rework` when the same phase can repair its artifacts;
+- `blocked` when a required prerequisite is absent.
 
-- role and step name
-- step purpose and current work-item boundary
-- exact artifacts to read, write, or leave untouched
-- step-specific evidence requirements, route reminders, and forbidden actions
-
-## Step Surface
-
-| Step | Prompt pair | Writes | Step-complete route |
-| --- | --- | --- | --- |
-| `frame_portfolio_governance` | `frame_producer.md` / `frame_verifier.md` | `portfolio_governance_brief`, `portfolio_decision_criteria` | `portfolio_governance_framed` |
-| `analyze_portfolio_operating_model` | `analyze_producer.md` / `analyze_verifier.md` | `workflow_lifecycle_matrix`, `portfolio_gap_analysis`, `portfolio_change_candidates` | `portfolio_operating_model_analyzed` |
-| `package_portfolio_operating_system` | `package_producer.md` / `package_verifier.md` | `workflow_portfolio_operating_system`, `portfolio_operating_summary`, `portfolio_next_actions` | `portfolio_operating_system_ready` |
-
-## Route Surface
-
-Helper routes:
-
-- `question` when provider questions are allowed by the interaction policy
-- question routes use `outcome.route_fields.questions`; blocked and failed routes use nullable `outcome.route_fields.reason`
-
-Application routes:
-
-- `inputs_prepared`
-- `portfolio_context_captured`
-- `portfolio_governance_framed`
-- `portfolio_operating_model_analyzed`
-- `portfolio_operating_system_ready`
-- `needs_rework`
-- `needs_replan`
-- `portfolio_operating_system_published`
-
-Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
-
-## Verifier Payloads
-
-| Step | Payload |
-| --- | --- |
-| `frame_portfolio_governance` | `PortfolioGovernanceFramingPayload` |
-| `analyze_portfolio_operating_model` | `PortfolioOperatingModelPayload` |
-| `package_portfolio_operating_system` | `PortfolioOperatingSystemPayload` |
+Names such as `release_framed` or `strategy_selected` in older domain guidance describe the positive success condition. They are descriptive success conditions, not runtime control values. The verifier cites only artifacts supplied by the runtime. Provider output and artifact validation failures may receive bounded repair feedback through a new journaled turn.

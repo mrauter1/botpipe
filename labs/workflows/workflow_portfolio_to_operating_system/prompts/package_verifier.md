@@ -1,3 +1,7 @@
+## Durable verifier outcome
+
+Return a JSON result matching the injected schema. Use `accepted` when the artifacts meet the positive phase condition described below, `needs_rework` when the same phase can be repaired, `needs_replan` when an accepted earlier plan must be revisited, `question` or `blocked` when operator input is required, and `failed` for a terminal domain failure. The phase labels below describe semantic checks; do not return old route labels as the `outcome`. Cite only artifact names supplied by the runtime.
+
 # Package Portfolio Operating System Verifier
 
 ## Step Contract
@@ -12,28 +16,10 @@
 - This work item owns packaging validation only.
 - Judge the existing package artifacts. Do not execute the next workflow or mutate workflow packages in this step.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `workflow_capability_snapshot` | Read | Required input. |
-| `workflow_portfolio_health_snapshot` | Read | Required input. |
-| `portfolio_governance_brief` | Read | Required input. |
-| `portfolio_decision_criteria` | Read | Required input. |
-| `workflow_lifecycle_matrix` | Read | Required input. |
-| `portfolio_gap_analysis` | Read | Required input. |
-| `portfolio_change_candidates` | Read | Required input. |
-| `workflow_portfolio_operating_system` | Read | Required input. |
-| `portfolio_operating_summary` | Read | Required input. |
-| `portfolio_next_actions` | Read | Required input. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Do not overwrite `workflow_portfolio_operating_system`, `portfolio_operating_summary`, or `portfolio_next_actions` during verification.
-- Do not create `portfolio_operating_system_receipt.json` in this step.
-- Return verifier control metadata only through the step payload and selected route.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -57,15 +43,16 @@
 
 ## Evidence
 
+- Verify the declared phase artifacts—`workflow_portfolio_operating_system`, `portfolio_operating_summary`, `portfolio_next_actions`—against the phase requirements and require their claims to be internally consistent.
 - Base the verdict on the packaging artifacts plus the analyzed lifecycle matrix and change candidates instead of provider inference.
 - Confirm that the package is explicit enough for later refinement, governance, or decomposition work to consume later without rerunning this workflow first.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance
+### Outcome guidance
 - Return `portfolio_operating_system_ready` only when the package, JSON summary, and next-actions artifact are aligned and publication-ready.
 - Return `needs_rework` when the same packaging boundary still holds and the artifacts need local repair.
 - Return `needs_replan` when the package no longer matches the analyzed operating model.

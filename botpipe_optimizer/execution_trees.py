@@ -1,14 +1,22 @@
 """Frozen project trees for candidate compilation and paired evaluation."""
 
 from __future__ import annotations
-import json, os, shutil, stat, tempfile
-from collections.abc import Mapping, Sequence
+
+import json
+import os
+import shutil
+import stat
+import tempfile
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
-from botpipe.core.surface_identity import canonical_surface_id, derive_surface_manifest
+
+from botpipe.surface_identity import canonical_surface_id
+
+from .surface_identity import derive_surface_manifest
 
 DEFAULT_MAX_EXECUTION_TREE_FILES = 100000
 DEFAULT_MAX_EXECUTION_TREE_BYTES = 512 * 1024 * 1024
@@ -60,8 +68,8 @@ def capture_execution_tree(
     max_bytes: int = DEFAULT_MAX_EXECUTION_TREE_BYTES,
 ) -> FrozenExecutionTree:
     raw = Path(source_root)
-    if raw.is_symlink():
-        raise ValueError("execution source root must not be a symlink")
+    if _has_symlink(raw):
+        raise ValueError("execution source root must not contain a symlink")
     source = raw.resolve(strict=True)
     if not source.is_dir():
         raise ValueError("source_root must be a directory")
@@ -69,12 +77,19 @@ def capture_execution_tree(
     parent = Path(owned_parent).resolve()
     parent.mkdir(parents=True, exist_ok=True)
     excluded = _excluded_roots(source, [*excluded_roots, parent])
-    project = _enumerate(source, prefix=None, excluded=excluded, layer="project")
+    project = _enumerate(
+        source,
+        prefix=None,
+        excluded=excluded,
+        layer="project",
+        max_files=max_files,
+        max_bytes=max_bytes,
+    )
     package: list[dict[str, Any]] = []
     prefix = None
     if selected_package_root is not None:
         raw_package = Path(selected_package_root)
-        if raw_package.is_symlink():
+        if _has_symlink(raw_package):
             raise ValueError("selected package root must not be a symlink")
         package_root = raw_package.resolve(strict=True)
         try:
@@ -82,10 +97,15 @@ def capture_execution_tree(
         except ValueError:
             prefix = _relative(selected_package_import_path or package_root.name)
             package = _enumerate(
-                package_root, prefix=prefix, excluded=(), layer="selected_package"
+                package_root,
+                prefix=prefix,
+                excluded=(),
+                layer="selected_package",
+                max_files=max_files - len(project),
+                max_bytes=max_bytes - sum(record["size_bytes"] for record in project),
             )
     records = _merge(project, package)
-    total = sum((int(r["size_bytes"]) for r in records))
+    total = sum(int(r["size_bytes"]) for r in records)
     if len(records) > max_files:
         raise ValueError(
             f"execution tree has {len(records)} files, exceeding max_execution_tree_files={max_files}"
@@ -107,13 +127,13 @@ def capture_execution_tree(
             exclusions=_exclusion_payload(excluded),
             layers={"project": True, "selected_package_import_path": prefix},
         )
-        if [x["path"] for x in manifest["files"]] != [x["path"] for x in records]:
-            raise ValueError("frozen tree inventory differs from source inventory")
+        if manifest["files"] != _file_identities(records):
+            raise ValueError("frozen tree identity differs from source inventory")
         return FrozenExecutionTree(
             root,
             str(manifest["execution_tree_id"]),
             manifest,
-            tuple((dict(r) for r in records)),
+            tuple(dict(r) for r in records),
             parent,
             token,
         )
@@ -130,16 +150,9 @@ def derive_execution_tree_manifest(
 ) -> dict[str, Any]:
     resolved = Path(root).resolve(strict=True)
     records = _enumerate(resolved, prefix=None, excluded=(), layer="frozen")
-    files = [
-        {
-            "path": r["path"],
-            "sha256": r["sha256"],
-            "size_bytes": r["size_bytes"],
-            "executable": r["executable"],
-        }
-        for r in records
-        if r["path"] != OWNERSHIP_MARKER
-    ]
+    files = _file_identities(
+        record for record in records if record["path"] != OWNERSHIP_MARKER
+    )
     boundary = {
         "kind": "execution_tree",
         "exclusions": sorted(exclusions),
@@ -156,7 +169,7 @@ def derive_execution_tree_manifest(
         "boundary": boundary,
         "mode_semantics": mode,
         "file_count": len(files),
-        "size_bytes": sum((int(x["size_bytes"]) for x in files)),
+        "size_bytes": sum(int(x["size_bytes"]) for x in files),
         "files": files,
     }
 
@@ -187,6 +200,7 @@ def materialize_execution_arm(
     owned_parent: Path,
     *,
     candidate_manifest: Mapping[str, Any] | None = None,
+    removed_paths: Sequence[str] = (),
 ) -> ExecutionArm:
     verify_frozen_execution_tree(snapshot)
     parent = Path(owned_parent).resolve()
@@ -194,6 +208,14 @@ def materialize_execution_arm(
     root, token = allocate_owned_directory(parent, prefix="execution-arm-")
     try:
         _copy(snapshot.root, root)
+        for value in removed_paths:
+            relative = _relative(value)
+            target = root / relative
+            if _has_symlink(target, stop=root) or not target.is_file():
+                raise ValueError(
+                    f"removed path must name a staged regular file: {relative}"
+                )
+            target.unlink()
         surface_id = None
         if candidate_manifest is not None:
             raw = Path(
@@ -280,6 +302,10 @@ def assert_execution_arm_unchanged(
 
 
 def allocate_owned_directory(parent: Path, *, prefix: str) -> tuple[Path, str]:
+    if not isinstance(prefix, str) or not prefix or "/" in prefix or "\\" in prefix:
+        raise ValueError("owned-directory prefix must be a nonempty filename prefix")
+    if _has_symlink(Path(parent)):
+        raise ValueError("owned parent must not contain symlinks")
     parent = Path(parent).resolve(strict=True)
     token = uuid4().hex
     root = Path(tempfile.mkdtemp(prefix=prefix, dir=parent)).resolve()
@@ -298,6 +324,8 @@ def cleanup_owned_directory(
     raw = Path(path)
     if not raw.is_absolute() or ".." in raw.parts:
         raise ValueError("cleanup path must be absolute without traversal")
+    if _has_symlink(raw):
+        raise ValueError("cleanup path must not contain symlinks")
     root = raw.resolve(strict=True)
     parent = Path(owned_parent).resolve(strict=True)
     if root == parent:
@@ -316,7 +344,7 @@ def cleanup_owned_directory(
 
 
 def validate_disjoint_roots(*roots: Path) -> tuple[Path, ...]:
-    resolved = tuple((Path(x).resolve() for x in roots))
+    resolved = tuple(Path(x).resolve() for x in roots)
     for i, left in enumerate(resolved):
         for right in resolved[i + 1 :]:
             if left == right or _under(left, right) or _under(right, left):
@@ -325,16 +353,24 @@ def validate_disjoint_roots(*roots: Path) -> tuple[Path, ...]:
 
 
 def _enumerate(
-    root: Path, *, prefix: str | None, excluded: Sequence[Path], layer: str
+    root: Path,
+    *,
+    prefix: str | None,
+    excluded: Sequence[Path],
+    layer: str,
+    max_files: int | None = None,
+    max_bytes: int | None = None,
 ) -> list[dict[str, Any]]:
     records = []
+    admitted_bytes = 0
 
     def visit(directory: Path) -> None:
+        nonlocal admitted_bytes
         for entry in sorted(os.scandir(directory), key=lambda e: e.name):
             path = Path(entry.path)
             relative = path.relative_to(root)
             out = (Path(prefix) / relative if prefix else relative).as_posix()
-            if any((path == x or _under(path, x) for x in excluded)):
+            if any(path == x or _under(path, x) for x in excluded):
                 continue
             if entry.is_symlink():
                 raise ValueError(f"execution tree source contains a symlink: {out}")
@@ -356,6 +392,15 @@ def _enumerate(
                 raise ValueError(
                     f"execution tree source contains a special file: {out}"
                 )
+            if max_files is not None and len(records) + 1 > max_files:
+                raise ValueError(
+                    f"execution tree exceeds max_execution_tree_files={max_files}"
+                )
+            if max_bytes is not None and admitted_bytes + info.st_size > max_bytes:
+                raise ValueError(
+                    f"execution tree exceeds max_execution_tree_bytes={max_bytes}"
+                )
+            admitted_bytes += info.st_size
             records.append(
                 {
                     "path": out,
@@ -382,6 +427,20 @@ def _merge(*groups: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
                 )
             merged[path] = record
     return [merged[x] for x in sorted(merged)]
+
+
+def _file_identities(
+    records: Iterable[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    return [
+        {
+            "path": record["path"],
+            "sha256": record["sha256"],
+            "size_bytes": record["size_bytes"],
+            "executable": record["executable"],
+        }
+        for record in records
+    ]
 
 
 def _copy(source: Path, target: Path) -> None:
@@ -421,10 +480,7 @@ def _exclusion_payload(values: Sequence[Path]) -> list[str]:
 
 def _limits(files: int, bytes_: int) -> None:
     if any(
-        (
-            isinstance(x, bool) or not isinstance(x, int) or x <= 0
-            for x in (files, bytes_)
-        )
+        isinstance(x, bool) or not isinstance(x, int) or x <= 0 for x in (files, bytes_)
     ):
         raise ValueError("execution tree limits must be positive integers")
 

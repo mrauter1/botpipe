@@ -1,3 +1,7 @@
+## Durable producer result
+
+After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+
 # Assess Go/No-Go Producer
 
 ## Step Contract
@@ -12,24 +16,10 @@
 - This work item owns the readiness assessment only.
 - Keep the work-item boundary at assessment artifacts. Do not publish the final stakeholder package in this step.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `release_scope_brief` | Read | Required input. |
-| `decision_criteria` | Read | Required input. |
-| `evidence_intake_register` | Read | Required input. |
-| `release_inventory` | Read | Required input. |
-| `test_evidence_pack` | Read | Required input. |
-| `operational_readiness` | Read | Required input. |
-| `rollback_readiness` | Read | Required input. |
-| `blocking_issues` | Read | Required input. |
-| `go_no_go_assessment` | Write | Overwrite. |
-| `risk_register` | Write | Overwrite. |
-| `decision_summary` | Write | Overwrite. |
-
-### Artifact Notes
-- Do not write the final stakeholder package or receipt in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -52,16 +42,16 @@
 - Missing or weak proof must influence the recommendation explicitly.
 - Keep the JSON summary aligned to the prose assessment with no contradictions.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance for the verifier
+### Outcome guidance for the verifier
 - `assessment_ready`: the recommendation, risks, and summary are coherent and packaging-ready.
 - `needs_rework`: the same assessment boundary still holds, but the synthesis or recommendation needs local repair.
 - `needs_replan`: the release boundary or decision surface changed materially and framing must be revisited.
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only for genuine missing prerequisites, missing evidence, or irreconcilable contradictions.
+- Use `blocked` only when a missing prerequisite or irreconcilable contradiction prevents safe progress.
 
 ## Out Of Scope
 

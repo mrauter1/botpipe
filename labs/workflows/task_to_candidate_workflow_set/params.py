@@ -1,11 +1,12 @@
-"""Workflow-specific parameter model for the task-to-candidate-workflow-set package."""
+"""Typed invocation parameters."""
 
 from __future__ import annotations
 
 from botpipe_optimizer import TaskFramingWithEvidenceParameters
 
+
 class Params(TaskFramingWithEvidenceParameters):
-    """Invocation contract for ``task_to_candidate_workflow_set``."""
+    pass
 
 
 __all__ = ["Params"]

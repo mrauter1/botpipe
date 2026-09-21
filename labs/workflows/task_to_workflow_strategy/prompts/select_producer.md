@@ -1,3 +1,7 @@
+## Durable producer result
+
+After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+
 # Select Strategy Producer
 
 ## Step Contract
@@ -12,28 +16,10 @@
 - This work item owns strategy selection only.
 - Keep the boundary at final route choice and route rationale. Do not rerun candidate retrieval, execute the selected route, or package the final handoff artifacts yet.
 
-## Artifact Contract
+## Runtime bindings
 
-| Artifact | Direction | Notes |
-| --- | --- | --- |
-| `request` | Read | Required input. |
-| `invocation_contract` | Read | Required input. |
-| `workflow_portfolio_snapshot` | Read | Required input. |
-| `task_strategy_brief` | Read | Required input. |
-| `workflow_selection_criteria` | Read | Required input. |
-| `workflow_candidate_matrix` | Read | Required input. |
-| `workflow_gap_analysis` | Read | Required input. |
-| `candidate_route_posture` | Read | Required input. |
-| `candidate_workflow_set` | Read | Required input. |
-| `candidate_workflow_set_summary` | Read | Required input. |
-| `candidate_next_action` | Read | Required input. |
-| `strategy_decision` | Write | Overwrite. |
-
-### Artifact Notes
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Treat the adopted child artifacts as the authoritative candidate-analysis package for this step.
-- Do not modify `workflow_candidate_matrix`, `workflow_gap_analysis`, `candidate_route_posture`, `candidate_workflow_set`, `candidate_workflow_set_summary`, or `candidate_next_action` in this step.
-- Do not create `workflow_strategy_package`, `strategy_summary`, or `strategy_next_action` in this step.
+- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
+- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
 
 ## Output Requirements
 
@@ -59,16 +45,16 @@
 - `material_gap` -> `create_new`
 - Justify `create_new` only when the child package already proved the material gap is durable enough that reuse, composition, and adaptation are not credible.
 
-## Routes
+## Phase decision criteria
 
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
-- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
+- Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Route guidance for the verifier
+### Outcome guidance for the verifier
 - `strategy_selected`: the child candidate package was consumed explicitly, the builder baseline remains visible, and one route plus downstream workflow set is justified clearly.
 - `needs_rework`: the same selection boundary holds, but the final route rationale or recommended workflow set needs local repair.
 - `needs_replan`: the framing, legal route set, or adopted child candidate package changed materially.
-- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Use `blocked` only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Out Of Scope
 

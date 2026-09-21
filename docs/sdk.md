@@ -1,583 +1,157 @@
-# SDK
-
-The SDK is the public Python execution facade. Use it when application code,
-tests, notebooks, or agents need to run Botpipe workflows or individual steps
-without driving the CLI.
-
-```python
-from botpipe import Botpipe
-```
-
-One SDK call is one independent invocation. The SDK uses the runtime task, run,
-checkpoint, artifact, and provider machinery internally, but it does not expose
-manual task/run management, durable resume, event browsing, or trace browsing as
-public SDK workflows.
-
-## Smallest Use
-
-```python
-from botpipe import Botpipe
-
-client = Botpipe(workspace=".", provider="codex")
-result = client.run(ReviewWorkflow, "Review this change.")
-
-if result.ok:
-    print(result.state)
-```
-
-With typed input and params:
-
-```python
-result = client.run(
-    ReviewWorkflow,
-    message="Review this release.",
-    input=ReviewWorkflow.Input(topic="checkout"),
-    params={"mode": "strict"},
-)
-```
-
-`message`, `input`, and `params` are separate:
-
-- `message` is the natural-language request, visible as `ctx.message`.
-- `input` is structured workflow input, visible as fields on `ctx.input` and
-  temporarily also as the raw model on `ctx.input_fields`.
-- `params` is configuration, visible as `ctx.params` and `ctx.workflow_params`.
+# SDK reference
 
 ## Client
 
 ```python
-from pathlib import Path
-
 from botpipe import Botpipe, Policy
 
 client = Botpipe(
-    workspace=Path("."),
-    default_policy=Policy(read_only=True),
-    provider="codex",
-    model=None,
-    model_effort=None,
-    runtime_config=None,
-    provider_policy_config=None,
+    workspace=".",
+    provider="codex",            # or a Provider object
+    provider_config={"command": ["codex", "exec"]},
+    policy=Policy(model="gpt-5.5"),
     state_dir=None,
-    retention=None,
+    max_operations=1000,
+    timeout=3600,
 )
 ```
 
-Constructor arguments:
+- `run(workflow_or_name, *args, task_id=None, run_id=None, **kwargs)` creates a
+  new run and returns `RunResult`. A duplicate `run_id` is rejected.
+- `arun(...)` is the async equivalent.
+- `resume(run_id, *, answer=..., workflow=None, max_operations=None,
+  timeout=None)` resumes. Supply `workflow` for a local callable that cannot be
+  imported from stored metadata. `max_operations` may explicitly extend the
+  recorded operation budget, and `timeout` may replace its positive limit;
+  otherwise the recorded limits remain. Limits belong to the run and its child
+  contexts; resuming never changes the client's defaults for another run.
+  Operation limits require positive integers; timeouts require finite positive
+  numbers. Booleans and silently truncated values are rejected.
+  A completed run returns its saved result without executing the workflow or
+  changing its limits and revision history.
+- `resolve(run_id, operation_id, *, retry=False, response=..., artifact_digests=None)` explicitly
+  reconciles an interrupted operation. Choose a resolution, then call
+  `resume`; an explicit `None` response records `None` as the activity result.
+  Provider reconciliation first checks recovery: an authoritative completed
+  response wins over supplied input, and running or unknown attempts remain
+  blocked. A manual provider response or retry requires confirmed stopped effects.
+  When a completed response has no durable artifact inventory, provide a complete
+  `artifact_digests` mapping from declared name to SHA-256 digest (`None` means an
+  optional artifact is absent). It may accompany a manual response, but cannot
+  accompany `retry=True`. The current files are verified and recorded as operator
+  reconciliation, then verified again during capture.
+- `runs()` returns run metadata mappings.
+- `inspect(run_id)` returns run metadata, operations, events, and artifacts.
 
-- `workspace`: project or repository working directory. This is not the internal
-  `.botpipe` state directory.
-- `default_policy`: SDK client-level policy layer inherited by workflow steps,
-  direct operations, and SDK step calls unless overridden.
-- `provider`: `None`, a provider name such as `"codex"` or `"claude"`, or an
-  already constructed `LLMProvider`.
-- `model`, `model_effort`: provider overrides.
-- `runtime_config`: runtime options object. `None` uses config resolution.
-- `provider_policy_config`: runtime provider policy config. `None` uses config
-  resolution.
-- `state_dir`: internal runtime state directory. `None` uses the workspace
-  `.botpipe` state root.
-- `retention`: default SDK retention policy. `None` uses
-  `RetentionPolicy.sdk_default()`.
+`RunResult` contains `run_id`, `task_id`, `status`, `value`, `artifacts`,
+`error`, `pending_input`, `folder`, and `usage`. `ok` is true for a completed
+run. Status is one of `completed`, `failed`, `awaiting_input`, `interrupted`, or
+`budget_exceeded`.
 
-Policy layers inherit. `default_policy` and per-call `policy` are not hard
-security caps by themselves; strict enforcement belongs to runtime provider
-policy configuration. Backend capability still matters: a provider policy
-feature such as `deny_read` is only enforced when the selected backend can emit
-it. Unsupported controls fail by default rather than being silently treated as
-enforced.
+## Authoring API
 
-## `run`
+```python
+@workflow(name=None, version="1", policy=None)
+def workflow_function(...): ...
 
-```text
-result = client.run(
-    workflow,
-    message=None,
-    *,
-    policy=None,
-    input=None,
-    params=None,
-    on_input=None,
-    max_pauses=8,
-    max_steps=None,
-    provider_questions=None,
-    options=None,
-    retention=None,
+@activity(retry_safe=False, retries=0, name=None)
+def external_operation(...): ...
+```
+
+Implementation edits are allowed between executions. Completed operations retain
+their saved outcomes; future operations use current code. Replay matches logical
+callable identities, operation positions, and inputs, and checks stored types and
+field layout. An explicit `name` supplies the logical activity or workflow name;
+otherwise its module and qualified callable name identify it. Workflow `version`
+labels a release for observation; it is not a resume gate.
+
+Automatic retry requires both the recorded attempt and current activity to declare
+`retry_safe=True`. Editing that flag cannot authorize repeating an earlier unsafe
+attempt; use explicit reconciliation when its effect is uncertain.
+
+`Session.run(prompt, *, input=None, reads=(), writes=(), returns=str,
+policy=None, name=None, retries=2, workspace=None)` returns a `Result` with
+`value`, `artifacts`, `usage`, and `operation_id`. `Session.arun()` is its async
+counterpart. `retries` repairs rejected typed output contracts; it never silently
+retries an uncertain provider effect. `workspace` selects an explicit isolated
+workspace for an editing branch.
+
+`ask(question, *, returns=str)` requests typed operator input.
+Submitted answers are validated and durably encoded by the matching `ask`
+operation. Invalid or non-durable answers keep the run in `awaiting_input` with
+a JSON-safe `pending_input.diagnostic`; a later resume can submit a correction.
+`parallel(*callables, max_workers=None, settle="all")` returns ordered results
+from independent durable scopes.
+
+External run arguments, provider output, and human answers are normalized at
+entry and saved as typed state. Internal workflow and activity calls follow
+ordinary Python argument semantics; annotations do not trigger another coercion.
+Restoration never revalidates committed model values. Validation must remain
+side-effect-free because a crash before its checkpoint can require repeating it.
+
+`provider_budget(*, max_turns, max_seconds=None, turn_timeout_seconds=None)` limits
+actual provider dispatches in its dynamic scope. Child workflows and parallel
+branches share the same journal-backed counter. Initial calls, typed-output
+repairs, and explicitly authorized manual retries each reserve a turn before
+dispatch; native receipt recovery does not. Time limits require a
+provider with `supports_timeout=True`. The absolute deadline includes suspended
+time, survives resume, and never extends. Nested budgets all apply.
+
+## Runtime context
+
+`current_run()` is available inside workflows and activities. It exposes
+`workspace`, `folder`, `task_folder`, `task_id`, `run_id`, `scope`, `client`,
+`policy`, `limits`, and `journal`. `limits` is the immutable configuration for
+the current run, independent of `client.limits` (defaults for new runs).
+
+Each execution appends `execution_revision` events with start and end source
+observations. Run metadata retains `provenance_start` and `provenance_end` as
+summaries; inspection and optimizer attribution use the complete event history.
+Observations record workflow identity, orchestration fingerprint, and package
+surface hash when verifiable. Unavailable source stays explicit as
+`verified: false`. Any revision changes or unavailable observations prevent the
+run from becoming verified evidence for one revision, even if a later execution
+returns to the original source.
+
+Verified provenance requires source-backed module definitions. Functions created
+later inside another function, transformed bytecode, stale imports, or unavailable
+source remain executable but carry unverified provenance.
+
+Integration code can call:
+
+```python
+ctx.operation(
+    kind="remote-read",
+    inputs={"key": key},
+    execute=lambda: remote.get(key),
+    retry_safe=True,
 )
 ```
 
-Arguments:
-
-- `workflow`: workflow class or workflow reference string.
-- `message`: `str | None`.
-- `policy`: per-run policy layer.
-- `input`: `None`, a mapping, or an exact instance of the workflow's `Input`
-  model. It is keyword-only.
-- `params`: `None`, a mapping, or an instance of the workflow's `Params` model.
-- `on_input`: handler for `RequestInput(...)` or provider question pauses.
-- `max_pauses`: maximum handled pause/resume cycles before `TooManyPauses`.
-- `max_steps`: forwarded to the runtime as the step budget; `0` disables the limit.
-- `provider_questions`: whether provider-selected question routes are allowed.
-- `options`: advanced run options; normally omit.
-- `retention`: per-call retention override.
-
-Input validation:
-
-- If the workflow does not declare `Input`, `input` must be `None`.
-- If the workflow declares required `Input` fields, pass `input=...`.
-- If `input` is a model, it must be the exact compiled `Workflow.Input` type.
-- If `input` is a mapping, the SDK validates it through `Workflow.Input`.
-- `client.run(Wf, "message", {"field": "value"})` is invalid because `input`
-  is keyword-only.
-- `params` rejects unknown fields and validates through `Workflow.Params`.
-
-Workflow references can be names, files, modules, or explicit classes, matching
-the runtime loader:
-
-```python
-client.run("review", "Review this.")
-client.run("workflows/review.py", "Review this.")
-client.run(".botpipe/workflows/review.py", "Review this.")
-client.run(".botpipe/workflows/review/flow.py:ReviewWorkflow", "Review this.")
-client.run("botpipe.workflows.review.workflow:ReviewWorkflow", "Review this.")
-```
-
-## Result
-
-`client.run(...)` returns `WorkflowResult`.
-
-```python
-result.ok
-result.status
-result.terminal
-result.state
-result.output
-result.output_validation_error
-result.artifacts
-result.history
-result.last_event
-result.last_outcome
-result.handled_inputs
-result.debug
-result.retention
-```
-
-Status fields:
-
-- `ok`: `True` only for completed successful runs.
-- `status`: `"completed"`, `"failed"`, or `"awaiting_input"`.
-- `terminal`: runtime terminal tag such as `FINISH`, `FAIL`, or `AWAIT_INPUT`.
-
-`state` is the final typed workflow state model. `output` is the validated
-workflow output when the workflow declares `Output` and `build_output(...)`.
-
-`result.artifact(name)` is shorthand for `result.artifacts.require(name)`.
-
-## Artifacts
-
-Declared writes are exposed through `ArtifactMap`.
-
-```python
-report = result.artifacts.report
-same_report = result.artifact("report")
-
-report.exists()
-report.read_text()
-report.read_bytes()
-report.read_json()
-report.read_model()
-report.materialize("exports/report.md")
-```
-
-`ResultArtifact` fields:
-
-- `name`
-- `path`
-- `kind`
-- `schema`
-- `source_path`
-- `promoted`
-- `required`
-- `qualified_name`
-
-Only declared public writes that resolve to one root-stable path are returned.
-Branch/fan-in, active-worklist, and worklist-selection-dependent writes are
-recorded in their runtime manifests instead of being re-rendered from the root
-SDK context. Runtime telemetry files are available through debug paths when
-retained, but they are not part of the public artifact map.
-
-## Pauses And Input Handlers
-
-Workflows pause when workflow code returns `RequestInput(...)` or when a
-provider-selected question route is allowed. Pass `on_input` to answer pauses.
-
-```python
-from botpipe import StaticInput
-
-result = client.run(
-    ApprovalWorkflow,
-    "Ship the release.",
-    input=ApprovalWorkflow.Input(topic="release"),
-    on_input=StaticInput({"approved": True}),
-)
-```
-
-A custom handler receives `InputRequest`:
-
-```python
-def answer(request):
-    print(request.question)
-    print(request.reason)
-    return {"approved": True}
-
-
-result = client.run(ApprovalWorkflow, "Ship it.", on_input=answer)
-```
-
-`InputRequest` fields:
-
-- `pending_input_id`
-- `question`
-- `reason`
-- `best_supposition`
-- `source_step`
-- `source_hook`
-- `source_phase`
-- `input_schema`
-- `input_schema_model`
-- `pause_index`
-- `partial`
-
-Handler return values may be `str`, Pydantic model, mapping, sequence, number,
-boolean, or `None`. Mappings, models, lists, tuples, numbers, booleans, and
-`None` are JSON-serialized before resume. Strings are passed as strings.
-
-Built-in handlers:
-
-- `StaticInput(value)`: always returns the same value.
-- `MappingInput(mapping)`: matches by pending input ID, source step, or question.
-- `BestSuppositionInput()`: returns `request.best_supposition`, or raises
-  `InputRequired` if absent.
-- `ConsoleInput()`: prints the question and reads from standard input.
-
-If a workflow pauses and no handler is configured, the SDK raises
-`InputRequired`. The exception includes `request` and `partial`.
-
-`provider_questions` defaults to:
-
-- `True` when `on_input` is provided.
-- `False` when `on_input` is absent.
-
-Direct workflow `RequestInput(...)` pauses are still surfaced even when provider
-questions are disabled.
-
-## Direct Operations
-
-Use these for one-off provider calls without a workflow.
-
-```python
-summary = client.llm(
-    "Summarize the incident.",
-    returns=str,
-    retry=3,
-    policy=None,
-)
-
-label = client.classify(
-    "Classify the request.",
-    choices=["incident", "question"],
-    retry=3,
-    policy=None,
-)
-```
-
-Direct operations inherit runtime policy, SDK default policy, and explicit
-operation `policy`.
-
-## Single-Step Execution
-
-`client.step(...)` runs a single simple declaration or supported core step
-through the same runtime engine path used by normal workflows.
-
-```python
-from botpipe import FINISH, Event, Text, python_step
-
-emit = python_step(
-    lambda ctx: (ctx.artifacts.report.write_text(ctx.message or ""), Event("done"))[1],
-    name="emit",
-    writes=[Text("report")],
-    routes={"done": FINISH},
-)
-
-result = client.step(emit, "Write a report.")
-```
-
-Signature:
-
-```text
-step_result = client.step(
-    step_def,
-    message=None,
-    *,
-    policy=None,
-    input=None,
-    params=None,
-    routes=None,
-    on_input=None,
-    max_pauses=8,
-    max_steps=None,
-    provider_questions=None,
-    retention=None,
-)
-```
-
-`StepResult` fields:
-
-- `ok`
-- `status`
-- `route`
-- `value`
-- `state`
-- `artifacts`
-- `workflow_result`
-
-`value` is currently `None`; use `workflow_result`, `state`, and `artifacts` for
-outputs.
-
-`client.step(...)` does not support branch-group declarations or worklist-scoped
-declarations.
-
-## Step Helpers
-
-The SDK can build and run common step types directly.
-The examples below assume the named symbols are imported from `botpipe`.
-
-### `prompt_step`
-
-```python
-result = client.prompt_step(
-    "Review {{ message }}.",
-    "Review the rollout.",
-    input=None,
-    name="review",
-    writes=[Md("report")],
-    reads=(),
-    requires=(),
-    routes={"done": FINISH},
-    session=None,
-    retry=3,
-    policy=None,
-    on_input=None,
-    max_pauses=8,
-    max_steps=None,
-    provider_questions=None,
-    retention=None,
-)
-```
-
-### `produce_verify_step`
-
-```python
-result = client.produce_verify_step(
-    producer="Draft the package.",
-    verifier="Verify the package.",
-    message="Prepare release evidence.",
-    input=None,
-    name="produce_verify",
-    writes=[Md("draft")],
-    verifier_writes=[Md("review")],
-    reads=(),
-    requires=(),
-    verifier_requires=(),
-    routes={"accepted": FINISH, "needs_rework": SELF},
-    session=None,
-    verifier_session=None,
-    retry=3,
-    policy=None,
-    on_input=None,
-    max_pauses=8,
-    max_steps=None,
-    provider_questions=None,
-    retention=None,
-)
-```
-
-### `python_step`
-
-```python
-def handler(ctx):
-    return Event("done")
-
-
-result = client.python_step(
-    handler,
-    "Run local code.",
-    input=None,
-    name="python",
-    writes=(),
-    reads=(),
-    requires=(),
-    routes={"done": FINISH},
-    policy=None,
-    on_input=None,
-    max_pauses=8,
-    max_steps=None,
-    retention=None,
-)
-```
-
-`policy` on SDK Python steps applies to provider operations called inside the
-handler. It does not sandbox the Python function itself.
-
-### `workflow_step`
-
-```python
-result = client.workflow_step(
-    ChildWorkflow,
-    "Outer request.",
-    input=None,
-    child_message="Child request.",
-    name="workflow",
-    params={"mode": "strict"},
-    writes=(),
-    reads=(),
-    requires=(),
-    routes={"done": FINISH},
-    policy=None,
-    on_input=None,
-    max_pauses=8,
-    max_steps=None,
-    provider_questions=None,
-    retention=None,
-)
-```
-
-`message` is the outer SDK invocation request. `child_message` is the child
-workflow request; if omitted, the SDK uses `message`.
-
-## Retention
-
-The SDK writes normal runtime task/run state while executing. Retention controls
-what remains after the call returns.
-
-```python
-from botpipe import RetentionPolicy
-
-client = Botpipe(workspace=".", provider="codex", retention=RetentionPolicy.keep_all())
-result = client.run(MyWorkflow, "Run it.", retention=RetentionPolicy.ephemeral())
-```
-
-Retention modes:
-
-- `RetentionPolicy.sdk_default()`: `delete_task_scratch`. Successful task
-  scratch is deleted, declared task-local writes are promoted, workspace writes
-  remain in place, and failed or awaiting-input runs keep scratch by default.
-- `RetentionPolicy.keep_all()`: keep the SDK task directory and declared writes
-  in their runtime locations.
-- `RetentionPolicy.ephemeral()`: delete all SDK-managed task scratch and omit
-  task-local declared writes from the result artifact map; workspace writes stay.
-
-Task-local branch/worklist outputs that are omitted from the root artifact map
-are not currently promoted by default retention. Use `RetentionPolicy.keep_all()`
-when those outputs must remain available in their runtime locations. Sharing the
-result and retention collector does not resolve this scoped-output limitation.
-
-`result.retention` records:
-
-- `policy`
-- `task_scratch_retained`
-- `task_scratch_deleted`
-- `promoted_artifacts`
-- `retained_task_dir`
-
-Use `promoted_writes_dir=` on `RetentionPolicy(...)` when promoted declared
-writes should go to a specific directory.
-
-## Cleanup
-
-`cleanup(...)` deletes old SDK-managed task directories. It only considers task
-directories carrying the SDK sentinel file.
-
-```python
-from datetime import timedelta
-
-dry_run = client.cleanup(older_than=timedelta(days=2), dry_run=True)
-deleted = client.cleanup(older_than=timedelta(days=2), include_failed=True)
-```
-
-Arguments:
-
-- `older_than`: optional age filter.
-- `include_failed`: include failed or awaiting-input SDK tasks. Defaults to
-  `False`.
-- `dry_run`: report candidates without deleting.
-
-Return value: `CleanupResult(deleted, skipped, errors, dry_run)`.
-
-## Debug Info
-
-`result.debug` exposes internal paths for inspection when retained:
-
-- `task_id`
-- `run_id`
-- `task_dir`
-- `workflow_dir`
-- `run_dir`
-- `events_file`
-- `trace_file`
-- `checkpoint_file`
-
-These are diagnostic handles, not the durable public SDK control surface. For
-manual resume, event browsing, run listing, or trace browsing, use the runtime
-CLI/API rather than treating SDK debug paths as stable orchestration state.
-
-## Errors
-
-All SDK-specific errors inherit from `BotpipeSDKError`.
-
-- `WorkflowInputError`: invalid or missing workflow `input`.
-- `WorkflowParameterError`: invalid workflow `params`.
-- `InputRequired`: run paused and no handler was available.
-- `TooManyPauses`: pause budget exceeded.
-- `InputResponseValidationError`: handler response could not be serialized or
-  failed runtime resume validation.
-- `SDKExecutionError`: provider resolution, workflow resolution, runtime
-  execution, retention, or cleanup failure at the SDK boundary.
-
-`BotpipeSDKError.original_error` carries the wrapped exception when available.
-`SDKExecutionError.task_dir` may point to retained runtime state after a failure.
-
-## Public Export Checklist
-
-Root SDK exports include:
-
-```text
-Botpipe,
-WorkflowResult, StepResult,
-ArtifactMap, ResultArtifact,
-RetentionPolicy, RetentionInfo, CleanupResult,
-InputRequest, HandledInput, SDKDebugInfo,
-BotpipeSDKError, WorkflowInputError, WorkflowParameterError,
-InputRequired, TooManyPauses, InputResponseValidationError, SDKExecutionError,
-ConsoleInput, StaticInput, MappingInput, BestSuppositionInput
-```
-
-The root package also exports the simple authoring API, so most applications can
-use one import module:
-
-```python
-from botpipe import Botpipe, Workflow, step, python_step
-```
-
-## SDK Rules
-
-- Use `Botpipe(workspace=...)` with the real project root.
-- Pass `input=` and `params=` by keyword.
-- Keep `message`, `input`, and `params` separate.
-- Use `on_input` for bounded automated pause handling.
-- Set `provider_questions=True` only when provider-selected questions are part
-  of the intended interaction model.
-- Read declared outputs through `result.artifacts`.
-- Inspect `result.debug` only for diagnostics.
-- Use retention policies intentionally for long-running agents and test suites.
-- Use the CLI/runtime APIs for durable task/run management and manual resume.
+The result must use Botpipe's JSON codec. Use this low-level boundary for runtime
+integrations; ordinary workflows should prefer sessions and activities.
+
+## Provider boundary
+
+A provider implements `run(ProviderRequest) -> ProviderResponse` and may
+implement `recover(request)`. `ProviderRequest` contains the operation ID,
+rendered prompt, workspace, session ID, output schema, resolved policy, artifact
+destinations, receipt directory, timeout, and attempt number. A provider writes
+durable attempt receipts before reporting completion.
+
+Recovery returns `Completed(response)`, `Stopped(detail)`, `Running(detail)`, or
+`Unknown(detail)` from `botpipe.recovery`. Completed means the response is
+authoritative and no owned attempt can continue writing. Stopped means effects
+cannot continue and no completed response exists. Adapters must establish these
+facts; a missing receipt is not proof of termination. Legacy response returns
+remain supported, while legacy `None` and generic recovery errors mean Unknown.
+Native starting receipts without a verifiable process remain Unknown.
+
+Declared output files are preserved before dispatch. When completed output
+fails validation, Botpipe quarantines that attempt's files and restores every
+previous declared destination before repair. It does not roll back arbitrary
+workspace edits or overwrite conflicts from other tools. Interrupted capture or
+rollback retains the workspace fence and resumes before further provider work.
+
+`FakeProvider` accepts strings, responses, mappings, or callbacks and records
+calls. Use it for tests without a provider CLI.
