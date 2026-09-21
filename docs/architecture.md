@@ -76,12 +76,17 @@ name/value pairs. Replay therefore preserves observable Python keyword order;
 execution still receives ordinary keyword arguments.
 
 `Flag` and `IntFlag` pseudo-members store their native integer value and name.
+Enum records and contracts use native storage fields; public `name` and `value`
+properties remain views of that state. An int-backed pseudo-member's integer
+payload must match its stored value, or encoding rejects it.
 Application attributes and populated custom slots are rejected; disposable
 stdlib caches are not durable state. Restoration does not invoke application
 construction hooks. A historical value that current construction would no longer
 produce is restored without inserting it into the enum's shared cache, so reading
 old state does not change the validation of new values. Equivalent standard
-composites retain normal enum identity.
+composites retain normal enum identity. Custom metaclass dispatch, attribute
+lookup, or class construction prevents new entries in the constructor cache;
+compatible existing entries can still be reused.
 
 Datetime records retain wall time, `fold`, and fixed-offset timezone names.
 Supported timezones are naive values and exact `datetime.timezone` instances;

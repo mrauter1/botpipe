@@ -10,10 +10,16 @@ import math
 import re
 import sys
 from datetime import date, datetime, timedelta, timezone
-from enum import CONFORM, EJECT, KEEP, STRICT, Enum, Flag
+from enum import CONFORM, EJECT, KEEP, STRICT, Enum, EnumType, Flag
 from inspect import get_annotations, getattr_static
 from pathlib import Path
-from types import MappingProxyType, MemberDescriptorType, SimpleNamespace, UnionType
+from types import (
+    MappingProxyType,
+    MemberDescriptorType,
+    MethodType,
+    SimpleNamespace,
+    UnionType,
+)
 from typing import (
     Annotated,
     Any,
@@ -652,7 +658,7 @@ class _Contracts:
         if isinstance(value, Enum):
             return {
                 "enum": type_name(type(value)),
-                "member": value.name,
+                "member": object.__getattribute__(value, "_name_"),
             }
         if isinstance(value, type):
             return {"type": type_name(value)}
@@ -675,7 +681,7 @@ class _Contracts:
                         [
                             member_name,
                             _encode(
-                                member.value,
+                                object.__getattribute__(member, "_value_"),
                                 f"{path}.members[{member_name!r}]",
                                 depth + 1,
                                 self.value_traversal,
@@ -780,9 +786,11 @@ _NO_STANDARD_FLAG_RESULT = object()
 _FLAG_INSTANCE_FIELDS = frozenset({"_value_", "_name_", "_inverted_"})
 
 
-def _flag_has_native_instance_state(value):
+def _flag_has_native_instance_state(value, raw):
     """Return whether a pseudo-member has only core state and disposable caches."""
 
+    if type(value)._member_type_ is int and int.__int__(value) != raw:
+        return False
     try:
         state = object.__getattribute__(value, "__dict__")
     except AttributeError:
@@ -803,14 +811,28 @@ def _flag_has_native_instance_state(value):
     return True
 
 
-def _flag_hook(cls, name):
+def _flag_classmethod(cls, name):
     hook = getattr_static(cls, name)
-    return getattr(hook, "__func__", hook)
+    if type(hook) is classmethod:
+        return hook.__func__
+    if type(hook) is MethodType and hook.__self__ is cls:
+        return hook.__func__
+    return _NO_STANDARD_FLAG_RESULT
 
 
 def _standard_flag_result(cls, raw):
     """Predict stdlib Flag._missing_ output without invoking application hooks."""
 
+    metaclass = type(cls)
+    constructor = getattr_static(cls, "__new__")
+    if type(constructor) is staticmethod:
+        constructor = constructor.__func__
+    if (
+        getattr_static(metaclass, "__call__") is not EnumType.__call__
+        or getattr_static(metaclass, "__getattribute__") is not type.__getattribute__
+        or constructor is not Enum.__new__
+    ):
+        return _NO_STANDARD_FLAG_RESULT
     member_type = cls._member_type_
     if getattr_static(cls, "__setattr__") is not getattr_static(
         member_type, "__setattr__"
@@ -824,7 +846,7 @@ def _standard_flag_result(cls, raw):
         pass
     else:
         return _NO_STANDARD_FLAG_RESULT
-    if _flag_hook(cls, "_missing_") is not _flag_hook(Flag, "_missing_"):
+    if _flag_classmethod(cls, "_missing_") is not _flag_classmethod(Flag, "_missing_"):
         return _NO_STANDARD_FLAG_RESULT
 
     value = raw
@@ -855,14 +877,14 @@ def _standard_flag_result(cls, raw):
     if not (member_value or aliases):
         return value, None
 
-    iterator = _flag_hook(cls, "_iter_member_")
-    by_value = _flag_hook(Flag, "_iter_member_by_value_")
-    by_definition = _flag_hook(Flag, "_iter_member_by_def_")
+    iterator = _flag_classmethod(cls, "_iter_member_")
+    by_value = _flag_classmethod(Flag, "_iter_member_by_value_")
+    by_definition = _flag_classmethod(Flag, "_iter_member_by_def_")
     if iterator not in (by_value, by_definition):
         return _NO_STANDARD_FLAG_RESULT
     if (
         iterator is by_definition
-        and _flag_hook(cls, "_iter_member_by_value_") is not by_value
+        and _flag_classmethod(cls, "_iter_member_by_value_") is not by_value
     ):
         return _NO_STANDARD_FLAG_RESULT
     members = []
@@ -937,7 +959,7 @@ def _compatible_cached_flag_member(member, cls, raw, name):
         and member_raw == raw
         and type(member_name) is type(name)
         and member_name == name
-        and _flag_has_native_instance_state(member)
+        and _flag_has_native_instance_state(member, member_raw)
     )
 
 
@@ -973,7 +995,8 @@ def _encode(value, path, depth, traversal, contracts):
             }
         if isinstance(value, Enum):
             cls = type(value)
-            member = value.name
+            member = object.__getattribute__(value, "_name_")
+            raw = object.__getattribute__(value, "_value_")
             declared = (
                 type(member) is str
                 and member in cls.__members__
@@ -983,10 +1006,11 @@ def _encode(value, path, depth, traversal, contracts):
                 if (
                     not isinstance(value, Flag)
                     or cls._member_type_ not in (object, int)
-                    or type(value.value) is not int
+                    or type(raw) is not int
+                    or (member is not None and type(member) is not str)
                 ):
                     raise TypeError(f"{path}: unsupported unnamed enum value")
-                if not _flag_has_native_instance_state(value):
+                if not _flag_has_native_instance_state(value, raw):
                     raise TypeError(
                         f"{path}: pseudo-member has unsupported instance state"
                     )
@@ -995,9 +1019,7 @@ def _encode(value, path, depth, traversal, contracts):
                 "type": type_name(cls),
                 "contract": contracts.for_type(cls, f"{path}.contract"),
                 "member": member,
-                "value": _encode(
-                    value.value, f"{path}.value", depth + 1, traversal, contracts
-                ),
+                "value": _encode(raw, f"{path}.value", depth + 1, traversal, contracts),
             }
         if value is None or type(value) in (str, int, bool):
             return value

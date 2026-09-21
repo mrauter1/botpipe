@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-from enum import KEEP, STRICT, Flag, IntFlag
+from enum import KEEP, STRICT, EnumType, Flag, IntFlag
 from pathlib import Path
 
 import pytest
@@ -251,6 +251,77 @@ def test_incompatible_cache_entries_are_ignored(mismatch):
     assert LocalBits._value2member_map_[3] is incompatible
 
 
+def test_int_flag_pseudo_members_require_matching_native_integer_payloads():
+    class MismatchedPayload(IntFlag):
+        A = 1
+
+        @classmethod
+        def _missing_(cls, value):
+            member = int.__new__(cls, 5)
+            object.__setattr__(member, "_value_", 1)
+            object.__setattr__(member, "_name_", None)
+            return member
+
+    with pytest.raises(TypeError, match="unsupported instance state"):
+        codec.encode(MismatchedPayload(9))
+
+    int_calls = []
+
+    class PresentedInt(IntFlag):
+        A = 1
+        B = 2
+
+        def __int__(self):
+            int_calls.append(self)
+            return 99
+
+    encoded = codec.encode(PresentedInt(3))
+    PresentedInt._value2member_map_.pop(3)
+    restored = codec.decode(encoded)
+
+    assert int_calls == []
+    assert int.__int__(restored) == 3
+    assert restored is PresentedInt(3)
+
+
+def test_int_flag_cache_reuse_requires_matching_native_integer_payload():
+    class LocalBits(IntFlag):
+        A = 1
+        B = 2
+
+    encoded = codec.encode(LocalBits(3))
+    incompatible = int.__new__(LocalBits, 5)
+    object.__setattr__(incompatible, "_value_", 3)
+    object.__setattr__(incompatible, "_name_", "A|B")
+    LocalBits._value2member_map_[3] = incompatible
+
+    restored = codec.decode(encoded)
+
+    assert restored is not incompatible
+    assert int.__int__(restored) == 3
+    assert object.__getattribute__(restored, "_value_") == 3
+    assert object.__getattribute__(restored, "_name_") == "A|B"
+    assert LocalBits._value2member_map_[3] is incompatible
+
+
+def test_named_int_flag_with_distinct_native_payload_remains_a_reference():
+    class NamedPayload(IntFlag):
+        def __new__(cls, value):
+            member = int.__new__(cls, value + 4)
+            member._value_ = value
+            return member
+
+        A = 1
+
+    encoded = codec.encode(NamedPayload.A)
+
+    assert int.__int__(NamedPayload.A) == 5
+    assert encoded["member"] == "A"
+    assert encoded["value"] == 1
+    assert encoded["contract"]["members"] == [["A", 1]]
+    assert codec.decode(encoded) is NamedPayload.A
+
+
 def test_custom_missing_hook_is_not_called_to_decide_cache_insertion():
     calls = []
 
@@ -267,6 +338,135 @@ def test_custom_missing_hook_is_not_called_to_decide_cache_insertion():
     assert calls == []
     assert restored.value == 3
     assert 3 not in CustomMissing._value2member_map_
+
+
+def test_wrongly_bound_native_missing_hook_does_not_enable_cache_insertion():
+    class WrongBinding(Flag):
+        A = 1
+        B = 2
+
+    WrongBinding._missing_ = staticmethod(Flag._missing_.__func__)
+    encoded = codec.encode(_pseudo(WrongBinding, 3, "A|B"))
+
+    restored = codec.decode(encoded)
+
+    assert object.__getattribute__(restored, "_value_") == 3
+    assert object.__getattribute__(restored, "_name_") == "A|B"
+    assert 3 not in WrongBinding._value2member_map_
+    with pytest.raises(TypeError):
+        WrongBinding(3)
+
+
+@pytest.mark.parametrize(
+    "customization", ["metaclass_call", "metaclass_lookup", "class_new"]
+)
+def test_custom_construction_paths_do_not_receive_restored_composites(customization):
+    calls = []
+
+    def fallback(cls, value):
+        calls.append(value)
+        cache = type.__getattribute__(cls, "_value2member_map_")
+        return cache.get(value, type.__getattribute__(cls, "A"))
+
+    if customization == "metaclass_call":
+
+        class CustomMeta(EnumType):
+            def __call__(cls, value, *args, **kwargs):
+                return fallback(cls, value)
+
+    elif customization == "metaclass_lookup":
+        dynamic_lookup = False
+
+        class CustomMeta(EnumType):
+            def __getattribute__(cls, name):
+                if dynamic_lookup and name == "__new__":
+                    return fallback
+                return super().__getattribute__(name)
+
+    else:
+
+        class CustomMeta(EnumType):
+            pass
+
+    class CustomConstruction(Flag, metaclass=CustomMeta):
+        A = 1
+        B = 2
+
+    if customization == "class_new":
+        CustomConstruction.__new__ = staticmethod(fallback)
+    elif customization == "metaclass_lookup":
+        dynamic_lookup = True
+
+    encoded = codec.encode(_pseudo(CustomConstruction, 3, "A|B"))
+    assert CustomConstruction(3) is CustomConstruction.A
+    assert 3 not in CustomConstruction._value2member_map_
+    calls.clear()
+
+    restored = codec.decode(encoded)
+
+    assert calls == []
+    assert type(restored) is CustomConstruction
+    assert object.__getattribute__(restored, "_value_") == 3
+    assert object.__getattribute__(restored, "_name_") == "A|B"
+    assert 3 not in CustomConstruction._value2member_map_
+
+    assert CustomConstruction(3) is CustomConstruction.A
+    assert 3 not in CustomConstruction._value2member_map_
+    CustomConstruction._value2member_map_[3] = restored
+    assert CustomConstruction(3) is restored
+
+
+def test_transparent_metaclass_still_restores_canonical_flag_identity():
+    class TransparentMeta(EnumType):
+        pass
+
+    class TransparentBits(Flag, metaclass=TransparentMeta):
+        A = 1
+        B = 2
+
+    encoded = codec.encode(TransparentBits(3))
+    TransparentBits._value2member_map_.pop(3)
+
+    restored = codec.decode(encoded)
+
+    assert restored is TransparentBits(3)
+
+
+def test_native_definition_order_iteration_restores_canonical_identity():
+    class DefinitionOrder(Flag):
+        B = 2
+        A = 1
+
+    value = DefinitionOrder(3)
+    encoded = codec.encode(value)
+    DefinitionOrder._value2member_map_.pop(3)
+
+    restored = codec.decode(encoded)
+
+    assert object.__getattribute__(restored, "_name_") == "B|A"
+    assert restored is DefinitionOrder(3)
+
+
+def test_compatible_cached_pseudo_is_reused_with_custom_construction_path():
+    calls = []
+
+    class CustomMeta(EnumType):
+        def __call__(cls, value, *args, **kwargs):
+            calls.append(value)
+            return super().__call__(value, *args, **kwargs)
+
+    class CustomCall(Flag, metaclass=CustomMeta):
+        A = 1
+        B = 2
+
+    cached = CustomCall(3)
+    encoded = codec.encode(cached)
+    calls.clear()
+
+    restored = codec.decode(encoded)
+
+    assert restored is cached
+    assert calls == []
 
 
 def test_custom_instance_setter_is_not_called_or_cached_through_restore():
