@@ -95,7 +95,9 @@ jobs:
               output.write("BOTPIPE_REQUIRE_NATIVE_CONTAINMENT=1\n")
           print(f"Testing {release['tag_name']} ({actual})")
       - name: Require native containment and provider contracts
-        run: python -m pytest -q tests/test_processes.py tests/test_codex_native_contract.py
+        run: >-
+          python -m pytest -q tests/test_processes.py tests/test_codex_native_contract.py
+          tests/test_budgets.py::test_native_receipt_recovery_does_not_consume_another_turn
 
   tests:
     runs-on: ubuntu-22.04

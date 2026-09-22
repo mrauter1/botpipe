@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import errno
+import io
 import json
 import os
 import signal
@@ -7,6 +9,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -105,6 +108,76 @@ def executable(tmp_path: Path, body: str) -> tuple[str, ...]:
     script = tmp_path / "provider.py"
     script.write_text(body, encoding="utf-8")
     return sys.executable, str(script)
+
+
+@pytest.mark.parametrize("failure_point", ["write", "close"])
+def test_native_stdin_tolerates_windows_closed_pipe_einval(
+    monkeypatch: pytest.MonkeyPatch, failure_point: str
+) -> None:
+    monkeypatch.setattr(provider_module, "_WINDOWS_PIPE_EINVAL", True)
+
+    class Stdin:
+        close_called = False
+
+        def write(self, _data):
+            if failure_point == "write":
+                raise OSError(errno.EINVAL, "child closed stdin")
+
+        def close(self):
+            self.close_called = True
+            if failure_point == "close":
+                raise OSError(errno.EINVAL, "child closed stdin")
+
+    stdin = Stdin()
+    containment = SimpleNamespace(ensure_tree_exited=lambda *_args, **_kwargs: None)
+    process = SimpleNamespace(
+        stdin=stdin,
+        stdout=io.BytesIO(b"out"),
+        stderr=io.BytesIO(b"err"),
+        wait=lambda timeout: 0,
+        _botpipe_containment=containment,
+    )
+
+    output = CodexProvider(("unused",))._communicate_bounded(
+        process, b"prompt", 1.0
+    )
+
+    assert output == (b"out", b"err")
+    assert stdin.close_called
+
+
+@pytest.mark.parametrize(
+    "write_error",
+    [RuntimeError("write failed"), OSError(errno.EIO, "unexpected I/O error")],
+)
+def test_native_stdin_propagates_unexpected_write_error_and_still_closes(
+    monkeypatch: pytest.MonkeyPatch, write_error: BaseException
+) -> None:
+    monkeypatch.setattr(provider_module, "_WINDOWS_PIPE_EINVAL", True)
+
+    class Stdin:
+        close_called = False
+
+        def write(self, _data):
+            raise write_error
+
+        def close(self):
+            self.close_called = True
+
+    stdin = Stdin()
+    containment = SimpleNamespace(ensure_tree_exited=lambda *_args, **_kwargs: None)
+    process = SimpleNamespace(
+        stdin=stdin,
+        stdout=io.BytesIO(),
+        stderr=io.BytesIO(),
+        wait=lambda timeout: 0,
+        _botpipe_containment=containment,
+    )
+
+    with pytest.raises(type(write_error)) as raised:
+        CodexProvider(("unused",))._communicate_bounded(process, b"prompt", 1.0)
+    assert raised.value is write_error
+    assert stdin.close_called
 
 
 def test_native_stream_capture_fails_at_bounded_limit(

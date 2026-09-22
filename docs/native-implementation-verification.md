@@ -228,6 +228,9 @@ the older Ubuntu system package then exposed a native launcher compatibility
 failure. Windows installation retains all packaged helpers, and restricted RUN
 uses Codex's unelevated sandbox rather than leaving the backend disabled. Both
 platforms keep the requested approval and filesystem policies.
+The Windows native fixture follows Codex's own sandbox tests by placing its
+isolated writable workspace outside `USERPROFILE/AppData`, which the restricted
+token excludes. This changes test placement without widening the write policy.
 
 The native suite also interrupts an actual Codex turn after its acknowledgement,
 checks the durable stopped outcome after cleanup, and completes an explicitly

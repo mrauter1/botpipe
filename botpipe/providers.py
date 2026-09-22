@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import math
@@ -22,6 +23,8 @@ from .policy import NetworkMode, OperationKind, PermissionMode, Policy, SandboxM
 from .processes import ProcessContainment, ProcessContainmentUnavailable
 from .recovery import Completed, RecoveryOutcome, Running, Stopped, Unknown
 from .storage import sync_directory
+
+_WINDOWS_PIPE_EINVAL = os.name == "nt"
 
 
 class ProviderError(RuntimeError):
@@ -1117,12 +1120,27 @@ class _CLIProvider:
                 errors.append(exc)
 
         def write_stdin() -> None:
+            def peer_closed(exc: OSError) -> bool:
+                # Like Popen.communicate(), tolerate Windows' EINVAL when the
+                # child closes its input pipe before consuming the prompt.
+                return isinstance(exc, BrokenPipeError) or (
+                    _WINDOWS_PIPE_EINVAL and exc.errno == errno.EINVAL
+                )
+
             try:
                 assert process.stdin is not None
                 process.stdin.write(prompt)
+            except OSError as exc:
+                if not peer_closed(exc):
+                    errors.append(exc)
+            except BaseException as exc:
+                errors.append(exc)
+            try:
+                assert process.stdin is not None
                 process.stdin.close()
-            except BrokenPipeError:
-                pass
+            except OSError as exc:
+                if not peer_closed(exc):
+                    errors.append(exc)
             except BaseException as exc:
                 errors.append(exc)
 

@@ -150,15 +150,19 @@ def test_native_receipt_recovery_does_not_consume_another_turn(tmp_path, monkeyp
 
     with Botpipe(tmp_path, provider=provider) as client:
         original = client.journal.response
+        interrupted_response = False
 
         def crash(operation_id, response, **kwargs):
+            nonlocal interrupted_response
             if "text" in response:
+                interrupted_response = True
                 raise KeyboardInterrupt()
             return original(operation_id, response, **kwargs)
 
         monkeypatch.setattr(client.journal, "response", crash)
         result = client.run(work)
         assert result.status == "interrupted"
+        assert interrupted_response, result.error
         monkeypatch.setattr(client.journal, "response", original)
         resumed = client.resume(result.run_id, workflow=work)
         assert resumed.status == "completed", resumed.error

@@ -10,6 +10,7 @@ import gzip
 import json
 import os
 import shlex
+import tempfile
 import threading
 import tomllib
 from dataclasses import replace
@@ -157,8 +158,20 @@ def native_bridge(tmp_path):
     thread.start()
     home = tmp_path / "codex-home"
     home.mkdir()
-    workspace = tmp_path / "workspace"
-    workspace.mkdir()
+    workspace_context = None
+    if os.name == "nt":
+        # Match upstream windows-sandbox-rs process tests, whose sandbox_cwd
+        # stays outside USERPROFILE\AppData. The restricted LUA token cannot
+        # rely on pytest's private temporary-directory ancestry even when the
+        # leaf workspace has a capability ACE.
+        workspace_context = tempfile.TemporaryDirectory(
+            prefix=".botpipe-native-",
+            dir=Path(__file__).resolve().parents[1],
+        )
+        workspace = Path(workspace_context.name)
+    else:
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
     provider = (
         '{name="Botpipe local fixture", '
         f'base_url="http://127.0.0.1:{server.server_port}/v1", '
@@ -180,6 +193,8 @@ def native_bridge(tmp_path):
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)
+        if workspace_context is not None:
+            workspace_context.cleanup()
 
 
 OUTPUT_SCHEMA = {
@@ -564,12 +579,15 @@ def test_current_codex_native_exec_obeys_turn_sandbox(
         assert exit_code != 0, output[:8_000]
         assert not target.exists(), output[:8_000]
         lowered = output.lower()
-        assert any(
-            phrase in lowered
-            for phrase in (
-                "permission denied",
-                "access is denied",
-                "operation not permitted",
-                "read-only file system",
-            )
-        ), output[:8_000]
+        if os.name == "nt":
+            assert "access to the path" in lowered, output[:8_000]
+            assert "is denied" in lowered, output[:8_000]
+        else:
+            assert any(
+                phrase in lowered
+                for phrase in (
+                    "permission denied",
+                    "operation not permitted",
+                    "read-only file system",
+                )
+            ), output[:8_000]
