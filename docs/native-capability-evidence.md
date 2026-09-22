@@ -11,7 +11,7 @@ still requires pinned-version integration receipts on each supported platform.
 | Adapter profile | Generate, empty grants | Exact generate grants | Read-only query | Run | Sessions | Decision |
 | --- | --- | --- | --- | --- | --- | --- |
 | `codex-exec-v1` | rejected | rejected | rejected | implemented | yes | no |
-| `codex-app-server-v2` (source-reviewed against Codex 0.156.0) | implemented in code; current native CI pending | implemented in code; current native CI pending | implemented in code; current native CI pending | implemented for current compatible protocol; native receipt pending | fingerprint-bound | no |
+| `codex-app-server-v2` (source-reviewed against Codex 0.156.0) | implemented; native CI scope below | implemented; native CI scope below | implemented; native CI scope below | implemented for current compatible protocol; credentialed receipt pending | fingerprint-bound | no |
 | `claude-code-cli-v1` | implemented for Claude Code 2.1.259+; native receipt pending | rejected | rejected | implemented | yes | no |
 | `claude-agent-sdk-0.2.155` | implemented; native receipt pending | implemented mediator; host proof pending | implemented mediator; native receipt pending | delegated to CLI profile | yes; transitions unproven | no |
 | `pi-json-v1` | implemented; native receipt pending | rejected | rejected | unrestricted explicit policy only | yes | no |
@@ -57,7 +57,7 @@ only.
 
 The implemented app-server profile exposes structured mediated tools while
 generic shell tools remain disabled. Its current Codex 0.156.0 source audit,
-provisional native CI checks, and remaining limitations are recorded below. Empty-grant
+completed native CI checks, and remaining limitations are recorded below. Empty-grant
 generation uses the reviewed per-turn environment/tool configuration; native
 credentialed receipts and hostile-configuration conformance remain release
 gates.
@@ -251,14 +251,20 @@ gaps; credential values or hashes are not used as substitutes for identity.
 `fe74a774532af67b5a4a3dec03ce9469e17f89af`, for the reviewed mediated profile.
 The app-server accepts newer protocol-compatible versions for native RUN after
 the protocol capability checks; strict mediated generate/query profiles require
-an explicitly reviewed release. This is code and source evidence. Current
-native-binary conformance remains
-pending and does not prove credentialed behavior or model cache hits.
+an explicitly reviewed release. Native-binary contract checks pass on Linux
+and Windows; these checks do not prove credentialed behavior or model cache hits.
 
 The [0.156.0 release](https://github.com/openai/codex/releases/tag/rust-v0.156.0)
-was published on 2026-09-22. Its source audit is complete, but its Linux and
-Windows native CI results are provisional until this revision runs on both
-hosted platforms. The reviewed release has already refactored the older
+was published on 2026-09-22. Its source audit and native contract checks passed
+for Botpipe commit `894517f79b2daf9c3581b44d29303aa92c4ae64d` in
+[CI run 35790223474](https://github.com/mrauter1/botpipe/actions/runs/35790223474):
+36 tests passed on Linux; 15 passed and 21 Linux-specific tests were skipped
+on Windows. Both jobs downloaded the current stable release and verified its
+published digest. The tests exercise native role continuation and reset,
+empty-grant tool inventory, interrupted-turn recovery, persisted-skill closure,
+native execution sandboxing, and process containment, using a local model
+fixture. Credentialed provider conformance remains a separate release gate.
+The reviewed release has already refactored the older
 `codex-rs/core/src/tools/spec.rs` path. The complete registry construction is
 in [`spec_plan.rs`](https://github.com/openai/codex/blob/fe74a774532af67b5a4a3dec03ce9469e17f89af/codex-rs/core/src/tools/spec_plan.rs),
 with configuration derivation in
@@ -316,10 +322,10 @@ executables at the root. Native CI verifies the GitHub release digest, safely
 extracts every regular package member without renaming it, and requires the
 declared entrypoint plus both root and resource sandbox helpers.
 
-The current 0.156.0 source audit defines the provisional per-turn
+The current 0.156.0 source audit defines the reviewed per-turn
 environment/tool configuration for command-free generation and the finite
-mediator inventory for exact grants. Native CI must confirm its effective
-request inventories. `CodexAppServerProvider` is a real
+mediator inventory for exact grants. Native CI confirms the tested effective
+request inventories within the scope above. `CodexAppServerProvider` is a real
 ProviderAdapter surface for generate, read-only query, exact generation,
 durable recovery, native RUN on a compatible protocol, and fingerprint-bound
 session resume. Its RUN path uses the app-server bridge directly; it does not
