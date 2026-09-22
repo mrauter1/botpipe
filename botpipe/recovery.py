@@ -121,7 +121,7 @@ def cancellation_evidence(
 
     if identity is None:
         return None
-    records: list[dict[str, Any]] = []
+    facts: list[tuple[str, dict[str, Any] | None]] = []
     for event in events:
         if (
             event.get("event") != "cancellation_outcome"
@@ -129,32 +129,51 @@ def cancellation_evidence(
         ):
             continue
         data = event.get("data")
-        if not isinstance(data, Mapping) or data.get("attempt") != dict(identity):
+        if not isinstance(data, Mapping):
             continue
-        if data.get("outcome") != "completed":
+        if data.get("attempt") != dict(identity):
             continue
-        response = data.get("response")
-        if type(response) is not dict:
+        outcome = data.get("outcome")
+        if outcome in {"running", "unknown"}:
+            continue
+        if outcome not in {"completed", "stopped"}:
             return Unknown("matching cancellation evidence is malformed")
-        records.append(response)
-    if not records:
+        allowed = {"outcome", "detail", "attempt"}
+        if outcome == "completed":
+            allowed.add("response")
+        if set(data) - allowed:
+            return Unknown("matching cancellation evidence is malformed")
+        detail = data.get("detail")
+        if detail is not None and type(detail) is not str:
+            return Unknown("matching cancellation evidence is malformed")
+        response = data.get("response")
+        if outcome == "completed":
+            if type(response) is not dict:
+                return Unknown("matching cancellation evidence is malformed")
+            facts.append((outcome, response))
+        else:
+            if "response" in data:
+                return Unknown("matching cancellation evidence is malformed")
+            facts.append((outcome, None))
+    if not facts:
         return None
-    first = records[0]
-    if any(record != first for record in records[1:]):
-        return Unknown("conflicting completed cancellation evidence")
+    first = facts[0]
+    if any(fact != first for fact in facts[1:]):
+        return Unknown("conflicting terminal cancellation evidence")
+    if first[0] == "stopped":
+        return Stopped("stopped attempt recorded during cancellation")
+    record = first[1]
+    assert record is not None
     try:
-        from .providers import ProviderResponse
+        from .provider_checkpoints import canonical_provider_response
 
-        response = ProviderResponse(
-            **{
-                key: first[key]
-                for key in ("text", "session_id", "usage", "metadata")
-                if key in first
-            }
+        response = canonical_provider_response(
+            record,
+            allow_mapping=True,
         )
-        if response.to_record() != first:
+        if response.to_record() != record:
             raise ValueError("response has unknown fields")
-    except (TypeError, ValueError, RecursionError) as exc:
+    except Exception as exc:
         return Unknown(f"matching cancellation evidence is invalid: {exc}")
     return Completed(response, "completed response recorded during cancellation")
 

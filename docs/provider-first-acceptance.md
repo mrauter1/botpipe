@@ -15,10 +15,10 @@ native integration receipts.
 **Blocked.** The deterministic runtime is broadly implemented, but the completed
 release baseline in section 7.5 is not met:
 
-- Codex's public app-server profile implements mediated query and nonempty
-  exact-grant generation. Pinned Codex 0.131.0 always exposes `update_plan` and
-  `request_user_input`, so empty-grant generation is rejected before dispatch.
-  A07's required empty inventory cannot be established with that interface.
+- Codex's public app-server profile implements mediated query, command-free
+  generation, and exact-grant generation for the reviewed Codex 0.155.1
+  profile. Native credentialed receipts, hostile-configuration checks, and
+  supported-platform conformance are still required before A07 can pass.
 - Pi uses the same pinned SDK and persistent session format for generate,
   query, and run. Cross-process locator continuity and permission resets have
   deterministic coverage; credentialed native transitions remain unproved.
@@ -52,10 +52,10 @@ release baseline in section 7.5 is not met:
 | A05 | Pass | Task/work-item continuity, stable child scopes, and pre-dispatch ownership/affinity rejection are covered. |
 | A05b | Pass | Reconstructed aliases, sharing-topology drift, and stale cross-run revision rejection have focused tests. |
 | A06 | Pass | Session claims and locks serialize shared turns; independent parallel sessions are exercised. |
-| A07 | Blocked | Claude and Pi inventory closure has source/stub coverage, but no native receipts exist and the public Codex profile cannot provide tool-free generation. |
+| A07 | Partial | Claude, Pi, and the reviewed Codex 0.155.1 profile have source/local-binary coverage for inventory closure, but credentialed native receipts and hostile-configuration conformance are absent. |
 | A07b | Partial | All three SDK/app-server adapters mediate exact grants and persist resolved envelopes before dispatch. Descriptor/process and hostile-policy tests pass; native receipts are absent and the local bubblewrap isolation probe cannot execute. |
 | A08 | Partial | All three SDK/app-server query profiles implement bounded descriptor-confined read/list/search and the scoped snapshot-based count-lines command. Hostile local and protocol tests pass; mandatory credentialed native receipts remain absent. |
-| A08b | Blocked | Requests reset permission each turn, Pi uses the same SDK across all operations, and session continuation has deterministic coverage. Codex rejects required empty-grant turns and binds native threads to a tool-registry fingerprint; no required native transition/repair/stream/resume matrix is proved. |
+| A08b | Blocked | Requests reset permission each turn, Pi uses the same SDK across all operations, and session continuation has deterministic coverage. Codex binds native threads to a tool-registry fingerprint; no required credentialed native transition/repair/stream/resume matrix is proved. |
 | A09 | Partial | Common validation and concrete-profile rejection happen before dispatch in focused tests. The full mandatory native option/schema/continuation matrix is not proved. |
 | A10 | Partial | Fake-provider substitutability and recorded provider/profile/version/model affinity pass. Real adapters do not implement the optional `session_affinity()` hook, so native account/default-model identity drift through environment credentials is not established; native equivalence and continuation also remain unproved. |
 | A11 | Pass | Schema extra-field policy, malformed/unsupported distinctions, bounded repair, and repair charging are covered. |
@@ -120,15 +120,17 @@ A subsequent focused ownership check covers removal of settled dynamic-reader
 claims so normal queries do not accumulate orphan metadata.
 
 The two skipped cases are native Windows Job Object acceptance and smoke tests.
-Windows CI also includes the new app-server and workspace coordination suites.
-Credentialed adapter conformance remains a separate gate.
+The CI workflow now defines Ubuntu and Windows native-contract jobs, including
+the app-server and workspace coordination suites, but those jobs have not yet
+produced a receipt for this snapshot. Credentialed adapter conformance remains
+a separate gate.
 
 Subprocess tests run with an absolute worktree `PYTHONPATH` to avoid accidentally
 importing the baseline editable checkout. The isolated sdist/wheel build, clean
 installed-wheel imports/assets/catalog and sync/async/replay smoke, strict public
 API type check, Python compilation, JavaScript syntax check, and diff whitespace
-check passed. The package discovers all 20 workflows. Supported-platform CI is
-verified separately on the published commit.
+check passed. The package discovers all 20 workflows. Supported-platform CI
+remains a pending release attachment for this snapshot.
 
 The following evidence must still be attached before this document can record a
 release pass:

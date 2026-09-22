@@ -221,10 +221,6 @@ def WorkflowRunTracesToOptimizationCandidates(
                     expected_selected_workflow=manifest.workflow_name,
                     max_output_bytes=params.max_output_bytes,
                 )
-                if "workflow_optimization_supporting" in proposal.artifacts:
-                    supporting_content = (
-                        proposal.artifacts.workflow_optimization_supporting.read_bytes()
-                    )
                 decision = verifier.generate(
                     Prompt.file("prompts/recommendation_verifier.md"),
                     input={
@@ -246,6 +242,10 @@ def WorkflowRunTracesToOptimizationCandidates(
                     max_output_bytes=params.max_output_bytes,
                 )
                 if review.accepted:
+                    if "workflow_optimization_supporting" in proposal.artifacts:
+                        supporting_content = (
+                            proposal.artifacts.workflow_optimization_supporting.read_bytes()
+                        )
                     break
                 feedback = review.model_dump(mode="json", by_alias=True)
         else:

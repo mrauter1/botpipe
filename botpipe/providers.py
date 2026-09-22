@@ -19,7 +19,7 @@ from types import MappingProxyType
 from typing import Any, Callable, Iterator, Protocol, runtime_checkable
 
 from .policy import NetworkMode, OperationKind, PermissionMode, Policy, SandboxMode
-from .processes import ProcessContainment
+from .processes import ProcessContainment, ProcessContainmentUnavailable
 from .recovery import Completed, RecoveryOutcome, Running, Stopped, Unknown
 from .storage import sync_directory
 
@@ -352,7 +352,7 @@ JEV_CAPABILITIES = ProviderCapabilities(
 
 
 CODEX_APPSERVER_CAPABILITIES = ProviderCapabilities(
-    version="codex-app-server-0.131.0",
+    version="codex-app-server-v2",
     operations=frozenset(
         {OperationKind.GENERATE, OperationKind.QUERY, OperationKind.RUN}
     ),
@@ -360,15 +360,15 @@ CODEX_APPSERVER_CAPABILITIES = ProviderCapabilities(
     structured_output=True,
     multiple_artifacts=True,
     recovery=True,
-    cancellation=False,
+    cancellation=True,
     exact_command_grants=True,
     autonomous_read_only_query=True,
     live_streaming=True,
     limitations=(
-        "generate requires at least one exact command grant because the pinned native inventory cannot implement strict tool-free generation",
-        "query and exact generation require the pinned app-server and isolated config",
-        "run delegates to the separately validated Codex CLI profile",
-        "native credentials and pinned integration receipts are deployment gates",
+        "strict generate/query inventory requires reviewed release and model-catalog conformance evidence",
+        "query and exact generation require an isolated app-server configuration",
+        "native run requires current per-turn environment and sandbox protocol capabilities",
+        "native credentials and integration receipts are deployment gates",
     ),
 )
 
@@ -870,6 +870,12 @@ class _CLIProvider:
         prior = self._reconcile_prior_attempts(request)
         if prior is not None:
             return prior
+        try:
+            ProcessContainment.require_available()
+        except ProcessContainmentUnavailable as exc:
+            raise CapabilityError(
+                f"{self.name} native process containment is unavailable: {exc}"
+            ) from exc
         request.receipt_dir.mkdir(parents=True, exist_ok=True)
         effective = request.policy.effective()
         command, env, emission = self._build(request, effective)
@@ -899,23 +905,14 @@ class _CLIProvider:
                 path, started
             )  # intent precedes the potentially effectful spawn
             containment = ProcessContainment.create()
-            process = subprocess.Popen(
+            process = containment.spawn(
                 command,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 cwd=request.workspace,
                 env={**os.environ, **env},
-                **containment.creation_kwargs,
             )
-            try:
-                containment.attach_and_start(process)
-            except BaseException:
-                # Windows children start suspended; assignment failure must
-                # terminate that child before any user code is allowed to run.
-                process.kill()
-                process.wait()
-                raise
             process._botpipe_containment = containment
             with self._active_lock:
                 self._active[(request.operation_id, request.attempt)] = (

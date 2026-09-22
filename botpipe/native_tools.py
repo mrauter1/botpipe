@@ -14,7 +14,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Mapping
 
-from .processes import ProcessContainment
+from .processes import ProcessContainment, ProcessContainmentUnavailable
 from .providers import CapabilityError
 
 _PRIVATE_NAMES = frozenset({
@@ -422,7 +422,6 @@ class ReadOnlyTools:
                 "count_lines executable identity changed after authorization"
             )
 
-        containment = ProcessContainment.create()
         process = None
         retained = {"stdout": bytearray(), "stderr": bytearray()}
         output_truncated = {"stdout": False, "stderr": False}
@@ -456,6 +455,8 @@ class ReadOnlyTools:
 
         threads = []
         try:
+            # The fixed, pinned system wc binary is the complete command: it
+            # does not load project code or create descendant processes.
             process = subprocess.Popen(
                 envelope.native_argv,
                 stdin=subprocess.PIPE,
@@ -463,9 +464,7 @@ class ReadOnlyTools:
                 stderr=subprocess.PIPE,
                 cwd="/",
                 env=dict(envelope.environment),
-                **containment.creation_kwargs,
             )
-            containment.attach_and_start(process)
             threads = [
                 threading.Thread(
                     target=write_snapshot,
@@ -490,19 +489,19 @@ class ReadOnlyTools:
             try:
                 returncode = process.wait(timeout=envelope.timeout)
             except subprocess.TimeoutExpired as exc:
-                containment.terminate(process, grace_seconds=1.0)
+                process.kill()
+                process.wait()
                 for thread in threads:
                     thread.join(1.0)
                 raise CapabilityError("count_lines command timed out") from exc
-            containment.ensure_tree_exited(process, grace_seconds=1.0)
             for thread in threads:
                 thread.join(1.0)
             if any(thread.is_alive() for thread in threads):
                 raise CapabilityError("count_lines command I/O did not terminate")
         finally:
             if process is not None and process.poll() is None:
-                containment.terminate(process, grace_seconds=1.0)
-            containment.close()
+                process.kill()
+                process.wait()
 
         if writer_errors:
             raise CapabilityError("count_lines snapshot input could not be delivered") from writer_errors[0]
@@ -827,7 +826,10 @@ class ExactCommandTools:
         if _directory_identity(self.workspace, self._workspace_fd) != dict(envelope.workspace_identity):
             raise CapabilityError("pinned workspace identity changed after authorization")
         self._audit_repository()
-        containment = ProcessContainment.create()
+        try:
+            containment = ProcessContainment.create()
+        except ProcessContainmentUnavailable as exc:
+            raise CapabilityError(str(exc)) from exc
         retained, truncated = bytearray(), False
         process = None
 
@@ -840,13 +842,11 @@ class ExactCommandTools:
                 truncated |= len(chunk) > remaining
 
         try:
-            process = subprocess.Popen(
+            process = containment.spawn(
                 self._command(envelope), stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 env={"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"},
-                pass_fds=(self._workspace_fd,),
-                **containment.creation_kwargs)
-            containment.attach_and_start(process)
+                pass_fds=(self._workspace_fd,))
             reader = threading.Thread(target=drain, name="botpipe-command-output", daemon=True)
             reader.start()
             try:

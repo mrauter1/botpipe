@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import signal
+import subprocess
 import sys
 import threading
 import time
@@ -13,7 +14,7 @@ import pytest
 
 from botpipe.codex_appserver import (
     AUDITED_CONFIG_OVERRIDES,
-    PINNED_CODEX_VERSION,
+    CURRENT_VERIFIED_CODEX_VERSION,
     CodexAppServerBridge,
     CodexAppServerCapabilityError,
     CodexAppServerProtocolError,
@@ -32,6 +33,45 @@ from botpipe.providers import (
     receipt_path,
 )
 from botpipe.recovery import Completed, Unknown
+
+
+@pytest.fixture(autouse=True)
+def local_process_containment(monkeypatch: pytest.MonkeyPatch):
+    """Unit protocol stubs use a process group; kernel backend has separate tests."""
+
+    if os.name == "nt":
+        yield
+        return
+
+    class LocalContainment:
+        def spawn(self, argv, **kwargs):
+            return subprocess.Popen(argv, start_new_session=True, **kwargs)
+
+        def ensure_tree_exited(self, process, *, grace_seconds):
+            try:
+                os.killpg(process.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                return
+            try:
+                process.wait(timeout=grace_seconds)
+            except subprocess.TimeoutExpired:
+                pass
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            process.wait(timeout=2)
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(
+        "botpipe.codex_appserver.ProcessContainment.require_available", lambda: None
+    )
+    monkeypatch.setattr(
+        "botpipe.codex_appserver.ProcessContainment.create", lambda: LocalContainment()
+    )
+    yield
 
 
 def tool() -> DynamicTool:
@@ -55,6 +95,8 @@ def stub(
     namespace: str | None = None,
     arguments: dict[str, object] | None = None,
     resume: bool = False,
+    call_tool: bool = True,
+    effective_model: str = "gpt-5.4",
 ) -> tuple[str, ...]:
     transcript = tmp_path / "transcript.jsonl"
     script = tmp_path / "app_server.py"
@@ -82,16 +124,17 @@ assert request['method'] == 'configRequirements/read'
 send({{'id': request['id'], 'result': {{'requirements': None}}}})
 request = receive()
 assert request['method'] == {'thread/resume' if resume else 'thread/start'!r}
-send({{'id': request['id'], 'result': {{'thread': {{'id': 'thread-1'}}, 'model': 'gpt-test', 'reasoningEffort': 'medium'}}}})
+send({{'id': request['id'], 'result': {{'thread': {{'id': 'thread-1'}}, 'model': {effective_model!r}, 'reasoningEffort': 'medium'}}}})
 request = receive()
 assert request['method'] == 'turn/start'
 send({{'id': request['id'], 'result': {{'turn': {{'id': 'turn-1', 'status': 'inProgress', 'items': []}}}}}})
 if {unexpected_request!r}:
     send({{'id': 77, 'method': 'item/tool/requestUserInput', 'params': {{'threadId': 'thread-1', 'turnId': 'turn-1'}}}})
-else:
+elif {call_tool!r}:
     send({{'id': 77, 'method': 'item/tool/call', 'params': {{'threadId': 'thread-1', 'turnId': 'turn-1', 'callId': 'call-1', 'namespace': {namespace!r}, 'tool': {tool_name!r}, 'arguments': {arguments!r}}}}})
-tool_response = receive()
-assert tool_response['id'] == 77
+if {unexpected_request!r} or {call_tool!r}:
+    tool_response = receive()
+    assert tool_response['id'] == 77
 send({{'method': 'thread/tokenUsage/updated', 'params': {{'threadId': 'thread-1', 'tokenUsage': {{'total': {{'inputTokens': 30, 'outputTokens': 20}}, 'last': {{'inputTokens': 3, 'cachedInputTokens': 1, 'outputTokens': 2, 'reasoningOutputTokens': 1, 'totalTokens': 5}}}}}}}})
 send({{'method': 'item/completed', 'params': {{'threadId': 'thread-1', 'turnId': 'turn-1', 'item': {{'type': 'agentMessage', 'id': 'message-1', 'text': 'answer'}}}}}})
 send({{'method': 'turn/completed', 'params': {{'threadId': 'thread-1', 'turn': {{'id': 'turn-1', 'status': 'completed', 'items': []}}}}}})
@@ -107,7 +150,7 @@ def bridge(tmp_path: Path, command: tuple[str, ...]) -> CodexAppServerBridge:
     return CodexAppServerBridge(
         command=command,
         codex_home=home,
-        version_probe=lambda: f"codex-cli {PINNED_CODEX_VERSION}",
+        version_probe=lambda: f"codex-cli {CURRENT_VERIFIED_CODEX_VERSION}",
     )
 
 
@@ -156,7 +199,8 @@ def test_bridge_closes_effectful_inventory_and_services_dynamic_tool(
 
     assert result.text == "answer"
     assert result.session.thread_id == "thread-1"
-    assert result.session.tool_fingerprint == tool_fingerprint([tool()])
+    assert len(result.session.tool_fingerprint) == 64
+    assert result.session.tool_fingerprint != tool_fingerprint([tool()])
     assert result.turn_id == "turn-1"
     assert result.usage["total"] == {"inputTokens": 30, "outputTokens": 20}
     assert result.usage["last"]["totalTokens"] == 5
@@ -183,6 +227,7 @@ def test_bridge_closes_effectful_inventory_and_services_dynamic_tool(
     assert params["config"]["features.plugins"] is False
     assert params["config"]["web_search"] == "disabled"
     assert params["dynamicTools"] == [tool().to_wire()]
+    assert "model" not in params
     assert "developerInstructions" not in params
     assert "baseInstructions" not in params
     assert messages[5]["method"] == "turn/start"
@@ -193,7 +238,7 @@ def test_bridge_closes_effectful_inventory_and_services_dynamic_tool(
     }
     collaboration = messages[5]["params"]["collaborationMode"]
     assert collaboration["mode"] == "default"
-    assert collaboration["settings"]["model"] == "gpt-test"
+    assert collaboration["settings"]["model"] == "gpt-5.4"
     assert collaboration["settings"]["reasoning_effort"] == "medium"
     assert collaboration["settings"]["developer_instructions"].endswith(
         "Use only the mediated evidence."
@@ -272,7 +317,7 @@ def test_role_instructions_replace_and_clear_on_same_native_thread(
         request["params"]["collaborationMode"] for request in turn_requests
     ]
     assert all(item["mode"] == "default" for item in collaborations)
-    assert all(item["settings"]["model"] == "gpt-test" for item in collaborations)
+    assert all(item["settings"]["model"] == "gpt-5.4" for item in collaborations)
     assert all(
         item["settings"]["reasoning_effort"] == "medium"
         for item in collaborations
@@ -316,7 +361,7 @@ def test_completed_app_server_turn_cannot_leave_stubborn_descendant(
         "def receive(): return json.loads(sys.stdin.readline())\n"
         "def send(value): print(json.dumps(value),flush=True)\n"
         "request=receive();send({'id':request['id'],'result':{'userAgent':'stub'}});receive()\n"
-        "for method,result in [('config/read',{'config':{},'layers':[]}),('configRequirements/read',{'requirements':None}),('thread/start',{'thread':{'id':'thread-1'},'model':'gpt-test','reasoningEffort':'medium'}),('turn/start',{'turn':{'id':'turn-1'}})]:\n"
+        "for method,result in [('config/read',{'config':{},'layers':[]}),('configRequirements/read',{'requirements':None}),('thread/start',{'thread':{'id':'thread-1'},'model':'gpt-5.4','reasoningEffort':'medium'}),('turn/start',{'turn':{'id':'turn-1'}})]:\n"
         " request=receive();assert request['method']==method;send({'id':request['id'],'result':result})\n"
         "send({'method':'item/completed','params':{'item':{'type':'agentMessage','text':'ok'}}})\n"
         "send({'method':'turn/completed','params':{'turn':{'id':'turn-1','status':'completed'}}})\n"
@@ -364,10 +409,10 @@ def test_uncertain_process_tree_cleanup_prevents_successful_result(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     class UncertainContainment:
-        creation_kwargs = {"start_new_session": True}
-
-        def attach_and_start(self, _process):
-            return None
+        def spawn(self, argv, **kwargs):
+            if os.name == "posix":
+                kwargs["start_new_session"] = True
+            return subprocess.Popen(argv, **kwargs)
 
         def ensure_tree_exited(self, _process, *, grace_seconds):
             assert grace_seconds == 0.1
@@ -391,7 +436,7 @@ def test_uncertain_process_tree_cleanup_prevents_successful_result(
         )
 
 
-def test_app_server_attach_failure_kills_unregistered_leader(
+def test_app_server_spawn_failure_closes_containment(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import botpipe.codex_appserver as appserver
@@ -399,28 +444,16 @@ def test_app_server_attach_failure_kills_unregistered_leader(
     calls: list[object] = []
 
     class FailedContainment:
-        creation_kwargs: dict[str, object] = {}
-
-        def attach_and_start(self, process):
-            calls.append(("attach", process.pid))
+        def spawn(self, _argv, **_kwargs):
+            calls.append("spawn")
             raise RuntimeError("job assignment failed")
 
         def close(self):
             calls.append("close")
 
-    process = type(
-        "Process",
-        (),
-        {
-            "pid": 123,
-            "kill": lambda self: calls.append("kill"),
-            "wait": lambda self, timeout: calls.append(("wait", timeout)),
-        },
-    )()
     monkeypatch.setattr(
         appserver.ProcessContainment, "create", lambda: FailedContainment()
     )
-    monkeypatch.setattr(appserver.subprocess, "Popen", lambda *_args, **_kwargs: process)
 
     with pytest.raises(RuntimeError, match="job assignment failed"):
         appserver._JsonlProcess(
@@ -431,34 +464,30 @@ def test_app_server_attach_failure_kills_unregistered_leader(
             max_messages=1,
         )
 
-    assert calls == [("attach", 123), "kill", ("wait", 2), "close"]
+    assert calls == ["spawn", "close"]
 
 
-def test_tool_free_profile_fails_before_version_probe_or_dispatch(tmp_path: Path) -> None:
-    marker = tmp_path / "started"
-    script = tmp_path / "should_not_start.py"
-    script.write_text(
-        f"from pathlib import Path\nPath({str(marker)!r}).write_text('started')\n",
-        encoding="utf-8",
+def test_tool_free_profile_dispatches_with_exact_empty_inventory(tmp_path: Path) -> None:
+    adapter = bridge(tmp_path, stub(tmp_path, call_tool=False))
+    result = adapter.execute(
+        prompt="hello",
+        workspace=tmp_path,
+        tools=[],
+        mediator=lambda _name, _args: "unused",
+        timeout=2,
     )
-    probes: list[str] = []
-    home = tmp_path / "home"
-    home.mkdir()
-    adapter = CodexAppServerBridge(
-        command=(sys.executable, str(script)),
-        codex_home=home,
-        version_probe=lambda: probes.append("called") or "codex-cli 0.131.0",
+    assert result.text == "answer"
+    thread_start = next(
+        message
+        for message in read_transcript(tmp_path)
+        if message.get("method") == "thread/start"
     )
-    with pytest.raises(CodexAppServerCapabilityError, match="tool-free generate"):
-        adapter.execute(
-            prompt="hello",
-            workspace=tmp_path,
-            tools=[],
-            mediator=lambda _name, _args: "unused",
-            timeout=2,
-        )
-    assert probes == []
-    assert not marker.exists()
+    assert thread_start["params"]["dynamicTools"] == []
+    assert thread_start["params"]["config"][
+        "tools.experimental_request_user_input.enabled"
+    ] is False
+    assert thread_start["params"]["config"]["tools.update_plan.enabled"] is False
+    assert thread_start["params"]["config"]["orchestrator.skills.enabled"] is False
 
 
 def test_unknown_version_fails_before_app_server_dispatch(tmp_path: Path) -> None:
@@ -473,9 +502,9 @@ def test_unknown_version_fails_before_app_server_dispatch(tmp_path: Path) -> Non
     adapter = CodexAppServerBridge(
         command=(sys.executable, str(script)),
         codex_home=home,
-        version_probe=lambda: "codex-cli 0.132.0",
+        version_probe=lambda: "codex-cli 0.156.0",
     )
-    with pytest.raises(CodexAppServerCapabilityError, match="requires codex-cli 0.131.0"):
+    with pytest.raises(CodexAppServerCapabilityError, match="no conformance evidence"):
         adapter.execute(
             prompt="hello",
             workspace=tmp_path,
@@ -484,6 +513,29 @@ def test_unknown_version_fails_before_app_server_dispatch(tmp_path: Path) -> Non
             timeout=2,
         )
     assert not marker.exists()
+
+
+def test_unreviewed_effective_model_fails_before_turn_without_implicit_override(
+    tmp_path: Path,
+) -> None:
+    adapter = bridge(
+        tmp_path,
+        stub(tmp_path, call_tool=False, effective_model="account-model"),
+    )
+    with pytest.raises(CodexAppServerCapabilityError, match="effective model"):
+        adapter.execute(
+            prompt="hello",
+            workspace=tmp_path,
+            tools=[],
+            mediator=lambda _name, _args: "unused",
+            timeout=2,
+        )
+    transcript = read_transcript(tmp_path)
+    thread_start = next(
+        message for message in transcript if message.get("method") == "thread/start"
+    )
+    assert "model" not in thread_start["params"]
+    assert not any(message.get("method") == "turn/start" for message in transcript)
 
 
 def test_resumed_session_rejects_tool_registry_drift_before_dispatch(
@@ -563,7 +615,7 @@ def test_overlong_protocol_line_is_rejected_before_materialization(tmp_path: Pat
     adapter = CodexAppServerBridge(
         command=(sys.executable, str(script)),
         codex_home=home,
-        version_probe=lambda: "codex-cli 0.131.0",
+        version_probe=lambda: f"codex-cli {CURRENT_VERIFIED_CODEX_VERSION}",
         max_event_bytes=128,
         max_events=2,
     )
@@ -708,21 +760,102 @@ def test_provider_adapter_commits_receipt_tool_evidence_and_session_binding(
         )
 
 
-def test_provider_empty_generate_fails_before_probe_and_receipt(tmp_path: Path) -> None:
-    probes: list[str] = []
-    home = tmp_path / "home"
+def test_provider_empty_generate_uses_strict_empty_inventory(tmp_path: Path) -> None:
+    adapter = CodexAppServerProvider(
+        bridge=bridge(tmp_path, stub(tmp_path, call_tool=False))
+    )
+    request = provider_request(tmp_path, allow_commands=())
+    response = adapter.run(request)
+    assert response.text == "answer"
+    thread_start = next(
+        message
+        for message in read_transcript(tmp_path)
+        if message.get("method") == "thread/start"
+    )
+    assert thread_start["params"]["dynamicTools"] == []
+
+
+def test_provider_run_uses_native_app_server_profile_on_every_turn(
+    tmp_path: Path,
+) -> None:
+    adapter = CodexAppServerProvider(
+        bridge=bridge(tmp_path, stub(tmp_path, call_tool=False))
+    )
+    request = provider_request(
+        tmp_path,
+        operation_id="scope/codex-run:1",
+        operation=OperationKind.RUN,
+        allow_commands=(),
+    )
+
+    response = adapter.run(request)
+
+    assert response.text == "answer"
+    assert response.session_id == "thread-1"
+    transcript = read_transcript(tmp_path)
+    thread_start = next(
+        message for message in transcript if message.get("method") == "thread/start"
+    )["params"]
+    turn_start = next(
+        message for message in transcript if message.get("method") == "turn/start"
+    )["params"]
+    environment = {
+        "environmentId": "local",
+        "cwd": str(tmp_path.resolve()),
+        "runtimeWorkspaceRoots": [str(tmp_path.resolve())],
+    }
+    assert thread_start["dynamicTools"] == []
+    assert thread_start["config"] == {}
+    assert thread_start["environments"] == [environment]
+    assert thread_start["approvalPolicy"] == "on-request"
+    assert thread_start["sandbox"] == "workspace-write"
+    assert turn_start["environments"] == [environment]
+    assert turn_start["approvalPolicy"] == "on-request"
+    assert turn_start["sandboxPolicy"] == {
+        "type": "workspaceWrite",
+        "writableRoots": [],
+        "networkAccess": False,
+    }
+    assert turn_start["collaborationMode"]["settings"][
+        "developer_instructions"
+    ]
+
+    with pytest.raises(CapabilityError, match="tool-registry binding"):
+        adapter.run(
+            provider_request(
+                tmp_path,
+                operation_id="scope/codex-generate-after-run:1",
+                operation=OperationKind.GENERATE,
+                session_id="thread-1",
+                allow_commands=(),
+            )
+        )
+
+
+def test_newer_codex_is_accepted_for_native_run_but_not_unreviewed_strict_inventory(
+    tmp_path: Path,
+) -> None:
+    home = tmp_path / "newer-home"
     home.mkdir()
     native = CodexAppServerBridge(
-        command=(sys.executable, "unused.py"),
+        command=stub(tmp_path, call_tool=False),
         codex_home=home,
-        version_probe=lambda: probes.append("called") or "codex-cli 0.131.0",
+        version_probe=lambda: "codex-cli 0.156.0",
     )
     adapter = CodexAppServerProvider(bridge=native)
-    request = provider_request(tmp_path, allow_commands=())
-    with pytest.raises(CapabilityError, match="tool-free generate"):
-        adapter.run(request)
-    assert probes == []
-    assert not receipt_path(request).exists()
+
+    response = adapter.run(
+        provider_request(
+            tmp_path,
+            operation_id="scope/newer-run:1",
+            operation=OperationKind.RUN,
+            allow_commands=(),
+        )
+    )
+    assert response.text == "answer"
+
+    with pytest.raises(CodexAppServerCapabilityError, match="no conformance evidence"):
+        native.preflight(tmp_path, strict_inventory=True)
 
 
 @pytest.mark.parametrize(
@@ -741,7 +874,7 @@ def test_provider_exact_grants_cannot_override_read_scope(
     native = CodexAppServerBridge(
         command=(sys.executable, "unused.py"),
         codex_home=home,
-        version_probe=lambda: probes.append("called") or "codex-cli 0.131.0",
+        version_probe=lambda: probes.append("called") or f"codex-cli {CURRENT_VERIFIED_CODEX_VERSION}",
     )
     adapter = CodexAppServerProvider(bridge=native)
     request = provider_request(tmp_path, policy=policy)
@@ -864,7 +997,7 @@ send({{'id': request['id'], 'result': {{'config': {{}}, 'layers': []}}}})
 request = receive()
 send({{'id': request['id'], 'result': {{'requirements': None}}}})
 request = receive()
-send({{'id': request['id'], 'result': {{'thread': {{'id': 'thread-1'}}, 'model': 'gpt-test', 'reasoningEffort': 'medium'}}}})
+send({{'id': request['id'], 'result': {{'thread': {{'id': 'thread-1'}}, 'model': 'gpt-5.4', 'reasoningEffort': 'medium'}}}})
 request = receive()
 send({{'id': request['id'], 'result': {{'turn': {{'id': 'turn-1'}}}}}})
 ready.write_text('ready')
@@ -986,7 +1119,9 @@ def test_provider_query_exposes_bounded_read_surface(
     turn_start = next(
         message for message in transcript if message.get("method") == "turn/start"
     )
-    assert "collaborationMode" not in turn_start["params"]
+    assert turn_start["params"]["collaborationMode"]["settings"][
+        "developer_instructions"
+    ]
     assert "count_lines" in {
         item["name"] for item in thread_start["params"]["dynamicTools"]
     }

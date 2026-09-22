@@ -25,6 +25,7 @@ from botpipe.provider_checkpoints import (
     RetryAuthorizedCheckpoint,
     ValidatedCheckpoint,
     ValidationFailedCheckpoint,
+    canonical_provider_response,
 )
 from botpipe.providers import FakeProvider, ProviderError, ProviderResponse
 from botpipe.recovery import Completed, Running, Stopped, Unknown
@@ -48,6 +49,21 @@ RESPONSE = {
     "usage": {"input_tokens": 2},
     "metadata": {"receipt": "one"},
 }
+
+
+def test_canonical_provider_response_detaches_nested_mutable_evidence():
+    source = ProviderResponse(
+        "done",
+        usage={"tokens": {"input": [1]}},
+        metadata={"trace": {"labels": ["original"]}},
+    )
+
+    canonical = canonical_provider_response(source)
+    source.usage["tokens"]["input"].append(2)
+    source.metadata["trace"]["labels"].append("mutated")
+
+    assert canonical.usage == {"tokens": {"input": [1]}}
+    assert canonical.metadata == {"trace": {"labels": ["original"]}}
 
 
 @pytest.mark.parametrize(
@@ -509,3 +525,81 @@ def test_predispatch_cancellation_checkpoint_resumes_same_generation(tmp_path):
         assert completed.value == "done"
         assert len(provider.calls) == 1
         assert provider.calls[0].attempt == 1
+
+
+def test_wrong_family_recovered_completion_never_replaces_retry_checkpoint(
+    tmp_path,
+):
+    class OtherResponse:
+        def to_record(self):
+            return {"answers": {}}
+
+    @workflow
+    def work():
+        return Provider(session=None).run("work").value
+
+    provider = FakeProvider([KeyboardInterrupt()])
+    with Botpipe(tmp_path, provider=provider) as client:
+        first = client.run(work, run_id="wrong-family")
+        operation = next(
+            row
+            for row in client.journal.operations(first.run_id)
+            if row["kind"] == "provider"
+        )
+        provider.recover = lambda request: Stopped("stopped")
+        client.resolve(first.run_id, operation["id"], retry=True)
+        before = client.journal.get(operation["id"])["response"]
+        provider.recover = lambda request: Completed(OtherResponse())
+
+        resumed = client.resume(first.run_id, workflow=work)
+
+        assert resumed.status == "interrupted"
+        assert "invalid completed evidence" in resumed.error
+        assert client.journal.get(operation["id"])["response"] == before
+
+
+def test_invalid_manual_provider_response_fails_without_journal_mutation(tmp_path):
+    @workflow
+    def work():
+        return Provider(session=None).run("work").value
+
+    provider = FakeProvider([KeyboardInterrupt()])
+    with Botpipe(tmp_path, provider=provider) as client:
+        first = client.run(work, run_id="invalid-manual")
+        operation = next(
+            row
+            for row in client.journal.operations(first.run_id)
+            if row["kind"] == "provider"
+        )
+        before = client.journal.snapshot(first.run_id)
+        with pytest.raises(TypeError, match="text"):
+            client.resolve(first.run_id, operation["id"], response={"text": 123})
+        assert client.journal.snapshot(first.run_id) == before
+
+
+def test_durable_stopped_cancellation_authorizes_only_explicit_retry(tmp_path):
+    @workflow
+    def work():
+        return Provider(session=None).run("work").value
+
+    provider = FakeProvider([KeyboardInterrupt(), "retried"])
+    provider.cancel = lambda operation_id: Stopped("durably stopped")
+    provider.recover = lambda request: Unknown("adapter restarted")
+    with Botpipe(tmp_path, provider=provider) as client:
+        first = client.run(work, run_id="cancelled-stop")
+        operation = next(
+            row
+            for row in client.journal.operations(first.run_id)
+            if row["kind"] == "provider"
+        )
+        client.cancel(first.run_id)
+
+        blocked = client.resume(first.run_id, workflow=work)
+        assert blocked.status == "interrupted"
+        assert len(provider.calls) == 1
+
+        client.resolve(first.run_id, operation["id"], retry=True)
+        completed = client.resume(first.run_id, workflow=work)
+        assert completed.ok, completed.error
+        assert completed.value == "retried"
+        assert len(provider.calls) == 2

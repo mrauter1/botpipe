@@ -1,49 +1,56 @@
 from __future__ import annotations
 
 import os
+import signal
 import subprocess
 import sys
 import time
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-from botpipe import Botpipe, Policy, Provider, provider_budget, workflow
-from botpipe.processes import ProcessContainment
-from botpipe.providers import CodexProvider
+from botpipe.processes import ProcessContainment, ProcessContainmentUnavailable
 
 
-def test_windows_child_is_suspended_until_owned_job_assignment(monkeypatch):
+def test_windows_spawn_assigns_suspended_child_before_resume(monkeypatch):
     import botpipe.processes as processes
 
     calls = []
     job = SimpleNamespace(
-        assign_and_resume=lambda process: calls.append(
-            ("assign-and-resume", process.pid)
-        ),
+        assign_and_resume=lambda process: calls.append(("assign", process.pid)),
         terminate=lambda code: calls.append(("terminate", code)),
         active_process_count=lambda: 0,
         close=lambda: calls.append(("close",)),
     )
+    process = SimpleNamespace(pid=123, poll=lambda: 0)
     monkeypatch.setattr(processes, "os", SimpleNamespace(name="nt"))
     monkeypatch.setattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 512, raising=False)
     monkeypatch.setattr(processes.WindowsJobObject, "create", lambda: job)
+    monkeypatch.setattr(
+        processes.subprocess,
+        "Popen",
+        lambda argv, **kwargs: calls.append(("popen", tuple(argv), kwargs)) or process,
+    )
+
     containment = ProcessContainment.create()
-    assert containment.creation_kwargs["creationflags"] & 4  # CREATE_SUSPENDED
-    process = SimpleNamespace(pid=123, poll=lambda: 0)
-    containment.attach_and_start(process)
-    containment.ensure_tree_exited(process, grace_seconds=0.1)
+    observed = containment.spawn(("command",), stdin=subprocess.DEVNULL)
+    containment.ensure_tree_exited(observed, grace_seconds=0.1)
     containment.close()
-    assert calls == [("assign-and-resume", 123), ("terminate", 0), ("close",)]
+
+    assert calls[0][0] == "popen"
+    assert calls[0][2]["creationflags"] & 4  # CREATE_SUSPENDED
+    assert calls[1:] == [
+        ("assign", 123),
+        ("terminate", 0),
+        ("close",),
+    ]
 
 
 def test_windows_job_survivor_is_cleanup_uncertainty(monkeypatch):
     import botpipe.processes as processes
 
-    job = SimpleNamespace(
-        terminate=lambda _code: None,
-        active_process_count=lambda: 1,
-    )
+    job = SimpleNamespace(terminate=lambda _code: None, active_process_count=lambda: 1)
     containment = ProcessContainment({}, _windows_job=job, _owned_pid=123)
     process = SimpleNamespace(pid=123, args=("stub",), poll=lambda: 0)
     monkeypatch.setattr(processes, "os", SimpleNamespace(name="nt"))
@@ -52,129 +59,258 @@ def test_windows_job_survivor_is_cleanup_uncertainty(monkeypatch):
         containment.ensure_tree_exited(process, grace_seconds=0.001)
 
 
-@pytest.mark.skipif(os.name != "posix", reason="POSIX process groups")
-def test_posix_post_kill_survivor_is_cleanup_uncertainty(monkeypatch):
+def test_linux_capability_probe_is_cached_by_launcher_identity(monkeypatch):
     import botpipe.processes as processes
 
-    signals = []
-    containment = ProcessContainment({}, _owned_pid=123, _owned_pgid=123)
-    process = SimpleNamespace(pid=123, args=("stub",), poll=lambda: None)
-    monkeypatch.setattr(processes.os, "getpgid", lambda _pid: 123)
+    identity = (("unshare", 1), ("python", 2), (2, 39))
+    calls = []
+    monkeypatch.setattr(processes.os, "name", "posix")
     monkeypatch.setattr(
-        processes.os, "killpg", lambda pgid, sig: signals.append((pgid, sig))
+        processes,
+        "_linux_dependencies",
+        lambda: ("/usr/bin/unshare", "/usr/bin/python3", identity),
     )
     monkeypatch.setattr(
         ProcessContainment,
-        "_posix_group_has_live_processes",
-        staticmethod(lambda _pgid: True),
+        "_probe_linux",
+        lambda self: calls.append(self._linux_identity) or None,
+    )
+    processes._linux_probe_cache.clear()
+
+    ProcessContainment.create().close()
+    ProcessContainment.create().close()
+
+    assert calls == [identity]
+
+
+def test_unsupported_posix_host_fails_closed(monkeypatch):
+    import botpipe.processes as processes
+
+    monkeypatch.setattr(processes.os, "name", "posix")
+    monkeypatch.setattr(
+        processes,
+        "_linux_dependencies",
+        lambda: (_ for _ in ()).throw(
+            ProcessContainmentUnavailable("PID namespaces unavailable")
+        ),
     )
 
-    with pytest.raises(subprocess.TimeoutExpired):
-        containment.terminate(process, grace_seconds=0.001)
+    with pytest.raises(
+        ProcessContainmentUnavailable, match="PID namespaces unavailable"
+    ):
+        ProcessContainment.create()
 
-    assert signals == [(123, processes.signal.SIGTERM), (123, processes.signal.SIGKILL)]
+
+@pytest.mark.parametrize(
+    "unsafe_kwarg",
+    [
+        {"executable": "/bin/true"},
+        {"preexec_fn": lambda: None},
+        {"shell": True},
+    ],
+)
+def test_spawn_rejects_bootstrap_bypass_kwargs_before_popen(
+    unsafe_kwarg, monkeypatch
+):
+    monkeypatch.setattr(
+        subprocess,
+        "Popen",
+        lambda *_args, **_kwargs: pytest.fail("Popen must not be reached"),
+    )
+    containment = ProcessContainment({})
+
+    with pytest.raises(ValueError, match="contained spawn"):
+        containment.spawn(("command",), **unsafe_kwarg)
 
 
-@pytest.mark.skipif(os.name != "posix", reason="POSIX process groups")
-def test_success_cleanup_signals_descendants_without_pre_term_delay(tmp_path):
+@pytest.mark.skipif(os.name != "posix", reason="POSIX containment dispatch")
+def test_ensure_tree_exited_terminates_a_still_running_namespace(monkeypatch):
+    process = SimpleNamespace(pid=123, poll=lambda: None)
+    containment = ProcessContainment({}, _owned_pid=123, _process=process)
+    calls = []
+    monkeypatch.setattr(
+        ProcessContainment,
+        "_terminate_linux",
+        lambda self, observed, *, grace_seconds: calls.append(
+            (self, observed, grace_seconds)
+        ),
+    )
+
+    containment.ensure_tree_exited(process, grace_seconds=0.25)
+
+    assert calls == [(containment, process, 0.25)]
+
+
+@pytest.fixture
+def linux_containment() -> ProcessContainment:
+    if not sys.platform.startswith("linux"):
+        pytest.skip("Linux PID-namespace integration test")
+    try:
+        containment = ProcessContainment.create()
+    except ProcessContainmentUnavailable as exc:
+        if os.environ.get("BOTPIPE_REQUIRE_NATIVE_CONTAINMENT") == "1":
+            pytest.fail(f"required native containment is unavailable: {exc}")
+        pytest.skip(f"host lacks required PID-namespace containment: {exc}")
+    try:
+        yield containment
+    finally:
+        containment.close()
+
+
+def test_linux_spawn_preserves_argv_cwd_env_and_stdio(
+    tmp_path: Path, linux_containment: ProcessContainment
+):
+    script = (
+        "import json,os,sys;"
+        "print(json.dumps([sys.argv[1:],os.getcwd(),os.environ['TOKEN'],"
+        "sys.stdin.read()]))"
+    )
+    process = linux_containment.spawn(
+        (sys.executable, "-c", script, "one", "two"),
+        cwd=tmp_path,
+        env={"PATH": os.environ.get("PATH", ""), "TOKEN": "present"},
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    stdout, stderr = process.communicate(b"input")
+    linux_containment.ensure_tree_exited(process, grace_seconds=2.0)
+
+    assert process.returncode == 0
+    assert stderr == b""
+    assert stdout == (
+        f'[["one", "two"], "{tmp_path}", "present", "input"]\n'.encode()
+    )
+
+
+def test_linux_payload_restores_default_sigpipe(
+    linux_containment: ProcessContainment,
+):
+    process = linux_containment.spawn(
+        (
+            sys.executable,
+            "-c",
+            "import signal;print(int(signal.getsignal(signal.SIGPIPE)))",
+        ),
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    stdout, stderr = process.communicate()
+    linux_containment.ensure_tree_exited(process, grace_seconds=2.0)
+
+    assert process.returncode == 0
+    assert stderr == b""
+    assert stdout == b"0\n"
+
+
+def test_linux_normal_exit_kills_detached_descendant(
+    tmp_path: Path, linux_containment: ProcessContainment
+):
     ready = tmp_path / "ready"
     escaped = tmp_path / "escaped"
     child = (
         "import pathlib,sys,time;"
         "pathlib.Path(sys.argv[1]).write_text('ready');"
-        "time.sleep(.05);"
-        "pathlib.Path(sys.argv[2]).write_text('escaped')"
+        "time.sleep(.5);pathlib.Path(sys.argv[2]).write_text('escaped')"
     )
     parent = (
-        "import pathlib,subprocess,sys,time\n"
-        f"subprocess.Popen([sys.executable,'-c',{child!r},{str(ready)!r},{str(escaped)!r}])\n"
-        f"p=pathlib.Path({str(ready)!r})\n"
-        "while not p.exists(): time.sleep(.001)\n"
+        "import pathlib,subprocess,sys,time;"
+        "subprocess.Popen([sys.executable,'-c',sys.argv[1],sys.argv[2],sys.argv[3]],"
+        "start_new_session=True);"
+        "p=pathlib.Path(sys.argv[2]);deadline=time.monotonic()+2;"
+        "exec('while not p.exists() and time.monotonic() < deadline: time.sleep(.01)')"
     )
-    containment = ProcessContainment.create()
-    process = subprocess.Popen(
-        [sys.executable, "-c", parent], **containment.creation_kwargs
+    process = linux_containment.spawn(
+        (sys.executable, "-c", parent, child, str(ready), str(escaped)),
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
-    try:
-        containment.attach_and_start(process)
-        process.wait(timeout=2)
-        containment.ensure_tree_exited(process, grace_seconds=0.1)
-        time.sleep(0.1)
-        assert not escaped.exists()
-    finally:
-        try:
-            containment.terminate(process, grace_seconds=0.1)
-        except (ProcessLookupError, subprocess.TimeoutExpired):
-            pass
-        containment.close()
+    process.wait(timeout=3)
+    linux_containment.ensure_tree_exited(process, grace_seconds=2.0)
+    time.sleep(0.7)
+
+    assert ready.exists()
+    assert not escaped.exists()
 
 
-@pytest.mark.skipif(os.name != "posix", reason="POSIX process groups")
-def test_successful_native_leader_cannot_leave_effectful_descendant(tmp_path):
-    marker = tmp_path / "escaped"
-    child = f"import time,pathlib;time.sleep(1);pathlib.Path({str(marker)!r}).write_text('bad')"
-    script = tmp_path / "cli.py"
-    script.write_text(
-        "import subprocess,sys,json\n"
-        f"subprocess.Popen([sys.executable,'-c',{child!r}])\n"
-        "print(json.dumps({'type':'item.completed','item':{'type':'agent_message','text':'done'}}))\n"
-        "print(json.dumps({'type':'turn.completed'}))\n"
-    )
-
-    @workflow
-    def work():
-        return Provider().run("work").value
-
-    with Botpipe(
-        tmp_path, provider=CodexProvider((sys.executable, str(script)))
-    ) as client:
-        assert client.run(work).status == "completed"
-    time.sleep(1.1)
-    assert not marker.exists()
-
-
-def test_native_budget_timeout_cannot_be_overridden_by_policy(tmp_path):
-    script = tmp_path / "cli.py"
-    script.write_text("import time;time.sleep(10)\n")
-
-    @workflow
-    def work():
-        with provider_budget(max_turns=1, turn_timeout_seconds=0.05):
-            Provider().run("work", policy=Policy(timeout=10))
-
-    started = time.monotonic()
-    with Botpipe(
-        tmp_path, provider=CodexProvider((sys.executable, str(script)))
-    ) as client:
-        result = client.run(work)
-        assert result.status == "interrupted"
-        assert "timed out after 0.05" in result.error
-    assert time.monotonic() - started < 3
-
-
-@pytest.mark.skipif(os.name != "nt", reason="Native Windows Job Object smoke test")
-def test_windows_job_close_terminates_running_descendants(tmp_path):
-    ready, escaped = tmp_path / "ready", tmp_path / "escaped"
+def test_linux_timeout_kills_detached_descendant(
+    tmp_path: Path, linux_containment: ProcessContainment
+):
+    ready = tmp_path / "ready"
+    escaped = tmp_path / "escaped"
     child = (
-        f"import pathlib,time;pathlib.Path({str(ready)!r}).write_text('ready');"
-        f"time.sleep(1);pathlib.Path({str(escaped)!r}).write_text('escaped')"
+        "import pathlib,sys,time;"
+        "pathlib.Path(sys.argv[1]).write_text('ready');"
+        "time.sleep(.5);pathlib.Path(sys.argv[2]).write_text('escaped')"
     )
-    parent = f"import subprocess,sys,time;subprocess.Popen([sys.executable,'-c',{child!r}]);time.sleep(10)"
-    containment = ProcessContainment.create()
-    process = subprocess.Popen(
-        [sys.executable, "-c", parent], **containment.creation_kwargs
+    parent = (
+        "import subprocess,sys,time;"
+        "subprocess.Popen([sys.executable,'-c',sys.argv[1],sys.argv[2],sys.argv[3]],"
+        "start_new_session=True);time.sleep(30)"
+    )
+    process = linux_containment.spawn(
+        (sys.executable, "-c", parent, child, str(ready), str(escaped)),
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    deadline = time.monotonic() + 2
+    while not ready.exists() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert ready.exists()
+
+    linux_containment.terminate(process, grace_seconds=0.2)
+    time.sleep(0.7)
+
+    assert not escaped.exists()
+
+
+@pytest.mark.skipif(
+    not sys.platform.startswith("linux"), reason="Linux PID-namespace integration test"
+)
+def test_linux_owner_death_closes_lifeline_and_kills_namespace(tmp_path: Path):
+    try:
+        ProcessContainment.require_available()
+    except ProcessContainmentUnavailable as exc:
+        if os.environ.get("BOTPIPE_REQUIRE_NATIVE_CONTAINMENT") == "1":
+            pytest.fail(f"required native containment is unavailable: {exc}")
+        pytest.skip(f"host lacks required PID-namespace containment: {exc}")
+
+    ready = tmp_path / "ready"
+    escaped = tmp_path / "escaped"
+    driver = tmp_path / "driver.py"
+    driver.write_text(
+        "import subprocess,sys\n"
+        "from botpipe.processes import ProcessContainment\n"
+        "child=(\"import pathlib,sys,time;\"\n"
+        "       \"pathlib.Path(sys.argv[1]).write_text('ready');\"\n"
+        "       \"time.sleep(.5);pathlib.Path(sys.argv[2]).write_text('escaped')\")\n"
+        "payload=(\"import subprocess,sys,time;\"\n"
+        "         \"subprocess.Popen([sys.executable,'-c',sys.argv[1],\"\n"
+        "         \"sys.argv[2],sys.argv[3]],start_new_session=True);time.sleep(30)\")\n"
+        "c=ProcessContainment.create()\n"
+        "p=c.spawn((sys.executable,'-c',payload,child,sys.argv[1],sys.argv[2]),\n"
+        "          stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,\n"
+        "          stderr=subprocess.DEVNULL)\n"
+        "p.wait()\n"
+    )
+    environment = dict(os.environ)
+    environment["PYTHONPATH"] = str(Path(__file__).resolve().parents[1])
+    owner = subprocess.Popen(
+        (sys.executable, str(driver), str(ready), str(escaped)), env=environment
     )
     try:
-        containment.attach_and_start(process)
-        deadline = time.monotonic() + 5
+        deadline = time.monotonic() + 4
         while not ready.exists() and time.monotonic() < deadline:
             time.sleep(0.02)
-        assert ready.exists(), "contained child did not start"
-        containment.close()
-        process.wait(timeout=3)
-        time.sleep(1.1)
+        assert ready.exists()
+        os.kill(owner.pid, signal.SIGKILL)
+        owner.wait(timeout=2)
+        time.sleep(0.7)
         assert not escaped.exists()
     finally:
-        if process.poll() is None:
-            containment.terminate(process, grace_seconds=1)
-        containment.close()
+        if owner.poll() is None:
+            owner.kill()
+            owner.wait()

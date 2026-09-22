@@ -29,7 +29,6 @@ from .prompts import Prompt
 from .providers import (
     ProviderPolicyError,
     ProviderRequest,
-    ProviderResponse,
     ProviderTimeoutError,
     provider_request_from_snapshot,
     provider_request_snapshot,
@@ -40,13 +39,16 @@ from .provider_checkpoints import (
     NotDispatchedCheckpoint,
     PreparingCheckpoint,
     ProviderCheckpoint,
+    ProviderCheckpointError,
     ProviderLifecycle,
     RecoveryAction,
     RespondedCheckpoint,
     RetryAuthorizedCheckpoint,
     ValidatedCheckpoint,
     ValidationFailedCheckpoint,
+    canonical_provider_response,
     provider_attempt_identity,
+    provider_recovery_outcome,
 )
 from .runtime import current_run
 from .recovery import Completed, Unknown, cancellation_evidence, recover_outcome
@@ -174,15 +176,25 @@ def execute_provider(
                 raise BotpipeError(
                     "Concurrent editing branches cannot share a workspace"
                 )
-        def ensure_target_fence():
+        def ensure_target_fence(checkpoint):
             nonlocal target_lease
             if target_lease is not None:
                 target_lease.validate()
                 return
-            if effective.sandbox_mode == SandboxMode.READ_ONLY:
+            request_data = checkpoint.request_data
+            claim_operation = operation
+            claim_policy = effective
+            if request_data is not None:
+                claim_operation = request_data["operation"]
+                claim_policy = Policy.from_dict(request_data["policy"]).effective()
+            read_claim = (
+                claim_operation in {"query", "generate"}
+                or claim_policy.sandbox_mode == SandboxMode.READ_ONLY
+            )
+            if read_claim:
                 context = ctx.client._read_ownership(
                     ctx.run_id, workspace=target, parent=ctx.workspace_leases,
-                    operation_id=provider_operation_id,
+                    operation_id=provider_operation_id, recovery=True,
                 )
             else:
                 context = ctx.client._ownership(
@@ -307,12 +319,12 @@ def execute_provider(
         def execute_attempt(recover=False):
             nonlocal provider_operation_id
             operation_id = provider_operation_id = ctx.operation_id
-            # The operation is durable before admission. Its claim can then be
-            # recovered without releasing another operation's unresolved fence.
-            ensure_target_fence()
             fresh_response = False
             row = ctx.journal.get(operation_id)
             checkpoint = ProviderCheckpoint.from_record(row.get("response"))
+            # The operation is durable before admission. Durable request facts,
+            # when present, select the recovered claim rather than current policy.
+            ensure_target_fence(checkpoint)
             generation = checkpoint.generation
             authorized = isinstance(checkpoint, RetryAuthorizedCheckpoint)
 
@@ -525,7 +537,12 @@ def execute_provider(
                     operation_id=operation_id,
                     identity=provider_attempt_identity(checkpoint),
                 )
-                return evidence if evidence is not None else recover_outcome(adapter, request)
+                outcome = (
+                    evidence
+                    if evidence is not None
+                    else recover_outcome(adapter, request)
+                )
+                return provider_recovery_outcome(outcome)
 
             evidence = cancellation_evidence(
                 ctx.journal.events(ctx.run_id),
@@ -543,6 +560,35 @@ def execute_provider(
                     "Cancellation evidence conflicts with the provider checkpoint",
                     operation_id,
                 )
+
+            recovery_outcome = None
+            if (
+                recover
+                and not isinstance(checkpoint, RespondedCheckpoint)
+                and (authorized or not preparing)
+            ):
+                # Validate recovered terminal evidence before claiming a
+                # session or preparing/restoring any artifact destination.
+                recovery_outcome = recorded_recovery()
+                early_action = ProviderLifecycle.recovery_action(
+                    checkpoint, recovery_outcome
+                )
+                if authorized:
+                    if early_action not in {
+                        RecoveryAction.USE_RESPONSE,
+                        RecoveryAction.START_RETRY,
+                    }:
+                        raise UncertainOperation(
+                            recovery_outcome.detail
+                            or "Provider is not confirmed stopped; retry is blocked",
+                            operation_id,
+                        )
+                elif early_action is not RecoveryAction.USE_RESPONSE:
+                    raise UncertainOperation(
+                        recovery_outcome.detail
+                        or "Provider intent has no durable response; reconcile before retrying",
+                        operation_id,
+                    )
 
             def preflight_new_dispatch(request):
                 nonlocal request_data
@@ -613,7 +659,8 @@ def execute_provider(
                 # Reconcile before touching destinations: the previous
                 # process may still be writing them, or its completed
                 # response may already be recoverable from a receipt.
-                outcome = recorded_recovery()
+                outcome = recovery_outcome
+                assert outcome is not None
                 action = ProviderLifecycle.recovery_action(checkpoint, outcome)
                 if action is RecoveryAction.USE_RESPONSE:
                     generation = prepared_generation
@@ -678,7 +725,8 @@ def execute_provider(
                 dispatched = False
                 try:
                     if recover and not authorized and not preparing:
-                        outcome = recorded_recovery()
+                        outcome = recovery_outcome
+                        assert outcome is not None
                         action = ProviderLifecycle.recovery_action(
                             checkpoint, outcome
                         )
@@ -700,12 +748,9 @@ def execute_provider(
                             dispatched = True
                             dispatch.started()
                             try:
-                                response = adapter.run(request)
-                                if not isinstance(response, ProviderResponse):
-                                    raise TypeError(
-                                        "Provider returned an invalid response object"
-                                    )
-                                response.to_record()
+                                response = canonical_provider_response(
+                                    adapter.run(request)
+                                )
                             except BaseException as exc:
                                 dispatch.finish(
                                     "timed_out"
@@ -718,9 +763,7 @@ def execute_provider(
                                 )
                                 raise
                             dispatch.finish(
-                                "completed"
-                                if isinstance(response, ProviderResponse)
-                                else "failed",
+                                "completed",
                                 usage=getattr(response, "usage", None),
                             )
                         else:
@@ -765,14 +808,9 @@ def execute_provider(
                     raise
                 except Exception as exc:
                     raise UncertainOperation(str(exc), operation_id) from exc
-                if not isinstance(response, ProviderResponse):
-                    raise UncertainOperation(
-                        "Provider returned an invalid response; reconcile its effects",
-                        operation_id,
-                    )
                 try:
-                    response.to_record()
-                except (ValueError, TypeError, RecursionError) as exc:
+                    response = canonical_provider_response(response)
+                except ProviderCheckpointError as exc:
                     raise UncertainOperation(
                         f"Provider returned an invalid response: {exc}",
                         operation_id,

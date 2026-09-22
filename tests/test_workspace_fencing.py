@@ -1,6 +1,7 @@
 """Read/write ownership through the public runtime, across overlapping roots."""
 
 from concurrent.futures import ThreadPoolExecutor
+import json
 import threading
 
 import pytest
@@ -9,6 +10,7 @@ from botpipe import (
     Botpipe,
     Policy,
     Provider,
+    ReplayMismatch,
     RunBusy,
     UncertainOperation,
     parallel,
@@ -126,6 +128,207 @@ def test_independent_queries_can_share_an_alternate_read_root(tmp_path):
         for future in results:
             result = future.result(timeout=8)
             assert result.ok, result.error
+
+
+def test_standalone_queries_share_primary_root_and_persist_read_mode(tmp_path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    both = threading.Barrier(2)
+
+    def read(_request):
+        both.wait(timeout=5)
+        return "read"
+
+    with (
+        Botpipe(
+            workspace,
+            state_dir=tmp_path / "first-state",
+            provider=FakeProvider([read]),
+        ) as first,
+        Botpipe(
+            workspace,
+            state_dir=tmp_path / "second-state",
+            provider=FakeProvider([read]),
+        ) as second,
+        ThreadPoolExecutor(max_workers=2) as pool,
+    ):
+        futures = [
+            pool.submit(Provider(runtime=client, session=None).query, "inspect")
+            for client in (first, second)
+        ]
+        assert [future.result(timeout=8).value for future in futures] == [
+            "read",
+            "read",
+        ]
+        assert first.journal.runs()[0]["workspace_mode"] == "read"
+        assert second.journal.runs()[0]["workspace_mode"] == "read"
+
+
+def test_arbitrary_query_workflow_keeps_write_root_mode(tmp_path):
+    @workflow
+    def inspect():
+        return Provider().query("inspect").value
+
+    with Botpipe(tmp_path, provider=FakeProvider(["read"])) as client:
+        result = client.run(inspect)
+        assert result.ok, result.error
+        assert client.journal.run(result.run_id)["workspace_mode"] == "write"
+
+
+def test_standalone_query_resolution_reuses_recorded_read_fences(tmp_path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    owner_adapter = FakeProvider([RuntimeError("unknown result")])
+    observer_adapter = FakeProvider(["observed"])
+
+    with (
+        Botpipe(
+            workspace,
+            state_dir=tmp_path / "owner-state",
+            provider=owner_adapter,
+        ) as owner,
+        Botpipe(
+            workspace,
+            state_dir=tmp_path / "observer-state",
+            provider=observer_adapter,
+        ) as observer,
+    ):
+        with pytest.raises(UncertainOperation) as interrupted:
+            Provider(runtime=owner, session=None).query("inspect")
+        run_id = interrupted.value.run_id
+        operation = next(
+            row
+            for row in owner.journal.operations(run_id)
+            if row["kind"] == "provider"
+        )
+        recovering, release = threading.Event(), threading.Event()
+
+        def recover(_request):
+            recovering.set()
+            assert release.wait(5)
+            return Stopped("stopped")
+
+        owner_adapter.recover = recover
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            resolution = pool.submit(
+                owner.resolve,
+                run_id,
+                operation["id"],
+                response=ProviderResponse("manual"),
+            )
+            assert recovering.wait(5)
+            observed = Provider(runtime=observer, session=None).query("inspect")
+            assert observed.value == "observed"
+            release.set()
+            resolution.result(timeout=5)
+
+        assert owner.journal.run(run_id)["workspace_mode"] == "read"
+
+
+@pytest.mark.parametrize("action", ["resume", "resolve"])
+def test_missing_workspace_mode_recovers_with_conservative_writer_fence(
+    tmp_path, action
+):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    owner_adapter = FakeProvider([RuntimeError("unknown result")])
+    observer_adapter = FakeProvider(["must not dispatch"])
+
+    with (
+        Botpipe(
+            workspace,
+            state_dir=tmp_path / "owner-state",
+            provider=owner_adapter,
+        ) as owner,
+        Botpipe(
+            workspace,
+            state_dir=tmp_path / "observer-state",
+            provider=observer_adapter,
+        ) as observer,
+    ):
+        with pytest.raises(UncertainOperation) as interrupted:
+            Provider(runtime=owner, session=None).query("inspect")
+        run_id = interrupted.value.run_id
+        operation = next(
+            row
+            for row in owner.journal.operations(run_id)
+            if row["kind"] == "provider"
+        )
+        with owner.journal.transaction() as db:
+            raw = db.execute(
+                "SELECT metadata FROM runs WHERE id=?", (run_id,)
+            ).fetchone()[0]
+            metadata = json.loads(raw)
+            metadata.pop("workspace_mode")
+            db.execute(
+                "UPDATE runs SET metadata=? WHERE id=?",
+                (json.dumps(metadata), run_id),
+            )
+
+        recovering, release = threading.Event(), threading.Event()
+
+        def recover(_request):
+            recovering.set()
+            assert release.wait(5)
+            if action == "resume":
+                return Completed(ProviderResponse("recovered"))
+            return Stopped("stopped")
+
+        owner_adapter.recover = recover
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            if action == "resume":
+                recovery = pool.submit(owner.resume, run_id)
+            else:
+                recovery = pool.submit(
+                    owner.resolve,
+                    run_id,
+                    operation["id"],
+                    response=ProviderResponse("manual"),
+                )
+            assert recovering.wait(5)
+            with pytest.raises(RunBusy):
+                Provider(runtime=observer, session=None).query("inspect")
+            assert not observer_adapter.calls
+            release.set()
+            recovered = recovery.result(timeout=5)
+
+        if action == "resume":
+            assert recovered.ok, recovered.error
+            assert recovered.value.value == "recovered"
+        assert "workspace_mode" not in owner.journal.run(run_id)
+
+
+def test_inconsistent_saved_read_mode_is_rejected_before_recovery(tmp_path):
+    recovered = False
+
+    @workflow
+    def arbitrary_workflow():
+        return Provider(session=None).query("inspect").value
+
+    provider = FakeProvider([RuntimeError("unknown result")])
+    with Botpipe(tmp_path, provider=provider) as client:
+        first = client.run(arbitrary_workflow, run_id="inconsistent-mode")
+        assert first.status == "interrupted"
+        with client.journal.transaction() as db:
+            raw = db.execute(
+                "SELECT metadata FROM runs WHERE id=?", (first.run_id,)
+            ).fetchone()[0]
+            metadata = json.loads(raw)
+            metadata["workspace_mode"] = "read"
+            db.execute(
+                "UPDATE runs SET metadata=? WHERE id=?",
+                (json.dumps(metadata), first.run_id),
+            )
+
+        def recover(_request):
+            nonlocal recovered
+            recovered = True
+            return Completed(ProviderResponse("must not recover"))
+
+        provider.recover = recover
+        with pytest.raises(ReplayMismatch, match="inconsistent"):
+            client.resume(first.run_id, workflow=arbitrary_workflow)
+        assert recovered is False
 
 
 @pytest.mark.parametrize("primary_target", [False, True])

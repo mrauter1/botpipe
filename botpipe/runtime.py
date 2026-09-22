@@ -39,7 +39,7 @@ from .journal import Journal, now
 from .limits import RunLimits
 from .workspace_ownership import WorkspaceCoordinator
 from .models import RunResult
-from .policy import Policy
+from .policy import Policy, SandboxMode
 from .provenance import SourceContext, capture_workflow_provenance, source_context
 from .provider_checkpoints import (
     NotDispatchedCheckpoint,
@@ -48,7 +48,9 @@ from .provider_checkpoints import (
     RecoveryAction,
     RespondedCheckpoint,
     RetryAuthorizedCheckpoint,
+    canonical_provider_response,
     provider_attempt_identity,
+    provider_recovery_outcome,
 )
 from .recovery import (
     Completed,
@@ -1601,6 +1603,73 @@ class Botpipe:
         for field in ("provider_config", "provider_defaults", "policy"):
             if not isinstance(data.get(field, {}), dict):
                 raise ReplayMismatch(f"Recorded run {field} is malformed")
+        self._recorded_workspace_mode(data)
+
+    @staticmethod
+    def _recorded_workspace_mode(data):
+        # Runs created before root modes were recorded held the conservative
+        # write claim. Preserve that safe journal meaning without accepting an
+        # explicitly malformed value.
+        if "workspace_mode" not in data:
+            return "write"
+        mode = data.get("workspace_mode")
+        if mode not in {"read", "write"}:
+            raise ReplayMismatch("Recorded run workspace mode is malformed")
+        if mode == "read" and not Botpipe._is_recorded_standalone_reader(data):
+            raise ReplayMismatch(
+                "Recorded read workspace mode is inconsistent with the workflow"
+            )
+        return mode
+
+    @staticmethod
+    def _is_recorded_standalone_reader(data):
+        """Recognize only the durable private standalone query/generate shape."""
+
+        from .provider import _standalone_operation
+
+        if (
+            data.get("workflow") != _standalone_operation.name
+            or data.get("module") != _standalone_operation.fn.__module__
+            or data.get("function") != _standalone_operation.fn.__qualname__
+            or data.get("workflow_call")
+            != codec.encode(_standalone_operation.logical_identity)
+            or data.get("kwargs") != codec.encode({})
+        ):
+            return False
+        args = data.get("args")
+        if (
+            type(args) is not dict
+            or set(args) != {"$botpipe", "value"}
+            or args.get("$botpipe") != "tuple"
+            or type(args.get("value")) is not list
+            or len(args["value"]) != 1
+        ):
+            return False
+        encoded_spec = args["value"][0]
+        if (
+            type(encoded_spec) is not dict
+            or set(encoded_spec) != {"$botpipe", "value"}
+            or encoded_spec.get("$botpipe") != "dict"
+            or type(encoded_spec.get("value")) is not dict
+        ):
+            return False
+        spec = encoded_spec["value"]
+        return (
+            set(spec) == {"selection", "session", "operation", "prompt", "options"}
+            and spec.get("operation") in {"query", "generate"}
+        )
+
+    @staticmethod
+    def _new_workspace_mode(definition, args):
+        # Only the exact private standalone wrapper can narrow root ownership.
+        # User workflows remain writers even when their current body only reads.
+        from .provider import _standalone_operation
+
+        if definition is _standalone_operation and len(args) == 1:
+            spec = args[0]
+            if type(spec) is dict and spec.get("operation") in {"query", "generate"}:
+                return "read"
+        return "write"
 
     @contextmanager
     def _ownership(
@@ -1615,11 +1684,13 @@ class Botpipe:
 
     @contextmanager
     def _read_ownership(
-        self, run_id, *, workspace=None, parent=(), operation_id=None
+        self, run_id, *, workspace=None, parent=(), recovery=False,
+        operation_id=None
     ):
         target = self.workspace if workspace is None else workspace
         with self._workspace_coordinator.claim(
             target, self.journal, run_id, "read", parent=parent,
+            recovery=recovery,
             operation_id=operation_id
         ) as lease:
             yield lease
@@ -1668,6 +1739,7 @@ class Botpipe:
             "provider_config": self.provider_config,
             "provider_defaults": self.provider_defaults,
             "policy": self.policy.to_dict(),
+            "workspace_mode": self._new_workspace_mode(definition, args),
             "max_operations": limits.max_operations,
             "timeout": limits.timeout,
             "created_at": now(),
@@ -1678,7 +1750,12 @@ class Botpipe:
         # only the untouched placeholder created by this call.
         self.journal.create_run(data)
         try:
-            with self._ownership(run_id) as lease:
+            ownership = (
+                self._read_ownership
+                if data["workspace_mode"] == "read"
+                else self._ownership
+            )
+            with ownership(run_id) as lease:
                 data["provenance_start"] = capture_workflow_provenance(
                     definition, self.workspace
                 )
@@ -1731,8 +1808,10 @@ class Botpipe:
     ):
         # An invalid identifier must not create an orphan claim that can never
         # be reconciled. Re-read after admission for the current committed state.
-        self.journal.run(run_id)
-        with self._ownership(run_id, recovery=True) as lease:
+        initial = self.journal.run(run_id)
+        mode = self._recorded_workspace_mode(initial)
+        ownership = self._read_ownership if mode == "read" else self._ownership
+        with ownership(run_id, recovery=True) as lease:
             data = self.journal.run(run_id)
             self._check_run_configuration(data)
             operations = self.journal.operations(run_id)
@@ -2129,6 +2208,7 @@ class Botpipe:
                     and not isinstance(outcome, Completed)
                 ):
                     outcome = Completed(settled_checkpoint.response)
+                outcome = provider_recovery_outcome(outcome)
             response_record = None
             if isinstance(outcome, Completed):
                 try:
@@ -2231,10 +2311,22 @@ class Botpipe:
             raise ValueError("Choose retry=True or a response/artifact reconciliation")
         if not retry and response is _UNSET and artifact_digests is None:
             raise ValueError("Choose retry=True, a response, or artifact_digests")
-        # An invalid identifier must not create an orphan claim that can never
-        # be reconciled. Re-read after admission for the current committed state.
-        self.journal.run(run_id)
-        with self._ownership(run_id, recovery=True) as lease:
+        # Validate identifiers and manually supplied provider values before any
+        # ownership or journal mutation. Re-read after admission for freshness.
+        initial = self.journal.run(run_id)
+        initial_record = self.journal.get(operation_id)
+        if initial_record is None or initial_record["run_id"] != run_id:
+            raise KeyError(operation_id)
+        if response is not _UNSET and initial_record["kind"] == "provider":
+            try:
+                response = canonical_provider_response(
+                    response, allow_mapping=True
+                )
+            except ReplayMismatch as exc:
+                raise TypeError(str(exc)) from exc
+        mode = self._recorded_workspace_mode(initial)
+        ownership = self._read_ownership if mode == "read" else self._ownership
+        with ownership(run_id, recovery=True) as lease:
             data = self.journal.run(run_id)
             self._check_run_configuration(data)
             operations = self.journal.operations(run_id)
@@ -2253,10 +2345,7 @@ class Botpipe:
             old = dict(record.get("response") or {})
             source = "operator"
             if record["kind"] == "provider":
-                from .providers import (
-                    ProviderResponse,
-                    provider_request_from_snapshot,
-                )
+                from .providers import provider_request_from_snapshot
 
                 checkpoint = ProviderCheckpoint.from_record(old)
                 if isinstance(checkpoint, NotDispatchedCheckpoint):
@@ -2297,6 +2386,7 @@ class Botpipe:
                         )
                         if outcome is None:
                             outcome = recover_outcome(adapter, request)
+                    outcome = provider_recovery_outcome(outcome)
                     evidence = cancellation_evidence(
                         self.journal.events(run_id),
                         operation_id=operation_id,
@@ -2363,8 +2453,6 @@ class Botpipe:
                                 raise ValueError(
                                     "Artifact reconciliation also needs a provider response"
                                 )
-                            if not isinstance(response, ProviderResponse):
-                                response = ProviderResponse(**response)
                             checkpoint = ProviderLifecycle.completed(
                                 checkpoint, response
                             )
@@ -2373,19 +2461,21 @@ class Botpipe:
                             )
 
                 target = request.workspace.resolve()
-                with self._ownership(
-                    run_id, workspace=target, parent=(lease,),
-                    recovery=True, operation_id=operation_id,
+                request_policy = request.policy.effective()
+                target_ownership = (
+                    self._read_ownership
+                    if request.operation in {"query", "generate"}
+                    or request_policy.sandbox_mode == SandboxMode.READ_ONLY
+                    else self._ownership
+                )
+                with target_ownership(
+                    run_id, workspace=target, parent=(lease,), recovery=True,
+                    operation_id=operation_id,
                 ):
                     reconcile_provider()
 
                 if response is not _UNSET:
-                    if isinstance(response, dict):
-                        response = ProviderResponse(**response)
-                    if not isinstance(response, ProviderResponse):
-                        raise TypeError(
-                            "Provider reconciliation needs ProviderResponse or its field mapping"
-                        )
+                    response = canonical_provider_response(response)
                     checkpoint = ProviderLifecycle.completed(checkpoint, response)
                     session_update = None
                     session_id = inputs.get("session")

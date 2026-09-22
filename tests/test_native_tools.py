@@ -131,25 +131,7 @@ def test_count_lines_drains_but_rejects_overlimit_output(tmp_path, monkeypatch):
         def poll(self):
             return 0
 
-    class Containment:
-        creation_kwargs = {"start_new_session": True}
-
-        def attach_and_start(self, process):
-            pass
-
-        def ensure_tree_exited(self, process, grace_seconds):
-            pass
-
-        def terminate(self, process, grace_seconds):
-            pass
-
-        def close(self):
-            pass
-
     spawned = []
-    monkeypatch.setattr(
-        "botpipe.native_tools.ProcessContainment.create", lambda: Containment()
-    )
     monkeypatch.setattr(
         "botpipe.native_tools.subprocess.Popen",
         lambda command, **kwargs: spawned.append((command, kwargs)) or Process(),
@@ -472,10 +454,9 @@ def test_exact_command_bounds_output_controls_env_and_uses_containment(tmp_path,
     process = Process()
 
     class Containment:
-        creation_kwargs = {"start_new_session": True}
-
-        def attach_and_start(self, observed):
-            calls.append(("attach", observed))
+        def spawn(self, command, **kwargs):
+            calls.append(("spawn", command))
+            return subprocess.Popen(command, **kwargs)
 
         def ensure_tree_exited(self, observed, grace_seconds):
             calls.append(("ensure", observed, grace_seconds))
@@ -499,4 +480,4 @@ def test_exact_command_bounds_output_controls_env_and_uses_containment(tmp_path,
     assert spawned[0][1]["env"] == {
         "PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"
     }
-    assert [call[0] for call in calls] == ["attach", "wait", "ensure", "close"]
+    assert [call[0] for call in calls] == ["spawn", "wait", "ensure", "close"]

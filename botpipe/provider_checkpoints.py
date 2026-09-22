@@ -14,7 +14,7 @@ from typing import Any, Mapping
 
 from .errors import ReplayMismatch
 from .providers import ProviderResponse
-from .recovery import Completed, RecoveryOutcome, Running, Stopped
+from .recovery import Completed, RecoveryOutcome, Running, Stopped, Unknown
 
 
 class ProviderCheckpointError(ReplayMismatch):
@@ -117,21 +117,54 @@ def _only(record: Mapping[str, Any], allowed: set[str]) -> None:
         )
 
 
+def canonical_provider_response(
+    value: object, *, allow_mapping: bool = False
+) -> ProviderResponse:
+    """Validate and detach one response at the provider-family boundary."""
+
+    try:
+        if allow_mapping and type(value) is dict:
+            value = ProviderResponse(**value)
+        if not isinstance(value, ProviderResponse):
+            raise TypeError("expected ProviderResponse")
+        record = value.to_record()
+        record = json.loads(json.dumps(record, allow_nan=False))
+        response = ProviderResponse(**record)
+        if response.to_record() != record:
+            raise ValueError("response record is not canonical")
+    except (TypeError, ValueError, RecursionError) as exc:
+        raise ProviderCheckpointError(
+            f"Provider response is invalid: {exc}"
+        ) from exc
+    return response
+
+
+def provider_recovery_outcome(outcome: RecoveryOutcome) -> RecoveryOutcome:
+    """Keep invalid or wrong-family completed evidence uncertain."""
+
+    if not isinstance(outcome, Completed):
+        return outcome
+    try:
+        response = canonical_provider_response(outcome.response)
+    except ProviderCheckpointError as exc:
+        return Unknown(f"provider returned invalid completed evidence: {exc}")
+    return Completed(response, outcome.detail)
+
+
 def _response(record: Mapping[str, Any]) -> ProviderResponse:
     try:
-        response = ProviderResponse(
-            **{
+        return canonical_provider_response(
+            {
                 key: record[key]
                 for key in ("text", "session_id", "usage", "metadata")
                 if key in record
-            }
+            },
+            allow_mapping=True,
         )
-        response.to_record()
-    except (TypeError, ValueError, RecursionError) as exc:
+    except ProviderCheckpointError as exc:
         raise ProviderCheckpointError(
             f"Provider checkpoint response is invalid: {exc}"
         ) from exc
-    return response
 
 
 def _artifact_resolution(record: Mapping[str, Any]) -> dict[str, Any] | None:
@@ -576,6 +609,8 @@ __all__ = [
     "ProviderCheckpoint",
     "ProviderCheckpointError",
     "ProviderLifecycle",
+    "canonical_provider_response",
+    "provider_recovery_outcome",
     "provider_attempt_identity",
     "RecoveryAction",
     "RespondedCheckpoint",

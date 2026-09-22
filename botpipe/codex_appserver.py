@@ -1,11 +1,4 @@
-"""Pinned Codex app-server bridge for Botpipe-owned structured tools.
-
-The adapter is selected explicitly with ``interface="app_server"``.  The pinned
-upstream build still exposes ``update_plan`` and ``request_user_input``
-unconditionally, so it cannot implement Botpipe's strictly tool-free generate
-contract.  It can drive a source-audited, no-environment turn whose only
-externally effectful calls are client-owned dynamic tools.
-"""
+"""Codex app-server bridge for native and Botpipe-mediated turns."""
 
 from __future__ import annotations
 
@@ -16,6 +9,7 @@ import os
 import queue
 import re
 import subprocess
+import tempfile
 import threading
 import time
 from collections.abc import Callable, Mapping, Sequence
@@ -30,13 +24,11 @@ from .native_tools import (
     ToolObservation,
     command_scope_is_workspace_wide,
 )
-from .policy import OperationKind
-from .processes import ProcessContainment
+from .policy import NetworkMode, OperationKind, PermissionMode, SandboxMode
+from .processes import ProcessContainment, ProcessContainmentUnavailable
 from .providers import (
     CapabilityError,
     CODEX_APPSERVER_CAPABILITIES,
-    CodexProvider,
-    ProviderError,
     ProviderInterruptedError,
     ProviderRequest,
     ProviderResponse,
@@ -52,9 +44,13 @@ from .recovery import RecoveryOutcome, Unknown
 from .tool_evidence import ToolEvidence
 
 
-PINNED_CODEX_VERSION = "0.131.0"
-PINNED_CODEX_TAG = "rust-v0.131.0"
-PINNED_CODEX_COMMIT = "05eb8678451435cbc8d79c6d8254276289f2bdf1"
+CURRENT_VERIFIED_CODEX_VERSION = "0.155.1"
+CURRENT_VERIFIED_CODEX_COMMIT = "be2951ea34f0d295ed0becf97079f92fa5f6950e"
+MINIMUM_NATIVE_CODEX_VERSION = (0, 155, 1)
+VERIFIED_MEDIATED_MODELS = frozenset({"gpt-5.4"})
+_REVIEWED_MEDIATED_RELEASES = MappingProxyType(
+    {CURRENT_VERIFIED_CODEX_VERSION: CURRENT_VERIFIED_CODEX_COMMIT}
+)
 TOOL_CALL_LIMIT = 16
 TOOL_OUTPUT_BYTES = 32_000
 _BOTPIPE_ROLE_PREFIX = (
@@ -67,11 +63,9 @@ _BOTPIPE_ROLE_RESET = (
     "base and developer instructions."
 )
 
-# This list is derived from codex-rs/core/src/tools/spec_plan.rs and
-# codex-rs/tools/src/tool_config.rs at PINNED_CODEX_COMMIT.  Empty environments
-# remove shell/apply-patch/view-image.  The feature overrides below close the
-# conditional registrants.  These two non-effectful built-ins remain.
-UNAVOIDABLE_INTERNAL_TOOLS = frozenset({"update_plan", "request_user_input"})
+# Current Codex can disable these tools.  Keep the names reserved so a dynamic
+# registry cannot become ambiguous on a release with a different config result.
+NATIVE_TOOL_NAMES = frozenset({"update_plan", "request_user_input"})
 _RESERVED_NAMESPACES = frozenset(
     {
         "api_tool",
@@ -121,15 +115,15 @@ class DynamicTool:
         ):
             raise ValueError("dynamic tool namespace must match [A-Za-z0-9_-]{1,64}")
         if self.name == "mcp" or self.name.startswith("mcp__"):
-            raise ValueError("dynamic tool name is reserved by the pinned protocol")
+            raise ValueError("dynamic tool name is reserved by the native protocol")
         if self.namespace is not None and (
             self.namespace == "mcp"
             or self.namespace.startswith("mcp__")
             or self.namespace in _RESERVED_NAMESPACES
         ):
-            raise ValueError("dynamic tool namespace is reserved by the pinned protocol")
-        if self.namespace is None and self.name in UNAVOIDABLE_INTERNAL_TOOLS:
-            raise ValueError("dynamic tool name collides with a pinned native tool")
+            raise ValueError("dynamic tool namespace is reserved by the native protocol")
+        if self.namespace is None and self.name in NATIVE_TOOL_NAMES:
+            raise ValueError("dynamic tool name collides with a native tool")
         if type(self.description) is not str or not self.description.strip():
             raise ValueError("dynamic tool description must be non-empty")
         schema = _plain_json(self.input_schema, label="dynamic tool input schema")
@@ -164,8 +158,33 @@ class CodexAppServerResult:
     text: str
     session: CodexAppServerSession
     turn_id: str
+    codex_version: str
     usage: Mapping[str, Any] = field(default_factory=dict)
     events: tuple[Mapping[str, Any], ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class CodexTurnProfile:
+    """Complete per-turn execution authority and inventory contract."""
+
+    name: str
+    environments: tuple[Mapping[str, Any], ...]
+    approval_policy: str
+    sandbox_mode: str
+    sandbox_policy: Mapping[str, Any]
+    config: Mapping[str, Any]
+    native_tools: bool = False
+
+    def fingerprint_record(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "environments": [dict(value) for value in self.environments],
+            "approval_policy": self.approval_policy,
+            "sandbox_mode": self.sandbox_mode,
+            "sandbox_policy": dict(self.sandbox_policy),
+            "config": dict(self.config),
+            "native_tools": self.native_tools,
+        }
 
 
 Mediator = Callable[[str, Mapping[str, Any]], object]
@@ -187,11 +206,30 @@ def tool_fingerprint(tools: Sequence[DynamicTool]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _turn_fingerprint(
+    tools: Sequence[DynamicTool], profile: CodexTurnProfile
+) -> str:
+    encoded = json.dumps(
+        {
+            "tools": [tool.to_wire() for tool in tools],
+            "profile": profile.fingerprint_record(),
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+    ).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
 def _role_collaboration_mode(
-    thread_response: Mapping[str, Any], instructions: str | None
+    thread_response: Mapping[str, Any],
+    instructions: str | None,
+    *,
+    model: str | None = None,
+    effort: str | None = None,
 ) -> dict[str, Any]:
-    model = thread_response.get("model")
-    reasoning_effort = thread_response.get("reasoningEffort")
+    model = model or thread_response.get("model")
+    reasoning_effort = effort or thread_response.get("reasoningEffort")
     if not isinstance(model, str) or not model:
         raise CodexAppServerProtocolError(
             "thread response contained no effective model"
@@ -236,7 +274,7 @@ def _plain_json(value: Any, *, label: str) -> Any:
 
 
 def _clean_config_overrides() -> dict[str, Any]:
-    """Return the audited conditional-tool closures for the pinned source."""
+    """Return conditional-tool closures verified against Codex 0.155.1."""
     disabled_features = (
         "shell_tool",
         "hooks",
@@ -260,6 +298,12 @@ def _clean_config_overrides() -> dict[str, Any]:
         "goals",
         "memories",
         "artifact",
+        "skill_search",
+        "recommended_plugins",
+        "token_budget",
+        "current_time_reminder",
+        "sleep_tool",
+        "deferred_executor",
     )
     result = {f"features.{name}": False for name in disabled_features}
     result.update(
@@ -267,6 +311,9 @@ def _clean_config_overrides() -> dict[str, Any]:
             "web_search": "disabled",
             "project_doc_max_bytes": 0,
             "include_permissions_instructions": False,
+            "tools.experimental_request_user_input.enabled": False,
+            "tools.update_plan.enabled": False,
+            "orchestrator.skills.enabled": False,
         }
     )
     return result
@@ -288,7 +335,7 @@ class _JsonlProcess:
     ) -> None:
         self.containment = ProcessContainment.create()
         try:
-            self.process = subprocess.Popen(
+            self.process = self.containment.spawn(
                 tuple(command),
                 cwd=cwd,
                 env=dict(env),
@@ -297,22 +344,9 @@ class _JsonlProcess:
                 stderr=subprocess.PIPE,
                 text=False,
                 bufsize=0,
-                **self.containment.creation_kwargs,
             )
         except BaseException:
             self.containment.close()
-            raise
-        try:
-            self.containment.attach_and_start(self.process)
-        except BaseException:
-            # Assignment failure leaves a Windows child suspended and POSIX
-            # registration failure leaves no verified group safe to signal.
-            # Killing the known leader is the only safe fallback in either case.
-            try:
-                self.process.kill()
-                self.process.wait(timeout=2)
-            finally:
-                self.containment.close()
             raise
         self.max_message_bytes = max_message_bytes
         self.messages: queue.Queue[Mapping[str, Any] | BaseException | None] = (
@@ -464,7 +498,7 @@ class _JsonlProcess:
 
 
 class CodexAppServerBridge:
-    """Bidirectional client for the pinned experimental dynamic-tool protocol."""
+    """Bidirectional client for the current app-server protocol."""
 
     def __init__(
         self,
@@ -497,10 +531,29 @@ class CodexAppServerBridge:
         self.max_events = max_events
         self._active_lock = threading.Lock()
         self._active: dict[str, _Conversation] = {}
+        self._schema_verified_version: str | None = None
+        self.installed_version: str | None = None
 
-    def preflight(self, workspace: Path) -> None:
+    def preflight(
+        self,
+        workspace: Path,
+        *,
+        strict_inventory: bool = True,
+        model: str | None = None,
+    ) -> None:
         """Validate all locally knowable constraints before budget dispatch."""
-        self.verify_installation()
+        self.verify_installation(strict_inventory=strict_inventory)
+        if strict_inventory and model not in (None, *VERIFIED_MEDIATED_MODELS):
+            raise CodexAppServerCapabilityError(
+                f"Codex mediated inventory is reviewed only for models "
+                f"{sorted(VERIFIED_MEDIATED_MODELS)!r}; requested {model!r}"
+            )
+        try:
+            ProcessContainment.require_available()
+        except ProcessContainmentUnavailable as exc:
+            raise CodexAppServerCapabilityError(
+                f"Codex app-server process containment is unavailable: {exc}"
+            ) from exc
         self._verify_project_config(Path(workspace).resolve(strict=True))
 
     def interrupt(self, owner_id: str, *, timeout: float = 2.0) -> str | None:
@@ -523,8 +576,8 @@ class CodexAppServerBridge:
         state.process.close()
         return "turn-interrupt" if requested else "contained"
 
-    def verify_installation(self) -> None:
-        """Fail before app-server dispatch on version or config-surface drift."""
+    def verify_installation(self, *, strict_inventory: bool = True) -> None:
+        """Check protocol support and, when needed, reviewed strict inventory."""
         version_text = (
             self.version_probe()
             if self.version_probe is not None
@@ -537,13 +590,112 @@ class CodexAppServerBridge:
                 env={**os.environ, **self.env},
             ).stdout.strip()
         )
-        match = re.search(r"(?:codex-cli\s+)?([0-9]+\.[0-9]+\.[0-9]+)$", version_text.strip())
-        if match is None or match.group(1) != PINNED_CODEX_VERSION:
+        match = re.search(
+            r"(?:codex-cli\s+)?([0-9]+)\.([0-9]+)\.([0-9]+)$",
+            version_text.strip(),
+        )
+        if match is None:
             raise CodexAppServerCapabilityError(
-                f"Codex mediated profile requires codex-cli {PINNED_CODEX_VERSION} "
-                f"from {PINNED_CODEX_TAG} ({PINNED_CODEX_COMMIT}); found {version_text!r}"
+                f"could not determine Codex app-server protocol version from {version_text!r}"
             )
+        version = ".".join(match.groups())
+        self.installed_version = version
+        parsed = tuple(map(int, match.groups()))
+        if parsed < MINIMUM_NATIVE_CODEX_VERSION:
+            raise CodexAppServerCapabilityError(
+                "Codex app-server lacks the required per-turn environment, sandbox, "
+                f"and collaboration capabilities; found {version!r}"
+            )
+        if strict_inventory and version not in _REVIEWED_MEDIATED_RELEASES:
+            raise CodexAppServerCapabilityError(
+                "strict mediated tool inventory has no conformance evidence for "
+                f"codex-cli {version}; native RUN remains available when its protocol "
+                "capability check succeeds"
+            )
+        if (
+            self.version_probe is None
+            and self._schema_verified_version != version
+        ):
+            self._verify_protocol_schema()
+            self._schema_verified_version = version
         self._verify_config_hygiene()
+
+    def _verify_protocol_schema(self) -> None:
+        """Generate the installed schema and require every field Botpipe emits."""
+        executable = self.version_command[0]
+        with tempfile.TemporaryDirectory(prefix="botpipe-codex-schema-") as directory:
+            try:
+                subprocess.run(
+                    (
+                        executable,
+                        "app-server",
+                        "generate-json-schema",
+                        "--experimental",
+                        "--out",
+                        directory,
+                    ),
+                    check=True,
+                    text=True,
+                    capture_output=True,
+                    timeout=30,
+                    env={
+                        **os.environ,
+                        **self.env,
+                        "CODEX_HOME": str(self.codex_home),
+                    },
+                )
+                schema_root = Path(directory) / "v2"
+                requirements = {
+                    "ThreadStartParams.json": {
+                        "approvalPolicy",
+                        "config",
+                        "dynamicTools",
+                        "environments",
+                        "model",
+                        "sandbox",
+                    },
+                    "ThreadResumeParams.json": {
+                        "approvalPolicy",
+                        "config",
+                        "model",
+                        "sandbox",
+                    },
+                    "TurnStartParams.json": {
+                        "approvalPolicy",
+                        "collaborationMode",
+                        "environments",
+                        "model",
+                        "outputSchema",
+                        "sandboxPolicy",
+                    },
+                }
+                missing: list[str] = []
+                for filename, fields in requirements.items():
+                    document = json.loads(
+                        (schema_root / filename).read_text(encoding="utf-8")
+                    )
+                    properties = document.get("properties")
+                    if not isinstance(properties, Mapping):
+                        missing.append(f"{filename}:properties")
+                        continue
+                    missing.extend(
+                        f"{filename}:{field}"
+                        for field in sorted(fields - set(properties))
+                    )
+            except (
+                OSError,
+                subprocess.SubprocessError,
+                json.JSONDecodeError,
+                KeyError,
+            ) as exc:
+                raise CodexAppServerCapabilityError(
+                    f"Codex protocol schema capability probe failed: {exc}"
+                ) from exc
+        if missing:
+            raise CodexAppServerCapabilityError(
+                "Codex protocol schema is missing required capabilities: "
+                + ", ".join(missing)
+            )
 
     def _verify_config_hygiene(self) -> None:
         # A private home may contain auth and model cache, but none of the
@@ -581,21 +733,33 @@ class CodexAppServerBridge:
         envelopes: Any = (),
         registry_fingerprint: str | None = None,
         owner_id: str | None = None,
+        profile: CodexTurnProfile | None = None,
+        effort: str | None = None,
     ) -> CodexAppServerResult:
-        """Run one constrained turn, servicing only registered dynamic tools.
-
-        At least one dynamic tool is required.  The pinned source cannot hide
-        its two internal tools and therefore cannot implement tool-free
-        generation.  Callers must keep this bridge out of that operation.
-        """
+        """Run one turn under an explicit semantic execution profile."""
         self._validate_execute(
             prompt, workspace, tools, mediator, timeout, output_schema, session
         )
         if owner_id is not None and not owner_id:
             raise ValueError("owner_id must be non-empty when provided")
         root = Path(workspace).resolve(strict=True)
-        self.preflight(root)
-        fingerprint = registry_fingerprint or tool_fingerprint(tools)
+        if profile is None:
+            profile = CodexTurnProfile(
+                name="mediated-v2",
+                environments=(),
+                approval_policy="never",
+                sandbox_mode="read-only",
+                sandbox_policy=MappingProxyType(
+                    {"type": "readOnly", "networkAccess": False}
+                ),
+                config=AUDITED_CONFIG_OVERRIDES,
+            )
+        self.preflight(
+            root,
+            strict_inventory=not profile.native_tools,
+            model=model,
+        )
+        fingerprint = registry_fingerprint or _turn_fingerprint(tools, profile)
         if not re.fullmatch(r"[0-9a-f]{64}", fingerprint):
             raise ValueError("registry fingerprint must be a lowercase SHA-256 digest")
         if session is not None and session.tool_fingerprint != fingerprint:
@@ -632,6 +796,7 @@ class CodexAppServerBridge:
             max_total_event_bytes=self.max_total_event_bytes,
             max_events=self.max_events,
             evidence=evidence,
+            native_tools=profile.native_tools,
         )
         if owner_id is not None:
             with self._active_lock:
@@ -664,12 +829,12 @@ class CodexAppServerBridge:
                 params: dict[str, Any] = {
                     "cwd": str(root),
                     "model": model,
-                    "approvalPolicy": "never",
-                    "sandbox": "read-only",
+                    "approvalPolicy": profile.approval_policy,
+                    "sandbox": profile.sandbox_mode,
                     "ephemeral": False,
-                    "environments": [],
+                    "environments": [dict(value) for value in profile.environments],
                     "dynamicTools": [tool.to_wire() for tool in tools],
-                    "config": dict(AUDITED_CONFIG_OVERRIDES),
+                    "config": dict(profile.config),
                 }
                 started = state.rpc(
                     "thread/start",
@@ -684,9 +849,10 @@ class CodexAppServerBridge:
                     {
                         "threadId": session.thread_id,
                         "cwd": str(root),
-                        "approvalPolicy": "never",
-                        "sandbox": "read-only",
-                        "config": dict(AUDITED_CONFIG_OVERRIDES),
+                        "model": model,
+                        "approvalPolicy": profile.approval_policy,
+                        "sandbox": profile.sandbox_mode,
+                        "config": dict(profile.config),
                     },
                 )
                 thread_response = resumed
@@ -694,17 +860,26 @@ class CodexAppServerBridge:
                 thread_id = thread.get("id") if isinstance(thread, Mapping) else None
             if not isinstance(thread_id, str) or not thread_id:
                 raise CodexAppServerProtocolError("thread response contained no thread id")
-            collaboration_mode = (
-                _role_collaboration_mode(thread_response, instructions)
-                if session is not None or instructions
-                else None
+            if not profile.native_tools:
+                effective_model = thread_response.get("model")
+                if effective_model not in VERIFIED_MEDIATED_MODELS:
+                    raise CodexAppServerCapabilityError(
+                        "strict mediated tool inventory has no model-catalog "
+                        f"conformance evidence for effective model {effective_model!r}; "
+                        f"reviewed models are {sorted(VERIFIED_MEDIATED_MODELS)!r}"
+                    )
+            collaboration_mode = _role_collaboration_mode(
+                thread_response,
+                instructions,
+                model=model,
+                effort=effort,
             )
             turn_params: dict[str, Any] = {
                 "threadId": thread_id,
                 "input": [{"type": "text", "text": prompt}],
-                "environments": [],
-                "approvalPolicy": "never",
-                "sandboxPolicy": {"type": "readOnly", "networkAccess": False},
+                "environments": [dict(value) for value in profile.environments],
+                "approvalPolicy": profile.approval_policy,
+                "sandboxPolicy": dict(profile.sandbox_policy),
                 "collaborationMode": collaboration_mode,
                 "outputSchema": (
                     _plain_json(output_schema, label="output schema")
@@ -727,6 +902,7 @@ class CodexAppServerBridge:
                 text=text,
                 session=CodexAppServerSession(thread_id, fingerprint),
                 turn_id=turn_id,
+                codex_version=self.installed_version or "unknown",
                 usage=MappingProxyType(usage),
                 events=tuple(MappingProxyType(dict(event)) for event in state.events),
             )
@@ -760,11 +936,6 @@ class CodexAppServerBridge:
     ) -> None:
         if type(prompt) is not str or not prompt:
             raise ValueError("prompt must be non-empty")
-        if not tools:
-            raise CodexAppServerCapabilityError(
-                "pinned Codex app-server cannot hide update_plan and request_user_input; "
-                "tool-free generate is unsupported"
-            )
         keys = [tool.key for tool in tools]
         if len(keys) != len(set(keys)):
             raise ValueError("dynamic tool names must be unique within each namespace")
@@ -843,6 +1014,7 @@ class _Conversation:
     max_total_event_bytes: int
     max_events: int
     evidence: EvidenceRecorder | None = None
+    native_tools: bool = False
     next_id: int = 1
     thread_id: str | None = None
     turn_id: str | None = None
@@ -933,6 +1105,8 @@ class _Conversation:
                 self.terminal_event.set()
 
     def _reject_effectful_item(self, item_type: Any) -> None:
+        if self.native_tools:
+            return
         allowed = {
             "userMessage",
             "agentMessage",
@@ -950,6 +1124,15 @@ class _Conversation:
     def _server_request(self, message: Mapping[str, Any]) -> None:
         request_id = message["id"]
         method = message.get("method")
+        if self.native_tools and method in {
+            "item/commandExecution/requestApproval",
+            "item/fileChange/requestApproval",
+        }:
+            self.process.send({"id": request_id, "result": {"decision": "decline"}})
+            return
+        if self.native_tools and method == "item/tool/requestUserInput":
+            self.process.send({"id": request_id, "result": {"answers": {}}})
+            return
         if method != "item/tool/call":
             self.process.send(
                 {
@@ -1056,6 +1239,8 @@ def _profile_fingerprint(
     tools: Sequence[DynamicTool],
     envelopes: Mapping[str, Any] | Sequence[Any],
     *,
+    operation: OperationKind,
+    turn_profile: CodexTurnProfile,
     read_roots: Sequence[Path] = (),
     read_exclusions: Sequence[Path] = (),
 ) -> str:
@@ -1068,8 +1253,9 @@ def _profile_fingerprint(
         key=lambda item: json.dumps(item, sort_keys=True, separators=(",", ":"))
     )
     record = {
-        "adapter": CODEX_APPSERVER_CAPABILITIES.version,
-        "source_commit": PINNED_CODEX_COMMIT,
+        "transport": "codex-app-server-v2",
+        "operation": operation.value,
+        "turn_profile": turn_profile.fingerprint_record(),
         "tools": [tool.to_wire() for tool in tools],
         "envelopes": envelope_records,
         "read_roots": [str(path.resolve()) for path in read_roots],
@@ -1082,12 +1268,7 @@ def _profile_fingerprint(
 
 
 class CodexAppServerProvider(_CLIProvider):
-    """Real ProviderAdapter wrapper for mediated app-server turns.
-
-    ``generate`` is accepted only with non-empty exact command grants. Query
-    exposes bounded read/list/search tools plus one fixed read-only git-status
-    recipe. Effectful run delegates to :class:`CodexProvider`.
-    """
+    """Provider adapter using one app-server transport for every operation."""
 
     name = "codex"
     capabilities = CODEX_APPSERVER_CAPABILITIES
@@ -1104,7 +1285,6 @@ class CodexAppServerProvider(_CLIProvider):
             "stdio://",
         ),
         version_command: Sequence[str] = ("codex", "--version"),
-        run_command: str | Sequence[str] = ("codex", "exec"),
         env: Mapping[str, str] | None = None,
         bridge: CodexAppServerBridge | None = None,
     ) -> None:
@@ -1125,19 +1305,12 @@ class CodexAppServerProvider(_CLIProvider):
         elif codex_home is not None:
             raise ValueError("codex_home cannot be combined with an injected bridge")
         self.bridge = bridge
-        self._run_adapter = CodexProvider(run_command, env=env)
 
     def validate_request(self, request: ProviderRequest) -> None:
         super().validate_request(request)
         if request.operation is OperationKind.RUN:
-            self._run_adapter.validate_request(request)
-            return
-        if request.operation is OperationKind.GENERATE and not request.allow_commands:
-            raise CapabilityError(
-                "pinned Codex app-server cannot enforce strict tool-free generate; "
-                "provide an exact command grant or select another provider"
-            )
-        if request.operation is OperationKind.GENERATE:
+            self._native_profile(request)
+        elif request.operation is OperationKind.GENERATE and request.allow_commands:
             policy = request.policy.effective()
             if not command_scope_is_workspace_wide(
                 request.workspace, policy.allow_read, policy.deny_read
@@ -1149,7 +1322,12 @@ class CodexAppServerProvider(_CLIProvider):
         # Version and ambient home checks occur before any receipt or native
         # planning process. Effective config layers are audited by the protocol
         # bridge before thread/start.
-        self.bridge.preflight(request.workspace)
+        policy = request.policy.effective()
+        self.bridge.preflight(
+            request.workspace,
+            strict_inventory=request.operation is not OperationKind.RUN,
+            model=policy.model,
+        )
 
     def cancel(self, operation_id: str) -> RecoveryOutcome:
         attempted = self.bridge.interrupt(operation_id, timeout=2.0)
@@ -1163,9 +1341,6 @@ class CodexAppServerProvider(_CLIProvider):
                 f"Codex app-server attempt {operation_id!r}: {detail}; terminal "
                 "quiescence was not independently acknowledged"
             )
-        delegated = self._run_adapter.cancel(operation_id)
-        if not isinstance(delegated, Unknown):
-            return delegated
         return Unknown(
             f"Codex app-server attempt {operation_id!r}: no owned active app-server "
             "process was found; terminal quiescence was not independently acknowledged"
@@ -1173,8 +1348,6 @@ class CodexAppServerProvider(_CLIProvider):
 
     def run(self, request: ProviderRequest) -> ProviderResponse:
         self.validate_request(request)
-        if request.operation is OperationKind.RUN:
-            return self._run_adapter.run(request)
         existing = _existing_response_or_raise(request)
         if existing is not None:
             return existing
@@ -1195,9 +1368,16 @@ class CodexAppServerProvider(_CLIProvider):
             tools, mediator, envelopes, roots, exclusions = self._mediator(
                 request, observations, cleanups
             )
+            turn_profile = (
+                self._native_profile(request)
+                if request.operation is OperationKind.RUN
+                else self._mediated_profile()
+            )
             fingerprint = _profile_fingerprint(
                 tools,
                 envelopes,
+                operation=request.operation,
+                turn_profile=turn_profile,
                 read_roots=roots,
                 read_exclusions=exclusions,
             )
@@ -1221,7 +1401,7 @@ class CodexAppServerProvider(_CLIProvider):
             "version": 1,
             "provider": self.name,
             "adapter_version": self.capabilities.version,
-            "source_commit": PINNED_CODEX_COMMIT,
+            "codex_version": self.bridge.installed_version,
             "operation_id": request.operation_id,
             "attempt": request.attempt,
             "operation": request.operation.value,
@@ -1252,6 +1432,8 @@ class CodexAppServerProvider(_CLIProvider):
                 envelopes=envelopes,
                 registry_fingerprint=fingerprint,
                 owner_id=request.operation_id,
+                profile=turn_profile,
+                effort=policy.effort.value if policy.effort is not None else None,
             )
             usage = self._usage(result.usage)
             response = ProviderResponse(
@@ -1261,7 +1443,7 @@ class CodexAppServerProvider(_CLIProvider):
                 {
                     "provider": self.name,
                     "adapter_version": self.capabilities.version,
-                    "source_commit": PINNED_CODEX_COMMIT,
+                    "codex_version": result.codex_version,
                     "tool_fingerprint": fingerprint,
                     "tool_observations": [item.to_record() for item in observations],
                 },
@@ -1279,6 +1461,16 @@ class CodexAppServerProvider(_CLIProvider):
         except (KeyboardInterrupt, SystemExit):
             dispatch.finish("interrupted")
             raise
+        except CodexAppServerCapabilityError as exc:
+            failed = {
+                **started,
+                "status": "failed",
+                "finished_at": _now(),
+                "error": str(exc),
+            }
+            _atomic_json(path, failed)
+            dispatch.finish("failed", error=exc)
+            raise CapabilityError(str(exc)) from exc
         except BaseException as exc:
             if dispatched:
                 uncertain = {
@@ -1322,7 +1514,11 @@ class CodexAppServerProvider(_CLIProvider):
             for path in map(Path, policy.deny_read or ())
         )
         reads: ReadOnlyTools | None = None
-        if request.operation is OperationKind.QUERY:
+        if request.operation is OperationKind.RUN:
+            commands = None
+            envelopes = {}
+            tools = []
+        elif request.operation is OperationKind.QUERY:
             reads = ReadOnlyTools(
                 roots,
                 exclusions=exclusions,
@@ -1333,7 +1529,7 @@ class CodexAppServerProvider(_CLIProvider):
             commands = None
             envelopes = reads.command_envelopes
             tools = self._query_tools()
-        else:
+        elif request.allow_commands:
             commands = ExactCommandTools(
                 request.workspace,
                 request.allow_commands,
@@ -1359,6 +1555,10 @@ class CodexAppServerProvider(_CLIProvider):
             ]
             envelopes = commands.envelopes
             cleanups.append(commands.close)
+        else:
+            commands = None
+            envelopes = {}
+            tools = []
 
         def mediate(name: str, arguments: Mapping[str, Any]) -> ToolObservation:
             if len(observations) >= TOOL_CALL_LIMIT:
@@ -1388,6 +1588,158 @@ class CodexAppServerProvider(_CLIProvider):
             return observation
 
         return tools, mediate, envelopes, roots, exclusions
+
+    @staticmethod
+    def _mediated_profile() -> CodexTurnProfile:
+        return CodexTurnProfile(
+            name="mediated-strict-v2",
+            environments=(),
+            approval_policy="never",
+            sandbox_mode="read-only",
+            sandbox_policy=MappingProxyType(
+                {"type": "readOnly", "networkAccess": False}
+            ),
+            config=AUDITED_CONFIG_OVERRIDES,
+        )
+
+    @staticmethod
+    def _native_profile(request: ProviderRequest) -> CodexTurnProfile:
+        policy = request.policy.effective()
+        unsupported: list[str] = []
+        if policy.provider is not None and policy.provider.value != "codex":
+            unsupported.append(f"provider={policy.provider.value}")
+        if policy.base_url is not None:
+            unsupported.append("base_url")
+        if policy.model_overrides:
+            unsupported.append("model_overrides")
+        if policy.allow_read not in (None, (".",)):
+            unsupported.append("allow_read")
+        workspace = request.workspace.resolve()
+
+        def resolve_paths(values: Sequence[str]) -> list[str]:
+            resolved: list[str] = []
+            for value in values:
+                raw = Path(value)
+                path = raw.resolve() if raw.is_absolute() else (workspace / raw).resolve()
+                if not raw.is_absolute() and not path.is_relative_to(workspace):
+                    raise CapabilityError(
+                        f"relative policy path escapes workspace: {value!r}"
+                    )
+                resolved.append(str(path))
+            return resolved
+
+        write_roots = resolve_paths(policy.allow_write or ())
+        if (
+            policy.sandbox_mode is SandboxMode.WORKSPACE_WRITE
+            and str(workspace) not in write_roots
+        ):
+            unsupported.append(
+                "allow_write (Codex workspace-write cannot narrow its working directory)"
+            )
+        for name in (
+            "deny_read",
+            "network_domains",
+            "deny_network_domains",
+            "allow_permissions",
+            "ask_permissions",
+            "deny_permissions",
+        ):
+            if getattr(policy, name):
+                unsupported.append(name)
+        if policy.deny_write and policy.sandbox_mode is not SandboxMode.READ_ONLY:
+            unsupported.append("deny_write")
+        if policy.network is NetworkMode.LIMITED:
+            unsupported.append("network=limited")
+        if (
+            policy.sandbox_mode is SandboxMode.READ_ONLY
+            and policy.network is NetworkMode.FULL
+        ):
+            unsupported.append("network=full under read_only sandbox")
+        if (
+            policy.sandbox_mode is SandboxMode.DANGER_FULL_ACCESS
+            and policy.network is not NetworkMode.FULL
+        ):
+            unsupported.append(
+                f"network={policy.network.value} under danger_full_access"
+            )
+        if policy.sandbox_mode is SandboxMode.DANGER_FULL_ACCESS and policy.allow_write:
+            unsupported.append("allow_write under danger_full_access")
+        if policy.sandbox_mode is SandboxMode.READ_ONLY and request.artifacts:
+            unsupported.append("declared artifact writes under read_only sandbox")
+        if policy.allow_local_binding:
+            unsupported.append("allow_local_binding")
+        if policy.permission_mode in (PermissionMode.AUTO_EDIT, PermissionMode.DENY_ALL):
+            unsupported.append(f"permission_mode={policy.permission_mode.value}")
+        if policy.verbosity is not None:
+            unsupported.append("verbosity")
+        if policy.reasoning_summary is not None:
+            unsupported.append("reasoning_summary")
+        if (
+            policy.permission_mode is PermissionMode.FULL_AUTO_UNSANDBOXED
+            and policy.sandbox_mode is not SandboxMode.DANGER_FULL_ACCESS
+        ):
+            unsupported.append("unsandboxed automation without danger_full_access")
+        if unsupported:
+            raise CapabilityError(
+                "Codex app-server native RUN cannot enforce: "
+                + ", ".join(unsupported)
+            )
+        approval = (
+            "never"
+            if policy.permission_mode
+            in (
+                PermissionMode.FULL_AUTO_SANDBOXED,
+                PermissionMode.FULL_AUTO_UNSANDBOXED,
+            )
+            else "on-request"
+        )
+        if policy.sandbox_mode is SandboxMode.READ_ONLY:
+            sandbox_mode = "read-only"
+            sandbox_policy: dict[str, Any] = {
+                "type": "readOnly",
+                "networkAccess": False,
+            }
+        elif policy.sandbox_mode is SandboxMode.WORKSPACE_WRITE:
+            sandbox_mode = "workspace-write"
+            artifact_roots = []
+            for destination in request.artifacts.values():
+                target = (
+                    destination
+                    if destination.is_absolute()
+                    else workspace / destination
+                )
+                artifact_roots.append(str(target.resolve().parent))
+            extra_roots = list(
+                dict.fromkeys(
+                    root
+                    for root in (*write_roots, *artifact_roots)
+                    if root != str(workspace)
+                )
+            )
+            sandbox_policy = {
+                "type": "workspaceWrite",
+                "writableRoots": extra_roots,
+                "networkAccess": policy.network is NetworkMode.FULL,
+            }
+        else:
+            sandbox_mode = "danger-full-access"
+            sandbox_policy = {"type": "dangerFullAccess"}
+        environment = MappingProxyType(
+            {
+                "environmentId": "local",
+                "cwd": str(workspace),
+                "runtimeWorkspaceRoots": [str(workspace)],
+            }
+        )
+        return CodexTurnProfile(
+            name="native-run-v1",
+            environments=(environment,),
+            approval_policy=approval,
+            sandbox_mode=sandbox_mode,
+            sandbox_policy=MappingProxyType(sandbox_policy),
+            config=MappingProxyType({}),
+            native_tools=True,
+        )
 
     @staticmethod
     def _query_tools() -> list[DynamicTool]:
@@ -1506,7 +1858,7 @@ class CodexAppServerProvider(_CLIProvider):
                 "version": 1,
                 "provider": self.name,
                 "adapter_version": self.capabilities.version,
-                "source_commit": PINNED_CODEX_COMMIT,
+                "codex_version": self.bridge.installed_version,
                 "instruction_mode": "collaboration-mode-v1",
                 "thread_id": session.thread_id,
                 "tool_fingerprint": session.tool_fingerprint,
@@ -1526,9 +1878,10 @@ __all__ = [
     "CodexAppServerResult",
     "CodexAppServerSession",
     "DynamicTool",
-    "PINNED_CODEX_COMMIT",
-    "PINNED_CODEX_TAG",
-    "PINNED_CODEX_VERSION",
-    "UNAVOIDABLE_INTERNAL_TOOLS",
+    "CURRENT_VERIFIED_CODEX_COMMIT",
+    "CURRENT_VERIFIED_CODEX_VERSION",
+    "MINIMUM_NATIVE_CODEX_VERSION",
+    "NATIVE_TOOL_NAMES",
+    "CodexTurnProfile",
     "tool_fingerprint",
 ]

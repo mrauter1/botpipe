@@ -117,6 +117,42 @@ def test_cancellation_evidence_is_attempt_scoped_and_duplicate_safe() -> None:
     assert outcome.response.to_record() == response
 
 
+def test_cancellation_evidence_restores_stopped_and_rejects_conflicts() -> None:
+    identity = {"generation": 3, "request_digest": "current"}
+    stopped = {
+        "event": "cancellation_outcome",
+        "operation_id": "op",
+        "data": {"outcome": "stopped", "detail": "quiescent", "attempt": identity},
+    }
+    assert isinstance(
+        cancellation_evidence(
+            [stopped, stopped], operation_id="op", identity=identity
+        ),
+        Stopped,
+    )
+
+    completed = {
+        "event": "cancellation_outcome",
+        "operation_id": "op",
+        "data": {
+            "outcome": "completed",
+            "attempt": identity,
+            "response": ProviderResponse("done").to_record(),
+        },
+    }
+    conflict = cancellation_evidence(
+        [stopped, completed], operation_id="op", identity=identity
+    )
+    assert isinstance(conflict, Unknown)
+    malformed = {**stopped, "data": {**stopped["data"], "response": {}}}
+    assert isinstance(
+        cancellation_evidence(
+            [malformed], operation_id="op", identity=identity
+        ),
+        Unknown,
+    )
+
+
 @pytest.mark.parametrize(
     "result",
     [Completed("not a response"), RecoveryOutcome()],  # type: ignore[arg-type]

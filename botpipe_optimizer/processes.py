@@ -108,7 +108,7 @@ def run_bounded_process(
     containment = ProcessContainment.create()
     started = time.monotonic()
     try:
-        process = subprocess.Popen(
+        process = containment.spawn(
             list(argv),
             cwd=root,
             env=None if env is None else dict(env),
@@ -116,20 +116,12 @@ def run_bounded_process(
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             shell=False,
-            **containment.creation_kwargs,
         )
     except BaseException:
         containment.close()
         raise
-    attached = False
+    attached = True
     try:
-        try:
-            containment.attach_and_start(process)
-            attached = True
-        except BaseException:
-            process.kill()
-            process.wait()
-            raise
         out, err = (_Tail(max_stream_bytes), _Tail(max_stream_bytes))
         readers = [
             threading.Thread(target=_drain, args=(process.stdout, out), daemon=True),

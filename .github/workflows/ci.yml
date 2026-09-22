@@ -5,8 +5,77 @@ on:
   pull_request:
 
 jobs:
+  native-contract:
+    name: Native contract (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install package and tests
+        run: python -m pip install -e '.[test]'
+      - name: Download and verify current stable Codex
+        shell: python
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          import hashlib, json, os, pathlib, platform, tarfile, urllib.request, zipfile
+          request = urllib.request.Request(
+              "https://api.github.com/repos/openai/codex/releases/latest",
+              headers={"Authorization": "Bearer " + os.environ["GITHUB_TOKEN"], "Accept": "application/vnd.github+json"},
+          )
+          with urllib.request.urlopen(request, timeout=30) as response:
+              release = json.load(response)
+          windows = platform.system() == "Windows"
+          asset_name = "codex-x86_64-pc-windows-msvc.exe.zip" if windows else "codex-x86_64-unknown-linux-musl.tar.gz"
+          asset = next(item for item in release["assets"] if item["name"] == asset_name)
+          root = pathlib.Path(os.environ["RUNNER_TEMP"]) / "botpipe-native-codex"
+          root.mkdir()
+          archive = root / asset_name
+          with urllib.request.urlopen(asset["browser_download_url"], timeout=120) as response, archive.open("wb") as destination:
+              import shutil
+              shutil.copyfileobj(response, destination)
+          with archive.open("rb") as handle:
+              actual = "sha256:" + hashlib.file_digest(handle, "sha256").hexdigest()
+          if actual != asset["digest"]:
+              raise RuntimeError("Codex release asset digest mismatch")
+          if windows:
+              with zipfile.ZipFile(archive) as bundle:
+                  members = bundle.namelist()
+                  if len(members) != 1 or not members[0].endswith(".exe"):
+                      raise RuntimeError("Unexpected Codex archive layout")
+                  binary = root / "codex.exe"
+                  binary.write_bytes(bundle.read(members[0]))
+          else:
+              with tarfile.open(archive) as bundle:
+                  members = bundle.getmembers()
+                  if len(members) != 1 or not members[0].isfile():
+                      raise RuntimeError("Unexpected Codex archive layout")
+                  binary = root / "codex"
+                  with bundle.extractfile(members[0]) as source, binary.open("wb") as destination:
+                      shutil.copyfileobj(source, destination)
+              binary.chmod(0o755)
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as output:
+              output.write(f"BOTPIPE_TEST_CODEX_BINARY={binary}\n")
+              output.write("BOTPIPE_REQUIRE_NATIVE_CONTAINMENT=1\n")
+          print(f"Testing {release['tag_name']} ({actual})")
+      - name: Require native containment and provider contracts
+        run: python -m pytest -q tests/test_processes.py tests/test_codex_native_contract.py
+
   tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
+    env:
+      BOTPIPE_REQUIRE_NATIVE_CONTAINMENT: "1"
     strategy:
       matrix:
         python-version: ["3.12", "3.13"]

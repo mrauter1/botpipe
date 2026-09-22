@@ -1,0 +1,325 @@
+{
+  "date": "2026-09-22",
+  "botpipe_commit": "dc8a93f084b41bd2ae2c1ff4af3ce9e6b4fef45a",
+  "codex_version": "0.155.1",
+  "codex_source_commit": "be2951ea34f0d295ed0becf97079f92fa5f6950e",
+  "codex_archive_sha256": "42d0611ac331ea324c343fabadde30d05018af9a270557765aeef7afe028f7eb",
+  "model_catalog_profile": "gpt-5.4",
+  "provider": "controlled localhost Responses API fixture",
+  "actual_model_calls": false,
+  "actual_tool_calls": false,
+  "measured_cache_hits": false,
+  "same_thread_after_restart": true,
+  "focused_tests": {
+    "passed": 31,
+    "skipped": 1
+  },
+  "cases": {
+    "explicit_profile_continuation": [
+      {
+        "capture_file": "model-requests.json",
+        "request_sha256": "d33363fe9b02edea1c3a9af58e0096dbaa734a778e444746a1f01f91f6bde4d6",
+        "input_items": 3,
+        "developer_messages": 1,
+        "visible_tools": [
+          "botpipe_read"
+        ],
+        "prior_input_is_prefix": null,
+        "base_instructions_equal_to_first": true,
+        "cache_key_equal_to_first": true,
+        "tools_equal_to_first": true,
+        "output_schema_equal_to_first": true,
+        "output_schema_present": true
+      },
+      {
+        "capture_file": "model-requests.json",
+        "request_sha256": "217e8272bdd246a2bdb8a8342b982068d469b5ec6b34d73aecbe4107e1b5bdab",
+        "input_items": 6,
+        "developer_messages": 2,
+        "visible_tools": [
+          "botpipe_read"
+        ],
+        "prior_input_is_prefix": true,
+        "base_instructions_equal_to_first": true,
+        "cache_key_equal_to_first": true,
+        "tools_equal_to_first": true,
+        "output_schema_equal_to_first": true,
+        "output_schema_present": true
+      },
+      {
+        "capture_file": "model-requests.json",
+        "request_sha256": "9ab6ce62dc351e9a394c3f7366a2e090f8d3fd3b3b940133f5b0755d592b5161",
+        "input_items": 8,
+        "developer_messages": 2,
+        "visible_tools": [
+          "botpipe_read"
+        ],
+        "prior_input_is_prefix": true,
+        "base_instructions_equal_to_first": true,
+        "cache_key_equal_to_first": true,
+        "tools_equal_to_first": true,
+        "output_schema_equal_to_first": true,
+        "output_schema_present": true
+      },
+      {
+        "capture_file": "model-requests.json",
+        "request_sha256": "0d1435a681793f6ebf48d0718b048615cc097282a66e7c6514c5f16d6a4d5f2e",
+        "input_items": 11,
+        "developer_messages": 3,
+        "visible_tools": [
+          "botpipe_read"
+        ],
+        "prior_input_is_prefix": true,
+        "base_instructions_equal_to_first": true,
+        "cache_key_equal_to_first": true,
+        "tools_equal_to_first": true,
+        "output_schema_equal_to_first": true,
+        "output_schema_present": true
+      },
+      {
+        "capture_file": "model-requests.json",
+        "request_sha256": "270565c72fd68d8b85082515d4fc375315879aa7b235b83107f66354a9de6068",
+        "input_items": 13,
+        "developer_messages": 3,
+        "visible_tools": [
+          "botpipe_read"
+        ],
+        "prior_input_is_prefix": true,
+        "base_instructions_equal_to_first": true,
+        "cache_key_equal_to_first": true,
+        "tools_equal_to_first": true,
+        "output_schema_equal_to_first": true,
+        "output_schema_present": true
+      },
+      {
+        "capture_file": "resumed-model-requests.json",
+        "request_sha256": "7b4fb940dd246a2c7fca4ae2c7e0b57baa3b0e3056f023748cf4b68bfd9a66ac",
+        "input_items": 16,
+        "developer_messages": 4,
+        "visible_tools": [
+          "botpipe_read"
+        ],
+        "prior_input_is_prefix": true,
+        "base_instructions_equal_to_first": true,
+        "cache_key_equal_to_first": true,
+        "tools_equal_to_first": true,
+        "output_schema_equal_to_first": true,
+        "output_schema_present": true
+      },
+      {
+        "capture_file": "resumed-model-requests.json",
+        "request_sha256": "64dc22cfc17462739e02f17d6940a6f8c4214ea70878beaa68cdd4b98b45ba06",
+        "input_items": 19,
+        "developer_messages": 5,
+        "visible_tools": [
+          "botpipe_read"
+        ],
+        "prior_input_is_prefix": true,
+        "base_instructions_equal_to_first": true,
+        "cache_key_equal_to_first": true,
+        "tools_equal_to_first": true,
+        "output_schema_equal_to_first": true,
+        "output_schema_present": true
+      },
+      {
+        "capture_file": "resumed-model-requests.json",
+        "request_sha256": "8f41e047afe0971e4d11022e6673fd32adccaf479b5a395f1e339f903a422177",
+        "input_items": 21,
+        "developer_messages": 5,
+        "visible_tools": [
+          "botpipe_read"
+        ],
+        "prior_input_is_prefix": true,
+        "base_instructions_equal_to_first": true,
+        "cache_key_equal_to_first": true,
+        "tools_equal_to_first": true,
+        "output_schema_equal_to_first": true,
+        "output_schema_present": true
+      },
+      {
+        "capture_file": "resumed-model-requests.json",
+        "request_sha256": "fb083aadc3bccae8fc9a07b83baaae02562409848eb2880717713c3e12631ee7",
+        "input_items": 24,
+        "developer_messages": 6,
+        "visible_tools": [
+          "botpipe_read"
+        ],
+        "prior_input_is_prefix": true,
+        "base_instructions_equal_to_first": true,
+        "cache_key_equal_to_first": true,
+        "tools_equal_to_first": true,
+        "output_schema_equal_to_first": true,
+        "output_schema_present": true
+      },
+      {
+        "capture_file": "resumed-model-requests.json",
+        "request_sha256": "75cb8a670d952861f469a8de9804de7f0ece5a46f4a56a5207653d715e727ddb",
+        "input_items": 26,
+        "developer_messages": 6,
+        "visible_tools": [
+          "botpipe_read"
+        ],
+        "prior_input_is_prefix": true,
+        "base_instructions_equal_to_first": true,
+        "cache_key_equal_to_first": true,
+        "tools_equal_to_first": true,
+        "output_schema_equal_to_first": true,
+        "output_schema_present": true
+      }
+    ],
+    "zero_tools": [
+      {
+        "capture_file": "model-requests.json",
+        "request_sha256": "f67305b142608922f7c30c5b044854b89e08e952393b66ed39ba52fe8c5f3c8f",
+        "input_items": 3,
+        "developer_messages": 1,
+        "visible_tools": [],
+        "prior_input_is_prefix": null,
+        "base_instructions_equal_to_first": true,
+        "cache_key_equal_to_first": true,
+        "tools_equal_to_first": true,
+        "output_schema_equal_to_first": true,
+        "output_schema_present": true
+      },
+      {
+        "capture_file": "model-requests.json",
+        "request_sha256": "1e765332fc40c32d198164476fd53f4efb47443960eede3a9335182a117ea8ce",
+        "input_items": 6,
+        "developer_messages": 2,
+        "visible_tools": [],
+        "prior_input_is_prefix": true,
+        "base_instructions_equal_to_first": true,
+        "cache_key_equal_to_first": true,
+        "tools_equal_to_first": true,
+        "output_schema_equal_to_first": true,
+        "output_schema_present": true
+      },
+      {
+        "capture_file": "model-requests.json",
+        "request_sha256": "14efbc2d9b30f62ba276c67dcd592b2eff83a64d00fa1bf9b5f17431af0120e7",
+        "input_items": 8,
+        "developer_messages": 2,
+        "visible_tools": [],
+        "prior_input_is_prefix": true,
+        "base_instructions_equal_to_first": true,
+        "cache_key_equal_to_first": true,
+        "tools_equal_to_first": true,
+        "output_schema_equal_to_first": true,
+        "output_schema_present": true
+      },
+      {
+        "capture_file": "model-requests.json",
+        "request_sha256": "d99116a01412dbaf9491f41986eceb3c92525fea6e0e3c8fdb6f6079221de4a9",
+        "input_items": 11,
+        "developer_messages": 3,
+        "visible_tools": [],
+        "prior_input_is_prefix": true,
+        "base_instructions_equal_to_first": true,
+        "cache_key_equal_to_first": true,
+        "tools_equal_to_first": true,
+        "output_schema_equal_to_first": true,
+        "output_schema_present": true
+      },
+      {
+        "capture_file": "model-requests.json",
+        "request_sha256": "ca60909ef259410f1d0f9e743fe48c5f0bc7f2c0a36a0bfd1a57b2e6d5d4e77d",
+        "input_items": 13,
+        "developer_messages": 3,
+        "visible_tools": [],
+        "prior_input_is_prefix": true,
+        "base_instructions_equal_to_first": true,
+        "cache_key_equal_to_first": true,
+        "tools_equal_to_first": true,
+        "output_schema_equal_to_first": true,
+        "output_schema_present": true
+      }
+    ],
+    "omitted_environment_after_restart": [
+      {
+        "capture_file": "resumed-model-requests.json",
+        "request_sha256": "364928f8489407a11cd3fe2812acfceb8985d4d17536cd181f84efa641cef6c5",
+        "input_items": 17,
+        "developer_messages": 4,
+        "visible_tools": [
+          "apply_patch",
+          "view_image",
+          "botpipe_read"
+        ],
+        "prior_input_is_prefix": null,
+        "base_instructions_equal_to_first": true,
+        "cache_key_equal_to_first": true,
+        "tools_equal_to_first": true,
+        "output_schema_equal_to_first": true,
+        "output_schema_present": true
+      },
+      {
+        "capture_file": "resumed-model-requests.json",
+        "request_sha256": "76180aa79026d2ebd9899dcfa2c117380ab3b465802c27d68bc3c8f64df139d7",
+        "input_items": 20,
+        "developer_messages": 5,
+        "visible_tools": [
+          "apply_patch",
+          "view_image",
+          "botpipe_read"
+        ],
+        "prior_input_is_prefix": true,
+        "base_instructions_equal_to_first": true,
+        "cache_key_equal_to_first": true,
+        "tools_equal_to_first": true,
+        "output_schema_equal_to_first": true,
+        "output_schema_present": true
+      },
+      {
+        "capture_file": "resumed-model-requests.json",
+        "request_sha256": "e86624721ed91560e2af03464275a0c759b0a80069fea9d68389bc3b73df6b3d",
+        "input_items": 22,
+        "developer_messages": 5,
+        "visible_tools": [
+          "apply_patch",
+          "view_image",
+          "botpipe_read"
+        ],
+        "prior_input_is_prefix": true,
+        "base_instructions_equal_to_first": true,
+        "cache_key_equal_to_first": true,
+        "tools_equal_to_first": true,
+        "output_schema_equal_to_first": true,
+        "output_schema_present": true
+      },
+      {
+        "capture_file": "resumed-model-requests.json",
+        "request_sha256": "c9405ed0360d3e737a8c6c005d65a8071449a49745e6ebfd4d285f265dde2e6f",
+        "input_items": 25,
+        "developer_messages": 6,
+        "visible_tools": [
+          "apply_patch",
+          "view_image",
+          "botpipe_read"
+        ],
+        "prior_input_is_prefix": true,
+        "base_instructions_equal_to_first": true,
+        "cache_key_equal_to_first": true,
+        "tools_equal_to_first": true,
+        "output_schema_equal_to_first": true,
+        "output_schema_present": true
+      },
+      {
+        "capture_file": "resumed-model-requests.json",
+        "request_sha256": "41ddc1b4135c9702ae602c941bf0166b79a5c80021cd854b6e8f0cd617ea43fe",
+        "input_items": 28,
+        "developer_messages": 6,
+        "visible_tools": [
+          "botpipe_read"
+        ],
+        "prior_input_is_prefix": true,
+        "base_instructions_equal_to_first": true,
+        "cache_key_equal_to_first": true,
+        "tools_equal_to_first": false,
+        "output_schema_equal_to_first": true,
+        "output_schema_present": true
+      }
+    ]
+  },
+  "linux_containment": "blocked by host namespace restrictions; no delegated cgroup",
+  "native_run_startup": "blocked before model request: bwrap NETLINK_ROUTE Operation not permitted"
+}

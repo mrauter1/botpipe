@@ -222,8 +222,6 @@ class WorkspaceCoordinator:
             type(operation_id) is not str or not operation_id
         ):
             raise ValueError("operation_id must be a non-empty string or None")
-        if recovery and mode != "write":
-            raise ValueError("recovery claims must use write mode")
         workspace_text, identity = _canonical_directory(workspace)
         journal_text = _canonical_journal(journal)
         parent_tokens = self._parent_tokens(
@@ -283,14 +281,16 @@ class WorkspaceCoordinator:
                 tokens.add(lease.token)
         return frozenset(tokens)
 
-    def _rows(self, workspace: str, mode: str) -> list[sqlite3.Row]:
+    def _rows(
+        self, workspace: str, mode: str, recovery: bool
+    ) -> list[sqlite3.Row]:
         with closing(self._connect()) as db:
             rows = db.execute("SELECT * FROM claims").fetchall()
         return [
             row
             for row in rows
             if _overlaps(row["workspace"], workspace)
-            and (mode == "write" or row["mode"] == "write")
+            and (recovery or mode == "write" or row["mode"] == "write")
         ]
 
     def _try_existing_lock(self, token: str):
@@ -328,11 +328,14 @@ class WorkspaceCoordinator:
         try:
             # Probe outside the write transaction so journal inspection never
             # stretches the registry's global admission lock.
-            for row in self._rows(workspace, mode):
+            for row in self._rows(workspace, mode, recovery):
                 if row["token"] in parent_tokens:
                     continue
                 locked = self._try_existing_lock(row["token"])
                 if locked is None:
+                    if mode == "read" and row["mode"] == "read":
+                        # Live readers remain compatible during recovery too.
+                        continue
                     raise RunBusy(
                         f"Workspace overlaps active {row['mode']} claim for "
                         f"{row['workspace']}"
@@ -341,6 +344,37 @@ class WorkspaceCoordinator:
                 same_run = row["journal"] == journal and row["run_id"] == run_id
                 row_operation_id = row["operation_id"]
                 same_operation = row_operation_id == operation_id
+                if mode == "read" and row["mode"] == "write":
+                    if Journal.foreign_has_unresolved_effects(
+                        row["journal"], row["run_id"], row_operation_id
+                    ):
+                        if recovery and same_run:
+                            # A recovered reader must not downgrade or release
+                            # an earlier writer fence from its own run.
+                            retained.add(row["token"])
+                        else:
+                            raise RunBusy(
+                                f"Run {row['run_id']} has unresolved effects; "
+                                "resume or reconcile it first"
+                            )
+                    else:
+                        removable.add(row["token"])
+                    continue
+                if (
+                    mode == "read"
+                    and row["mode"] == "read"
+                    and (
+                        not same_run
+                        or (
+                            recovery
+                            and operation_id is not None
+                            and not same_operation
+                        )
+                    )
+                ):
+                    # Compatible foreign and sibling/root read fences stay intact.
+                    retained.add(row["token"])
+                    continue
                 if (
                     recovery
                     and same_run
@@ -383,11 +417,23 @@ class WorkspaceCoordinator:
                     for row in current:
                         if not _overlaps(row["workspace"], workspace):
                             continue
-                        if mode == "read" and row["mode"] == "read":
+                        if (
+                            mode == "read"
+                            and row["mode"] == "read"
+                            and not recovery
+                        ):
                             continue
                         if row["token"] in parent_tokens:
                             continue
                         if row["token"] in retained:
+                            continue
+                        if (
+                            mode == "read"
+                            and row["mode"] == "read"
+                            and row["token"] not in removable
+                        ):
+                            # A compatible reader may have arrived after the
+                            # probe; recovery does not need to inspect it.
                             continue
                         if row["token"] not in removable:
                             raise RunBusy(

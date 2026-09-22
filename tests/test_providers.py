@@ -30,6 +30,56 @@ from botpipe.providers import (
 from botpipe.recovery import Completed
 
 
+@pytest.fixture(autouse=True)
+def local_process_containment(monkeypatch: pytest.MonkeyPatch):
+    """CLI unit stubs use process groups; kernel backend has dedicated tests."""
+
+    if os.name == "nt":
+        yield
+        return
+
+    class LocalContainment:
+        @classmethod
+        def require_available(cls):
+            return None
+
+        @classmethod
+        def create(cls):
+            return cls()
+
+        def spawn(self, argv, **kwargs):
+            return subprocess.Popen(argv, start_new_session=True, **kwargs)
+
+        def terminate(self, process, *, grace_seconds):
+            self._kill_group(process, grace_seconds)
+
+        def ensure_tree_exited(self, process, *, grace_seconds):
+            self._kill_group(process, grace_seconds)
+
+        @staticmethod
+        def _kill_group(process, grace_seconds):
+            if process.poll() is None:
+                try:
+                    os.killpg(process.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    return
+                try:
+                    process.wait(timeout=grace_seconds)
+                except subprocess.TimeoutExpired:
+                    pass
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            process.wait(timeout=2)
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(provider_module, "ProcessContainment", LocalContainment)
+    yield
+
+
 def request(tmp_path: Path, **changes: object) -> ProviderRequest:
     values = dict(
         operation_id="scope/turn:1",

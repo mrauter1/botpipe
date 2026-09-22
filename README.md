@@ -5,8 +5,9 @@ perform work, sessions carry conversation continuity, ordinary Python expresses
 the process, and Botpipe records operations and outcomes for inspection and
 recovery.
 
-Botpipe 2.0 is a clean break. It does not read, migrate, replay, or analyze
-execution journals created by earlier versions.
+Botpipe 2.0 has no legacy API or journal compatibility obligation. Journal
+designs are selected for the current requirements; earlier formats may be reused
+when they meet those requirements. Unsupported stores are rejected before mutation.
 
 This rewrite is a development build. The [native capability matrix](docs/native-capability-evidence.md)
 records supported interfaces and outstanding release gates. Unsupported
@@ -16,6 +17,12 @@ passed.
 ## Install
 
 Botpipe requires Python 3.12 or newer.
+
+Native subprocess execution requires Windows Job Objects or a Linux host that
+permits user, PID, and mount namespaces, with util-linux `unshare` 2.37+,
+system Python, and pidfd support. Botpipe checks this before launching work and
+rejects hosts that cannot guarantee descendant cleanup. Other POSIX hosts do not
+currently have a supported native subprocess backend.
 
 ```bash
 pip install botpipe

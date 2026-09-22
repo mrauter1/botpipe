@@ -842,6 +842,10 @@ def test_v2_eligible_evidence_review_loop_and_terminal_failure(
         proposal_sessions.append(request.session_id)
         value = prompt_input(request)
         proposal_inputs.append(value)
+        if review_mode == "reject_then_accept" and len(proposal_inputs) == 1:
+            request.artifacts["workflow_optimization_supporting"].write_text(
+                "support from rejected proposal"
+            )
         evidence = value["evidence_snapshot"]
         observation_id = next(
             item["observation_id"]
@@ -991,3 +995,7 @@ def test_v2_eligible_evidence_review_loop_and_terminal_failure(
         assert review_calls == 2
         assert proposal_sessions == [None, "producer-native-session"]
         assert review_sessions == [None, "verifier-native-session"]
+        assert not any(
+            artifact.path.endswith("workflow_optimization_supporting.md")
+            for artifact in result.value.receipt.supporting_artifacts
+        )

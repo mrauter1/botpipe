@@ -11,7 +11,7 @@ still requires pinned-version integration receipts on each supported platform.
 | Adapter profile | Generate, empty grants | Exact generate grants | Read-only query | Run | Sessions | Decision |
 | --- | --- | --- | --- | --- | --- | --- |
 | `codex-exec-v1` | rejected | rejected | rejected | implemented | yes | no |
-| `codex-app-server-0.131.0` | rejected: unavoidable internal tools | implemented in code; native receipt pending | implemented in code; native receipt pending | delegated to `codex-exec-v1` | fingerprint-bound | no |
+| `codex-app-server-v2` (reviewed against Codex 0.155.1) | implemented in code; native receipt pending | implemented in code; native receipt pending | implemented in code; native receipt pending | implemented for current compatible protocol; native receipt pending | fingerprint-bound | no |
 | `claude-code-cli-v1` | implemented for Claude Code 2.1.259+; native receipt pending | rejected | rejected | implemented | yes | no |
 | `claude-agent-sdk-0.2.155` | implemented; native receipt pending | implemented mediator; host proof pending | implemented mediator; native receipt pending | delegated to CLI profile | yes; transitions unproven | no |
 | `pi-json-v1` | implemented; native receipt pending | rejected | rejected | unrestricted explicit policy only | yes | no |
@@ -56,9 +56,11 @@ or an exact argv command envelope. Therefore this adapter advertises `run`
 only.
 
 The implemented app-server profile exposes structured mediated tools while
-generic shell tools remain disabled. Its pinned source audit and limitations
-are recorded below. The native inventory still contains two unavoidable
-internal tools, so this profile rejects empty-grant generation.
+generic shell tools remain disabled. Its current Codex 0.155.1 source audit,
+local binary checks, and remaining limitations are recorded below. Empty-grant
+generation uses the reviewed per-turn environment/tool configuration; native
+credentialed receipts and hostile-configuration conformance remain release
+gates.
 
 ### Claude Code
 
@@ -245,19 +247,20 @@ gaps; credential values or hashes are not used as substitutes for identity.
 
 ## Codex app-server source audit and mediated bridge
 
-`botpipe.codex_appserver` pins `rust-v0.131.0`, peeled commit
-`05eb8678451435cbc8d79c6d8254276289f2bdf1`. It accepts no other reported
-`codex-cli` version. This is a code capability and stub-protocol proof, not a
-native conformance receipt: the build and tests used for this rewrite had no
-Codex executable or authentication.
+`botpipe.codex_appserver` currently verifies Codex 0.155.1, peeled commit
+`be2951ea34f0d295ed0becf97079f92fa5f6950e`, for the reviewed mediated profile.
+The app-server accepts newer protocol-compatible versions for native RUN after
+the protocol capability checks; strict mediated generate/query profiles require
+an explicitly reviewed release. This is code and local native-binary evidence,
+not a credentialed conformance receipt or proof of model cache hits.
 
-The pinned release has already refactored the older
+The reviewed release has already refactored the older
 `codex-rs/core/src/tools/spec.rs` path. The complete registry construction is
-in [`spec_plan.rs`](https://github.com/openai/codex/blob/05eb8678451435cbc8d79c6d8254276289f2bdf1/codex-rs/core/src/tools/spec_plan.rs),
+in [`spec_plan.rs`](https://github.com/openai/codex/blob/be2951ea34f0d295ed0becf97079f92fa5f6950e/codex-rs/core/src/tools/spec_plan.rs),
 with configuration derivation in
-[`tool_config.rs`](https://github.com/openai/codex/blob/05eb8678451435cbc8d79c6d8254276289f2bdf1/codex-rs/tools/src/tool_config.rs)
+[`tool_config.rs`](https://github.com/openai/codex/blob/be2951ea34f0d295ed0becf97079f92fa5f6950e/codex-rs/tools/src/tool_config.rs)
 and feature defaults in
-[`features/src/lib.rs`](https://github.com/openai/codex/blob/05eb8678451435cbc8d79c6d8254276289f2bdf1/codex-rs/features/src/lib.rs).
+[`features/src/lib.rs`](https://github.com/openai/codex/blob/be2951ea34f0d295ed0becf97079f92fa5f6950e/codex-rs/features/src/lib.rs).
 Those sources establish this closure:
 
 - `thread/start.environments: []` selects no execution environment. The tool
@@ -268,13 +271,13 @@ Those sources establish this closure:
 - An isolated `CODEX_HOME`, workspace-config rejection, `config/read` layer
   inspection, and rejection of all managed requirements close ambient MCP,
   plugin, and hook registration before `thread/start`.
-- [`thread/start.dynamicTools`](https://github.com/openai/codex/blob/05eb8678451435cbc8d79c6d8254276289f2bdf1/codex-rs/app-server-protocol/src/protocol/v2/thread.rs)
+- [`thread/start.dynamicTools`](https://github.com/openai/codex/blob/be2951ea34f0d295ed0becf97079f92fa5f6950e/codex-rs/app-server-protocol/src/protocol/v2/thread.rs)
   supplies schema-validated structured tools. Calls arrive as the bidirectional
-  [`item/tool/call`](https://github.com/openai/codex/blob/05eb8678451435cbc8d79c6d8254276289f2bdf1/codex-rs/app-server-protocol/src/protocol/v2/item.rs)
+  [`item/tool/call`](https://github.com/openai/codex/blob/be2951ea34f0d295ed0becf97079f92fa5f6950e/codex-rs/app-server-protocol/src/protocol/v2/item.rs)
   server request. The bridge services only an exact registered name and rejects
   every other server-initiated request.
 - The
-  [`turn/start` and `turn/interrupt` protocol](https://github.com/openai/codex/blob/05eb8678451435cbc8d79c6d8254276289f2bdf1/codex-rs/app-server-protocol/src/protocol/v2/turn.rs)
+  [`turn/start` and `turn/interrupt` protocol](https://github.com/openai/codex/blob/be2951ea34f0d295ed0becf97079f92fa5f6950e/codex-rs/app-server-protocol/src/protocol/v2/turn.rs)
   provides native output schemas, streaming notifications, terminal status,
   and cancellation. Dynamic-tool definitions are persisted with threads in
   the pinned core, and the bridge binds a resumed thread ID to a deterministic
@@ -295,21 +298,19 @@ Those sources establish this closure:
   This is source and transcript evidence for preserving cacheable prefixes,
   not a credentialed receipt showing a provider cache hit.
 
-The same source audit found an upstream blocker for strict command-free
-generation: `update_plan` and `request_user_input` are registered
-unconditionally. Neither has a documented hiding switch in this release.
-Although they do not directly mutate the host, A07 requires every autonomous
-tool to be blocked when the grant list is empty. The provider wrapper therefore
-rejects empty-grant generate before version probing, receipt creation, or
-process dispatch. `CodexAppServerProvider` is a real ProviderAdapter surface
-for read-only query, non-empty exact generation, durable recovery, and
-fingerprint-bound session resume; its `run` delegates to `codex-exec-v1`.
+The current 0.155.1 source and local endpoint checks establish the reviewed
+per-turn environment/tool configuration for command-free generation and the
+finite mediator inventory for exact grants. `CodexAppServerProvider` is a real
+ProviderAdapter surface for generate, read-only query, exact generation,
+durable recovery, native RUN on a compatible protocol, and fingerprint-bound
+session resume. Its RUN path uses the app-server bridge directly; it does not
+delegate to `codex-exec-v1`.
 The query profile exposes read/list/search and `count_lines` within the resolved
 policy roots. Exact-generation grants fail before probing when a narrower or
 denied read policy would let the fixed git-status command bypass path semantics.
 This conditional profile must not be presented as complete Codex support.
-Codex cannot be marked complete until a pinned native interface can hide those
-two tools and a credentialed hostile-config conformance run supplies receipts.
+Codex cannot be marked complete until credentialed hostile-config and
+platform-specific native conformance runs supply receipts.
 
 `tests/test_codex_appserver.py` exercises a full bidirectional JSONL transcript:
 initialization with experimental API negotiation, runtime config audits,
@@ -317,7 +318,8 @@ thread and turn startup, a structured dynamic callback, bounded response,
 usage and terminal events, fail-closed version and session fingerprints, and
 denial of a non-mediated server request. Provider-level tests also cover exact
 generation, autonomous bounded query, completed receipt recovery, durable tool
-evidence, empty-grant preflight rejection, and fingerprint-bound native resume.
+evidence, mediated-profile preflight checks, and fingerprint-bound native
+resume.
 The wrapper publishes the resolved envelope manifest before reserving dispatch
 budget or creating a receipt; the bridge repeats that idempotent check before
 native launch. When the mediator returns a `ToolObservation`, the bridge
