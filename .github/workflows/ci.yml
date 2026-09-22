@@ -24,6 +24,11 @@ jobs:
           python-version: "3.12"
       - name: Install package and tests
         run: python -m pip install -e '.[test]'
+      - name: Install Codex Linux sandbox dependency
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes bubblewrap
       - name: Download and verify current stable Codex
         shell: python
         env:

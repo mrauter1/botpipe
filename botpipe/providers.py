@@ -689,7 +689,7 @@ class _CLIProvider:
         completed: Completed | None = None
         for process, request in owned:
             try:
-                self._stop(process)
+                returncode = self._stop(process)
                 if process.poll() is None:
                     return Running("provider process remains live after cancellation")
                 path = receipt_path(request)
@@ -703,7 +703,7 @@ class _CLIProvider:
                     current.update(
                         status="cancelled",
                         finished_at=_now(),
-                        returncode=process.returncode,
+                        returncode=returncode,
                         error=(
                             "provider attempt cancelled with confirmed "
                             "process-tree termination"
@@ -898,6 +898,7 @@ class _CLIProvider:
         }
         process: subprocess.Popen[bytes] | None = None
         containment = None
+        returncode: int | None = None
         stdout = b""
         stderr = b""
         try:
@@ -932,11 +933,15 @@ class _CLIProvider:
                     receipt=path,
                     started=started,
                 )
-                containment.ensure_tree_exited(process, grace_seconds=0.1)
+                returncode = containment.finish(process, grace_seconds=0.1)
                 dispatch.stopped()
             except subprocess.TimeoutExpired as exc:
                 if not getattr(exc, "stopped", False):
-                    self._stop(process)
+                    returncode = self._stop(process)
+                else:
+                    returncode = containment.finish(
+                        process, grace_seconds=0.1, forced=True
+                    )
                 if getattr(exc, "drained", False):
                     stdout = exc.output or b""
                     stderr = exc.stderr or b""
@@ -948,7 +953,7 @@ class _CLIProvider:
                     **started,
                     "status": "failed",
                     "finished_at": _now(),
-                    "returncode": process.returncode,
+                    "returncode": returncode,
                     "raw": raw,
                     "error": f"provider timed out after {effective_timeout:g} seconds",
                 }
@@ -958,7 +963,7 @@ class _CLIProvider:
                 self._stop(process)
                 raise
             raw = self._save_streams(path, stdout, stderr)
-            if process.returncode != 0:
+            if returncode != 0:
                 message = (
                     stderr.decode(errors="replace").strip()
                     or stdout.decode(errors="replace").strip()
@@ -967,9 +972,9 @@ class _CLIProvider:
                     **started,
                     "status": "failed",
                     "finished_at": _now(),
-                    "returncode": process.returncode,
+                    "returncode": returncode,
                     "raw": raw,
-                    "error": f"provider {self.name!r} exited {process.returncode}: {message}",
+                    "error": f"provider {self.name!r} exited {returncode}: {message}",
                 }
                 _atomic_json(path, failed)
                 raise ProviderError(failed["error"])
@@ -983,7 +988,7 @@ class _CLIProvider:
                     **started,
                     "status": "uncertain" if uncertain else "failed",
                     "finished_at": _now(),
-                    "returncode": process.returncode,
+                    "returncode": returncode,
                     "raw": raw,
                     "error": str(exc),
                 }
@@ -993,7 +998,7 @@ class _CLIProvider:
                 **started,
                 "status": "completed",
                 "finished_at": _now(),
-                "returncode": process.returncode,
+                "returncode": returncode,
                 "raw": raw,
                 "response": _response_record(response),
             }
@@ -1014,7 +1019,7 @@ class _CLIProvider:
                     current.update(
                         status="failed",
                         finished_at=_now(),
-                        returncode=process.returncode,
+                        returncode=returncode,
                         error=str(exc),
                     )
                     _atomic_json(path, current)
@@ -1169,11 +1174,12 @@ class _CLIProvider:
         return request.prompt.encode()
 
     @staticmethod
-    def _stop(process: subprocess.Popen[bytes]) -> None:
+    def _stop(process: subprocess.Popen[bytes]) -> int | None:
         containment = getattr(process, "_botpipe_containment", None)
         if containment is None:
             raise RuntimeError("Cannot terminate a process without verified ownership")
         containment.terminate(process, grace_seconds=1.0)
+        return containment.finish(process, grace_seconds=1.0, forced=True)
 
     @staticmethod
     def _save_streams(receipt: Path, stdout: bytes, stderr: bytes) -> dict[str, str]:

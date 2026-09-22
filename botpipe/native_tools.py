@@ -850,18 +850,18 @@ class ExactCommandTools:
             reader = threading.Thread(target=drain, name="botpipe-command-output", daemon=True)
             reader.start()
             try:
-                returncode = process.wait(timeout=self.timeout)
+                process.wait(timeout=self.timeout)
             except subprocess.TimeoutExpired as exc:
-                containment.terminate(process, grace_seconds=1.0)
+                containment.finish(process, grace_seconds=1.0, forced=True)
                 reader.join(1.0)
                 raise CapabilityError(f"command grant timed out: {grant_id}") from exc
-            containment.ensure_tree_exited(process, grace_seconds=1.0)
+            returncode = containment.finish(process, grace_seconds=1.0)
             reader.join(1.0)
             if reader.is_alive():
                 raise CapabilityError("command output drain did not terminate")
         finally:
             if process is not None and process.poll() is None:
-                containment.terminate(process, grace_seconds=1.0)
+                containment.finish(process, grace_seconds=1.0, forced=True)
             containment.close()
         observation = ToolObservation(
             "exec_grant", {"grant_id": grant_id, "argv": list(envelope.public_argv)},

@@ -56,6 +56,10 @@ def local_process_containment(monkeypatch: pytest.MonkeyPatch):
         def ensure_tree_exited(self, process, *, grace_seconds):
             self._kill_group(process, grace_seconds)
 
+        def finish(self, process, *, grace_seconds, forced=False):
+            self._kill_group(process, grace_seconds)
+            return process.returncode
+
         @staticmethod
         def _kill_group(process, grace_seconds):
             if process.poll() is None:
@@ -116,6 +120,28 @@ def test_native_stream_capture_fails_at_bounded_limit(
         CodexProvider(command).run(request(tmp_path))
 
     assert json.loads(receipt_path(request(tmp_path)).read_text())["status"] == "failed"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Linux monitor differs from payload")
+def test_cli_uses_contained_payload_status_instead_of_monitor_exit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    finish = provider_module.ProcessContainment.finish
+
+    def signalled_payload(self, process, *, grace_seconds, forced=False):
+        assert finish(self, process, grace_seconds=grace_seconds, forced=forced) == 0
+        return -signal.SIGKILL
+
+    monkeypatch.setattr(provider_module.ProcessContainment, "finish", signalled_payload)
+    provider = CodexProvider(executable(tmp_path, "pass\n"))
+    req = request(tmp_path)
+
+    with pytest.raises(ProviderError, match="exited -9"):
+        provider.run(req)
+
+    receipt = json.loads(receipt_path(req).read_text())
+    assert receipt["status"] == "failed"
+    assert receipt["returncode"] == -signal.SIGKILL
 
 
 def test_codex_retains_raw_receipt_and_recovers_without_dispatch(

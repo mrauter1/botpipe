@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import os
 import signal
+import socket
+import struct
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -11,6 +14,117 @@ from types import SimpleNamespace
 import pytest
 
 from botpipe.processes import ProcessContainment, ProcessContainmentUnavailable
+
+
+@pytest.mark.parametrize(
+    ("wait_status", "exit_code"),
+    [
+        (37 << 8, 37),
+        (signal.SIGTERM, -signal.SIGTERM),
+        (signal.SIGKILL, -signal.SIGKILL),
+    ],
+)
+def test_linux_payload_status_decodes_wait_status(wait_status, exit_code):
+    parent, helper = socket.socketpair()
+    containment = ProcessContainment({}, _linux_status_socket=parent)
+    helper.sendall(b"S" + struct.pack("!I", wait_status))
+    helper.close()
+
+    assert containment._read_linux_payload_status(required=True) == exit_code
+
+
+@pytest.mark.parametrize(
+    "record",
+    [
+        b"",
+        b"S\0",
+        b"X" + b"\0" * 4,
+        b"S" + b"\0" * 5,
+        b"S" + struct.pack("!I", 0x10000),
+    ],
+)
+def test_linux_payload_status_missing_or_malformed_fails_closed(record):
+    parent, helper = socket.socketpair()
+    containment = ProcessContainment({}, _linux_status_socket=parent)
+    helper.sendall(record)
+    helper.close()
+
+    with pytest.raises(RuntimeError, match="payload.*status"):
+        containment._read_linux_payload_status(required=True)
+
+
+def test_forced_linux_cleanup_allows_missing_payload_status(monkeypatch):
+    parent, helper = socket.socketpair()
+    helper.close()
+    process = SimpleNamespace(pid=123)
+    containment = ProcessContainment(
+        {}, _owned_pid=123, _process=process, _linux_status_socket=parent
+    )
+    monkeypatch.setattr(
+        ProcessContainment,
+        "_terminate_linux",
+        lambda self, observed, *, grace_seconds: None,
+    )
+
+    assert containment.finish(process, grace_seconds=0.1, forced=True) is None
+
+
+def test_linux_finish_caches_authenticated_payload_status(monkeypatch):
+    parent, helper = socket.socketpair()
+    helper.sendall(b"S" + struct.pack("!I", 23 << 8))
+    helper.close()
+    process = SimpleNamespace(pid=123, poll=lambda: 0, returncode=0)
+    containment = ProcessContainment(
+        {}, _owned_pid=123, _process=process, _linux_status_socket=parent
+    )
+    cleanups = []
+    monkeypatch.setattr(
+        ProcessContainment,
+        "ensure_tree_exited",
+        lambda self, observed, *, grace_seconds: cleanups.append(observed),
+    )
+
+    assert containment.finish(process, grace_seconds=0.1) == 23
+    assert containment.finish(process, grace_seconds=0.1) == 23
+    assert cleanups == [process]
+
+
+def test_concurrent_linux_finish_reads_terminal_status_once(monkeypatch):
+    parent, helper = socket.socketpair()
+    helper.sendall(b"S" + struct.pack("!I", 17 << 8))
+    helper.close()
+    process = SimpleNamespace(pid=123, poll=lambda: 0, returncode=0)
+    containment = ProcessContainment(
+        {}, _owned_pid=123, _process=process, _linux_status_socket=parent
+    )
+    cleanups = []
+
+    def cleanup(self, observed, *, grace_seconds):
+        cleanups.append(observed)
+        time.sleep(0.02)
+
+    monkeypatch.setattr(ProcessContainment, "ensure_tree_exited", cleanup)
+    start = threading.Barrier(3)
+    results = []
+    errors = []
+
+    def finish():
+        try:
+            start.wait()
+            results.append(containment.finish(process, grace_seconds=0.1))
+        except BaseException as exc:
+            errors.append(exc)
+
+    threads = [threading.Thread(target=finish) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    start.wait()
+    for thread in threads:
+        thread.join(timeout=1)
+
+    assert not errors
+    assert results == [17, 17]
+    assert cleanups == [process]
 
 
 def test_windows_spawn_assigns_suspended_child_before_resume(monkeypatch):
@@ -23,7 +137,7 @@ def test_windows_spawn_assigns_suspended_child_before_resume(monkeypatch):
         active_process_count=lambda: 0,
         close=lambda: calls.append(("close",)),
     )
-    process = SimpleNamespace(pid=123, poll=lambda: 0)
+    process = SimpleNamespace(pid=123, poll=lambda: 0, returncode=0)
     monkeypatch.setattr(processes, "os", SimpleNamespace(name="nt"))
     monkeypatch.setattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 512, raising=False)
     monkeypatch.setattr(processes.WindowsJobObject, "create", lambda: job)
@@ -35,7 +149,7 @@ def test_windows_spawn_assigns_suspended_child_before_resume(monkeypatch):
 
     containment = ProcessContainment.create()
     observed = containment.spawn(("command",), stdin=subprocess.DEVNULL)
-    containment.ensure_tree_exited(observed, grace_seconds=0.1)
+    assert containment.finish(observed, grace_seconds=0.1) == 0
     containment.close()
 
     assert calls[0][0] == "popen"
@@ -45,6 +159,52 @@ def test_windows_spawn_assigns_suspended_child_before_resume(monkeypatch):
         ("terminate", 0),
         ("close",),
     ]
+
+
+def test_windows_close_proves_job_exit_before_releasing_handle(monkeypatch):
+    import botpipe.processes as processes
+
+    calls = []
+    job = SimpleNamespace(
+        terminate=lambda code: calls.append(("terminate", code)),
+        active_process_count=lambda: 0,
+        close=lambda: calls.append(("close",)),
+    )
+    process = SimpleNamespace(
+        pid=123, args=("stub",), poll=lambda: 1, returncode=1
+    )
+    containment = ProcessContainment(
+        {}, _windows_job=job, _owned_pid=123, _process=process
+    )
+    monkeypatch.setattr(processes, "os", SimpleNamespace(name="nt"))
+
+    containment.close()
+
+    assert calls == [("terminate", 1), ("close",)]
+    assert containment.finish(process, grace_seconds=0.1, forced=True) == 1
+
+
+def test_linux_close_proves_monitor_exit_before_closing_status_channel(monkeypatch):
+    parent, helper = socket.socketpair()
+    process = SimpleNamespace(pid=123)
+    containment = ProcessContainment(
+        {}, _owned_pid=123, _process=process, _linux_status_socket=parent
+    )
+    calls = []
+
+    def terminate(self, observed, *, grace_seconds):
+        assert self._linux_status_socket is not None
+        assert self._linux_status_socket.fileno() >= 0
+        calls.append("proved-exit")
+        helper.close()
+
+    monkeypatch.setattr(ProcessContainment, "_terminate_linux", terminate)
+
+    containment.close()
+
+    assert calls == ["proved-exit"]
+    assert parent.fileno() == -1
+    assert containment.finish(process, grace_seconds=0.1, forced=True) is None
 
 
 def test_windows_job_survivor_is_cleanup_uncertainty(monkeypatch):
@@ -174,9 +334,9 @@ def test_linux_spawn_preserves_argv_cwd_env_and_stdio(
         stderr=subprocess.PIPE,
     )
     stdout, stderr = process.communicate(b"input")
-    linux_containment.ensure_tree_exited(process, grace_seconds=2.0)
+    returncode = linux_containment.finish(process, grace_seconds=2.0)
 
-    assert process.returncode == 0
+    assert returncode == 0
     assert stderr == b""
     assert stdout == (
         f'[["one", "two"], "{tmp_path}", "present", "input"]\n'.encode()
@@ -187,21 +347,40 @@ def test_linux_payload_restores_default_sigpipe(
     linux_containment: ProcessContainment,
 ):
     process = linux_containment.spawn(
-        (
-            sys.executable,
-            "-c",
-            "import signal;print(int(signal.getsignal(signal.SIGPIPE)))",
-        ),
+        ("/bin/sh", "-c", "kill -s PIPE $$; exit 99"),
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
     stdout, stderr = process.communicate()
-    linux_containment.ensure_tree_exited(process, grace_seconds=2.0)
+    returncode = linux_containment.finish(process, grace_seconds=2.0)
+
+    assert returncode == -signal.SIGPIPE
+    assert stderr == b""
+    assert stdout == b""
+
+
+@pytest.mark.parametrize(
+    ("script", "expected"),
+    [
+        ("import sys;sys.exit(37)", 37),
+        ("import os,signal;os.kill(os.getpid(),signal.SIGTERM)", -signal.SIGTERM),
+        ("import os,signal;os.kill(os.getpid(),signal.SIGKILL)", -signal.SIGKILL),
+    ],
+)
+def test_linux_finish_reports_payload_status(
+    linux_containment: ProcessContainment, script: str, expected: int
+):
+    process = linux_containment.spawn(
+        (sys.executable, "-c", script),
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    process.wait(timeout=3)
 
     assert process.returncode == 0
-    assert stderr == b""
-    assert stdout == b"0\n"
+    assert linux_containment.finish(process, grace_seconds=2.0) == expected
 
 
 def test_linux_normal_exit_kills_detached_descendant(
@@ -228,7 +407,7 @@ def test_linux_normal_exit_kills_detached_descendant(
         stderr=subprocess.DEVNULL,
     )
     process.wait(timeout=3)
-    linux_containment.ensure_tree_exited(process, grace_seconds=2.0)
+    assert linux_containment.finish(process, grace_seconds=2.0) == 0
     time.sleep(0.7)
 
     assert ready.exists()
@@ -261,7 +440,7 @@ def test_linux_timeout_kills_detached_descendant(
         time.sleep(0.01)
     assert ready.exists()
 
-    linux_containment.terminate(process, grace_seconds=0.2)
+    linux_containment.finish(process, grace_seconds=0.2, forced=True)
     time.sleep(0.7)
 
     assert not escaped.exists()

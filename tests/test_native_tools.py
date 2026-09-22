@@ -458,8 +458,9 @@ def test_exact_command_bounds_output_controls_env_and_uses_containment(tmp_path,
             calls.append(("spawn", command))
             return subprocess.Popen(command, **kwargs)
 
-        def ensure_tree_exited(self, observed, grace_seconds):
-            calls.append(("ensure", observed, grace_seconds))
+        def finish(self, observed, *, grace_seconds, forced=False):
+            calls.append(("finish", observed, grace_seconds, forced))
+            return observed.returncode
 
         def terminate(self, *args, **kwargs):
             calls.append(("terminate",))
@@ -480,4 +481,4 @@ def test_exact_command_bounds_output_controls_env_and_uses_containment(tmp_path,
     assert spawned[0][1]["env"] == {
         "PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"
     }
-    assert [call[0] for call in calls] == ["spawn", "wait", "ensure", "close"]
+    assert [call[0] for call in calls] == ["spawn", "wait", "finish", "close"]

@@ -15,7 +15,8 @@ import struct
 import subprocess
 import sys
 import time
-from dataclasses import dataclass
+import threading
+from dataclasses import dataclass, field
 from typing import Any
 
 
@@ -24,7 +25,7 @@ class ProcessContainmentUnavailable(RuntimeError):
 
 
 _LINUX_HELPER = r'''
-import array, ctypes, json, os, select, signal, socket, sys
+import array, ctypes, json, os, select, signal, socket, struct, sys
 
 lifeline_fd = int(sys.argv[1])
 ready_fd = int(sys.argv[2])
@@ -65,7 +66,6 @@ ready = socket.socket(fileno=ready_fd)
 rights = array.array("i", [pidfd])
 ready.sendmsg([b"R"], [(socket.SOL_SOCKET, socket.SCM_RIGHTS, rights)])
 os.close(pidfd)
-ready.close()
 
 # The payload cannot run until the owner has received the namespace init pidfd.
 if (select.select([lifeline_fd, parent_pidfd], [], [])[0] != [lifeline_fd]
@@ -84,6 +84,7 @@ child = os.fork()
 if child == 0:
     os.close(lifeline_fd)
     os.close(parent_pidfd)
+    ready.close()
     for signal_name in ("SIGPIPE", "SIGXFZ", "SIGXFSZ"):
         restored = getattr(signal, signal_name, None)
         if restored is not None:
@@ -113,12 +114,12 @@ while True:
             leader_status = status
     if leader_status is not None:
         os.close(lifeline_fd)
-        if os.WIFSIGNALED(leader_status):
-            signum = os.WTERMSIG(leader_status)
-            signal.signal(signum, signal.SIG_DFL)
-            os.kill(os.getpid(), signum)
-            os._exit(128 + signum)
-        os._exit(os.WEXITSTATUS(leader_status))
+        try:
+            ready.sendall(b"S" + struct.pack("!I", leader_status))
+        except OSError:
+            pass
+        ready.close()
+        os._exit(0)
     readable, _, _ = select.select([lifeline_fd, parent_pidfd], [], [], 0.02)
     if parent_pidfd in readable:
         os._exit(125)
@@ -277,7 +278,13 @@ class ProcessContainment:
     _linux_identity: tuple[object, ...] | None = None
     _linux_init_pidfd: int | None = None
     _linux_lifeline: int | None = None
+    _linux_status_socket: socket.socket | None = None
+    _payload_status_finished: bool = False
+    _payload_returncode: int | None = None
     _process: subprocess.Popen[bytes] | None = None
+    _finish_lock: threading.RLock = field(
+        default_factory=threading.RLock, repr=False, compare=False
+    )
 
     @classmethod
     def create(cls) -> "ProcessContainment":
@@ -328,9 +335,9 @@ class ProcessContainment:
                 cwd="/",
                 env={"PATH": "/usr/bin:/bin", "LANG": "C"},
             )
-            if process.wait(timeout=_LINUX_STARTUP_TIMEOUT_SECONDS) != 0:
+            process.wait(timeout=_LINUX_STARTUP_TIMEOUT_SECONDS)
+            if self.finish(process, grace_seconds=1.0) != 0:
                 return "Linux PID-namespace containment probe failed"
-            self.ensure_tree_exited(process, grace_seconds=1.0)
             return None
         except BaseException as exc:
             return (
@@ -499,6 +506,8 @@ class ProcessContainment:
             os.write(lifeline_write, b"G")
             self._linux_init_pidfd = init_pidfd
             self._linux_lifeline = lifeline_write
+            self._linux_status_socket = ready_parent
+            ready_parent = None
             self._owned_pid = process.pid
             self._process = process
             return process
@@ -535,8 +544,95 @@ class ProcessContainment:
                 os.close(parent_pidfd)
             if environment_fd >= 0:
                 os.close(environment_fd)
-            ready_parent.close()
+            if ready_parent is not None:
+                ready_parent.close()
             ready_child.close()
+
+    def finish(
+        self,
+        process: subprocess.Popen[bytes],
+        *,
+        grace_seconds: float,
+        forced: bool = False,
+    ) -> int | None:
+        """Clean up the owned tree and return the contained payload's status.
+
+        The launcher/monitor status is deliberately not used as the payload
+        result.  Forced cleanup may prevent namespace init from reporting a
+        terminal payload status, so that case returns ``None``.
+        """
+
+        with self._finish_lock:
+            return self._finish_locked(
+                process, grace_seconds=grace_seconds, forced=forced
+            )
+
+    def _finish_locked(
+        self,
+        process: subprocess.Popen[bytes],
+        *,
+        grace_seconds: float,
+        forced: bool,
+    ) -> int | None:
+        if process.pid != self._owned_pid:
+            raise RuntimeError("refusing to finish an unregistered process")
+        if self._payload_status_finished:
+            if self._payload_returncode is None and not forced:
+                raise RuntimeError("contained payload status was unavailable")
+            return self._payload_returncode
+        if os.name == "nt":
+            if forced:
+                self.terminate(process, grace_seconds=grace_seconds)
+            else:
+                self.ensure_tree_exited(process, grace_seconds=grace_seconds)
+            self._payload_returncode = process.returncode
+            self._payload_status_finished = True
+            return self._payload_returncode
+        if forced:
+            self._terminate_linux(process, grace_seconds=grace_seconds)
+            self._payload_returncode = self._read_linux_payload_status(required=False)
+            self._payload_status_finished = True
+            return self._payload_returncode
+        if process.poll() is None:
+            raise RuntimeError("contained process monitor has not exited")
+        self.ensure_tree_exited(process, grace_seconds=grace_seconds)
+        self._payload_returncode = self._read_linux_payload_status(required=True)
+        self._payload_status_finished = True
+        return self._payload_returncode
+
+    def _read_linux_payload_status(self, *, required: bool) -> int | None:
+        channel = self._linux_status_socket
+        if channel is None:
+            if required:
+                raise RuntimeError("missing Linux payload-status channel")
+            return None
+        record = bytearray()
+        try:
+            # Normal finish has already proved namespace init (the only peer)
+            # exited, so a stream socket now contains the complete frame and
+            # EOF.  Forced finish provides the same proof before reading.
+            channel.setblocking(False)
+            while len(record) < 6:
+                try:
+                    chunk = channel.recv(6 - len(record))
+                except BlockingIOError:
+                    break
+                if not chunk:
+                    break
+                record.extend(chunk)
+        finally:
+            channel.close()
+            self._linux_status_socket = None
+        if not record and not required:
+            return None
+        if len(record) != 5 or record[:1] != b"S":
+            raise RuntimeError("missing or malformed Linux payload status")
+        wait_status = struct.unpack("!I", record[1:])[0]
+        if wait_status > 0xFFFF or not (
+            os.WIFEXITED(wait_status) or os.WIFSIGNALED(wait_status)
+        ):
+            raise RuntimeError("invalid Linux payload wait status")
+        return os.waitstatus_to_exitcode(wait_status)
 
     @staticmethod
     def _verify_linux_namespace_init(pidfd: int, sender_pid: int) -> None:
@@ -645,30 +741,35 @@ class ProcessContainment:
         raise subprocess.TimeoutExpired(process.args, timeout)
 
     def close(self) -> None:
-        if self._windows_job is not None:
-            self._windows_job.close()
+        with self._finish_lock:
+            self._close_locked()
+
+    def _close_locked(self) -> None:
+        process = self._process
+        if process is not None and not self._payload_status_finished:
+            if process.pid != self._owned_pid:
+                raise RuntimeError("owned process identity changed before close")
+            # Preserve the same cleanup proof as finish(): closing ownership
+            # handles first could make a later caller mistake unavailable
+            # descriptors for a successfully quiesced process tree.
+            self._finish_locked(process, grace_seconds=1.0, forced=True)
         if self._linux_lifeline is not None:
             os.close(self._linux_lifeline)
             self._linux_lifeline = None
-        process = self._process
-        if (
-            process is not None
-            and self._linux_init_pidfd is not None
-            and not select.select([self._linux_init_pidfd], [], [], 0)[0]
-        ):
-            try:
-                self._wait_for_linux_exit(process, timeout=1.0)
-            except subprocess.TimeoutExpired:
-                try:
-                    signal.pidfd_send_signal(
-                        self._linux_init_pidfd, signal.SIGKILL
-                    )
-                except ProcessLookupError:
-                    pass
-                self._wait_for_linux_exit(process, timeout=1.0)
+        if self._linux_status_socket is not None:
+            self._linux_status_socket.close()
+            self._linux_status_socket = None
         if self._linux_init_pidfd is not None:
+            if process is None and not select.select(
+                [self._linux_init_pidfd], [], [], 0
+            )[0]:
+                raise RuntimeError(
+                    "cannot verify live namespace init without its monitor"
+                )
             os.close(self._linux_init_pidfd)
             self._linux_init_pidfd = None
+        if self._windows_job is not None:
+            self._windows_job.close()
 
 
 class WindowsJobObject:

@@ -140,10 +140,15 @@ def run_bounded_process(
                 break
             time.sleep(min(0.05, max(0, deadline - time.monotonic())))
         if timed_out or cancelled:
-            containment.terminate(process, grace_seconds=termination_grace_seconds)
+            containment.finish(
+                process,
+                grace_seconds=termination_grace_seconds,
+                forced=True,
+            )
+            returncode = None
         else:
             process.wait()
-            containment.ensure_tree_exited(
+            returncode = containment.finish(
                 process,
                 grace_seconds=termination_grace_seconds,
             )
@@ -155,7 +160,7 @@ def run_bounded_process(
             )
         return ProcessResult(
             tuple(argv),
-            process.returncode,
+            returncode,
             timed_out,
             cancelled,
             max(0, time.monotonic() - started),
@@ -166,7 +171,11 @@ def run_bounded_process(
         )
     except BaseException:
         if attached:
-            containment.terminate(process, grace_seconds=termination_grace_seconds)
+            containment.finish(
+                process,
+                grace_seconds=termination_grace_seconds,
+                forced=True,
+            )
         raise
     finally:
         containment.close()

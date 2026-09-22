@@ -1713,6 +1713,14 @@ class Botpipe:
                 r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", value
             ):
                 raise ValueError(f"{label} must be a safe identifier")
+        with self._workspace_coordinator.execution_guard(self.journal, run_id):
+            return self._run_exclusive(
+                definition, args, kwargs, task_id, run_id, context, limits
+            )
+
+    def _run_exclusive(
+        self, definition, args, kwargs, task_id, run_id, context, limits
+    ):
         folder = self.state_dir / "tasks" / task_id / "runs" / run_id
         encoded_args = codec.encode(args)
         encoded_kwargs = codec.encode(kwargs)
@@ -1798,6 +1806,24 @@ class Botpipe:
             )
 
     def _resume(
+        self,
+        run_id,
+        *,
+        answers=None,
+        workflow=None,
+        max_operations=None,
+        timeout=None,
+    ):
+        with self._workspace_coordinator.execution_guard(self.journal, run_id):
+            return self._resume_exclusive(
+                run_id,
+                answers=answers,
+                workflow=workflow,
+                max_operations=max_operations,
+                timeout=timeout,
+            )
+
+    def _resume_exclusive(
         self,
         run_id,
         *,
@@ -2299,6 +2325,24 @@ class Botpipe:
             )
 
     def _resolve(
+        self,
+        run_id,
+        operation_id,
+        *,
+        retry=False,
+        response=_UNSET,
+        artifact_digests=None,
+    ):
+        with self._workspace_coordinator.execution_guard(self.journal, run_id):
+            return self._resolve_exclusive(
+                run_id,
+                operation_id,
+                retry=retry,
+                response=response,
+                artifact_digests=artifact_digests,
+            )
+
+    def _resolve_exclusive(
         self,
         run_id,
         operation_id,

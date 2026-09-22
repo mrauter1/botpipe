@@ -327,13 +327,16 @@ def test_t16_bounded_process_reaps_children_on_timeout_and_normal_leader_exit(
     tmp_path: Path,
     leader_exits: bool,
 ) -> None:
-    child_pid_path = tmp_path / "child.pid"
-    leader_tail = "" if leader_exits else ";time.sleep(30)"
+    descendant_witness = tmp_path / "descendant-survived"
+    leader_tail = "" if leader_exits else "time.sleep(30)"
+    child = (
+        "import pathlib,time;time.sleep(.7);"
+        f"pathlib.Path({str(descendant_witness)!r}).write_text('survived')"
+    )
     program = (
         "import pathlib,subprocess,sys,time;"
-        "child=subprocess.Popen([sys.executable,'-c','import time;time.sleep(30)'],"
+        f"child=subprocess.Popen([sys.executable,'-c',{child!r}],"
         "stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL);"
-        f"pathlib.Path({str(child_pid_path)!r}).write_text(str(child.pid))"
         f"{leader_tail}"
     )
     result = run_bounded_process(
@@ -342,12 +345,10 @@ def test_t16_bounded_process_reaps_children_on_timeout_and_normal_leader_exit(
         timeout_seconds=2 if leader_exits else 0.3,
         termination_grace_seconds=0.2,
     )
-    child_pid = int(child_pid_path.read_text(encoding="utf-8"))
-    deadline = time.monotonic() + 2
-    while _process_is_running(child_pid) and time.monotonic() < deadline:
-        time.sleep(0.02)
-    assert not _process_is_running(child_pid)
+    time.sleep(0.9)
+    assert not descendant_witness.exists()
     assert result.timed_out is (not leader_exits)
+    assert result.exit_code == (0 if leader_exits else None)
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows Job Object acceptance")

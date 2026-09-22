@@ -118,11 +118,31 @@ class WorkspaceCoordinator:
         self.registry_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.lock_dir = self.registry_dir / "workspace-ownership-locks"
         self.lock_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+        self.run_lock_dir = self.registry_dir / "run-locks"
+        self.run_lock_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.database = self.registry_dir / "workspace-ownership.sqlite3"
         self.busy_timeout = busy_timeout
         self._live: dict[str, _HeldClaim] = {}
         self._live_lock = threading.RLock()
         self._initialize()
+
+    @contextmanager
+    def execution_guard(self, journal: object, run_id: str):
+        """Exclude another executor for the same durable run.
+
+        This guard is acquired before workspace claims.  Its identity excludes
+        workspace paths deliberately: clients configured with different roots
+        must still not recover or execute one journal/run concurrently.
+        """
+
+        if type(run_id) is not str or not run_id:
+            raise ValueError("run_id must be a non-empty string")
+        journal_text = _canonical_journal(journal)
+        identity = hashlib.sha256(
+            f"{journal_text}\0{run_id}".encode("utf-8", "surrogatepass")
+        ).hexdigest()
+        with workspace_lock(self.run_lock_dir / f"{identity}.lock"):
+            yield
 
     def _connect(self) -> sqlite3.Connection:
         db = sqlite3.connect(
