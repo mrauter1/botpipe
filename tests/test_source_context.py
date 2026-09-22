@@ -106,12 +106,12 @@ def test_owned_callable_default_uses_current_dependency_after_answer(
     )
     _write(
         root / "workflow.py",
-        "from botpipe import ask, workflow\n"
+        "from botpipe import ask_human, workflow\n"
         "from branchpkg.helper import Helper\n"
         "@workflow\n"
         f"{declaration}"
         "    before = callback()\n"
-        "    answer = ask('continue?')\n"
+        "    answer = ask_human('continue?')\n"
         "    return before, answer\n",
     )
     start = _write(
@@ -126,12 +126,7 @@ def test_owned_callable_default_uses_current_dependency_after_answer(
     )
     resume = _write(
         tmp_path / "resume.py",
-        "from botpipe import Botpipe\n"
-        "from botpipe.providers import FakeProvider\n"
-        "from rootpkg.workflow import job\n"
-        "with Botpipe('.', provider=FakeProvider([])) as client:\n"
-        "    result = client.resume('owned-default', workflow=job, answer='yes')\n"
-        "    assert result.ok and result.value == ('changed', 'yes'), result.error\n",
+        'from botpipe import Botpipe\nfrom botpipe.providers import FakeProvider\nfrom rootpkg.workflow import job\nwith Botpipe(\'.\', provider=FakeProvider([])) as client:\n    result = client.resume(\'owned-default\', workflow=job, answers={client.pending(\'owned-default\')[0]["operation_id"]: \'yes\'})\n    assert result.ok and result.value == (\'changed\', \'yes\'), result.error\n',
     )
 
     first = _run(start)
@@ -162,12 +157,12 @@ def test_raw_partial_branch_keeps_application_manifest_and_rejects_model_edit(
     root = _package(tmp_path, "rootpkg")
     _write(
         root / "workflow.py",
-        "from botpipe import ask, parallel, workflow\n"
+        "from botpipe import ask_human, parallel, workflow\n"
         "from application.branch import branch\n"
         "@workflow\n"
         "def job():\n"
         "    result = parallel(branch)\n"
-        "    ask('continue?')\n"
+        "    ask_human('continue?')\n"
         "    return result\n",
     )
     start = _write(
@@ -187,12 +182,7 @@ def test_raw_partial_branch_keeps_application_manifest_and_rejects_model_edit(
     )
     resume = _write(
         tmp_path / "resume.py",
-        "from botpipe import Botpipe\n"
-        "from botpipe.providers import FakeProvider\n"
-        "from rootpkg.workflow import job\n"
-        "with Botpipe('.', provider=FakeProvider([])) as client:\n"
-        "    result = client.resume('raw-partial', workflow=job, answer='yes')\n"
-        "    assert result.ok and result.value == [('old', 'FileIO')], result.error\n",
+        'from botpipe import Botpipe\nfrom botpipe.providers import FakeProvider\nfrom rootpkg.workflow import job\nwith Botpipe(\'.\', provider=FakeProvider([])) as client:\n    result = client.resume(\'raw-partial\', workflow=job, answers={client.pending(\'raw-partial\')[0]["operation_id"]: \'yes\'})\n    assert result.ok and result.value == [(\'old\', \'FileIO\')], result.error\n',
     )
 
     first = _run(start)
@@ -220,16 +210,16 @@ def test_imported_wraps_uses_application_prompt_and_wrapper_source_is_verified(
     (application / "prompt.md").write_text("application prompt")
     _write(
         application / "workflow.py",
-        "from botpipe import Policy, Prompt, Session, ask, workflow\n"
+        "from botpipe import Policy, Prompt, Provider, ask_human, workflow\n"
         "from helperpkg.decorators import traced\n"
         "@workflow\n"
         "@traced\n"
         "def job():\n"
-        "    value = Session().run(\n"
+        "    value = Provider().run(\n"
         "        Prompt.file('prompt.md'),\n"
         "        policy=Policy(sandbox_mode='read_only'),\n"
         "    ).value\n"
-        "    ask('continue?')\n"
+        "    ask_human('continue?')\n"
         "    return value\n",
     )
     start = _write(
@@ -250,12 +240,7 @@ def test_imported_wraps_uses_application_prompt_and_wrapper_source_is_verified(
     )
     resume = _write(
         tmp_path / "resume.py",
-        "from botpipe import Botpipe\n"
-        "from botpipe.providers import FakeProvider\n"
-        "from application.workflow import job\n"
-        "with Botpipe('.', provider=FakeProvider([])) as client:\n"
-        "    result = client.resume('wrapped', workflow=job, answer='yes')\n"
-        "    assert result.ok and result.value == 'done', result.error\n",
+        'from botpipe import Botpipe\nfrom botpipe.providers import FakeProvider\nfrom application.workflow import job\nwith Botpipe(\'.\', provider=FakeProvider([])) as client:\n    result = client.resume(\'wrapped\', workflow=job, answers={client.pending(\'wrapped\')[0]["operation_id"]: \'yes\'})\n    assert result.ok and result.value == \'done\', result.error\n',
     )
 
     first = _run(start)
@@ -312,11 +297,11 @@ def test_missing_loaded_helper_does_not_erase_application_resource_origin(
     (application / "prompt.md").write_text("application prompt")
     _write(
         application / "workflow.py",
-        "from botpipe import Policy, Prompt, Session\n"
+        "from botpipe import Policy, Prompt, Provider\n"
         "from helperpkg.tasks import loaded_helper\n"
         "def job():\n"
         "    loaded_helper()\n"
-        "    return Session().run(\n"
+        "    return Provider().run(\n"
         "        Prompt.file('prompt.md'),\n"
         "        policy=Policy(sandbox_mode='read_only'),\n"
         "    ).value\n",
@@ -371,28 +356,18 @@ def test_wrapped_application_with_owned_default_relocates(tmp_path: Path) -> Non
     application = _package(first_root, "application")
     _write(
         application / "workflow.py",
-        "from botpipe import ask, workflow\n"
+        "from botpipe import ask_human, workflow\n"
         "from branchpkg.helper import Helper\n"
         "from helperpkg.decorators import traced\n"
         "@workflow\n"
         "@traced\n"
         "def job(callback=Helper()):\n"
-        "    ask('continue?')\n"
+        "    ask_human('continue?')\n"
         "    return callback()\n",
     )
     script = _write(
         first_root / "run.py",
-        "import os, sys\n"
-        "from botpipe import Botpipe\n"
-        "from botpipe.providers import FakeProvider\n"
-        "from application.workflow import job\n"
-        "with Botpipe(os.environ['BOTPIPE_TEST_WORKSPACE'], provider=FakeProvider([])) as client:\n"
-        "    if sys.argv[-1:] == ['resume']:\n"
-        "        result = client.resume('relocated', workflow=job, answer='yes')\n"
-        "        assert result.ok and result.value == 'owned', result.error\n"
-        "    else:\n"
-        "        result = client.run(job, run_id='relocated')\n"
-        "        assert result.status == 'awaiting_input', result.error\n",
+        'import os, sys\nfrom botpipe import Botpipe\nfrom botpipe.providers import FakeProvider\nfrom application.workflow import job\nwith Botpipe(os.environ[\'BOTPIPE_TEST_WORKSPACE\'], provider=FakeProvider([])) as client:\n    if sys.argv[-1:] == [\'resume\']:\n        result = client.resume(\'relocated\', workflow=job, answers={client.pending(\'relocated\')[0]["operation_id"]: \'yes\'})\n        assert result.ok and result.value == \'owned\', result.error\n    else:\n        result = client.run(job, run_id=\'relocated\')\n        assert result.status == \'awaiting_input\', result.error\n',
     )
 
     first = _run(script, source_root=first_root, workspace=workspace)
@@ -415,11 +390,11 @@ def test_sdk_partial_branch_inherits_application_prompt(tmp_path: Path) -> None:
     _write(
         application / "workflow.py",
         "from functools import partial\n"
-        "from botpipe import Policy, Prompt, Session, parallel, workflow\n"
+        "from botpipe import Policy, Prompt, Provider, parallel, workflow\n"
         "@workflow\n"
         "def job():\n"
         "    callback = partial(\n"
-        "        Session().run,\n"
+        "        Provider().run,\n"
         "        Prompt.file('prompt.md'),\n"
         "        policy=Policy(sandbox_mode='read_only'),\n"
         "    )\n"
@@ -457,11 +432,11 @@ def test_symlinked_sdk_partial_branch_inherits_application_prompt(
     _write(
         application / "workflow.py",
         "from functools import partial\n"
-        "from botpipe import Policy, Prompt, Session, parallel, workflow\n"
+        "from botpipe import Policy, Prompt, Provider, parallel, workflow\n"
         "@workflow\n"
         "def job():\n"
         "    callback = partial(\n"
-        "        Session().run,\n"
+        "        Provider().run,\n"
         "        Prompt.file('prompt.md'),\n"
         "        policy=Policy(sandbox_mode='read_only'),\n"
         "    )\n"
@@ -506,13 +481,13 @@ def test_sdk_partial_application_contract_adds_owner_without_stealing_prompt_ori
         application / "workflow.py",
         "from functools import partial\n"
         "from pathlib import Path\n"
-        "from botpipe import Policy, Prompt, Session, parallel, workflow\n"
+        "from botpipe import Policy, Prompt, Provider, parallel, workflow\n"
         "from botpipe.runtime import Workflow\n"
         "from contractpkg.model import Answer\n"
         "@workflow\n"
         "def job():\n"
         "    callback = partial(\n"
-        "        Session().run,\n"
+        "        Provider().run,\n"
         "        Prompt.file('prompt.md'),\n"
         "        returns=Answer,\n"
         "        policy=Policy(sandbox_mode='read_only'),\n"

@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, ValidationError
 
-from botpipe import Artifact, Session, activity, current_run, workflow
+from botpipe import Artifact, Provider, Session, activity, current_run, workflow
 
 from .conventions import phase_dir_key
 from .reviews import (
@@ -375,7 +375,8 @@ def devloop(
         required=True,
     )
 
-    planner, plan_reviewer = Session(key="devloop-plan"), Session.fresh()
+    planner = Provider()
+    plan_reviewer = planner.with_config(session=None)
     plan_feedback: tuple[Any, ...] = ()
     attempt = 0
     while True:
@@ -430,7 +431,8 @@ def devloop(
         document.status = "in_progress"
         _write_json(str(plan_path), document.model_dump(mode="json"))
         phase_dir = phase_dir_key(phase.phase_id)
-        phase_session = Session(key=f"devloop-phase:{phase.phase_id}")
+        phase_provider = planner.with_config(session=Session())
+        phase_verifier = planner.with_config(session=None)
         implementation_feedback: tuple[Any, ...] = ()
         stage_attempt = 0
         phase_done = False
@@ -454,7 +456,7 @@ def devloop(
                 schema=ReviewReport,
                 required=True,
             )
-            implemented = phase_session.run(
+            implemented = phase_provider.run(
                 IMPLEMENT_PRODUCER,
                 input={
                     "request": request,
@@ -465,7 +467,7 @@ def devloop(
                 writes=(notes,),
             )
             review_id = _review_id("implement", phase.phase_id, stage_attempt)
-            checked = phase_session.run(
+            checked = phase_verifier.run(
                 IMPLEMENT_VERIFIER,
                 input=_review_input(
                     request=request,
@@ -512,7 +514,7 @@ def devloop(
                     item_attempt = 0
                     while True:
                         item_attempt += 1
-                        revised = phase_session.run(
+                        revised = phase_provider.run(
                             PHASE_ITEM_PRODUCER,
                             input={
                                 "request": request,
@@ -570,7 +572,7 @@ def devloop(
                         item_review_id = _review_id(
                             "phase_item", phase.phase_id, item_attempt
                         )
-                        item_checked = phase_session.run(
+                        item_checked = phase_verifier.run(
                             PHASE_ITEM_VERIFIER,
                             input=_review_input(
                                 request=request,
@@ -628,14 +630,14 @@ def devloop(
                 schema=ReviewReport,
                 required=True,
             )
-            tested = phase_session.run(
+            tested = phase_provider.run(
                 TEST_PRODUCER,
                 input={"request": request, "phase": _phase_dict(phase)},
                 reads=(latest_plan, implemented.artifacts.impl_notes),
                 writes=(test_strategy,),
             )
             test_review_id = _review_id("test", phase.phase_id, stage_attempt)
-            test_checked = phase_session.run(
+            test_checked = phase_verifier.run(
                 TEST_VERIFIER,
                 input=_review_input(
                     request=request,
@@ -692,12 +694,13 @@ def devloop(
         schema=ReviewReport,
         required=True,
     )
-    audit_session, audit_verifier = Session(key="devloop-audit"), Session.fresh()
+    audit_provider = planner.with_config(session=Session())
+    audit_verifier = planner.with_config(session=None)
     audit_feedback: tuple[Any, ...] = ()
     audit_attempt = 0
     while True:
         audit_attempt += 1
-        produced_audit = audit_session.run(
+        produced_audit = audit_provider.run(
             AUDIT_PRODUCER,
             input={
                 "request": request,

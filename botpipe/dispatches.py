@@ -113,9 +113,13 @@ class Dispatch:
         self._ended_monotonic = None
         self._finished_at = None
         self._finished = False
-        effective = request.policy.effective()
+        from .policy import Policy
+        policy = getattr(request, "policy", None)
+        effective = policy.effective() if policy is not None else Policy(model=getattr(request, "settings", {}).get("model")).effective()
         details = {
             "provider": self.provider_name,
+            "capability_profile": getattr(getattr(provider, "capabilities", None), "version", None),
+            "operation": str(getattr(request, "operation", "decide")),
             "model": effective.model,
             "effort": None if effective.effort is None else effective.effort.value,
             "policy_fingerprint": hashlib.sha256(
@@ -131,6 +135,10 @@ class Dispatch:
             dispatch_id=self.id,
             details=details,
         )
+        if self.ctx is not None:
+            from .streaming import bind_stream_identity
+
+            bind_stream_identity(self.ctx.run_id, self.operation_id)
 
     def _event(self, name, data):
         if self.ctx is not None:
@@ -186,7 +194,7 @@ def dispatch_records(events):
         data = event["data"]
         dispatch_id = data.get("dispatch_id")
         if not dispatch_id:
-            continue  # Journals written before per-dispatch telemetry.
+            continue
         record = records.setdefault(
             dispatch_id,
             {

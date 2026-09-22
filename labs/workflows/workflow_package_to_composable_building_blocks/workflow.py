@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from botpipe import Session, current_run, workflow
+from botpipe import Provider, current_run, workflow
 from labs.workflows._shared import (
     LabWorkflowResult,
     ReplanRequired,
@@ -34,8 +34,8 @@ def WorkflowPackageToComposableBuildingBlocks(
     params: Params, request: str = ""
 ) -> LabWorkflowResult:
     """Execute the workflow package to composable building blocks evidence workflow."""
-    _producer = Session(key="producer")
-    _verifier = Session(key="verifier")
+    _producer = Provider()
+    _verifier = _producer.with_config(session=None)
     context = {"request": request, "parameters": params.model_dump(mode="json")}
     context["selected_workflow_contract"] = observe_workflow(params.selected_workflow)
     source_path = context["selected_workflow_contract"]["source"]["path"]

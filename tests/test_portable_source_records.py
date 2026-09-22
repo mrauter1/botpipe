@@ -32,24 +32,15 @@ def test_operation_owners_relocate_with_explicit_workflow(tmp_path):
     package.mkdir(parents=True)
     (package / "__init__.py").write_text("")
     (package / "workflow.py").write_text(
-        "from botpipe import ask, workflow\n"
+        "from botpipe import ask_human, workflow\n"
         "@workflow\n"
         "def job():\n"
-        "    ask('continue?')\n"
+        "    ask_human('continue?')\n"
         "    return 'done'\n"
     )
     script = code1 / "run.py"
     script.write_text(
-        "import os, sys\n"
-        "from botpipe import Botpipe\n"
-        "from botpipe.providers import FakeProvider\n"
-        "from owned.workflow import job\n"
-        "with Botpipe(os.environ['BOTPIPE_TEST_WORKSPACE'], provider=FakeProvider([])) as client:\n"
-        "    if sys.argv[-1:] == ['resume']:\n"
-        "        result = client.resume('move', workflow=job, answer='yes')\n"
-        "    else:\n"
-        "        result = client.run(job, run_id='move')\n"
-        "    print(result.status, result.value)\n"
+        'import os, sys\nfrom botpipe import Botpipe\nfrom botpipe.providers import FakeProvider\nfrom owned.workflow import job\nwith Botpipe(os.environ[\'BOTPIPE_TEST_WORKSPACE\'], provider=FakeProvider([])) as client:\n    if sys.argv[-1:] == [\'resume\']:\n        result = client.resume(\'move\', workflow=job, answers={client.pending(\'move\')[0]["operation_id"]: \'yes\'})\n    else:\n        result = client.run(job, run_id=\'move\')\n    print(result.status, result.value)\n'
     )
     first = _run(script, code1, workspace)
     assert first.returncode == 0, first.stderr

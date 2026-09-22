@@ -60,7 +60,7 @@ After writing every declared artifact, return a JSON result matching the injecte
 ## Out Of Scope
 
 - Publishing the final recursive-improvement cycle package.
-- Mutating workflow packages or `.botpipe` history.
+- Mutating workflow packages or `.botpipe-v2` history.
 - Executing downstream workflows.
 
 ## Forbidden

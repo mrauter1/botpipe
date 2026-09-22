@@ -7,7 +7,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from botpipe import Artifact, Prompt, Session, activity, current_run, workflow
+from botpipe import Artifact, Prompt, Provider, Session, activity, current_run, workflow
 
 from .contracts import (
     BehaviorDistillationPayload,
@@ -108,11 +108,12 @@ def code_to_workflow(
     _bootstrap_capture(str(ctx.workspace), str(ctx.folder), name)
     invocation_contract, source_manifest, trace_corpus = _read_specs(ctx.folder)
 
-    behavior_session = Session(key="behavior-producer")
-    behavior_verifier = Session(key="behavior-verifier")
-    authoring_session = Session(key="authoring-producer")
-    design_verifier = Session(key="design-verifier")
-    build_verifier = Session(key="build-verifier")
+    base = Provider()
+    behavior_provider = base.with_config(session=Session())
+    behavior_verifier = base.with_config(session=None)
+    authoring_provider = base.with_config(session=Session())
+    design_verifier = base.with_config(session=None)
+    build_verifier = base.with_config(session=None)
 
     behavior_inventory = Artifact.json("behavior_inventory.json", required=True)
     behavior_report = Artifact.md(
@@ -125,7 +126,7 @@ def code_to_workflow(
 
     behavior_feedback = ()
     while True:
-        distilled = behavior_session.run(
+        distilled = behavior_provider.run(
             Prompt.file("prompts/distill_behavior_producer.md"),
             input={"request": request, "generated_workflow_name": name},
             reads=(
@@ -165,7 +166,7 @@ def code_to_workflow(
             prompt_matrix = Artifact.md("prompt_contract_matrix.md", required=True)
             equivalence_plan = Artifact.md("equivalence_plan.md", required=True)
             coverage_map = Artifact.json("coverage_map.json", required=True)
-            designed = authoring_session.run(
+            designed = authoring_provider.run(
                 Prompt.file("prompts/design_recreation_producer.md"),
                 input={"request": request, "generated_workflow_name": name},
                 reads=(
@@ -211,7 +212,7 @@ def code_to_workflow(
         if replan_behavior:
             behavior_feedback = (design_check.artifacts.design_review,)
             while True:
-                distilled = behavior_session.run(
+                distilled = behavior_provider.run(
                     Prompt.file("prompts/distill_behavior_producer.md"),
                     input={"request": request, "generated_workflow_name": name},
                     reads=(
@@ -247,7 +248,7 @@ def code_to_workflow(
             )
             generated_layout = Artifact.json("generated_layout.json", required=True)
             validation_report = Artifact.md("validation_report.md", required=True)
-            built = authoring_session.run(
+            built = authoring_provider.run(
                 Prompt.file("prompts/build_and_validate_producer.md"),
                 input={
                     "request": request,

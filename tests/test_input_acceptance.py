@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 from pydantic import BaseModel, Field, field_validator
 
-from botpipe import Botpipe, ask, codec, parallel, workflow
+from botpipe import Botpipe, ask_human, codec, parallel, workflow
 from botpipe.providers import FakeProvider
 
 
@@ -33,13 +33,13 @@ def test_invalid_custom_validator_answer_can_be_corrected(tmp_path):
 
     @workflow
     def gate():
-        return ask("Decision?", returns=Approval)
+        return ask_human("Decision?", returns=Approval)
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(gate)
         operation_id = paused.pending_input["operation_id"]
         rejected = client.resume(
-            paused.run_id, workflow=gate, answer={"decision": "typo"}
+            paused.run_id, workflow=gate, answers={client.pending(paused.run_id)[0]["operation_id"]: {"decision": "typo"}}
         )
 
         assert rejected.status == "awaiting_input"
@@ -53,7 +53,7 @@ def test_invalid_custom_validator_answer_can_be_corrected(tmp_path):
         assert client.journal.get(operation_id)["status"] == "waiting"
 
         accepted = client.resume(
-            paused.run_id, workflow=gate, answer={"decision": "approve"}
+            paused.run_id, workflow=gate, answers={client.pending(paused.run_id)[0]["operation_id"]: {"decision": "approve"}}
         )
         assert accepted.ok, accepted.error
         assert accepted.value == Approval(decision="approve")
@@ -85,11 +85,11 @@ class AliasedAnswer(BaseModel):
 def test_sdk_accepts_typed_python_answers(tmp_path, contract, answer):
     @workflow
     def gate():
-        return ask("Answer?", returns=contract)
+        return ask_human("Answer?", returns=contract)
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(gate)
-        result = client.resume(paused.run_id, workflow=gate, answer=answer)
+        result = client.resume(paused.run_id, workflow=gate, answers={client.pending(paused.run_id)[0]["operation_id"]: answer})
 
         assert result.ok, result.error
         assert result.value == answer
@@ -99,17 +99,17 @@ def test_sdk_accepts_typed_python_answers(tmp_path, contract, answer):
 def test_answer_that_cannot_be_encoded_stays_waiting(tmp_path):
     @workflow
     def gate():
-        return ask("Durable value?", returns=Any)
+        return ask_human("Durable value?", returns=Any)
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(gate)
         operation_id = paused.pending_input["operation_id"]
-        rejected = client.resume(paused.run_id, workflow=gate, answer=object())
+        rejected = client.resume(paused.run_id, workflow=gate, answers={client.pending(paused.run_id)[0]["operation_id"]: object()})
 
         assert rejected.status == "awaiting_input"
         assert rejected.pending_input["diagnostic"]["type"] == "encoding_error"
         assert client.journal.get(operation_id)["status"] == "waiting"
-        corrected = client.resume(paused.run_id, workflow=gate, answer="safe")
+        corrected = client.resume(paused.run_id, workflow=gate, answers={client.pending(paused.run_id)[0]["operation_id"]: "safe"})
         assert corrected.value == "safe"
 
 
@@ -124,11 +124,11 @@ def test_unexpected_validator_bug_is_not_reported_as_bad_input(tmp_path):
 
     @workflow
     def gate():
-        return ask("Value?", returns=Broken)
+        return ask_human("Value?", returns=Broken)
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(gate)
-        result = client.resume(paused.run_id, workflow=gate, answer={"value": 1})
+        result = client.resume(paused.run_id, workflow=gate, answers={client.pending(paused.run_id)[0]["operation_id"]: {"value": 1}})
 
         assert result.status == "failed"
         assert result.pending_input is None
@@ -138,7 +138,7 @@ def test_unexpected_validator_bug_is_not_reported_as_bad_input(tmp_path):
 def test_nested_answer_candidate_reaches_only_target_ask(tmp_path):
     @workflow
     def child():
-        return ask("Nested?", returns=int)
+        return ask_human("Nested?", returns=int)
 
     @workflow
     def parent():
@@ -146,17 +146,17 @@ def test_nested_answer_candidate_reaches_only_target_ask(tmp_path):
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(parent)
-        completed = client.resume(paused.run_id, workflow=parent, answer="4")
+        completed = client.resume(paused.run_id, workflow=parent, answers={client.pending(paused.run_id)[0]["operation_id"]: "4"})
 
         assert completed.value == 4
 
 
 def test_parallel_answers_are_keyed_to_the_pending_operation(tmp_path):
     def left():
-        return ask("Left?", returns=int)
+        return ask_human("Left?", returns=int)
 
     def right():
-        return ask("Right?", returns=int)
+        return ask_human("Right?", returns=int)
 
     @workflow
     def both():
@@ -166,11 +166,11 @@ def test_parallel_answers_are_keyed_to_the_pending_operation(tmp_path):
         first = client.run(both)
         assert first.pending_input["question"] == "Left?"
 
-        second = client.resume(first.run_id, workflow=both, answer="1")
+        second = client.resume(first.run_id, workflow=both, answers={first.pending_input["operation_id"]: "1"})
         assert second.status == "awaiting_input"
         assert second.pending_input["question"] == "Right?"
 
-        completed = client.resume(first.run_id, workflow=both, answer="2")
+        completed = client.resume(first.run_id, workflow=both, answers={second.pending_input["operation_id"]: "2"})
         assert completed.value == [1, 2]
 
 
@@ -179,7 +179,7 @@ def test_answer_can_be_resubmitted_when_acceptance_did_not_commit(
 ):
     @workflow
     def gate():
-        return ask("Approve?")
+        return ask_human("Approve?")
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(gate)
@@ -189,12 +189,12 @@ def test_answer_can_be_resubmitted_when_acceptance_did_not_commit(
             raise OSError("checkpoint unavailable")
 
         monkeypatch.setattr(client.journal, "response", fail_before_commit)
-        interrupted = client.resume(paused.run_id, workflow=gate, answer="yes")
+        interrupted = client.resume(paused.run_id, workflow=gate, answers={client.pending(paused.run_id)[0]["operation_id"]: "yes"})
         assert interrupted.status == "interrupted"
         assert interrupted.pending_input == paused.pending_input
 
         monkeypatch.setattr(client.journal, "response", response)
-        assert client.resume(paused.run_id, workflow=gate, answer="yes").value == "yes"
+        assert client.resume(paused.run_id, workflow=gate, answers={client.pending(paused.run_id)[0]["operation_id"]: "yes"}).value == "yes"
 
 
 def test_interruption_before_acceptance_keeps_answer_target(tmp_path):
@@ -210,15 +210,15 @@ def test_interruption_before_acceptance_keeps_answer_target(tmp_path):
 
     @workflow
     def gate():
-        return ask("Value?", returns=InterruptOnce)
+        return ask_human("Value?", returns=InterruptOnce)
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(gate)
-        interrupted = client.resume(paused.run_id, workflow=gate, answer={"value": 1})
+        interrupted = client.resume(paused.run_id, workflow=gate, answers={client.pending(paused.run_id)[0]["operation_id"]: {"value": 1}})
 
         assert interrupted.status == "interrupted"
         assert interrupted.pending_input == paused.pending_input
-        corrected = client.resume(paused.run_id, workflow=gate, answer={"value": 2})
+        corrected = client.resume(paused.run_id, workflow=gate, answers={client.pending(paused.run_id)[0]["operation_id"]: {"value": 2}})
         assert corrected.value == InterruptOnce(value=2)
 
 
@@ -238,7 +238,7 @@ def test_accepted_answer_survives_finish_crash_without_revalidation(
 
     @workflow
     def gate():
-        return ask("Number?", returns=Answer)
+        return ask_human("Number?", returns=Answer)
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(gate)
@@ -249,7 +249,7 @@ def test_accepted_answer_survives_finish_crash_without_revalidation(
 
         monkeypatch.setattr(client.journal, "finish", crash_after_acceptance)
         with pytest.raises(SystemExit):
-            client.resume(paused.run_id, workflow=gate, answer={"number": 3})
+            client.resume(paused.run_id, workflow=gate, answers={client.pending(paused.run_id)[0]["operation_id"]: {"number": 3}})
         assert validations == [3]
 
         monkeypatch.setattr(client.journal, "finish", finish)
@@ -261,7 +261,7 @@ def test_accepted_answer_survives_finish_crash_without_revalidation(
 def test_lost_acceptance_ack_uses_committed_answer(tmp_path, monkeypatch):
     @workflow
     def gate():
-        return ask("Approve?")
+        return ask_human("Approve?")
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(gate)
@@ -272,7 +272,7 @@ def test_lost_acceptance_ack_uses_committed_answer(tmp_path, monkeypatch):
             raise OSError("lost acknowledgement")
 
         monkeypatch.setattr(client.journal, "response", lose_ack)
-        completed = client.resume(paused.run_id, workflow=gate, answer="yes")
+        completed = client.resume(paused.run_id, workflow=gate, answers={client.pending(paused.run_id)[0]["operation_id"]: "yes"})
 
         assert completed.value == "yes"
 
@@ -280,7 +280,7 @@ def test_lost_acceptance_ack_uses_committed_answer(tmp_path, monkeypatch):
 def test_stale_pending_metadata_cannot_replace_accepted_answer(tmp_path):
     @workflow
     def gate():
-        return ask("Approve?")
+        return ask_human("Approve?")
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(gate)
@@ -289,15 +289,15 @@ def test_stale_pending_metadata_cannot_replace_accepted_answer(tmp_path):
             operation_id, {"validated_answer": codec.encode("first")}
         )
 
-        with pytest.raises(ValueError, match="no longer waiting"):
-            client.resume(paused.run_id, workflow=gate, answer="second")
+        with pytest.raises(ValueError, match="not waiting"):
+            client.resume(paused.run_id, workflow=gate, answers={operation_id: "second"})
         assert client.resume(paused.run_id, workflow=gate).value == "first"
 
 
 def test_unvalidated_answer_checkpoint_is_rejected_without_revalidation(tmp_path):
     @workflow
     def gate():
-        return ask("Approve?")
+        return ask_human("Approve?")
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(gate)
@@ -315,10 +315,10 @@ def test_cli_rejected_answer_is_actionable_and_correctable(tmp_path):
     source = tmp_path / "approval.py"
     source.write_text(
         "from typing import Literal\n"
-        "from botpipe import ask, workflow\n"
+        "from botpipe import ask_human, workflow\n"
         "@workflow\n"
         "def gate():\n"
-        "    return ask('Decision?', returns=Literal['approve', 'reject'])\n"
+        "    return ask_human('Decision?', returns=Literal['approve', 'reject'])\n"
     )
     state = tmp_path / "state"
     env = {
@@ -355,8 +355,17 @@ def test_cli_rejected_answer_is_actionable_and_correctable(tmp_path):
         )
 
     started = cli("run", f"{source}:gate")
+    assert started.returncode == 4, started.stderr
     run_id = json.loads(started.stdout)["run_id"]
-    rejected = cli("resume", run_id, "--workflow", f"{source}:gate", "--answer", "typo")
+    operation_id = json.loads(started.stdout)["pending_input"]["operation_id"]
+    rejected = cli(
+        "answer",
+        run_id,
+        operation_id,
+        "typo",
+        "--workflow",
+        f"{source}:gate",
+    )
     rejected_body = json.loads(rejected.stdout)
 
     assert rejected.returncode == 2, rejected.stderr
@@ -364,7 +373,12 @@ def test_cli_rejected_answer_is_actionable_and_correctable(tmp_path):
     assert rejected_body["pending_input"]["diagnostic"]["type"] == "validation_error"
 
     corrected = cli(
-        "resume", run_id, "--workflow", f"{source}:gate", "--answer", "approve"
+        "answer",
+        run_id,
+        operation_id,
+        "approve",
+        "--workflow",
+        f"{source}:gate",
     )
     assert corrected.returncode == 0, corrected.stderr
     assert json.loads(corrected.stdout)["value"] == "approve"

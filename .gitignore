@@ -1,5 +1,6 @@
 legacy_docs/
 .botpipe/
+.botpipe-v2/
 .botpipe-workspace.lock
 .venv*/
 

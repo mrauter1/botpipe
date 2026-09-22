@@ -4,17 +4,21 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import subprocess
 import tempfile
 import threading
 from collections.abc import Iterable, Mapping
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Protocol, runtime_checkable
+from types import MappingProxyType
+from typing import Any, Callable, Iterator, Protocol, runtime_checkable
 
-from .policy import NetworkMode, PermissionMode, Policy, SandboxMode
+from .policy import NetworkMode, OperationKind, PermissionMode, Policy, SandboxMode
 from .processes import ProcessContainment
 from .recovery import Completed, RecoveryOutcome, Running, Stopped, Unknown
 from .storage import sync_directory
@@ -26,6 +30,10 @@ class ProviderError(RuntimeError):
 
 class ProviderPolicyError(ProviderError):
     """The selected provider cannot faithfully enforce the policy."""
+
+
+class CapabilityError(ProviderPolicyError):
+    """The selected native adapter cannot enforce a requested capability."""
 
 
 class ProviderInterruptedError(ProviderError):
@@ -54,6 +62,25 @@ class _ProviderTimedOut(subprocess.TimeoutExpired):
     stopped = True
 
 
+NativeEventSink = Callable[[Mapping[str, Any]], None]
+_MAX_NATIVE_STREAM_BYTES = 8 * 1024 * 1024
+_NATIVE_EVENT_SINK: ContextVar[NativeEventSink | None] = ContextVar(
+    "botpipe_native_event_sink", default=None
+)
+
+
+@contextmanager
+def observe_native_events(callback: NativeEventSink) -> Iterator[None]:
+    """Observe parsed native JSON events for the current provider invocation."""
+    if not callable(callback):
+        raise TypeError("native event observer must be callable")
+    token = _NATIVE_EVENT_SINK.set(callback)
+    try:
+        yield
+    finally:
+        _NATIVE_EVENT_SINK.reset(token)
+
+
 @dataclass(frozen=True, slots=True)
 class ProviderRequest:
     operation_id: str
@@ -67,6 +94,11 @@ class ProviderRequest:
     timeout: float
     attempt: int = 1
     reads: tuple[Path, ...] = ()
+    operation: OperationKind = OperationKind.RUN
+    instructions: str | None = None
+    settings: Mapping[str, Any] = field(default_factory=dict)
+    allow_commands: tuple[tuple[str, ...], ...] = ()
+    read_fence: Callable[[Path], Any] | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "workspace", Path(self.workspace))
@@ -75,6 +107,39 @@ class ProviderRequest:
             self, "artifacts", {str(k): Path(v) for k, v in self.artifacts.items()}
         )
         object.__setattr__(self, "reads", tuple(Path(value) for value in self.reads))
+        try:
+            operation = (
+                self.operation
+                if isinstance(self.operation, OperationKind)
+                else OperationKind(self.operation)
+            )
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"invalid provider operation: {self.operation!r}") from exc
+        object.__setattr__(self, "operation", operation)
+        if self.instructions is not None and type(self.instructions) is not str:
+            raise TypeError("instructions must be a string or None")
+        if not isinstance(self.settings, Mapping):
+            raise TypeError("settings must be a mapping")
+        settings = dict(self.settings)
+        if any(type(key) is not str or not key for key in settings):
+            raise ValueError("settings keys must be non-empty strings")
+        object.__setattr__(self, "settings", MappingProxyType(settings))
+        if self.read_fence is not None and not callable(self.read_fence):
+            raise TypeError("read_fence must be callable or None")
+        grants: list[tuple[str, ...]] = []
+        for grant in self.allow_commands:
+            if isinstance(grant, (str, bytes)):
+                raise TypeError("allow_commands entries must be argv sequences")
+            argv = tuple(grant)
+            if not argv or any(
+                type(arg) is not str or not arg or "\x00" in arg for arg in argv
+            ):
+                raise ValueError(
+                    "allow_commands entries must be non-empty argv tuples without NULs"
+                )
+            if argv not in grants:
+                grants.append(argv)
+        object.__setattr__(self, "allow_commands", tuple(grants))
         if not self.operation_id:
             raise ValueError("operation_id must be non-empty")
         if (
@@ -87,6 +152,7 @@ class ProviderRequest:
             isinstance(self.timeout, bool)
             or not isinstance(self.timeout, (int, float))
             or self.timeout <= 0
+            or not math.isfinite(float(self.timeout))
         ):
             raise ValueError("timeout must be greater than zero")
 
@@ -125,20 +191,98 @@ class ProviderResponse:
             "usage": self.usage,
             "metadata": self.metadata,
         }
-        json.dumps(record, allow_nan=False)
+        encoded = json.dumps(record, allow_nan=False)
+        for name in ("usage", "metadata"):
+            if len(json.dumps(record[name], allow_nan=False).encode()) > 1_000_000:
+                raise ValueError(f"ProviderResponse.{name} exceeds the 1 MB evidence limit")
         return record
 
 
-@runtime_checkable
-class Provider(Protocol):
-    name: str
+@dataclass(frozen=True, slots=True)
+class ProviderCapabilities:
+    """Versioned native profiles this adapter can enforce."""
 
+    version: str
+    operations: frozenset[OperationKind]
+    sessions: bool
+    structured_output: bool
+    multiple_artifacts: bool
+    recovery: bool
+    cancellation: bool = False
+    exact_command_grants: bool = False
+    autonomous_read_only_query: bool = False
+    live_streaming: bool = False
+    decisions: bool = False
+    limitations: tuple[str, ...] = ()
+
+@runtime_checkable
+class ProviderAdapter(Protocol):
+    name: str
+    capabilities: ProviderCapabilities
+
+    def validate_request(self, request: ProviderRequest) -> None: ...
     def run(self, request: ProviderRequest) -> ProviderResponse: ...
-    # ProviderResponse | None is the supported legacy recovery contract;
-    # recover_outcome() translates it conservatively for callers.
-    def recover(
-        self, request: ProviderRequest
-    ) -> RecoveryOutcome | ProviderResponse | None: ...
+    def recover(self, request: ProviderRequest) -> RecoveryOutcome: ...
+    def cancel(self, operation_id: str) -> RecoveryOutcome: ...
+
+
+JEV_CAPABILITIES = ProviderCapabilities(
+    version="typesafe-systemone-v1",
+    operations=frozenset(),
+    sessions=False,
+    structured_output=True,
+    multiple_artifacts=False,
+    recovery=True,
+    cancellation=False,
+    decisions=True,
+    limitations=(
+        "decision-only adapter; generate/query/run are unsupported",
+        "a lost HTTP response has no native idempotency receipt and remains uncertain",
+    ),
+)
+
+
+CLAUDE_SDK_CAPABILITIES = ProviderCapabilities(
+    version="claude-agent-sdk-0.2.155",
+    operations=frozenset(
+        {OperationKind.GENERATE, OperationKind.QUERY, OperationKind.RUN}
+    ),
+    sessions=True,
+    structured_output=True,
+    multiple_artifacts=True,
+    recovery=True,
+    cancellation=False,
+    exact_command_grants=True,
+    autonomous_read_only_query=True,
+    live_streaming=True,
+    limitations=(
+        "generate/query require the exact pinned Agent SDK package",
+        "run delegates to the separately validated Claude Code CLI profile",
+        "native credentials and pinned integration receipts are deployment gates",
+    ),
+)
+
+
+PI_SDK_CAPABILITIES = ProviderCapabilities(
+    version="pi-agent-sdk-0.73.1",
+    operations=frozenset(
+        {OperationKind.GENERATE, OperationKind.QUERY, OperationKind.RUN}
+    ),
+    sessions=True,
+    structured_output=False,
+    multiple_artifacts=True,
+    recovery=True,
+    cancellation=True,
+    exact_command_grants=True,
+    autonomous_read_only_query=True,
+    live_streaming=True,
+    limitations=(
+        "generate/query persist the pinned Pi v3 JSONL session format",
+        "cross-interface continuation requires the separately installed Pi CLI to be exactly 0.73.1",
+        "run delegates to the separately validated unrestricted Pi CLI profile",
+        "native credentials and pinned integration receipts are deployment gates",
+    ),
+)
 
 
 def _now() -> str:
@@ -371,8 +515,22 @@ def _stream_usage(stdout: bytes) -> dict:
 
 class _CLIProvider:
     name = ""
+    capabilities = ProviderCapabilities(
+        version="native-cli",
+        operations=frozenset({OperationKind.RUN}),
+        sessions=True,
+        structured_output=True,
+        multiple_artifacts=True,
+        recovery=True,
+        cancellation=True,
+        live_streaming=True,
+        limitations=(
+            "generate/query require a native mediated-tool profile not supplied by this adapter",
+        ),
+    )
     supports_safe_read_retry = False
     supports_timeout = True
+    supported_settings: frozenset[str] = frozenset()
     _reserves_dispatch = True
 
     def __init__(
@@ -382,6 +540,82 @@ class _CLIProvider:
         if not self.command:
             raise ValueError("provider command cannot be empty")
         self.env = {str(k): str(v) for k, v in (env or {}).items()}
+        self._active_lock = threading.Lock()
+        self._active: dict[
+            tuple[str, int], tuple[subprocess.Popen[bytes], ProviderRequest]
+        ] = {}
+
+    def cancel(self, operation_id: str) -> RecoveryOutcome:
+        """Stop owned attempts for an operation and confirm process-tree quiescence."""
+        if type(operation_id) is not str or not operation_id:
+            raise TypeError("operation_id must be a non-empty string")
+        with self._active_lock:
+            owned = [
+                value for key, value in self._active.items() if key[0] == operation_id
+            ]
+        if not owned:
+            return Unknown("adapter does not own an active attempt for this operation")
+        completed: Completed | None = None
+        for process, request in owned:
+            try:
+                self._stop(process)
+                if process.poll() is None:
+                    return Running("provider process remains live after cancellation")
+                path = receipt_path(request)
+                current = _read_receipt(path)
+                if not _receipt_matches(current, request, request.attempt):
+                    return Unknown("provider cancellation receipt identity does not match")
+                if current.get("status") == "completed":
+                    completed = Completed(_record_response(current.get("response"), path))
+                    continue
+                if current.get("status") not in ("completed", "failed"):
+                    current.update(
+                        status="cancelled",
+                        finished_at=_now(),
+                        returncode=process.returncode,
+                        error=(
+                            "provider attempt cancelled with confirmed "
+                            "process-tree termination"
+                        ),
+                    )
+                    _atomic_json(path, current)
+            except BaseException as exc:
+                return Unknown(f"provider cancellation could not prove quiescence: {exc}")
+        return completed or Stopped(
+            "provider process tree stopped after cancellation"
+        )
+
+    def validate_request(self, request: ProviderRequest) -> None:
+        """Reject an unsupported effect contract before creating dispatch state."""
+        if request.operation not in self.capabilities.operations:
+            raise CapabilityError(
+                f"{self.name} adapter profile {self.capabilities.version!r} cannot enforce "
+                f"operation={request.operation.value!r}; select a proven native profile"
+            )
+        if request.operation != OperationKind.RUN and request.artifacts:
+            raise CapabilityError(
+                f"{request.operation.value} cannot declare provider-written artifacts; use run"
+            )
+        if request.operation != OperationKind.GENERATE and request.allow_commands:
+            raise CapabilityError(
+                "allow_commands is valid only for generate; query uses its constrained native surface"
+            )
+        if request.allow_commands and not self.capabilities.exact_command_grants:
+            raise CapabilityError(
+                f"{self.name} adapter has no pre-execution exact-argv mediator"
+            )
+        if request.operation == OperationKind.QUERY and not (
+            self.capabilities.autonomous_read_only_query
+        ):
+            raise CapabilityError(
+                f"{self.name} adapter has no proven autonomous read-only query profile"
+            )
+        unknown_settings = set(request.settings) - self.supported_settings
+        if unknown_settings:
+            raise CapabilityError(
+                f"{self.name} adapter does not support these provider settings: "
+                + ", ".join(sorted(unknown_settings))
+            )
 
     def recover(self, request: ProviderRequest) -> RecoveryOutcome:
         """Reconcile native receipts, preferring any completed response.
@@ -420,6 +654,14 @@ class _CLIProvider:
                 continue
             if status == "failed":
                 outcomes.append(Stopped(str(value.get("error") or "attempt failed")))
+                continue
+            if status == "cancelled":
+                outcomes.append(Stopped(str(value.get("error") or "attempt cancelled")))
+                continue
+            if status == "uncertain":
+                outcomes.append(
+                    Unknown(str(value.get("error") or "provider terminal state is unknown"))
+                )
                 continue
             alive = _receipt_process_alive(value)
             if alive is True:
@@ -489,6 +731,7 @@ class _CLIProvider:
         return None
 
     def run(self, request: ProviderRequest) -> ProviderResponse:
+        self.validate_request(request)
         path = receipt_path(request)
         existing = _existing_response_or_raise(request)
         if existing is not None:
@@ -543,6 +786,11 @@ class _CLIProvider:
                 process.wait()
                 raise
             process._botpipe_containment = containment
+            with self._active_lock:
+                self._active[(request.operation_id, request.attempt)] = (
+                    process,
+                    request,
+                )
             dispatch.started()
             started.update(status="running", pid=process.pid, spawned_at=_now())
             if os.name != "nt":
@@ -551,7 +799,7 @@ class _CLIProvider:
             try:
                 stdout, stderr = self._communicate(
                     process,
-                    request.prompt.encode(),
+                    self._stdin(request),
                     effective_timeout,
                     receipt=path,
                     started=started,
@@ -602,9 +850,10 @@ class _CLIProvider:
                     stdout.decode(errors="replace"), request, emission
                 )
             except ProviderError as exc:
+                uncertain = isinstance(exc, ProviderInterruptedError)
                 failed = {
                     **started,
-                    "status": "failed",
+                    "status": "uncertain" if uncertain else "failed",
                     "finished_at": _now(),
                     "returncode": process.returncode,
                     "raw": raw,
@@ -632,6 +881,8 @@ class _CLIProvider:
             if path.exists() and process is not None and process.poll() is not None:
                 current = _read_receipt(path)
                 if current.get("status") not in ("completed", "failed"):
+                    if current.get("status") == "uncertain":
+                        raise
                     current.update(
                         status="failed",
                         finished_at=_now(),
@@ -668,6 +919,8 @@ class _CLIProvider:
                 f"provider {self.name!r} adapter failed: {exc}"
             ) from exc
         finally:
+            with self._active_lock:
+                self._active.pop((request.operation_id, request.attempt), None)
             if containment is not None:
                 containment.close()
 
@@ -680,7 +933,112 @@ class _CLIProvider:
         receipt: Path,
         started: dict[str, Any],
     ) -> tuple[bytes, bytes]:
-        return process.communicate(prompt, timeout=timeout)
+        return self._communicate_bounded(process, prompt, timeout)
+
+    def _communicate_bounded(
+        self,
+        process: subprocess.Popen[bytes],
+        prompt: bytes,
+        timeout: float,
+        *,
+        on_stdout_line: Callable[[bytes], None] | None = None,
+    ) -> tuple[bytes, bytes]:
+        """Drain native streams without allowing process output to exhaust memory."""
+        stdout = bytearray()
+        stderr = bytearray()
+        overflow = [False, False]
+        errors: list[BaseException] = []
+
+        def retain(target: bytearray, chunk: bytes, index: int) -> None:
+            remaining = _MAX_NATIVE_STREAM_BYTES - len(target)
+            if remaining > 0:
+                target.extend(chunk[:remaining])
+            if len(chunk) > remaining:
+                overflow[index] = True
+
+        def read_stdout() -> None:
+            try:
+                assert process.stdout is not None
+                if on_stdout_line is None:
+                    for chunk in iter(lambda: process.stdout.read(64 * 1024), b""):
+                        retain(stdout, chunk, 0)
+                else:
+                    for line in iter(
+                        lambda: process.stdout.readline(_MAX_NATIVE_STREAM_BYTES + 1),
+                        b"",
+                    ):
+                        retain(stdout, line, 0)
+                        if len(line) <= _MAX_NATIVE_STREAM_BYTES and line.endswith(b"\n"):
+                            on_stdout_line(line)
+                        else:
+                            overflow[0] = True
+            except BaseException as exc:
+                errors.append(exc)
+
+        def read_stderr() -> None:
+            try:
+                assert process.stderr is not None
+                for chunk in iter(lambda: process.stderr.read(64 * 1024), b""):
+                    retain(stderr, chunk, 1)
+            except BaseException as exc:
+                errors.append(exc)
+
+        def write_stdin() -> None:
+            try:
+                assert process.stdin is not None
+                process.stdin.write(prompt)
+                process.stdin.close()
+            except BrokenPipeError:
+                pass
+            except BaseException as exc:
+                errors.append(exc)
+
+        threads = [
+            threading.Thread(target=target, daemon=True)
+            for target in (read_stdout, read_stderr, write_stdin)
+        ]
+        for thread in threads:
+            thread.start()
+        try:
+            process.wait(timeout=timeout)
+            process._botpipe_containment.ensure_tree_exited(
+                process, grace_seconds=0.1
+            )
+        except subprocess.TimeoutExpired as exc:
+            self._stop(process)
+            for thread in threads:
+                thread.join(timeout=2)
+            raise _ProviderTimedOut(
+                exc.cmd,
+                exc.timeout,
+                output=bytes(stdout),
+                stderr=bytes(stderr),
+            ) from exc
+        except BaseException:
+            self._stop(process)
+            for thread in threads:
+                thread.join(timeout=2)
+            raise
+        for thread in threads:
+            thread.join(timeout=2)
+        if any(thread.is_alive() for thread in threads):
+            raise ProviderError("native provider stream drain did not terminate")
+        if errors:
+            raise errors[0]
+        if overflow[0] or overflow[1]:
+            names = ", ".join(
+                name
+                for name, exceeded in zip(("stdout", "stderr"), overflow)
+                if exceeded
+            )
+            raise ProviderError(
+                f"native provider {names} exceeded the "
+                f"{_MAX_NATIVE_STREAM_BYTES} byte capture limit"
+            )
+        return bytes(stdout), bytes(stderr)
+
+    def _stdin(self, request: ProviderRequest) -> bytes:
+        return request.prompt.encode()
 
     @staticmethod
     def _stop(process: subprocess.Popen[bytes]) -> None:
@@ -761,6 +1119,20 @@ def _artifact_write_roots(request: ProviderRequest) -> list[str]:
 
 class CodexProvider(_CLIProvider):
     name = "codex"
+    capabilities = ProviderCapabilities(
+        version="codex-exec-v1",
+        operations=frozenset({OperationKind.RUN}),
+        sessions=True,
+        structured_output=True,
+        multiple_artifacts=True,
+        recovery=True,
+        cancellation=True,
+        limitations=(
+            "codex exec exposes native shell tools, so it cannot prove tool-free generate",
+            "exact argv grants need an app-server dynamic-tool mediator",
+            "read-only filesystem sandbox alone does not contain external effects",
+        ),
+    )
 
     def __init__(
         self,
@@ -780,76 +1152,27 @@ class CodexProvider(_CLIProvider):
         started: dict[str, Any],
     ) -> tuple[bytes, bytes]:
         """Drain JSONL while running so a newly known thread ID is durable."""
-        stdout_parts: list[bytes] = []
-        stderr_parts: list[bytes] = []
-        errors: list[BaseException] = []
+        event_sink = _NATIVE_EVENT_SINK.get()
 
-        def read_stdout() -> None:
+        def observe(line: bytes) -> None:
             try:
-                assert process.stdout is not None
-                for line in iter(process.stdout.readline, b""):
-                    stdout_parts.append(line)
-                    try:
-                        event = json.loads(line)
-                    except (json.JSONDecodeError, UnicodeDecodeError):
-                        continue
-                    if (
-                        isinstance(event, Mapping)
-                        and event.get("type") == "thread.started"
-                        and isinstance(event.get("thread_id"), str)
-                    ):
-                        started["session_id"] = event["thread_id"]
-                        started["session_known_at"] = _now()
-                        _atomic_json(receipt, started)
-            except BaseException as exc:  # surfaced on the caller thread
-                errors.append(exc)
+                event = json.loads(line)
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return
+            if event_sink is not None and isinstance(event, Mapping):
+                event_sink(event)
+            if (
+                isinstance(event, Mapping)
+                and event.get("type") == "thread.started"
+                and isinstance(event.get("thread_id"), str)
+            ):
+                started["session_id"] = event["thread_id"]
+                started["session_known_at"] = _now()
+                _atomic_json(receipt, started)
 
-        def read_stderr() -> None:
-            try:
-                assert process.stderr is not None
-                stderr_parts.append(process.stderr.read())
-            except BaseException as exc:
-                errors.append(exc)
-
-        def write_stdin() -> None:
-            try:
-                assert process.stdin is not None
-                process.stdin.write(prompt)
-                process.stdin.close()
-            except BrokenPipeError:
-                pass
-            except BaseException as exc:
-                errors.append(exc)
-
-        threads = [
-            threading.Thread(target=target, daemon=True)
-            for target in (read_stdout, read_stderr, write_stdin)
-        ]
-        for thread in threads:
-            thread.start()
-        try:
-            process.wait(timeout=timeout)
-        except subprocess.TimeoutExpired as exc:
-            self._stop(process)
-            for thread in threads:
-                thread.join(timeout=1)
-            raise _ProviderTimedOut(
-                exc.cmd,
-                exc.timeout,
-                output=b"".join(stdout_parts),
-                stderr=b"".join(stderr_parts),
-            ) from exc
-        except BaseException:
-            self._stop(process)
-            for thread in threads:
-                thread.join(timeout=1)
-            raise
-        process._botpipe_containment.ensure_tree_exited(process, grace_seconds=0.1)
-        for thread in threads:
-            thread.join()
-        if errors:
-            raise errors[0]
-        return b"".join(stdout_parts), b"".join(stderr_parts)
+        return self._communicate_bounded(
+            process, prompt, timeout, on_stdout_line=observe
+        )
 
     def _build(
         self, request: ProviderRequest, policy: Policy
@@ -938,6 +1261,10 @@ class CodexProvider(_CLIProvider):
             f"--config=sandbox_mode={_json_literal(sandbox)}",
             f"--config=approval_policy={_json_literal(approval)}",
         ]
+        if request.instructions is not None:
+            options += [
+                f"--config=developer_instructions={_json_literal(request.instructions)}"
+            ]
         if policy.model:
             options += ["--model", policy.model]
         if policy.effort:
@@ -993,6 +1320,7 @@ class CodexProvider(_CLIProvider):
         session_id = request.session_id
         events: list[Any] = []
         malformed = 0
+        terminal = False
         for line in stdout.splitlines():
             if not line.strip():
                 continue
@@ -1016,8 +1344,19 @@ class CodexProvider(_CLIProvider):
                     and isinstance(child.get("text"), str)
                 ):
                     messages.append(child["text"])
+            if isinstance(item, Mapping) and item.get("type") == "turn.failed":
+                raise ProviderError(
+                    f"Codex turn failed: {item.get('error') or 'unknown native error'}"
+                )
+            if isinstance(item, Mapping) and item.get("type") == "turn.completed":
+                terminal = True
         if not events or not messages:
             raise ProviderError("Codex returned no usable assistant message")
+        if not terminal:
+            raise ProviderInterruptedError(
+                "Codex stream ended without an authoritative turn.completed event",
+                receipt=receipt_path(request),
+            )
         return ProviderResponse(
             messages[-1],
             session_id,
@@ -1033,6 +1372,22 @@ class CodexProvider(_CLIProvider):
 
 class ClaudeProvider(_CLIProvider):
     name = "claude"
+    capabilities = ProviderCapabilities(
+        version="claude-code-cli-v1",
+        operations=frozenset({OperationKind.GENERATE, OperationKind.RUN}),
+        sessions=True,
+        structured_output=True,
+        multiple_artifacts=True,
+        recovery=True,
+        cancellation=True,
+        live_streaming=True,
+        limitations=(
+            "generate supports an empty grant set only and requires Claude Code 2.1.259+",
+            "allowed tool rules are approvals rather than exact argv mediation",
+            "a read-only filesystem sandbox alone does not contain external effects",
+            "a fully isolated settings/hooks/plugins profile still needs native integration proof",
+        ),
+    )
 
     def __init__(
         self,
@@ -1091,7 +1446,26 @@ class ClaudeProvider(_CLIProvider):
             "--permission-prompts",
             "none",
         ]
-        if policy.permission_mode == PermissionMode.FULL_AUTO_UNSANDBOXED:
+        if request.operation == OperationKind.GENERATE:
+            # Claude's documented bare+restricted profile removes ambient
+            # hooks/plugins/skills/subagents/MCP/memory.  The empty tool list
+            # removes the remaining built-ins; strict MCP prevents discovery
+            # from adding a tool back.
+            command += [
+                "--bare",
+                "--restricted",
+                "--strict-mcp-config",
+                "--tools",
+                "",
+            ]
+        if request.instructions is not None:
+            command += ["--system-prompt", request.instructions]
+        if request.operation == OperationKind.GENERATE:
+            command += ["--permission-mode", "dontAsk"]
+            settings["permissions"]["deny"] = ["*"]
+            settings["sandbox"]["allowUnsandboxedCommands"] = False
+            settings["sandbox"]["failIfUnavailable"] = True
+        elif policy.permission_mode == PermissionMode.FULL_AUTO_UNSANDBOXED:
             if policy.sandbox_mode != SandboxMode.DANGER_FULL_ACCESS:
                 raise ProviderPolicyError(
                     "unsandboxed automation requires danger_full_access"
@@ -1143,6 +1517,8 @@ class ClaudeProvider(_CLIProvider):
         allow = list(policy.allow_permissions or ())
         deny = list(policy.deny_permissions or ())
         ask = list(policy.ask_permissions or ())
+        if request.operation == OperationKind.GENERATE:
+            deny.append("*")
         rule_path = lambda path: (
             f"//{path.lstrip('/')}" if Path(path).is_absolute() else path
         )
@@ -1251,9 +1627,203 @@ class ClaudeProvider(_CLIProvider):
         )
 
 
+class PiProvider(_CLIProvider):
+    """Pi CLI adapter using its documented JSON event mode.
+
+    Pi can prove command-free generation by disabling every tool and every
+    discovered resource source.  Its stock CLI does not provide a constrained
+    exact-argv command tool or an OS effect boundary, so those profiles are
+    rejected rather than inferred from a tool name.
+    """
+
+    name = "pi"
+    capabilities = ProviderCapabilities(
+        version="pi-json-v1",
+        operations=frozenset({OperationKind.GENERATE, OperationKind.RUN}),
+        sessions=True,
+        structured_output=False,
+        multiple_artifacts=True,
+        recovery=True,
+        cancellation=True,
+        limitations=(
+            "generate supports an empty grant set only",
+            "stock built-in read tools do not include an enforceable command mediator",
+            "run is available only for an explicitly unrestricted policy",
+        ),
+    )
+
+    def __init__(
+        self,
+        command: str | Iterable[str] = ("pi",),
+        *,
+        env: Mapping[str, str] | None = None,
+    ) -> None:
+        super().__init__(command, env=env)
+
+    def validate_request(self, request: ProviderRequest) -> None:
+        super().validate_request(request)
+        policy = request.policy.effective()
+        if request.operation == OperationKind.RUN:
+            unsupported = []
+            if policy.sandbox_mode != SandboxMode.DANGER_FULL_ACCESS:
+                unsupported.append(f"sandbox_mode={policy.sandbox_mode.value}")
+            if policy.network != NetworkMode.FULL:
+                unsupported.append(f"network={policy.network.value}")
+            for name in (
+                "allow_read",
+                "deny_read",
+                "allow_write",
+                "deny_write",
+                "network_domains",
+                "deny_network_domains",
+                "allow_permissions",
+                "ask_permissions",
+                "deny_permissions",
+            ):
+                if getattr(policy, name):
+                    unsupported.append(name)
+            if unsupported:
+                raise CapabilityError(
+                    "Pi stock CLI has no OS containment for run policy: "
+                    + ", ".join(unsupported)
+                )
+
+    def _stdin(self, request: ProviderRequest) -> bytes:
+        # The prompt is supplied through a private @file so it is neither
+        # duplicated from piped stdin nor exposed in argv/receipt metadata.
+        return b""
+
+    def _communicate(
+        self,
+        process: subprocess.Popen[bytes],
+        prompt: bytes,
+        timeout: float,
+        *,
+        receipt: Path,
+        started: dict[str, Any],
+    ) -> tuple[bytes, bytes]:
+        event_sink = _NATIVE_EVENT_SINK.get()
+
+        def observe(line: bytes) -> None:
+            if event_sink is None:
+                return
+            try:
+                event = json.loads(line)
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return
+            if isinstance(event, Mapping):
+                event_sink(event)
+
+        return self._communicate_bounded(
+            process, prompt, timeout, on_stdout_line=observe
+        )
+
+    def _build(
+        self, request: ProviderRequest, policy: Policy
+    ) -> tuple[list[str], dict[str, str], dict[str, Any]]:
+        _provider_check(policy, self.name)
+        prompt_path = receipt_path(request).with_suffix(".prompt.txt")
+        _atomic_bytes(prompt_path, request.prompt.encode())
+        command = [
+            *self.command,
+            "--mode",
+            "json",
+            "--no-extensions",
+            "--no-skills",
+            "--no-prompt-templates",
+            "--no-themes",
+            "--no-context-files",
+            "--no-approve",
+        ]
+        if request.operation == OperationKind.GENERATE:
+            command.append("--no-tools")
+        else:
+            command += ["--tools", "read,bash,edit,write,grep,find,ls"]
+        if request.instructions is not None:
+            command += ["--system-prompt", request.instructions]
+        if policy.model:
+            command += ["--model", policy.model]
+        if policy.effort:
+            command += ["--thinking", policy.effort.value]
+        if request.session_id:
+            command += ["--session", request.session_id]
+        else:
+            command += ["--session-dir", str(request.receipt_dir / "pi-sessions")]
+        command += ["--", f"@{prompt_path}"]
+        return command, {**self.env, "PI_OFFLINE": "1", "PI_SKIP_VERSION_CHECK": "1"}, {
+            "structured_output": "client",
+            "native_mode": "json",
+            "tool_profile": (
+                "none" if request.operation == OperationKind.GENERATE else "run-builtins"
+            ),
+            "prompt_file": prompt_path.name,
+        }
+
+    def _parse(
+        self, stdout: str, request: ProviderRequest, emission: dict[str, Any]
+    ) -> ProviderResponse:
+        events: list[Mapping[str, Any]] = []
+        session_id = request.session_id
+        text: str | None = None
+        terminal = False
+        for line in stdout.splitlines():
+            if not line.strip():
+                continue
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise ProviderError("Pi returned malformed JSONL") from exc
+            if not isinstance(event, Mapping):
+                raise ProviderError("Pi JSON event must be an object")
+            events.append(event)
+            if event.get("type") == "session" and isinstance(event.get("id"), str):
+                session_id = event["id"]
+            if event.get("type") == "message_end":
+                message = event.get("message")
+                if isinstance(message, Mapping) and message.get("role") == "assistant":
+                    content = message.get("content")
+                    if isinstance(content, list):
+                        parts = [
+                            item.get("text")
+                            for item in content
+                            if isinstance(item, Mapping)
+                            and item.get("type") == "text"
+                            and isinstance(item.get("text"), str)
+                        ]
+                        if parts:
+                            text = "".join(parts)
+            if event.get("type") == "agent_end":
+                terminal = True
+        if text is None:
+            raise ProviderError("Pi returned no final assistant message")
+        if not terminal:
+            raise ProviderInterruptedError(
+                "Pi stream ended without an authoritative agent_end event",
+                receipt=receipt_path(request),
+            )
+        return ProviderResponse(
+            text,
+            session_id,
+            _usage(events),
+            {"provider": self.name, "event_count": len(events), **emission},
+        )
+
+
 class FakeProvider:
     name = "fake"
     supports_safe_read_retry = True
+    capabilities = ProviderCapabilities(
+        version="deterministic-v1",
+        operations=frozenset(OperationKind),
+        sessions=True,
+        structured_output=True,
+        multiple_artifacts=True,
+        recovery=True,
+        cancellation=False,
+        exact_command_grants=True,
+        autonomous_read_only_query=True,
+        limitations=("test adapter; not evidence of native provider enforcement",),
+    )
 
     def __init__(self, responses: Iterable[Any]) -> None:
         self._responses = iter(responses)
@@ -1261,6 +1831,7 @@ class FakeProvider:
         self._recovery: dict[tuple[str, int], RecoveryOutcome] = {}
 
     def run(self, request: ProviderRequest) -> ProviderResponse:
+        self.validate_request(request)
         self.calls.append(request)
         key = (request.operation_id, request.attempt)
         callback_started = False
@@ -1307,28 +1878,120 @@ class FakeProvider:
             Unknown("fake provider has no record of this attempt"),
         )
 
+    def cancel(self, operation_id: str) -> RecoveryOutcome:
+        # Fake callbacks can start arbitrary effects, so a cancellation request
+        # cannot strengthen the evidence already recorded by the fake.
+        outcomes = [
+            outcome
+            for (recorded_id, _attempt), outcome in self._recovery.items()
+            if recorded_id == operation_id
+        ]
+        for outcome_type in (Running, Unknown):
+            for outcome in outcomes:
+                if isinstance(outcome, outcome_type):
+                    return outcome
+        for outcome_type in (Completed, Stopped):
+            for outcome in outcomes:
+                if isinstance(outcome, outcome_type):
+                    return outcome
+        return Unknown("fake provider has no record of this operation")
 
-def get_provider(name: str, config: Mapping[str, Any] | None = None) -> Provider:
+    def validate_request(self, request: ProviderRequest) -> None:
+        if request.operation != OperationKind.RUN and request.artifacts:
+            raise CapabilityError(
+                f"{request.operation.value} cannot declare provider-written artifacts"
+            )
+        if request.operation != OperationKind.GENERATE and request.allow_commands:
+            raise CapabilityError("allow_commands is valid only for generate")
+
+
+def get_provider(
+    name: str, config: Mapping[str, Any] | None = None
+) -> Any:
     normalized = name.strip().lower()
     options = dict(config or {})
     if normalized == "codex":
+        native_interface = options.pop("interface", "cli")
+        if native_interface == "app_server":
+            from .codex_appserver import CodexAppServerProvider
+
+            return CodexAppServerProvider(**options)
+        if native_interface != "cli":
+            raise ValueError(
+                "codex interface must be 'cli' or 'app_server', got "
+                f"{native_interface!r}"
+            )
         return CodexProvider(**options)
     if normalized == "claude":
+        native_interface = options.pop("interface", "cli")
+        if native_interface == "agent_sdk":
+            from .claude_sdk import ClaudeSDKProvider
+
+            return ClaudeSDKProvider(**options)
+        if native_interface != "cli":
+            raise ValueError(
+                "claude interface must be 'cli' or 'agent_sdk', got "
+                f"{native_interface!r}"
+            )
         return ClaudeProvider(**options)
-    raise ValueError(f"unknown provider {name!r}; expected 'codex' or 'claude'")
+    if normalized == "pi":
+        native_interface = options.pop("interface", "cli")
+        if native_interface == "agent_sdk":
+            from .pi_sdk import PiSDKProvider
+
+            return PiSDKProvider(**options)
+        if native_interface != "cli":
+            raise ValueError(
+                "pi interface must be 'cli' or 'agent_sdk', got "
+                f"{native_interface!r}"
+            )
+        return PiProvider(**options)
+    if normalized == "jev":
+        # Lazy import keeps the generic recovery/request primitives acyclic.
+        from .jev import JevAdapter
+
+        return JevAdapter(**options)
+    raise ValueError(
+        f"unknown provider {name!r}; expected 'codex', 'claude', 'pi', or 'jev'"
+    )
+
+
+NATIVE_CAPABILITY_MATRIX = MappingProxyType(
+    {
+        "codex": CodexProvider.capabilities,
+        "codex-app-server": __import__(
+            "botpipe.codex_appserver", fromlist=["CODEX_APPSERVER_CAPABILITIES"]
+        ).CODEX_APPSERVER_CAPABILITIES,
+        "claude": ClaudeProvider.capabilities,
+        "claude-agent-sdk": CLAUDE_SDK_CAPABILITIES,
+        "pi": PiProvider.capabilities,
+        "pi-agent-sdk": PI_SDK_CAPABILITIES,
+        "jev": JEV_CAPABILITIES,
+        "fake": FakeProvider.capabilities,
+    }
+)
 
 
 __all__ = [
     "ClaudeProvider",
+    "CapabilityError",
     "CodexProvider",
     "FakeProvider",
-    "Provider",
+    "PiProvider",
+    "ProviderAdapter",
+    "ProviderCapabilities",
     "ProviderError",
     "ProviderInterruptedError",
     "ProviderPolicyError",
     "ProviderRequest",
     "ProviderResponse",
     "ProviderTimeoutError",
+    "OperationKind",
+    "NATIVE_CAPABILITY_MATRIX",
+    "JEV_CAPABILITIES",
+    "CLAUDE_SDK_CAPABILITIES",
+    "PI_SDK_CAPABILITIES",
     "get_provider",
     "receipt_path",
+    "observe_native_events",
 ]

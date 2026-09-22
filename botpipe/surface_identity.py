@@ -218,6 +218,7 @@ _SOURCE_EXCLUSIONS = frozenset(
     {
         ".git",
         ".botpipe",
+        ".botpipe-v2",
         ".pytest_cache",
         ".mypy_cache",
         ".ruff_cache",

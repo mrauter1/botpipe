@@ -19,7 +19,13 @@ from botpipe.surface_identity import (
     derive_surface_manifest as _derive_manifest,
 )
 
-_RUNTIME_PARTS = {"__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"}
+_RUNTIME_PARTS = {
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".botpipe-v2",
+}
 
 
 def _relative(value: Any) -> str:

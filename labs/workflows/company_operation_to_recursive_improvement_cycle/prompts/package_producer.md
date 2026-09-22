@@ -70,7 +70,7 @@ After writing every declared artifact, return a JSON result matching the injecte
 ## Out Of Scope
 
 - Executing the next workflow.
-- Mutating workflow packages or `.botpipe` history.
+- Mutating workflow packages or `.botpipe-v2` history.
 - Writing the publication receipt.
 
 ## Forbidden

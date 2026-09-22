@@ -15,6 +15,7 @@ PUBLICATION_RECEIPT_SCHEMA = "botpipe.code_to_workflow.publication_receipt/v1"
 
 _DEFAULT_EXCLUDED_DIRS = {
     ".botpipe",
+    ".botpipe-v2",
     ".cache",
     ".git",
     ".hg",
@@ -291,54 +292,63 @@ def validate_coverage_map(
 def _collect_botpipe_runs(
     workspace: Path, excluded: Path | None
 ) -> list[dict[str, Any]]:
-    runs_root = workspace / ".botpipe" / "tasks"
-    candidates = sorted(
-        runs_root.glob("*/wf_*/runs/*"), key=_mtime_sort_key, reverse=True
+    from botpipe.journal import Journal
+
+    journal_path = workspace / ".botpipe-v2" / "state.sqlite3"
+    if not journal_path.exists():
+        return []
+    snapshots = Journal.read_only_history(
+        journal_path,
+        max_runs=_MAX_TRACE_RUNS,
+        max_operations_per_run=_MAX_TRACE_EVENTS_PER_RUN,
+        max_events_per_run=_MAX_TRACE_EVENTS_PER_RUN,
     )
     runs: list[dict[str, Any]] = []
-    for run_dir in candidates:
-        if len(runs) >= _MAX_TRACE_RUNS:
-            break
-        if not run_dir.is_dir():
+    for snapshot in snapshots:
+        metadata = snapshot.run
+        run_dir = Path(str(metadata.get("folder") or ""))
+        if excluded is not None and run_dir.resolve() == excluded:
             continue
-        if excluded is not None and (
-            run_dir.resolve() == excluded
-            or _is_relative_to(run_dir.resolve(), excluded)
-        ):
-            continue
-        run_json = _try_read_json_object(run_dir / "run.json")
-        trace_records = _read_jsonl_objects(
-            run_dir / "trace.jsonl", limit=_MAX_TRACE_EVENTS_PER_RUN
-        )
-        if run_json is None and not trace_records:
-            continue
+        trace_records = [
+            {
+                "event": event["event"],
+                "operation_id": event.get("operation_id"),
+                **event["data"],
+            }
+            for event in snapshot.events
+        ]
         event_counts = Counter(
             str(record.get("event") or record.get("type") or "unknown")
             for record in trace_records
         )
         step_outcomes = [
             {
-                "step": record.get("step") or record.get("step_name"),
-                "event": record.get("event") or record.get("type"),
-                "outcome": _outcome_tag(record),
-                "target_step": record.get("target_step"),
+                "step": operation.get("name") or operation.get("kind"),
+                "event": operation.get("kind"),
+                "outcome": operation.get("status"),
+                "target_step": None,
             }
-            for record in trace_records
-            if record.get("step") or record.get("step_name") or _outcome_tag(record)
+            for operation in snapshot.operations
+        ]
+        operation_errors = [
+            _recorded_error_text(operation.get("error"))
+            for operation in snapshot.operations
+            if operation.get("error") is not None
         ]
         runs.append(
             {
                 "run_dir": _relative_or_absolute(run_dir, workspace),
-                "task_id": run_dir.parents[2].name
-                if len(run_dir.parents) >= 3
-                else None,
-                "workflow_name": _workflow_name_from_run_dir(run_dir),
-                "run_id": run_dir.name,
-                "status": _json_field(run_json, "status"),
-                "terminal": _json_field(run_json, "terminal"),
+                "task_id": metadata.get("task_id"),
+                "workflow_name": metadata.get("workflow"),
+                "run_id": metadata.get("run_id"),
+                "status": metadata.get("status"),
+                "terminal": metadata.get("status")
+                in {"completed", "failed", "cancelled"},
                 "event_counts": dict(sorted(event_counts.items())),
                 "step_outcomes": step_outcomes[:_MAX_TRACE_EVENTS_PER_RUN],
-                "errors": _error_excerpts(trace_records),
+                "errors": (
+                    operation_errors + _error_excerpts(trace_records)
+                )[:_MAX_ERROR_EXCERPTS],
                 "raw_output_refs": _raw_output_refs(trace_records),
             }
         )
@@ -348,7 +358,7 @@ def _collect_botpipe_runs(
 def _collect_nested_codex_rollouts(
     workspace: Path, excluded: Path | None
 ) -> list[dict[str, Any]]:
-    raw_root = workspace / ".botpipe" / "tasks"
+    raw_root = workspace / ".botpipe-v2" / "tasks"
     rollouts: list[dict[str, Any]] = []
     for path in sorted(
         raw_root.glob("**/raw/**/rollout-*.jsonl"), key=_mtime_sort_key, reverse=True
@@ -386,17 +396,6 @@ def _read_json_object(path: Path) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError(f"{path} must contain a JSON object")
     return value
-
-
-def _try_read_json_object(path: Path) -> dict[str, Any] | None:
-    try:
-        if not path.is_file():
-            return None
-        return _read_json_object(path)
-    except (OSError, ValueError, json.JSONDecodeError):
-        return None
-
-
 def _read_jsonl_objects(path: Path, *, limit: int) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     try:
@@ -464,16 +463,15 @@ def _raw_output_refs(records: list[dict[str, Any]]) -> list[str]:
     return refs[:_MAX_ERROR_EXCERPTS]
 
 
-def _json_field(payload: dict[str, Any] | None, field: str) -> Any:
-    if payload is None:
-        return None
-    return payload.get(field)
-
-
-def _workflow_name_from_run_dir(run_dir: Path) -> str:
-    workflow_dir = run_dir.parent.parent
-    name = workflow_dir.name
-    return name[3:] if name.startswith("wf_") else name
+def _recorded_error_text(value: Any) -> str:
+    if isinstance(value, str):
+        return _truncate(value)
+    if isinstance(value, dict):
+        for key in ("message", "error", "detail", "type"):
+            text = value.get(key)
+            if isinstance(text, str) and text.strip():
+                return _truncate(text.strip())
+    return _truncate(str(value))
 
 
 def _relative_or_absolute(path: Path, root: Path) -> str:

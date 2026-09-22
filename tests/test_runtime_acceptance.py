@@ -13,9 +13,11 @@ from botpipe import (
     Artifact,
     Botpipe,
     RunBusy,
+    Provider,
     Session,
     activity,
-    ask,
+    aparallel,
+    ask_human,
     parallel,
     workflow,
 )
@@ -31,6 +33,18 @@ class DomainRejection(Exception):
     def __init__(self, code, message):
         self.code = code
         super().__init__(code, message)
+
+
+def test_runtime_rejects_secret_bearing_policy_before_journal_creation(tmp_path):
+    from botpipe import ConfigurationError, Policy
+
+    with pytest.raises(ConfigurationError, match="credential"):
+        Botpipe(
+            tmp_path,
+            provider=None,
+            policy=Policy(base_url="https://user:password@example.org"),
+        )
+    assert not (tmp_path / ".botpipe-v2" / "state.sqlite3").exists()
 
 
 def _acceptance_transform(value):
@@ -59,7 +73,7 @@ def test_saved_provider_response_survives_process_restart_before_completion(
 
     @workflow
     def report():
-        return Session().run(
+        return Provider().run(
             "prepare report",
             returns=Decision,
             writes=[Artifact.text("report.txt", required=True)],
@@ -158,8 +172,8 @@ def test_provider_reconciliation_preserves_session_for_following_turn(tmp_path):
     @workflow
     def conversation():
         session = Session()
-        first = session.run("first").value
-        second = session.run("second").value
+        first = Provider(session=session).run("first").value
+        second = Provider(session=session).run("second").value
         return first, second
 
     provider = FakeProvider([SystemExit("response lost"), "second result"])
@@ -195,7 +209,7 @@ def test_nested_input_rebuilds_locals_without_repeating_completed_effects(tmp_pa
     @workflow
     def child():
         before = remember("child-before")
-        approved = ask("Approve?", returns=bool)
+        approved = ask_human("Approve?", returns=bool)
         return before, approved, remember("child-after")
 
     @workflow
@@ -210,7 +224,7 @@ def test_nested_input_rebuilds_locals_without_repeating_completed_effects(tmp_pa
         still_paused = client.resume(paused.run_id, workflow=parent)
         assert still_paused.status == "awaiting_input"
         assert effects == ["parent-before", "child-before"]
-        completed = client.resume(paused.run_id, answer=True, workflow=parent)
+        completed = client.answer(paused.run_id, paused.pending_input["operation_id"], True, workflow=parent)
         assert completed.ok, completed.error
         assert completed.value == (
             "PARENT-BEFORE",
@@ -237,7 +251,7 @@ def test_parallel_completed_branch_is_not_repeated_when_other_branch_pauses(tmp_
 
     def review():
         before = effect("review-started")
-        return before, ask("Review note?")
+        return before, ask_human("Review note?")
 
     @workflow
     def job():
@@ -247,10 +261,61 @@ def test_parallel_completed_branch_is_not_repeated_when_other_branch_pauses(tmp_
         paused = client.run(job)
         assert paused.status == "awaiting_input", paused.error
         assert sorted(effects) == ["built", "review-started"]
-        resumed = client.resume(paused.run_id, answer="approved", workflow=job)
+        resumed = client.answer(
+            paused.run_id,
+            paused.pending_input["operation_id"],
+            "approved",
+            workflow=job,
+        )
         assert resumed.ok, resumed.error
         assert resumed.value == ["built", ("review-started", "approved")]
         assert sorted(effects) == ["built", "review-started"]
+
+
+def test_parallel_human_requests_are_individually_targeted(tmp_path):
+    @workflow
+    def approvals():
+        return parallel(
+            lambda: ask_human("First?"),
+            lambda: ask_human("Second?"),
+        )
+
+    with Botpipe(tmp_path, provider=FakeProvider([])) as client:
+        paused = client.run(approvals)
+        pending = client.pending(paused.run_id)
+        assert {item["question"] for item in pending} == {"First?", "Second?"}
+
+        first = client.answer(
+            paused.run_id, pending[0]["operation_id"], "one", workflow=approvals
+        )
+        assert first.status == "awaiting_input"
+        remaining = client.pending(paused.run_id)
+        assert len(remaining) == 1
+        completed = client.answer(
+            paused.run_id,
+            remaining[0]["operation_id"],
+            "two",
+            workflow=approvals,
+        )
+        assert completed.ok
+        assert set(completed.value) == {"one", "two"}
+
+
+def test_aparallel_preserves_order_for_sync_and_async_branches(tmp_path):
+    async def later():
+        await asyncio.sleep(0)
+        return "async"
+
+    @workflow
+    async def composed():
+        return await aparallel(lambda: "sync", later)
+
+    with Botpipe(tmp_path, provider=FakeProvider([])) as client:
+        result = asyncio.run(client.arun(composed))
+        assert result.ok, result.error
+        assert result.value == ["sync", "async"]
+        replay = asyncio.run(client.aresume(result.run_id, workflow=composed))
+        assert replay.value == result.value
 
 
 def test_operation_budget_blocks_new_effects_and_does_not_reset_on_resume(tmp_path):
@@ -286,12 +351,12 @@ def test_version_change_does_not_invalidate_recorded_effects(tmp_path):
     @workflow(version="1")
     def versioned():
         effect()
-        return ask("Continue?")
+        return ask_human("Continue?")
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(versioned)
         versioned.version = "2"
-        resumed = client.resume(paused.run_id, answer="yes", workflow=versioned)
+        resumed = client.answer(paused.run_id, paused.pending_input["operation_id"], "yes", workflow=versioned)
         assert resumed.ok, resumed.error
         assert effects == ["ran"]
         assert client.journal.run(paused.run_id)["status"] == "completed"
@@ -308,7 +373,7 @@ def test_replay_rejects_changed_operation_even_when_mutable_closure_changed(tmp_
     @workflow
     def job():
         effect(settings["label"])
-        return ask("Continue?")
+        return ask_human("Continue?")
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         result = client.run(job)
@@ -331,7 +396,7 @@ def test_async_children_activities_and_provider_turns_replay_under_arun(tmp_path
     @workflow
     async def child():
         count = await record()
-        reply = await Session().arun("report")
+        reply = await Provider().arun("report")
         return count, reply.value
 
     @workflow
@@ -353,7 +418,7 @@ def test_async_children_activities_and_provider_turns_replay_under_arun(tmp_path
 def test_validation_repair_uses_new_recorded_turn_and_survives_replay(tmp_path):
     @workflow
     def typed():
-        return Session().run("decide", returns=Decision).value
+        return Provider().run("decide", returns=Decision).value
 
     provider = FakeProvider(
         [ProviderResponse("invalid JSON", "dialogue"), {"accepted": True}]
@@ -374,7 +439,9 @@ def test_validation_repair_uses_new_recorded_turn_and_survives_replay(tmp_path):
             for row in client.inspect(completed.run_id)["operations"]
             if row["kind"] == "provider"
         ]
-        assert [row["status"] for row in rows] == ["failed", "completed"]
+        assert [row["status"] for row in rows] == ["completed"]
+        assert len(rows[0]["response"]["repairs"]) == 1
+        assert rows[0]["response"]["repairs"][0]["output_error"]["retryable"]
 
 
 def test_reconciliation_can_supply_none_as_an_activity_result(tmp_path):
@@ -405,11 +472,11 @@ def test_unresolved_provider_fences_entire_workspace_across_runs(
 ):
     @workflow
     def interrupted():
-        return Session().run("edit workspace").value
+        return Provider().run("edit workspace").value
 
     @workflow
     def replacement():
-        return Session().run("more edits").value
+        return Provider().run("more edits").value
 
     with Botpipe(
         tmp_path, provider=FakeProvider([SystemExit("orphan may be editing")])
@@ -453,7 +520,7 @@ def test_repeated_async_cancellation_waits_until_effectful_worker_finishes(tmp_p
 
     @workflow
     def job():
-        return Session().run("work").value
+        return Provider().run("work").value
 
     async def scenario(client):
         task = asyncio.create_task(client.arun(job, run_id="cancelled-client"))
@@ -475,10 +542,71 @@ def test_repeated_async_cancellation_waits_until_effectful_worker_finishes(tmp_p
             except asyncio.CancelledError:
                 pass
         assert completed.is_set()
-        assert client.journal.run("cancelled-client")["status"] == "completed"
+        assert client.journal.run("cancelled-client")["status"] == "interrupted"
 
     with Botpipe(tmp_path, provider=FakeProvider([provider_turn])) as client:
         asyncio.run(scenario(client))
+
+
+def test_durable_cancel_request_prevents_late_success_commit(tmp_path):
+    entered = threading.Event()
+    released = threading.Event()
+
+    class Cancellable(FakeProvider):
+        def cancel(self, operation_id):
+            from botpipe.recovery import Stopped
+
+            released.set()
+            return Stopped("test callback released")
+
+    def provider_turn(request):
+        entered.set()
+        assert released.wait(timeout=5)
+        return "finished while cancellation settled"
+
+    @workflow
+    def job():
+        return Provider(session=None).run("work").value
+
+    with Botpipe(tmp_path, provider=Cancellable([provider_turn])) as client:
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(client.run, job, run_id="cancel-fence")
+            assert entered.wait(timeout=2)
+            cancelled = client.cancel("cancel-fence")
+            result = future.result(timeout=5)
+        assert cancelled["run"]["status"] == "interrupted"
+        assert result.status == "interrupted"
+        assert client.journal.run("cancel-fence")["status"] == "interrupted"
+
+
+def test_direct_async_provider_cancellation_stops_owned_attempt(tmp_path):
+    entered = threading.Event()
+    released = threading.Event()
+    exited = threading.Event()
+
+    class NativeStop(FakeProvider):
+        def cancel(self, operation_id):
+            released.set()
+            return Stopped("owned attempt stopped")
+
+    def provider_turn(request):
+        entered.set()
+        assert released.wait(timeout=5)
+        exited.set()
+        return "late value"
+
+    async def scenario(provider):
+        task = asyncio.create_task(provider.agenerate("work"))
+        assert await asyncio.to_thread(entered.wait, 2)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    with Botpipe(tmp_path, provider=NativeStop([provider_turn])) as client:
+        asyncio.run(scenario(Provider(runtime=client, session=None)))
+        assert exited.is_set()
+        [run] = client.runs()
+        assert run["status"] == "interrupted"
 
 
 def test_completed_run_ignores_global_helper_edits_inside_comprehensions(
@@ -541,13 +669,13 @@ def test_alternate_provider_workspace_excludes_independent_clients(
     @workflow
     def owner():
         def edit():
-            return Session().run("edit alternate target", workspace=target).value
+            return Provider().run("edit alternate target", workspace=target).value
 
         return parallel(edit) if parallel_branch else edit()
 
     @workflow
     def contender():
-        return Session().run("edit direct target").value
+        return Provider().run("edit direct target").value
 
     other_provider = FakeProvider(["must not dispatch"])
     with (
@@ -574,11 +702,11 @@ def test_interrupted_alternate_workspace_remains_fenced_after_owner_exits(tmp_pa
 
     @workflow
     def owner():
-        return Session().run("edit alternate target", workspace=target).value
+        return Provider().run("edit alternate target", workspace=target).value
 
     @workflow
     def contender():
-        return Session().run("edit direct target").value
+        return Provider().run("edit direct target").value
 
     with Botpipe(
         origin, provider=FakeProvider([SystemExit("provider may still own target")])
@@ -605,6 +733,44 @@ def test_interrupted_alternate_workspace_remains_fenced_after_owner_exits(tmp_pa
             )
             assert first.resume("alternate-owner", workflow=owner).ok
             assert other.run(contender).ok
+
+
+def test_raw_reader_cannot_observe_alternate_workspace_with_unresolved_writer(
+    tmp_path,
+):
+    origin, reader_origin, target = (
+        tmp_path / "origin",
+        tmp_path / "reader",
+        tmp_path / "target",
+    )
+    origin.mkdir()
+    reader_origin.mkdir()
+    target.mkdir()
+    (target / "input.txt").write_text("possibly being changed")
+
+    @workflow
+    def owner():
+        return Provider().run("edit alternate target", workspace=target).value
+
+    @workflow
+    def reader():
+        return Provider(session=None).generate(
+            "inspect alternate target",
+            workspace=target,
+            reads=["input.txt"],
+        ).value
+
+    with Botpipe(
+        origin, provider=FakeProvider([SystemExit("writer may still be active")])
+    ) as first:
+        with pytest.raises(SystemExit):
+            first.run(owner, run_id="unresolved-alternate-writer")
+        reader_provider = FakeProvider(["must not observe or dispatch"])
+        with Botpipe(reader_origin, provider=reader_provider) as other:
+            blocked = other.run(reader, run_id="blocked-alternate-reader")
+            assert blocked.status == "failed"
+            assert "unresolved" in blocked.error
+            assert reader_provider.calls == []
 
 
 def test_completed_root_does_not_reenter_changed_activity_call(

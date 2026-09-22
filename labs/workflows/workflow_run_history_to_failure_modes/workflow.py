@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from botpipe import Session, workflow
+from botpipe import Provider, workflow
 from labs.workflows._shared import (
     LabWorkflowResult,
     ReplanRequired,
@@ -26,8 +26,8 @@ def WorkflowRunHistoryToFailureModes(
     params: Params, request: str = ""
 ) -> LabWorkflowResult:
     """Execute the workflow run history to failure modes evidence workflow."""
-    _producer = Session(key="producer")
-    _verifier = Session(key="verifier")
+    _producer = Provider()
+    _verifier = _producer.with_config(session=None)
     context = {"request": request, "parameters": params.model_dump(mode="json")}
     context["selected_workflow_contract"] = observe_workflow(params.selected_workflow)
     context["observed_run_history"] = observe_run_history(

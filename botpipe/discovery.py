@@ -82,11 +82,11 @@ def discover_workflows(
     """
 
     root = Path(workspace).expanduser().resolve()
-    search_roots: list[tuple[str, Path, str | None]] = [
-        ("workspace", root / ".botpipe" / "workflows", None),
+    search_tiers: list[list[tuple[str, Path, str | None]]] = [
+        [("workspace", root / ".botpipe" / "workflows", None)],
     ]
     if include_labs:
-        search_roots.extend(
+        search_tiers.append(
             [
                 ("labs", root / "labs" / "workflows", "labs.workflows"),
                 (
@@ -97,16 +97,28 @@ def discover_workflows(
             ]
         )
     package_root = Path(__file__).resolve().parent / "workflows"
-    search_roots.append(("packaged", package_root, "botpipe.workflows"))
+    search_tiers.append([("packaged", package_root, "botpipe.workflows")])
 
-    effective: dict[str, WorkflowEntry] = {}
-    for kind, directory, module_prefix in search_roots:
-        if not directory.is_dir():
-            continue
-        for entry in _scan_root(directory, kind=kind, module_prefix=module_prefix):
-            effective.setdefault(entry.name, entry)
+    effective: dict[str, list[WorkflowEntry]] = {}
+    for tier in search_tiers:
+        candidates: dict[str, list[WorkflowEntry]] = {}
+        for kind, directory, module_prefix in tier:
+            if not directory.is_dir():
+                continue
+            for entry in _scan_root(directory, kind=kind, module_prefix=module_prefix):
+                values = candidates.setdefault(entry.name, [])
+                if all(existing.reference != entry.reference for existing in values):
+                    values.append(entry)
+        for name, entries in candidates.items():
+            # A higher-priority tier shadows lower tiers. Multiple declarations
+            # within the effective tier stay visible so execution can diagnose
+            # the ambiguous catalog name instead of choosing by scan order.
+            effective.setdefault(name, entries)
     return tuple(
-        sorted(effective.values(), key=lambda item: (item.name, item.reference))
+        sorted(
+            (entry for entries in effective.values() for entry in entries),
+            key=lambda item: (item.name, item.reference),
+        )
     )
 
 

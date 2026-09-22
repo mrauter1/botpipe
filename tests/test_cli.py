@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from botpipe.config import ConfigError, discover_config, load_config
+from botpipe.config import ConfigurationError, discover_config, load_config
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -16,13 +16,13 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 def _workflow_file(tmp_path: Path) -> Path:
     path = tmp_path / "flows.py"
     path.write_text(
-        "from botpipe import activity, ask, workflow\n\n"
+        "from botpipe import activity, ask_human, workflow\n\n"
         "@workflow\n"
         "def echo(message: str) -> str:\n"
         "    return message.upper()\n\n"
         "@workflow\n"
         "def approval() -> str:\n"
-        "    return ask('Ship it?', returns=str)\n\n"
+        "    return ask_human('Ship it?', returns=str)\n\n"
         "@activity(retry_safe=False)\n"
         "def external_effect() -> str:\n"
         "    raise KeyboardInterrupt()\n\n"
@@ -62,6 +62,8 @@ def test_cli_subprocess_run_list_show_and_logs(tmp_path: Path) -> None:
         "hello",
         "--task-id",
         "echo-task",
+        "--provider",
+        "codex",
         "--provider-config",
         '{"command":["codex","exec"]}',
         "--policy",
@@ -80,6 +82,8 @@ def test_cli_subprocess_run_list_show_and_logs(tmp_path: Path) -> None:
             "runs",
             "show",
             result["run_id"],
+            "--provider",
+            "codex",
             "--provider-config",
             '{"command":["codex","exec"]}',
             "--policy",
@@ -103,7 +107,7 @@ def test_cli_subprocess_run_list_show_and_logs(tmp_path: Path) -> None:
 
 def test_cli_subprocess_answers_human_input(tmp_path: Path) -> None:
     workflow = _workflow_file(tmp_path)
-    first = json.loads(_cli(tmp_path, "run", f"{workflow}:approval").stdout)
+    first = json.loads(_cli(tmp_path, "run", f"{workflow}:approval", expected=4).stdout)
     assert first["status"] == "awaiting_input"
     assert first["pending_input"]["question"] == "Ship it?"
 
@@ -112,6 +116,7 @@ def test_cli_subprocess_answers_human_input(tmp_path: Path) -> None:
             tmp_path,
             "answer",
             first["run_id"],
+            first["pending_input"]["operation_id"],
             "yes",
             "--workflow",
             f"{workflow}:approval",
@@ -132,7 +137,9 @@ def test_cli_subprocess_requires_explicit_interrupted_resolution(
     tmp_path: Path,
 ) -> None:
     workflow = _workflow_file(tmp_path)
-    first = json.loads(_cli(tmp_path, "run", f"{workflow}:interrupted").stdout)
+    first = json.loads(
+        _cli(tmp_path, "run", f"{workflow}:interrupted", expected=5).stdout
+    )
     assert first["status"] == "interrupted"
     shown = json.loads(_cli(tmp_path, "runs", "show", first["run_id"]).stdout)
     operation_id = shown["operations"][0]["id"]
@@ -156,9 +163,10 @@ def test_cli_subprocess_requires_explicit_interrupted_resolution(
 def test_config_file_discovery_and_explicit_precedence(tmp_path: Path) -> None:
     config_file = tmp_path / "botpipe.toml"
     config_file.write_text(
-        'provider = "claude"\nmax_operations = 25\ntimeout = 90\n'
-        '[provider_config]\nmodel = "configured"\n'
-        '[policy]\nnetwork = "none"\n',
+        'default_provider = "claude"\ndefault_profile = "review"\nmax_operations = 25\ntimeout = 90\n'
+        '[policy]\nnetwork = "none"\n'
+        '[providers.claude]\nmodel = "configured"\n'
+        '[providers.claude.profiles.review]\neffort = "medium"\n',
         encoding="utf-8",
     )
     assert discover_config(tmp_path) == config_file
@@ -169,14 +177,15 @@ def test_config_file_discovery_and_explicit_precedence(tmp_path: Path) -> None:
         provider_config={"effort": "high"},
         max_operations=30,
     )
-    assert config.provider == "codex"
-    assert config.provider_config == {"model": "configured", "effort": "high"}
+    assert config.default_provider == "codex"
+    assert config.selection is not None
+    assert config.selection.options == {"effort": "high"}
     assert config.policy == {"network": "none"}
     assert config.max_operations == 30
     assert config.timeout == 90
 
     config_file.write_text("unknown = true\n", encoding="utf-8")
-    with pytest.raises(ConfigError, match="unknown configuration keys"):
+    with pytest.raises(ConfigurationError, match="unknown configuration keys"):
         load_config(tmp_path)
 
 
@@ -184,7 +193,7 @@ def test_cli_resumes_file_workflow_and_typed_values_in_new_process(tmp_path: Pat
     source = tmp_path / "typed_flow.py"
     source.write_text("""from pathlib import Path
 from pydantic import BaseModel
-from botpipe import activity, ask, current_run, workflow
+from botpipe import activity, ask_human, current_run, workflow
 
 class Draft(BaseModel):
     title: str
@@ -201,13 +210,19 @@ def approval():
     draft = prepare()
     if draft.title in {'first', 'second', 'third', 'fourth', 'fifth'}:
         raise ValueError('Unexpected title')
-    answer = ask('Approve?', returns=bool)
+    answer = ask_human('Approve?', returns=bool)
     return {'title': draft.title, 'approved': answer}
 """)
-    first = json.loads(_cli(tmp_path, "run", f"{source}:approval").stdout)
+    first = json.loads(_cli(tmp_path, "run", f"{source}:approval", expected=4).stdout)
     assert first["status"] == "awaiting_input"
     resumed = json.loads(
-        _cli(tmp_path, "resume", first["run_id"], "--answer", "true").stdout
+        _cli(
+            tmp_path,
+            "answer",
+            first["run_id"],
+            first["pending_input"]["operation_id"],
+            "true",
+        ).stdout
     )
     assert resumed["status"] == "completed"
     assert resumed["value"] == {"title": "Saved typed result", "approved": True}

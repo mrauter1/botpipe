@@ -41,8 +41,8 @@ def request(tmp_path: Path, *, attempt: int = 1) -> ProviderRequest:
     )
 
 
-class LegacyProvider:
-    name = "legacy"
+class RecoveryAdapter:
+    name = "test"
 
     def __init__(self, result: object) -> None:
         self.result = result
@@ -64,20 +64,21 @@ class LegacyProvider:
         (ProviderInterruptedError("unverifiable", process_alive=None), Unknown),
     ],
 )
-def test_legacy_recovery_is_normalized_conservatively(
+def test_recovery_failures_are_normalized_conservatively(
     tmp_path: Path, result: object, outcome_type: type
 ) -> None:
     assert isinstance(
-        recover_outcome(LegacyProvider(result), request(tmp_path)), outcome_type
+        recover_outcome(RecoveryAdapter(result), request(tmp_path)), outcome_type
     )
 
 
-def test_legacy_completed_response_is_preserved(tmp_path: Path) -> None:
+def test_untyped_completed_response_is_rejected(tmp_path: Path) -> None:
     response = ProviderResponse("done", "session-1")
 
-    outcome = recover_outcome(LegacyProvider(response), request(tmp_path))
+    outcome = recover_outcome(RecoveryAdapter(response), request(tmp_path))
 
-    assert outcome == Completed(response, "legacy provider returned a response")
+    assert isinstance(outcome, Unknown)
+    assert "unsupported recovery result ProviderResponse" in (outcome.detail or "")
 
 
 @pytest.mark.parametrize(
@@ -88,7 +89,7 @@ def test_malformed_explicit_recovery_outcome_is_unknown(
     tmp_path: Path, result: object
 ) -> None:
     assert isinstance(
-        recover_outcome(LegacyProvider(result), request(tmp_path)), Unknown
+        recover_outcome(RecoveryAdapter(result), request(tmp_path)), Unknown
     )
 
 

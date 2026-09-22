@@ -19,6 +19,12 @@ provider sessions, human-input events, usage, and immutable artifact references.
 Files become durable before the ledger refers to them. A workspace lock protects
 one active run from another process.
 
+The 2.0 ledger defaults to `workspace/.botpipe-v2`. Before opening an existing
+database in write mode, Botpipe checks its application and format versions
+through a read-only connection. An unrecognized or pre-2.0 store is rejected
+without schema changes and the operator is directed to a fresh state directory.
+No old record is decoded, imported, converted, or used as optimizer evidence.
+
 Run records own root execution facts; operation records own their checkpoints.
 The journal commits an operation checkpoint, its native session update, and the
 associated event together. Physical-dispatch events retain separate evidence
@@ -162,9 +168,10 @@ before its process identity was recorded therefore remains uncertain.
 
 One provider checkpoint model interprets saved state for normal execution,
 recovery, manual reconciliation, and workspace ownership checks. The provider
-lifecycle owns the corresponding decisions; sessions retain the artifact and
-validation work. These are provider-specific rules, not a second control-flow
-language for workflows or a universal state machine for inputs and activities.
+lifecycle owns the corresponding decisions; the operation coordinator retains
+artifact capture and validation work. These are provider-specific rules, not a
+second control-flow language for workflows or a universal state machine for
+inputs and activities.
 
 | Durable fact | Permitted continuation |
 | --- | --- |

@@ -216,6 +216,45 @@ assert restored.box.item == 7
     )
 
 
+def test_explicit_contract_registry_restores_local_type_and_checks_structure():
+    @dataclass
+    class Original:
+        count: int
+
+    encoded = codec.encode(Original(3))
+    recorded_name = encoded["type"]
+    codec._TYPES.pop(recorded_name)
+
+    with pytest.raises(TypeError, match=r"Botpipe\(contract_registry="):
+        codec.decode(encoded)
+
+    @dataclass
+    class Compatible:
+        count: int
+
+    with codec.use_contract_registry({recorded_name: Compatible}):
+        restored = codec.decode(encoded)
+    assert type(restored) is Compatible
+    assert restored.count == 3
+
+    @dataclass
+    class Incompatible:
+        count: str
+
+    with codec.use_contract_registry({recorded_name: Incompatible}):
+        with pytest.raises(TypeError, match="storage contract"):
+            codec.decode(encoded)
+
+
+def test_contract_registry_is_scoped_and_validated():
+    with pytest.raises(TypeError, match="must map"):
+        codec.normalize_contract_registry([("module:Type", int)])
+    with pytest.raises(TypeError, match="must be a type"):
+        codec.normalize_contract_registry({"module:Type": object()})
+    with pytest.raises(TypeError, match="Invalid contract registry"):
+        codec.normalize_contract_registry({"invalid": int})
+
+
 def test_inherited_postponed_annotations_use_each_bases_module(tmp_path):
     (tmp_path / "base_state.py").write_text(
         """\

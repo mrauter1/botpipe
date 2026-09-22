@@ -22,11 +22,16 @@ from .policy import (
     SandboxMode,
 )
 from .prompts import Prompt
-from .runtime import Botpipe, Workflow, activity, ask, current_run, parallel, workflow
-from .sessions import OutputValidationError, Session
+from .runtime import Botpipe, Workflow, activity, ask_human, current_run, parallel, aparallel, workflow
+from .sessions import Session, SessionError, SessionAffinityError, SessionBusy, SessionHistoryConflict
+from .operations import OutputValidationError
+from .provider import Provider, Codex, ClaudeCode, Pi, Jev
+from .providers import CapabilityError
+from .config import ConfigurationError
+from .streaming import Stream, StreamEvent
 from .worklists import Selector, WorkItem, Worklist
 
-__version__ = "1.0.0"
+__version__ = "2.0.0"
 __all__ = [
     "Artifact",
     "ArtifactError",
@@ -54,13 +59,27 @@ __all__ = [
     "Prompt",
     "Workflow",
     "Session",
+    "SessionError",
+    "SessionAffinityError",
+    "SessionBusy",
+    "SessionHistoryConflict",
+    "Provider",
+    "Codex",
+    "ClaudeCode",
+    "Pi",
+    "Jev",
+    "CapabilityError",
+    "ConfigurationError",
+    "Stream",
+    "StreamEvent",
     "Selector",
     "WorkItem",
     "Worklist",
     "OutputValidationError",
     "activity",
-    "ask",
+    "ask_human",
     "current_run",
     "parallel",
+    "aparallel",
     "workflow",
 ]

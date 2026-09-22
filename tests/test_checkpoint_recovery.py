@@ -9,7 +9,7 @@ from botpipe import (
     Botpipe,
     BotpipeError,
     RunBusy,
-    Session,
+    Provider,
     provider_budget,
     workflow,
 )
@@ -31,7 +31,7 @@ def test_committed_finish_with_lost_ack_remains_completed(tmp_path, monkeypatch)
 
     @workflow
     def work():
-        return Session().run(
+        return Provider().run(
             "write", writes=[Artifact.text(destination, required=True)]
         )
 
@@ -69,7 +69,7 @@ def test_committed_provider_response_with_lost_ack_is_not_failed(tmp_path, monke
 
     @workflow
     def work():
-        return Session().run(
+        return Provider().run(
             "write", writes=[Artifact.text(destination, required=True)]
         )
 
@@ -78,9 +78,9 @@ def test_committed_provider_response_with_lost_ack_is_not_failed(tmp_path, monke
         response = client.journal.response
         lost = False
 
-        def lose_committed_ack(operation_id, value, session_key=None):
+        def lose_committed_ack(operation_id, value, **kwargs):
             nonlocal lost
-            response(operation_id, value, session_key)
+            response(operation_id, value, **kwargs)
             if "text" in value and "validated_value" not in value and not lost:
                 lost = True
                 raise OSError("lost response acknowledgement")
@@ -103,7 +103,7 @@ def test_uncommitted_finish_is_not_confirmed_from_writer_connection(
 ):
     @workflow
     def work():
-        return Session().run("work").value
+        return Provider().run("work").value
 
     provider = FakeProvider(["done"])
     with Botpipe(tmp_path, provider=provider) as client:
@@ -153,8 +153,8 @@ def test_interrupted_restore_keeps_foreign_workspace_fenced_until_resume(
     @workflow
     def work():
         with provider_budget(max_turns=1):
-            Session().run("consume budget")
-            return Session().run(
+            Provider().run("consume budget")
+            return Provider().run(
                 "denied",
                 writes=[
                     Artifact.text(first, required=True),
@@ -224,7 +224,7 @@ def test_policy_error_after_dispatch_remains_unknown_and_fenced(tmp_path):
 
     @workflow
     def work():
-        return Session().run("work", writes=[Artifact.text(destination, required=True)])
+        return Provider().run("work", writes=[Artifact.text(destination, required=True)])
 
     provider = FakeProvider([effect_then_policy_error])
     with Botpipe(tmp_path, provider=provider) as client:

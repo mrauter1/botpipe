@@ -14,9 +14,10 @@ from botpipe import (
     Artifact,
     ArtifactHandle,
     Prompt,
+    Provider,
     Session,
     activity,
-    ask,
+    ask_human,
     current_run,
 )
 
@@ -293,8 +294,8 @@ def observe_run_history(
 def run_phase(
     *,
     phase: str,
-    producer: Session,
-    verifier: Session,
+    producer: Provider,
+    verifier: Provider,
     producer_prompt: str,
     verifier_prompt: str,
     input: Mapping[str, Any],
@@ -308,20 +309,25 @@ def run_phase(
 
     response_type = returns | LabPhaseControl
     expected = [str(item.name) for item in writes]
+    phase_producer = (
+        producer.with_config(session=Session())
+        if provider_workspace is not None
+        else producer
+    )
     feedback: dict[str, Any] | None = None
     previous_handles: tuple[Any, ...] = ()
     while True:
         phase_input = {**dict(input), "phase": phase, "required_artifacts": expected}
         if feedback is not None:
             phase_input["rework_feedback"] = feedback
-        producer_result = producer.run(
+        producer_result = phase_producer.run(
             Prompt.file(producer_prompt),
             input=phase_input,
             reads=tuple(reads) + previous_handles,
             writes=tuple(writes),
             returns=LabPhaseDraft,
             name=f"{phase}.produce",
-            retries=2,
+            output_retries=2,
             workspace=provider_workspace,
         )
         handles = tuple(producer_result.artifacts.values())
@@ -331,7 +337,7 @@ def run_phase(
             raise ValueError(
                 f"{phase} did not capture required artifacts: {', '.join(missing)}"
             )
-        verification = verifier.run(
+        verification = verifier.generate(
             Prompt.file(verifier_prompt),
             input={
                 **dict(input),
@@ -343,7 +349,7 @@ def run_phase(
             reads=handles,
             returns=response_type,
             name=f"{phase}.verify",
-            retries=2,
+            output_retries=2,
         )
         outcome = verification.value
         unknown = sorted(set(outcome.authoritative_artifacts) - set(captured))
@@ -375,7 +381,7 @@ def run_phase(
                 )
             raise ReplanRequired(replan_target, phase_run)
         if outcome.outcome in {"question", "blocked"}:
-            answer = ask(
+            answer = ask_human(
                 f"{phase}: {outcome.summary}\n"
                 + (
                     outcome.question

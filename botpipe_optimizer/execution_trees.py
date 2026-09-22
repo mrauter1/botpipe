@@ -25,6 +25,7 @@ OWNERSHIP_MARKER = ".botpipe-owned-staging.json"
 EXCLUDED_DIRECTORY_NAMES = frozenset(
     {
         ".botpipe",
+        ".botpipe-v2",
         ".git",
         ".mypy_cache",
         ".pytest_cache",

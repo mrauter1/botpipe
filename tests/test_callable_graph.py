@@ -281,12 +281,12 @@ def test_paused_parallel_replays_result_after_metaclass_source_edit(tmp_path, ed
     _write(tmp_path / "rootpkg/__init__.py", "")
     _write(
         tmp_path / "rootpkg/workflow.py",
-        "from botpipe import ask, parallel, workflow\n"
+        "from botpipe import ask_human, parallel, workflow\n"
         "from branchpkg.branch import Branch\n"
         "@workflow\n"
         "def job():\n"
         "    answer = parallel(Branch)\n"
-        "    ask('continue?')\n"
+        "    ask_human('continue?')\n"
         "    return answer\n",
     )
     start = _write(
@@ -301,12 +301,7 @@ def test_paused_parallel_replays_result_after_metaclass_source_edit(tmp_path, ed
     )
     resume = _write(
         tmp_path / "resume.py",
-        "from botpipe import Botpipe\n"
-        "from botpipe.providers import FakeProvider\n"
-        "from rootpkg.workflow import job\n"
-        "with Botpipe('.', provider=FakeProvider([])) as client:\n"
-        "    result = client.resume('meta-drift', workflow=job, answer='yes')\n"
-        "    assert result.ok and result.value == ['old'], result.error\n",
+        'from botpipe import Botpipe\nfrom botpipe.providers import FakeProvider\nfrom rootpkg.workflow import job\nwith Botpipe(\'.\', provider=FakeProvider([])) as client:\n    result = client.resume(\'meta-drift\', workflow=job, answers={client.pending(\'meta-drift\')[0]["operation_id"]: \'yes\'})\n    assert result.ok and result.value == [\'old\'], result.error\n',
     )
     initial = _run(start)
     assert initial.returncode == 0, initial.stderr

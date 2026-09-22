@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-from botpipe import Botpipe, Policy, Session, current_run, workflow
+from botpipe import Botpipe, Policy, Provider, current_run, workflow
 from botpipe.journal import JournalSnapshot
 from botpipe.providers import FakeProvider, ProviderResponse
 from botpipe.read_projection import project_run
@@ -299,8 +299,8 @@ def test_optimizer_consumes_real_journaled_typed_outcome_and_usage(tmp_path):
 
     @workflow(name="observed")
     def observed():
-        session = Session()
-        return session.run(
+        provider = Provider()
+        return provider.run(
             "decide",
             returns=Decision,
             name="decide",

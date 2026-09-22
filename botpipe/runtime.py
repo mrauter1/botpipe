@@ -48,11 +48,14 @@ from .provider_checkpoints import (
     RespondedCheckpoint,
     RetryAuthorizedCheckpoint,
 )
-from .recovery import Completed, recover_outcome
+from .recovery import Completed, Running, Stopped, Unknown, recover_outcome
 
 _CURRENT = contextvars.ContextVar("botpipe_run", default=None)
 _OPERATION = contextvars.ContextVar("botpipe_operation", default=None)
 _ACTIVITY = contextvars.ContextVar("botpipe_activity", default=False)
+_ASYNC_CANCELLATION = contextvars.ContextVar(
+    "botpipe_async_cancellation", default=None
+)
 _UNSET = object()
 
 
@@ -86,12 +89,22 @@ def _commit_or_confirm(journal, operation_id, write, projection, message):
             raise UncertainOperation(message, operation_id) from exc
 
 
-def _persist_response(journal, operation_id, response, session_key=None):
+def _persist_response(journal, operation_id, response, *, session_update=None):
+    projection = {"status": "response", "response": response}
+    if session_update is not None:
+        projection.update(
+            session_id=session_update["session_id"],
+            session_revision=session_update["expected_revision"] + 1,
+        )
     _commit_or_confirm(
         journal,
         operation_id,
-        lambda: journal.response(operation_id, response, session_key=session_key),
-        {"status": "response", "response": response},
+        lambda: journal.response(
+            operation_id,
+            response,
+            session_update=session_update,
+        ),
+        projection,
         "Operation checkpoint could not be confirmed; resume to reconcile it",
     )
 
@@ -166,6 +179,31 @@ def _preflight_recorded_contracts(data, operations):
         raise ReplayMismatch(
             f"Recorded durable value contracts cannot be verified: {exc}"
         ) from exc
+
+
+def _cancellation_was_not_dispatched(operations):
+    """Prove every unfinished provider cancellation stopped before dispatch."""
+
+    found = False
+    for record in operations:
+        if record["status"] in {"completed", "failed"}:
+            continue
+        if record["kind"] not in {"provider", "decision"}:
+            continue
+        if record["kind"] != "provider":
+            return False
+        try:
+            checkpoint = ProviderCheckpoint.from_record(record.get("response"))
+        except (TypeError, ValueError, ReplayMismatch):
+            return False
+        if not (
+            isinstance(checkpoint, NotDispatchedCheckpoint)
+            and checkpoint.error_kind == "cancellation_error"
+            and checkpoint.restoration_pending is False
+        ):
+            return False
+        found = True
+    return found
 
 
 def _exception_record(exc):
@@ -548,9 +586,52 @@ def _invoke(fn, args, kwargs):
     return value
 
 
+class _AsyncCancellationScope:
+    """Join asyncio cancellation to the durable run it created in a worker."""
+
+    def __init__(self):
+        self._condition = threading.Condition()
+        self._runtime = None
+        self._run_id = None
+        self._requested = False
+
+    def bind(self, runtime, run_id):
+        with self._condition:
+            self._runtime = runtime
+            self._run_id = run_id
+            self._condition.notify_all()
+
+    def request(self):
+        with self._condition:
+            self._requested = True
+            self._condition.notify_all()
+
+    def cancel_once(self, timeout=0.05):
+        with self._condition:
+            if self._runtime is None:
+                self._condition.wait(timeout)
+            runtime, run_id = self._runtime, self._run_id
+        if runtime is None:
+            return False
+        runtime.cancel(run_id)
+        return True
+
+
+def _bind_async_cancellation(runtime, run_id):
+    scope = _ASYNC_CANCELLATION.get()
+    if scope is not None:
+        scope.bind(runtime, run_id)
+
+
 async def _async_call(fn, *args, **kwargs):
-    task = asyncio.create_task(asyncio.to_thread(fn, *args, **kwargs))
+    scope = _AsyncCancellationScope()
+    token = _ASYNC_CANCELLATION.set(scope)
+    try:
+        task = asyncio.create_task(asyncio.to_thread(fn, *args, **kwargs))
+    finally:
+        _ASYNC_CANCELLATION.reset(token)
     cancelled = False
+    cancellation_settled = False
     while True:
         try:
             result = await asyncio.shield(task)
@@ -558,10 +639,46 @@ async def _async_call(fn, *args, **kwargs):
         except asyncio.CancelledError:
             if task.cancelled():
                 raise
+            if not cancelled:
+                scope.request()
             cancelled = True
+            # Retry briefly after an Unknown result. This closes the narrow
+            # race where durable intent exists but the native adapter has not
+            # yet registered ownership of its just-starting process.
+            for _ in range(10):
+                if cancellation_settled or task.done():
+                    break
+                attempt = asyncio.create_task(asyncio.to_thread(scope.cancel_once))
+                while True:
+                    try:
+                        cancellation_settled = await asyncio.shield(attempt)
+                        break
+                    except asyncio.CancelledError:
+                        cancelled = True
+                        if attempt.done():
+                            try:
+                                cancellation_settled = attempt.result()
+                            except (BotpipeError, KeyError):
+                                pass
+                            break
+                    except (BotpipeError, KeyError):
+                        # The durable request remains the authority. Retry while
+                        # the worker is alive so a process that wins a start race
+                        # is still asked to stop once the adapter owns it.
+                        break
+                if not cancellation_settled and not task.done():
+                    try:
+                        await asyncio.sleep(0.02)
+                    except asyncio.CancelledError:
+                        cancelled = True
             if task.done():
-                result = task.result()
+                if not cancelled:
+                    result = task.result()
                 break
+        except BaseException:
+            if cancelled:
+                break
+            raise
     if cancelled:
         raise asyncio.CancelledError
     return result
@@ -890,34 +1007,68 @@ class RunContext:
             if parent is not None
             else self.workspace
         )
-        self.policy = Policy.resolve(
-            parent.policy if parent else client.policy, definition.policy
+        base_policy = parent.policy if parent else Policy.from_dict(
+            metadata.get("policy", {})
+        )
+        self.policy = Policy.resolve(base_policy, definition.policy)
+        # Applied lazily only when a new physical attempt may dispatch. Keeping
+        # it separate preserves historical operation fingerprints and permits
+        # committed replay/conservative recovery under changed deployment rules.
+        self.current_policy_ceiling = (
+            parent.current_policy_ceiling if parent else client.policy
         )
         self.parallel_branch = parallel_branch or (
             parent.parallel_branch if parent else False
         )
         self._session_locks = parent._session_locks if parent else {}
+        # Each durable scope records its own first-use family aliases. Strong
+        # object keys below keep ephemeral families alive for the execution.
+        self._provider_family_bindings = {}
         self._workspace_locks = parent._workspace_locks if parent else {}
         self._guard = parent._guard if parent else threading.RLock()
-        self._input_state = (
-            parent._input_state if parent else {"candidate": input_candidate}
-        )
+        self._input_state = parent._input_state if parent else {
+            "candidates": dict(input_candidate or {})
+        }
         self._execution_lock = threading.RLock()
         self._replay_state = parent._replay_state if parent else {"error": None}
         self.provider_budgets = parent.provider_budgets if parent else ()
+        self.execution_id = parent.execution_id if parent else uuid.uuid4().hex
+        self.provider_name = metadata.get("provider")
+        self.provider_config = dict(metadata.get("provider_config", {}))
+        self.provider_defaults = dict(metadata.get("provider_defaults", {}))
+        self._default_provider = None
+
+    @property
+    def provider(self):
+        """One memoized configured provider for this workflow scope."""
+
+        if self._default_provider is None:
+            from .provider import Provider
+
+            self._default_provider = Provider(runtime=self.client)
+        return self._default_provider
 
     def take_input_candidate(self, operation_id):
         """Consume a submitted answer only from the input operation it targets."""
         with self._guard:
-            candidate = self._input_state["candidate"]
-            if candidate is None or candidate["operation_id"] != operation_id:
+            candidates = self._input_state["candidates"]
+            if operation_id not in candidates:
                 return _UNSET
-            self._input_state["candidate"] = None
-            return candidate["raw"]
+            return candidates.pop(operation_id)
 
     @property
     def operation_id(self):
         return _OPERATION.get()
+
+    def check_cancelled(self):
+        """Fence a new physical dispatch after a durable cancellation request."""
+
+        requested = self.journal.run(self.run_id).get("cancel_requested_at")
+        if requested is not None:
+            raise UncertainOperation(
+                "Execution cancellation was requested; no new attempt may dispatch",
+                self.operation_id,
+            )
 
     def operation(
         self,
@@ -954,8 +1105,19 @@ class RunContext:
         finally:
             self._execution_lock.release()
 
-    def save_response(self, operation_id, response, session_key=None):
-        _persist_response(self.journal, operation_id, response, session_key)
+    def save_response(
+        self,
+        operation_id,
+        response,
+        *,
+        session_update=None,
+    ):
+        _persist_response(
+            self.journal,
+            operation_id,
+            response,
+            session_update=session_update,
+        )
 
     def _operation(
         self,
@@ -988,6 +1150,13 @@ class RunContext:
                     f"Operation {operation_id} changed ({record['kind']} -> {kind}); start a new run"
                 )
             if record["status"] == "completed":
+                if kind in {"provider", "decision"}:
+                    try:
+                        from .streaming import mark_stream_replay
+                    except ImportError:
+                        pass
+                    else:
+                        mark_stream_replay(self.run_id, operation_id)
                 return codec.decode(record["result"])
             if record["status"] == "failed":
                 _preflight_exception_record(record["error"])
@@ -1116,9 +1285,12 @@ class RunContext:
         )
 
     def scope_call(self, scope, definition):
-        return self._child(
-            definition, (), {}, f"{self.scope}/{scope}", parallel_branch=True
-        )
+        # ThreadPoolExecutor does not propagate context variables. Re-enter the
+        # owning runtime's restoration registry in each parallel branch.
+        with codec.use_contract_registry(self.client.contract_registry):
+            return self._child(
+                definition, (), {}, f"{self.scope}/{scope}", parallel_branch=True
+            )
 
     def assert_consumed(self):
         if self._replay_state["error"] is not None:
@@ -1136,7 +1308,7 @@ class RunContext:
             raise error
 
 
-def ask(question, *, returns=str):
+def ask_human(question, *, returns=str):
     ctx = current_run()
     codec.preflight(returns, path="$.answer")
     schema = codec.schema_for(returns)
@@ -1247,39 +1419,104 @@ def parallel(*calls, max_workers=None, settle="all"):
     )
 
 
+async def aparallel(*calls, max_workers=None, settle="all"):
+    """Async parallel composition with the same durable branch identities."""
+
+    return await _async_call(
+        parallel, *calls, max_workers=max_workers, settle=settle
+    )
+
+
 class Botpipe:
     def __init__(
         self,
         workspace=".",
-        provider="codex",
+        provider=_UNSET,
         *,
         state_dir=None,
         policy=None,
-        max_operations=1000,
-        timeout=3600,
+        max_operations=_UNSET,
+        timeout=_UNSET,
         provider_config=None,
+        provider_defaults=None,
+        contract_registry=None,
     ):
         from .providers import get_provider
+
+        if provider is _UNSET:
+            from .config import load_config
+
+            configured = load_config(workspace).client_kwargs()
+            workspace = configured["workspace"]
+            provider = configured["provider"]
+            if state_dir is None:
+                state_dir = configured["state_dir"]
+            if policy is None:
+                policy = configured["policy"]
+            if provider_config is None:
+                provider_config = configured["provider_config"]
+            if provider_defaults is None:
+                provider_defaults = configured["provider_defaults"]
+            if max_operations is _UNSET:
+                max_operations = configured["max_operations"]
+            if timeout is _UNSET:
+                timeout = configured["timeout"]
+
+        if max_operations is _UNSET:
+            max_operations = 1000
+        if timeout is _UNSET:
+            timeout = 3600
 
         self.workspace = Path(workspace).resolve()
         if not self.workspace.is_dir():
             raise ValueError(f"Workspace is not a directory: {self.workspace}")
         self.state_dir = (
-            Path(state_dir).resolve() if state_dir else self.workspace / ".botpipe"
+            Path(state_dir).resolve()
+            if state_dir
+            else self.workspace / ".botpipe-v2"
         )
         self.state_dir.mkdir(parents=True, exist_ok=True)
         self.provider_config = dict(provider_config or {})
+        self.provider_defaults = dict(provider_defaults or {})
+        # Runtime restoration resources are deliberately not journaled. The
+        # recorded structural contract remains the authority for each entry.
+        self.contract_registry = codec.normalize_contract_registry(contract_registry)
+        from .config import validate_non_secret_settings
+
+        validate_non_secret_settings(
+            self.provider_config, path="provider configuration"
+        )
+        validate_non_secret_settings(
+            self.provider_defaults, path="provider defaults"
+        )
+        self.policy = Policy.resolve(policy)
+        validate_non_secret_settings(
+            self.policy.to_dict(), path="runtime policy"
+        )
+        constructed_adapter = isinstance(provider, str)
         self.provider = (
             get_provider(provider, config=self.provider_config)
             if isinstance(provider, str)
             else provider
         )
-        if not callable(getattr(self.provider, "run", None)):
-            raise TypeError("Provider must implement run(request)")
-        self.provider_name = getattr(
-            self.provider, "name", type(self.provider).__name__
+        if provider is not None and not any(
+            callable(getattr(self.provider, method, None))
+            for method in ("run", "decide")
+        ):
+            raise TypeError("Provider must implement a supported capability")
+        self.provider_name = (
+            getattr(self.provider, "name", type(self.provider).__name__)
+            if self.provider is not None
+            else None
         )
-        self.policy = Policy.resolve(policy)
+        self._adapter_lock = threading.RLock()
+        self._adapter_cache = {}
+        self._owned_adapters = set()
+        if self.provider is not None:
+            key = self._adapter_key(self.provider_name, self.provider_config)
+            self._adapter_cache[key] = self.provider
+            if constructed_adapter:
+                self._owned_adapters.add(id(self.provider))
         self.limits = RunLimits(max_operations, timeout)
         self.journal = Journal(self.state_dir / "state.sqlite3")
 
@@ -1299,6 +1536,32 @@ class Botpipe:
     def timeout(self, value):
         self.limits = RunLimits(self.limits.max_operations, value)
 
+    @staticmethod
+    def _adapter_key(name, config):
+        return (
+            name,
+            json.dumps(
+                config, sort_keys=True, separators=(",", ":"), allow_nan=False
+            ),
+        )
+
+    def resolve_adapter(self, name, config=None):
+        """Resolve and memoize a runtime-owned adapter resource."""
+
+        from .config import validate_non_secret_settings
+        from .providers import get_provider
+
+        config = dict(config or {})
+        validate_non_secret_settings(config, path=f"provider {name} configuration")
+        key = self._adapter_key(name, config)
+        with self._adapter_lock:
+            adapter = self._adapter_cache.get(key)
+            if adapter is None:
+                adapter = get_provider(name, config=config)
+                self._adapter_cache[key] = adapter
+                self._owned_adapters.add(id(adapter))
+            return adapter
+
     def _definition(self, value):
         if isinstance(value, str):
             from .discovery import resolve_workflow
@@ -1312,15 +1575,12 @@ class Botpipe:
         return value
 
     def _check_run_configuration(self, data):
-        if (
-            data["provider"] != self.provider_name
-            or data.get("provider_config", {}) != self.provider_config
-        ):
-            raise ReplayMismatch(
-                "Provider configuration changed; resume with the recorded provider configuration"
-            )
-        if self.policy.to_dict() != data["policy"]:
-            raise ReplayMismatch("Run policy changed; resume with the recorded policy")
+        # Provider selection is a run snapshot. A changed project default must
+        # not retarget recorded families during recovery. Current policy is
+        # applied separately when a future dispatch is prepared.
+        for field in ("provider_config", "provider_defaults", "policy"):
+            if not isinstance(data.get(field, {}), dict):
+                raise ReplayMismatch(f"Recorded run {field} is malformed")
 
     @contextmanager
     def _ownership(self, run_id, *, workspace=None):
@@ -1368,7 +1628,49 @@ class Botpipe:
             os.fsync(handle.fileno())
             yield
 
+    @contextmanager
+    def _read_ownership(self, run_id, *, workspace=None):
+        """Fence a workspace read without replacing its durable writer owner."""
+
+        target = self.workspace if workspace is None else Path(workspace).resolve()
+        with workspace_lock(target / ".botpipe-workspace.lock") as handle:
+            handle.seek(0)
+            raw = handle.read().strip()
+            if raw:
+                try:
+                    owner = json.loads(raw)
+                except (ValueError, UnicodeError) as exc:
+                    raise RunBusy(
+                        "Workspace ownership record is unreadable; restore it before continuing"
+                    ) from exc
+                if (
+                    not isinstance(owner, dict)
+                    or not isinstance(owner.get("journal"), str)
+                    or not isinstance(owner.get("run_id"), str)
+                ):
+                    raise RunBusy(
+                        "Workspace ownership record is unreadable; restore it before continuing"
+                    )
+                if (
+                    owner != {"journal": str(self.journal.path), "run_id": run_id}
+                    and Journal.foreign_has_unresolved_effects(
+                        owner["journal"], owner["run_id"]
+                    )
+                ):
+                    raise RunBusy(
+                        f"Run {owner['run_id']} has unresolved effects; resume or reconcile it first"
+                    )
+            # Keep the OS fence for the complete reader turn. Unlike a writer,
+            # a reader must not replace the durable owner marker.
+            yield
+
     def run(self, definition, *args, task_id=None, run_id=None, **kwargs):
+        with codec.use_contract_registry(self.contract_registry):
+            return self._run(
+                definition, *args, task_id=task_id, run_id=run_id, **kwargs
+            )
+
+    def _run(self, definition, *args, task_id=None, run_id=None, **kwargs):
         definition = self._definition(definition)
         args, kwargs = _validate_args(definition.fn, args, kwargs)
         context = definition._source_context
@@ -1404,6 +1706,7 @@ class Botpipe:
             "folder": str(folder),
             "provider": self.provider_name,
             "provider_config": self.provider_config,
+            "provider_defaults": self.provider_defaults,
             "policy": self.policy.to_dict(),
             "max_operations": limits.max_operations,
             "timeout": limits.timeout,
@@ -1429,7 +1732,31 @@ class Botpipe:
         return await _async_call(self.run, definition, *args, **kwargs)
 
     def resume(
-        self, run_id, *, answer=_UNSET, workflow=None, max_operations=None, timeout=None
+        self,
+        run_id,
+        *,
+        answers=None,
+        workflow=None,
+        max_operations=None,
+        timeout=None,
+    ):
+        with codec.use_contract_registry(self.contract_registry):
+            return self._resume(
+                run_id,
+                answers=answers,
+                workflow=workflow,
+                max_operations=max_operations,
+                timeout=timeout,
+            )
+
+    def _resume(
+        self,
+        run_id,
+        *,
+        answers=None,
+        workflow=None,
+        max_operations=None,
+        timeout=None,
     ):
         with self._ownership(run_id):
             data = self.journal.run(run_id)
@@ -1504,28 +1831,52 @@ class Botpipe:
                 data.update(changes)
                 self.journal.update_run(run_id, **changes)
                 self.journal.event(run_id, "run_limits_updated", changes)
-            input_candidate = None
-            if answer is not _UNSET:
-                pending = data.get("pending_input")
-                if not pending:
-                    raise ValueError("Run is not waiting for an answer")
-                operation_id = pending.get("operation_id")
+            cancellation_inferred = (
+                data.get("cancel_requested_at") is not None
+                and data.get("cancellation_confirmed_at") is None
+                and _cancellation_was_not_dispatched(operations)
+            )
+            if data.get("cancel_requested_at") is not None and (
+                data.get("cancellation_confirmed_at") is not None
+                or cancellation_inferred
+            ):
+                # A confirmed stop (or an authoritative completion that won
+                # the race) permits replay/recovery. A cancellation checkpoint
+                # with completed restoration is equally authoritative: no
+                # native attempt existed to stop. The event history remains;
+                # only the active dispatch fence is acknowledged here.
+                data["cancel_requested_at"] = None
+                data["cancellation_confirmed_at"] = None
+                self.journal.update_run(
+                    run_id,
+                    cancel_requested_at=None,
+                    cancellation_confirmed_at=None,
+                    updated_at=now(),
+                )
+                self.journal.event(
+                    run_id,
+                    "cancellation_acknowledged",
+                    {"not_dispatched": cancellation_inferred},
+                )
+            if answers is None:
+                answers = {}
+            if not isinstance(answers, dict):
+                raise TypeError("answers must map operation ids to answers")
+            input_candidate = {}
+            for operation_id, answer in answers.items():
+                if not isinstance(operation_id, str):
+                    raise TypeError("answer operation ids must be strings")
                 record = self.journal.get(operation_id)
-                recorded_request = None if record is None else record.get("response")
-                expected_request = {
-                    key: pending[key]
-                    for key in ("question", "schema")
-                    if key in pending
-                }
                 if (
                     record is None
                     or record["run_id"] != run_id
                     or record["kind"] != "input"
                     or record["status"] != "waiting"
-                    or recorded_request != expected_request
                 ):
-                    raise ValueError("Run is no longer waiting for that answer")
-                input_candidate = {"operation_id": operation_id, "raw": answer}
+                    raise ValueError(
+                        f"Run is not waiting for answer operation {operation_id}"
+                    )
+                input_candidate[operation_id] = answer
             decoded_args = codec.decode(data["args"])
             decoded_kwargs = codec.decode(data["kwargs"])
             return self._execute(
@@ -1549,10 +1900,12 @@ class Botpipe:
         input_candidate=None,
         provenance_start=None,
     ):
+        _bind_async_cancellation(self, data["run_id"])
         ctx = RunContext(self, data, definition, input_candidate=input_candidate)
         status = "completed"
         value = None
         error = None
+        failure = None
         pending = data.get("pending_input")
         if provenance_start is None:
             provenance_start = capture_workflow_provenance(definition, self.workspace)
@@ -1565,6 +1918,11 @@ class Botpipe:
         token = _CURRENT.set(ctx)
         try:
             value = _invoke(definition.fn, args, kwargs)
+            if self.journal.run(ctx.run_id).get("cancel_requested_at") is not None:
+                raise UncertainOperation(
+                    "Execution was cancelled before its result was accepted",
+                    ctx.operation_id,
+                )
             ctx.assert_consumed()
             encoded = codec.encode(value)
             pending = None
@@ -1636,6 +1994,7 @@ class Botpipe:
             pending,
             ctx.folder,
             usage,
+            failure,
         )
 
     def _outputs(self, run_id):
@@ -1647,12 +2006,186 @@ class Botpipe:
     def runs(self):
         return self.journal.runs()
 
+    def pending(self, run_id):
+        """Return every independently answerable human-input request."""
+
+        run = self.journal.run(run_id)
+        diagnostic = run.get("pending_input") or {}
+        return tuple(
+            {
+                "operation_id": record["id"],
+                **record["response"],
+                **(
+                    {"diagnostic": diagnostic["diagnostic"]}
+                    if diagnostic.get("operation_id") == record["id"]
+                    and "diagnostic" in diagnostic
+                    else {}
+                ),
+            }
+            for record in self.journal.operations(run_id)
+            if record["kind"] == "input" and record["status"] == "waiting"
+        )
+
+    def answer(
+        self,
+        run_id,
+        operation_id,
+        value,
+        *,
+        workflow=None,
+        max_operations=None,
+        timeout=None,
+    ):
+        """Submit one answer to the exact pending human-input operation."""
+
+        return self.resume(
+            run_id,
+            answers={operation_id: value},
+            workflow=workflow,
+            max_operations=max_operations,
+            timeout=timeout,
+        )
+
     def inspect(self, run_id):
         from .read_projection import project_run
 
         return project_run(self.journal.snapshot(run_id)).inspection()
 
+    def cancel(self, run_id, operation_id=None):
+        """Request cancellation without claiming that unknown effects stopped."""
+
+        data = self.journal.run(run_id)
+        if data["status"] in {"completed", "failed", "budget_exceeded"}:
+            return self.inspect(run_id)
+        unfinished = [
+            record
+            for record in self.journal.operations(run_id)
+            if record["status"] not in {"completed", "failed"}
+            and record["kind"] in {"provider", "decision"}
+            and (operation_id is None or record["id"] == operation_id)
+        ]
+        # A targeted typo must not leave an otherwise healthy run fenced.  A
+        # run-wide request is still journaled when no operation exists yet so
+        # a worker racing toward its first dispatch observes the cancellation.
+        if operation_id is not None and not unfinished:
+            raise KeyError(operation_id)
+        requested_at = now()
+        self.journal.update_run(
+            run_id,
+            cancel_requested_at=requested_at,
+            updated_at=requested_at,
+        )
+        self.journal.event(
+            run_id,
+            "cancellation_requested",
+            {"operation_id": operation_id},
+            operation_id=operation_id,
+        )
+        unresolved = []
+        for record in unfinished:
+            inputs = codec.decode(record["inputs"])
+            name = inputs.get("provider")
+            config = inputs.get("provider_config", {})
+            adapter = self.resolve_adapter(name, config)
+            cancel = getattr(adapter, "cancel", None)
+            if not callable(cancel):
+                outcome = Unknown(
+                    f"{name} does not implement synchronous cancellation"
+                )
+            else:
+                try:
+                    outcome = cancel(record["id"])
+                except BaseException as exc:
+                    outcome = Unknown(f"provider cancellation failed: {exc}")
+            if not isinstance(outcome, (Completed, Stopped, Running, Unknown)):
+                outcome = Unknown(
+                    "provider returned an invalid cancellation outcome"
+                )
+            response_record = None
+            if isinstance(outcome, Completed):
+                try:
+                    response_record = outcome.response.to_record()
+                    if type(response_record) is not dict:
+                        raise TypeError("terminal response record is not an object")
+                    # Prove the record is durable before it reaches Journal.event.
+                    json.dumps(response_record, allow_nan=False)
+                except (
+                    AttributeError,
+                    TypeError,
+                    ValueError,
+                    OverflowError,
+                    RecursionError,
+                ) as exc:
+                    outcome = Unknown(
+                        f"provider returned an invalid completed cancellation response: {exc}"
+                    )
+            outcome_data = {
+                "outcome": type(outcome).__name__.lower(),
+                "detail": getattr(outcome, "detail", None),
+            }
+            if isinstance(outcome, Completed):
+                # Keep the authoritative terminal record in durable evidence.
+                # The owning worker or subsequent recovery performs the normal
+                # checkpoint/session commit rather than duplicating that logic.
+                outcome_data["response"] = response_record
+            self.journal.event(
+                run_id,
+                "cancellation_outcome",
+                outcome_data,
+                operation_id=record["id"],
+            )
+            if isinstance(outcome, (Running, Unknown)):
+                unresolved.append((record["id"], outcome))
+
+        settled_at = now()
+        if unresolved:
+            operation, outcome = unresolved[0]
+            detail = getattr(outcome, "detail", None) or (
+                "Provider cancellation was not confirmed stopped"
+            )
+            self.journal.update_run(
+                run_id,
+                status="interrupted",
+                error=detail,
+                cancellation_confirmed_at=None,
+                updated_at=settled_at,
+            )
+            self.journal.event(
+                run_id,
+                "cancellation_unconfirmed",
+                {"operation_ids": [item[0] for item in unresolved]},
+            )
+            raise UncertainOperation(detail, operation)
+
+        self.journal.event(run_id, "cancellation_confirmed", {})
+        self.journal.update_run(
+            run_id,
+            status="interrupted",
+            error="Execution cancelled",
+            cancellation_confirmed_at=settled_at,
+            updated_at=settled_at,
+        )
+        return self.inspect(run_id)
+
     def resolve(
+        self,
+        run_id,
+        operation_id,
+        *,
+        retry=False,
+        response=_UNSET,
+        artifact_digests=None,
+    ):
+        with codec.use_contract_registry(self.contract_registry):
+            return self._resolve(
+                run_id,
+                operation_id,
+                retry=retry,
+                response=response,
+                artifact_digests=artifact_digests,
+            )
+
+    def _resolve(
         self,
         run_id,
         operation_id,
@@ -1675,9 +2208,9 @@ class Botpipe:
                 raise KeyError(operation_id)
             if record["status"] not in ("started", "response"):
                 raise ValueError("Only unfinished operations can be reconciled")
-            if record["kind"] not in ("provider", "activity"):
+            if record["kind"] not in ("provider", "decision", "activity"):
                 raise ValueError(
-                    "Only provider turns and activities require effect reconciliation"
+                    "Only provider turns, decisions, and activities require effect reconciliation"
                 )
             if artifact_digests is not None and record["kind"] != "provider":
                 raise ValueError("Only provider outputs accept artifact reconciliation")
@@ -1693,6 +2226,10 @@ class Botpipe:
                         "Start a new run to use different provider budget limits"
                     )
                 inputs = codec.decode(record["inputs"])
+                adapter = self.resolve_adapter(
+                    inputs["provider"],
+                    inputs.get("provider_config", {}),
+                )
                 request_data = checkpoint.request_data or {}
                 # A retry marker names the *next* generation; reconcile the
                 # attempt whose effects are still awaiting resolution.
@@ -1725,7 +2262,7 @@ class Botpipe:
                         # boundary; it is as authoritative as a recovered receipt.
                         outcome = Completed(checkpoint.response)
                     else:
-                        outcome = recover_outcome(self.provider, request)
+                        outcome = recover_outcome(adapter, request)
                     action = ProviderLifecycle.reconciliation_action(outcome)
                     if action is RecoveryAction.USE_RESPONSE:
                         checkpoint = ProviderLifecycle.completed(
@@ -1802,11 +2339,90 @@ class Botpipe:
                             "Provider reconciliation needs ProviderResponse or its field mapping"
                         )
                     checkpoint = ProviderLifecycle.completed(checkpoint, response)
+                    session_update = None
+                    session_id = inputs.get("session")
+                    if session_id is not None and record.get("session_revision") is None:
+                        saved_session = self.journal.session(session_id)
+                        if saved_session is None:
+                            raise ValueError("Recorded provider session is missing")
+                        session_update = {
+                            "session_id": session_id,
+                            "expected_revision": saved_session["revision"],
+                            "native_session_id": response.session_id,
+                        }
                     _persist_response(
                         self.journal,
                         operation_id,
                         checkpoint.to_record(),
-                        session_key=inputs.get("session"),
+                        session_update=session_update,
+                    )
+            elif record["kind"] == "decision":
+                from .artifacts import ArtifactMap
+                from .jev import (
+                    DecisionRequest,
+                    DecisionResponse,
+                    decision_response_from_record,
+                )
+                from .models import Result
+                from .recovery import Stopped
+
+                inputs = codec.decode(record["inputs"])
+                adapter = self.resolve_adapter(
+                    inputs["provider"],
+                    inputs.get("provider_config", {}),
+                )
+                request = DecisionRequest(
+                    operation_id=operation_id,
+                    state=inputs["state"],
+                    questions=inputs["questions"],
+                    receipt_dir=Path(data["folder"]) / "receipts",
+                    timeout=RunLimits.from_record(data).timeout,
+                    settings=inputs.get("settings", {}),
+                )
+                outcome = recover_outcome(adapter, request)
+                if isinstance(outcome, Completed):
+                    resolved_response = outcome.response
+                    retry = False
+                    source = "recovered"
+                elif isinstance(outcome, Stopped):
+                    resolved_response = None if response is _UNSET else response
+                    if resolved_response is None and not retry:
+                        raise ValueError(
+                            "A stopped decision needs retry=True or a typed response"
+                        )
+                else:
+                    raise BotpipeError(
+                        getattr(outcome, "detail", None)
+                        or "Decision outcome is uncertain; reconciliation is blocked"
+                    )
+                if resolved_response is not None:
+                    if not isinstance(resolved_response, DecisionResponse):
+                        if not isinstance(resolved_response, dict):
+                            raise TypeError(
+                                "Decision reconciliation needs DecisionResponse or its record"
+                            )
+                        resolved_response = decision_response_from_record(
+                            resolved_response, inputs["questions"]
+                        )
+                    result = Result(
+                        dict(resolved_response.answers),
+                        ArtifactMap(),
+                        dict(resolved_response.usage),
+                        operation_id,
+                        run_id=run_id,
+                        metadata={
+                            **resolved_response.metadata,
+                            "model": resolved_response.model,
+                        },
+                    )
+                    _persist_response(
+                        self.journal,
+                        operation_id,
+                        {
+                            "phase": "validated",
+                            "validated_value": codec.encode(result),
+                            "usage": dict(resolved_response.usage),
+                        },
                     )
             elif response is not _UNSET:
                 result = codec.encode(response)
@@ -1845,9 +2461,36 @@ class Botpipe:
                 },
                 operation_id,
             )
+            if data.get("cancel_requested_at") is not None:
+                self.journal.update_run(
+                    run_id,
+                    cancel_requested_at=None,
+                    cancellation_confirmed_at=None,
+                    updated_at=now(),
+                )
+                self.journal.event(
+                    run_id,
+                    "cancellation_reconciled",
+                    {"operation_id": operation_id},
+                    operation_id=operation_id,
+                )
 
     def close(self):
-        self.journal.close()
+        with self._adapter_lock:
+            adapters = [
+                adapter
+                for adapter in self._adapter_cache.values()
+                if id(adapter) in self._owned_adapters
+            ]
+            self._adapter_cache.clear()
+            self._owned_adapters.clear()
+        try:
+            for adapter in adapters:
+                close = getattr(adapter, "close", None)
+                if callable(close):
+                    close()
+        finally:
+            self.journal.close()
 
     def __enter__(self):
         return self

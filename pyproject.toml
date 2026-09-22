@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "botpipe"
-version = "1.0.0"
-description = "Durable Python workflows for agentic provider harnesses."
+version = "2.0.0"
+description = "Provider-first SDK and durable Python workflow runtime."
 readme = "README.md"
 requires-python = ">=3.12"
 license = "Apache-2.0"
@@ -26,6 +26,7 @@ classifiers = [
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
@@ -50,6 +51,7 @@ include = ["botpipe*", "botpipe_optimizer*", "labs*"]
 [tool.setuptools.package-data]
 botpipe = [
   "py.typed",
+  "pi_sdk_bridge.mjs",
   "workflows/**/*",
 ]
 labs = ["workflows/**/*"]
@@ -62,6 +64,7 @@ botpipe = [
 labs = ["**/__pycache__/*", "**/*.py[cod]"]
 
 [project.optional-dependencies]
+claude-sdk = ["claude-agent-sdk==0.2.155"]
 test = ["pytest>=8,<10", "pytest-asyncio>=0.23"]
 
 [tool.pytest.ini_options]

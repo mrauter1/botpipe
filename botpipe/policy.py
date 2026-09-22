@@ -6,6 +6,8 @@ into metadata and pretending they were applied.
 
 from __future__ import annotations
 
+import os
+import math
 from dataclasses import dataclass, fields
 from enum import Enum
 from pathlib import Path
@@ -21,6 +23,16 @@ class _ValueEnum(str, Enum):
 class ProviderName(_ValueEnum):
     CODEX = "codex"
     CLAUDE = "claude"
+    PI = "pi"
+    JEV = "jev"
+
+
+class OperationKind(_ValueEnum):
+    """The effect contract selected for one provider turn."""
+
+    GENERATE = "generate"
+    QUERY = "query"
+    RUN = "run"
 
 
 class ModelEffort(_ValueEnum):
@@ -91,6 +103,102 @@ def _strings(value: Any, name: str) -> tuple[str, ...] | None:
         if text not in result:
             result.append(text)
     return tuple(result)
+
+
+def _is_within(child: str, parent: str) -> bool:
+    """Conservatively compare authored path scopes without touching the filesystem."""
+    if any(character in child + parent for character in "*?[]"):
+        return child == parent
+    child_path = Path(os.path.normpath(child))
+    parent_path = Path(os.path.normpath(parent))
+    if child_path.is_absolute() != parent_path.is_absolute():
+        return False
+    if ".." in child_path.parts or ".." in parent_path.parts:
+        return child == parent
+    try:
+        child_path.relative_to(parent_path)
+    except ValueError:
+        return False
+    return True
+
+
+def _allowed_subset(
+    child: tuple[str, ...], parent: tuple[str, ...], *, paths: bool
+) -> bool:
+    if paths:
+        return all(any(_is_within(value, root) for root in parent) for value in child)
+    return set(child).issubset(parent)
+
+
+def _union(parent: tuple[str, ...], child: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(dict.fromkeys((*parent, *child)))
+
+
+def _path_intersection(
+    left: tuple[str, ...] | None, right: tuple[str, ...] | None
+) -> tuple[str, ...] | None:
+    """Return the narrower lexical roots common to both authority sets."""
+    if left is None:
+        return right
+    if right is None:
+        return left
+    result: list[str] = []
+    for first in left:
+        for second in right:
+            narrower = (
+                first
+                if _is_within(first, second)
+                else second
+                if _is_within(second, first)
+                else None
+            )
+            if narrower is not None and narrower not in result:
+                result.append(narrower)
+    return tuple(result)
+
+
+def _domain_contains(pattern: str, value: str) -> bool:
+    """Conservatively compare literal and leading-wildcard host scopes."""
+    if pattern == value:
+        return True
+    if pattern.startswith("*.") and "*" not in pattern[2:]:
+        suffix = pattern[1:].lower()
+        candidate = value.lower()
+        return candidate.endswith(suffix) and candidate != suffix[1:]
+    return False
+
+
+def _domain_intersection(
+    left: tuple[str, ...] | None, right: tuple[str, ...] | None
+) -> tuple[str, ...] | None:
+    if left is None:
+        return right
+    if right is None:
+        return left
+    result: list[str] = []
+    for first in left:
+        for second in right:
+            narrower = (
+                second
+                if _domain_contains(first, second)
+                else first
+                if _domain_contains(second, first)
+                else None
+            )
+            if narrower is not None and narrower not in result:
+                result.append(narrower)
+    return tuple(result)
+
+
+def _set_intersection(
+    left: tuple[str, ...] | None, right: tuple[str, ...] | None
+) -> tuple[str, ...] | None:
+    if left is None:
+        return right
+    if right is None:
+        return left
+    allowed = set(right)
+    return tuple(value for value in left if value in allowed)
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,6 +282,8 @@ class Policy:
                 raise TypeError("timeout must be a number or None")
             if self.timeout <= 0:
                 raise ValueError("timeout must be greater than zero")
+            if not math.isfinite(float(self.timeout)):
+                raise ValueError("timeout must be finite")
         if self.allow_local_binding is not None and not isinstance(
             self.allow_local_binding, bool
         ):
@@ -243,24 +353,198 @@ class Policy:
 
     def merged(self, override: "Policy | Mapping[str, Any] | None") -> "Policy":
         other = override if isinstance(override, Policy) else Policy.from_dict(override)
+        sandbox_rank = {
+            SandboxMode.READ_ONLY: 0,
+            SandboxMode.WORKSPACE_WRITE: 1,
+            SandboxMode.DANGER_FULL_ACCESS: 2,
+        }
+        network_rank = {NetworkMode.NONE: 0, NetworkMode.LIMITED: 1, NetworkMode.FULL: 2}
+        permission_rank = {
+            PermissionMode.DENY_ALL: 0,
+            PermissionMode.ASK: 1,
+            PermissionMode.AUTO_EDIT: 2,
+            PermissionMode.FULL_AUTO_SANDBOXED: 3,
+            PermissionMode.FULL_AUTO_UNSANDBOXED: 4,
+        }
+        for name, ranks in (
+            ("sandbox_mode", sandbox_rank),
+            ("network", network_rank),
+            ("permission_mode", permission_rank),
+        ):
+            parent_value = getattr(self, name)
+            child_value = getattr(other, name)
+            if (
+                parent_value is not None
+                and child_value is not None
+                and ranks[child_value] > ranks[parent_value]
+            ):
+                raise ValueError(
+                    f"policy override cannot broaden {name} from "
+                    f"{parent_value.value!r} to {child_value.value!r}"
+                )
+        if self.allow_local_binding is False and other.allow_local_binding is True:
+            raise ValueError("policy override cannot enable local binding")
+        if (
+            self.timeout is not None
+            and other.timeout is not None
+            and other.timeout > self.timeout
+        ):
+            raise ValueError("policy override cannot increase timeout")
+        for name, paths in (
+            ("allow_read", True),
+            ("allow_write", True),
+            ("network_domains", False),
+            ("allow_permissions", False),
+            ("ask_permissions", False),
+        ):
+            parent_values = getattr(self, name)
+            child_values = getattr(other, name)
+            if (
+                parent_values is not None
+                and child_values is not None
+                and not _allowed_subset(child_values, parent_values, paths=paths)
+            ):
+                raise ValueError(f"policy override cannot broaden {name}")
         payload = self.to_dict(exclude_none=False)
         for field in fields(self):
             value = getattr(other, field.name)
             if value is not None:
                 payload[field.name] = value
+        for name in (
+            "deny_read",
+            "deny_write",
+            "deny_network_domains",
+            "deny_permissions",
+        ):
+            parent_values = getattr(self, name)
+            child_values = getattr(other, name)
+            if parent_values is not None and child_values is not None:
+                payload[name] = _union(parent_values, child_values)
         if other.sandbox_mode == SandboxMode.READ_ONLY and other.allow_write is None:
             payload["allow_write"] = ()
         if other.sandbox_mode == SandboxMode.DANGER_FULL_ACCESS:
-            if other.allow_write is None:
-                payload["allow_write"] = ()
             if other.network is None:
-                payload["network"] = NetworkMode.FULL
-                payload["network_domains"] = ()
+                # A danger-full-access sandbox does not implicitly widen an
+                # inherited network ceiling.
+                if self.network is None:
+                    payload["network"] = NetworkMode.FULL
+                    payload["network_domains"] = ()
         if (
             other.network in (NetworkMode.FULL, NetworkMode.NONE)
             and other.network_domains is None
         ):
             payload["network_domains"] = ()
+        return Policy(**payload)
+
+    def intersect(self, ceiling: "Policy | Mapping[str, Any] | None") -> "Policy":
+        """Apply current deployment authority to a previously resolved policy.
+
+        This differs from :meth:`merged`: a saved request must retain its
+        model/provider choices while every effect-bearing field becomes the
+        intersection of the saved authority and the current deployment
+        ceiling. Disjoint scopes close to the empty set rather than silently
+        selecting either side.
+        """
+        other = ceiling if isinstance(ceiling, Policy) else Policy.from_dict(ceiling)
+        saved = self.effective()
+        sandbox_rank = {
+            SandboxMode.READ_ONLY: 0,
+            SandboxMode.WORKSPACE_WRITE: 1,
+            SandboxMode.DANGER_FULL_ACCESS: 2,
+        }
+        network_rank = {
+            NetworkMode.NONE: 0,
+            NetworkMode.LIMITED: 1,
+            NetworkMode.FULL: 2,
+        }
+        permission_rank = {
+            PermissionMode.DENY_ALL: 0,
+            PermissionMode.ASK: 1,
+            PermissionMode.AUTO_EDIT: 2,
+            PermissionMode.FULL_AUTO_SANDBOXED: 3,
+            PermissionMode.FULL_AUTO_UNSANDBOXED: 4,
+        }
+
+        payload = saved.to_dict(exclude_none=False)
+        payload["sandbox_mode"] = (
+            min(
+                (saved.sandbox_mode, other.sandbox_mode),
+                key=sandbox_rank.__getitem__,
+            )
+            if other.sandbox_mode is not None
+            else saved.sandbox_mode
+        )
+        payload["permission_mode"] = (
+            min(
+                (saved.permission_mode, other.permission_mode),
+                key=permission_rank.__getitem__,
+            )
+            if other.permission_mode is not None
+            else saved.permission_mode
+        )
+        network = (
+            min((saved.network, other.network), key=network_rank.__getitem__)
+            if other.network is not None
+            else saved.network
+        )
+        domains: tuple[str, ...] | None = None
+        if network is NetworkMode.LIMITED:
+            saved_domains = (
+                saved.network_domains
+                if saved.network is NetworkMode.LIMITED
+                else None
+            )
+            current_domains = (
+                other.network_domains
+                if other.network is NetworkMode.LIMITED
+                else None
+            )
+            domains = _domain_intersection(saved_domains, current_domains)
+            if not domains:
+                network = NetworkMode.NONE
+                domains = ()
+        elif network in (NetworkMode.NONE, NetworkMode.FULL):
+            domains = saved.network_domains if other.network is None else ()
+        payload["network"] = network
+        payload["network_domains"] = domains
+
+        payload["allow_read"] = _path_intersection(
+            saved.allow_read, other.allow_read
+        )
+        payload["allow_write"] = _path_intersection(
+            saved.allow_write, other.allow_write
+        )
+        if payload["sandbox_mode"] is SandboxMode.READ_ONLY:
+            payload["allow_write"] = ()
+        for name in ("allow_permissions", "ask_permissions"):
+            payload[name] = _set_intersection(
+                getattr(saved, name), getattr(other, name)
+            )
+        for name in (
+            "deny_read",
+            "deny_write",
+            "deny_network_domains",
+            "deny_permissions",
+        ):
+            saved_values = getattr(saved, name)
+            other_values = getattr(other, name)
+            payload[name] = (
+                None
+                if saved_values is None and other_values is None
+                else _union(saved_values or (), other_values or ())
+            )
+        payload["allow_local_binding"] = (
+            bool(saved.allow_local_binding and other.allow_local_binding)
+            if other.allow_local_binding is not None
+            else saved.allow_local_binding
+        )
+        if saved.timeout is None:
+            payload["timeout"] = other.timeout
+        elif other.timeout is None:
+            payload["timeout"] = saved.timeout
+        else:
+            payload["timeout"] = min(saved.timeout, other.timeout)
+        payload["read_only"] = saved.read_only
         return Policy(**payload)
 
     @staticmethod
@@ -309,6 +593,7 @@ __all__ = [
     "ModelEffort",
     "ModelVerbosity",
     "NetworkMode",
+    "OperationKind",
     "PermissionMode",
     "Policy",
     "PolicyInput",

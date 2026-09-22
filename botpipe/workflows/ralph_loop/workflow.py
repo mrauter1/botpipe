@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from botpipe import Artifact, Session, Worklist, workflow
+from botpipe import Artifact, Provider, Session, Worklist, workflow
 
 
 class ReviewDecision(BaseModel):
@@ -71,8 +71,8 @@ object whose verdict is accepted or needs_rework.
 def ralph_loop(request: str):
     work = Artifact.json("work.json", required=True)
     plan_review = Artifact.md("plan_review.md", required=True)
-    planner = Session(key="planner")
-    plan_reviewer = Session(key="plan-reviewer")
+    planner = Provider()
+    plan_reviewer = planner.with_config(session=None)
     feedback = ()
 
     while True:
@@ -90,19 +90,19 @@ def ralph_loop(request: str):
 
     items = Worklist.from_artifact(plan.artifacts.work, collection="items")
     for item in items:
-        session = Session.work_item(item)
+        provider = planner.with_config(session=Session.work_item(item))
         item_review = Artifact.md(
             f"items/{item.dir_key}/implementation_review.md",
             required=True,
         )
         feedback = ()
         while True:
-            session.run(
+            provider.run(
                 IMPLEMENT,
                 input=item.payload,
                 reads=(items.artifact, *feedback),
             )
-            review = session.run(
+            review = provider.run(
                 REVIEW_IMPLEMENTATION,
                 input=item.payload,
                 reads=(items.artifact,),

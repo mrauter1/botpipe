@@ -7,7 +7,7 @@ from dataclasses import asdict
 from botpipe import (
     Artifact,
     Prompt,
-    Session,
+    Provider,
     activity,
     current_run,
     provider_budget,
@@ -183,8 +183,8 @@ def WorkflowRunTracesToOptimizationCandidates(
         turn_timeout_seconds=params.provider_turn_timeout_seconds,
     ) as budget:
         if snapshot.next_action == "propose_changes" and snapshot.shortlist:
-            producer = Session(key="optimizer-producer")
-            verifier = Session.fresh()
+            producer = Provider()
+            verifier = producer.with_config(session=None)
             feedback = None
             while True:
                 proposal = producer.run(
@@ -210,7 +210,7 @@ def WorkflowRunTracesToOptimizationCandidates(
                     ),
                     returns=CandidateSet,
                     name="propose evidence-bound candidates",
-                    retries=2,
+                    output_retries=2,
                 )
                 candidate_set = validate_candidate_set(
                     proposal.value,
@@ -224,7 +224,7 @@ def WorkflowRunTracesToOptimizationCandidates(
                     supporting_content = (
                         proposal.artifacts.workflow_optimization_supporting.read_bytes()
                     )
-                decision = verifier.run(
+                decision = verifier.generate(
                     Prompt.file("prompts/recommendation_verifier.md"),
                     input={
                         "request": request,
@@ -237,7 +237,7 @@ def WorkflowRunTracesToOptimizationCandidates(
                     },
                     returns=CandidateReview,
                     name="independently review candidate set",
-                    retries=2,
+                    output_retries=2,
                 )
                 review = validate_candidate_review(
                     decision.value,

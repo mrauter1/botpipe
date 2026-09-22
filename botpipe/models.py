@@ -18,6 +18,8 @@ class Result(Generic[T]):
     artifacts: ArtifactMap
     usage: dict[str, Any] = field(default_factory=dict)
     operation_id: str = ""
+    run_id: str = ""
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -31,6 +33,7 @@ class RunResult(Generic[T]):
     pending_input: dict | None = None
     folder: Path = Path(".")
     usage: dict = field(default_factory=dict)
+    exception: BaseException | None = field(default=None, repr=False, compare=False)
 
     @property
     def ok(self):

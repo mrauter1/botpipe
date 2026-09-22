@@ -3,14 +3,16 @@
 Author workflows as ordinary typed Python functions decorated with `@workflow`.
 The function owns branches, loops, exception handling, and nested workflow calls.
 
-Use `Session` for provider turns. Declare immutable inputs with `reads`, provider
+Use `Provider` for provider turns. Declare immutable inputs with `reads`, provider
 destinations with `Artifact` values in `writes`, and structured output with
-`returns`. Give distinct long-lived roles distinct session keys. Use
-`Session.task` for cross-run task continuity, `Session.work_item` for stable
-work-item continuity, and `Session.fresh` for independent reviews.
+`returns`. Use `run` for effectful work, `query` for read-only discovery, and
+`generate` for supplied-context judgments. A provider has managed continuity by
+default. Pass `Session.task(...)` or `Session.work_item(...)` to
+`Provider(session=...)` for stable cross-run continuity, and derive
+`provider.with_config(session=None)` for independent review calls.
 
 Use `@activity` for custom filesystem or process I/O. Keep unsafe activities
-small and do not claim exactly-once external effects. Use `ask` for durable user
+small and do not claim exactly-once external effects. Use `ask_human` for durable user
 input, `parallel` for independent branches, and nested decorated function calls
 for durable child workflows.
 

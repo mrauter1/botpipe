@@ -92,6 +92,7 @@ def _generated_relative_path(value: Any) -> str:
         or any(part in {"", ".", ".."} for part in path.parts)
         or "__pycache__" in path.parts
         or path.parts[0] == ".git"
+        or path.parts[0] == ".botpipe-v2"
         or (path.parts[0] == ".botpipe" and path.parts[:2] != (".botpipe", "workflows"))
     ):
         raise ValueError(f"generated file path must stay repo-relative: {value}")

@@ -360,7 +360,7 @@ def test_projection_uses_physical_dispatch_events_not_response_claims():
     assert projection.usage == {"input_tokens": 3}
 
 
-def test_legacy_response_usage_is_preserved_without_dispatch_evidence():
+def test_manually_reconciled_usage_is_preserved_without_dispatch_evidence():
     operation = {
         "id": "op",
         "run_id": "run",

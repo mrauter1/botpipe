@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from botpipe import Artifact, Botpipe, Session, Worklist, ask, workflow
+from botpipe import Artifact, Botpipe, Policy, Provider, Worklist, ask_human, workflow
 from botpipe.providers import FakeProvider
 from botpipe.recovery import Stopped
 
@@ -25,7 +25,7 @@ def test_session_snapshots_raw_binary_reads(tmp_path):
 
     @workflow
     def reader():
-        return Session().run("Read input", reads=["input.bin"]).value
+        return Provider().run("Read input", reads=["input.bin"]).value
 
     provider = FakeProvider([inspect_request])
     with Botpipe(tmp_path, provider=provider) as client:
@@ -34,14 +34,41 @@ def test_session_snapshots_raw_binary_reads(tmp_path):
     assert observed == [content]
 
 
+def test_relative_raw_reads_resolve_from_effective_provider_workspace(tmp_path):
+    target = tmp_path / "candidate"
+    target.mkdir()
+    (tmp_path / "input.txt").write_text("wrong root")
+    (target / "input.txt").write_text("candidate input")
+    observed = []
+
+    def inspect_request(request):
+        observed.append(request.reads[0].read_text())
+        return "read"
+
+    @workflow
+    def reader():
+        return Provider(session=None).run(
+            "Read candidate input",
+            workspace=target,
+            reads=["input.txt"],
+        ).value
+
+    provider = FakeProvider([inspect_request])
+    with Botpipe(tmp_path, provider=provider) as client:
+        result = client.run(reader)
+
+    assert result.ok, result.error
+    assert observed == ["candidate input"]
+
+
 def test_completed_raw_read_does_not_require_live_file_on_resume(tmp_path):
     source = tmp_path / "input.txt"
     source.write_text("initial contents")
 
     @workflow
     def reader():
-        value = Session().run("Read input", reads=["input.txt"]).value
-        ask("Continue?")
+        value = Provider().run("Read input", reads=["input.txt"]).value
+        ask_human("Continue?")
         return value
 
     provider = FakeProvider(["read"])
@@ -49,10 +76,71 @@ def test_completed_raw_read_does_not_require_live_file_on_resume(tmp_path):
         paused = client.run(reader)
         assert paused.status == "awaiting_input", paused.error
         source.unlink()
-        resumed = client.resume(paused.run_id, workflow=reader, answer="yes")
+        resumed = client.resume(paused.run_id, workflow=reader, answers={client.pending(paused.run_id)[0]["operation_id"]: "yes"})
     assert resumed.ok, resumed.error
     assert resumed.value == "read"
     assert len(provider.calls) == 1
+
+
+def test_raw_read_denied_by_authored_scope_never_dispatches_provider(tmp_path):
+    (tmp_path / "secret.txt").write_text("must remain unread")
+
+    @workflow
+    def reader():
+        return Provider(session=None).generate(
+            "Read input",
+            reads=["secret.txt"],
+            policy=Policy(allow_read=("allowed",)),
+        ).value
+
+    provider = FakeProvider(["must not dispatch"])
+    with Botpipe(tmp_path, provider=provider) as client:
+        result = client.run(reader)
+
+    assert result.status == "failed"
+    assert "allow_read" in result.error
+    assert provider.calls == []
+
+
+def test_committed_raw_snapshot_replays_under_tighter_live_read_ceiling(tmp_path):
+    source = tmp_path / "input.txt"
+    source.write_text("initial contents")
+
+    @workflow
+    def reader():
+        value = Provider(session=None).generate(
+            "Read input", reads=["input.txt"]
+        ).value
+        ask_human("Continue?")
+        return value
+
+    provider = FakeProvider(["read"])
+    with Botpipe(
+        tmp_path,
+        provider=provider,
+        policy=Policy(allow_read=(".",)),
+    ) as first:
+        paused = first.run(reader)
+        assert paused.status == "awaiting_input", paused.error
+        [pending] = first.pending(paused.run_id)
+
+    source.unlink()
+    replay_provider = FakeProvider([])
+    with Botpipe(
+        tmp_path,
+        provider=replay_provider,
+        policy=Policy(allow_read=()),
+    ) as tighter:
+        resumed = tighter.resume(
+            paused.run_id,
+            workflow=reader,
+            answers={pending["operation_id"]: "yes"},
+        )
+
+    assert resumed.ok, resumed.error
+    assert resumed.value == "read"
+    assert len(provider.calls) == 1
+    assert replay_provider.calls == []
 
 
 def test_capture_published_before_operation_finish_survives_crash(
@@ -65,7 +153,7 @@ def test_capture_published_before_operation_finish_survives_crash(
     @workflow
     def writer():
         return (
-            Session()
+            Provider()
             .run("Write report", writes=[Artifact.text("result.txt", required=True)])
             .artifacts.result
         )
@@ -102,10 +190,10 @@ def test_provider_response_is_recorded_before_artifact_validation(tmp_path):
 
     @workflow
     def writer():
-        return Session().run(
+        return Provider().run(
             "Write JSON",
             writes=[Artifact.json("result.json", required=True)],
-            retries=0,
+            output_retries=0,
         )
 
     with Botpipe(tmp_path, provider=FakeProvider([invalid])) as client:
@@ -128,10 +216,10 @@ def test_explicit_provider_retry_requires_new_artifact_outputs(tmp_path):
 
     @workflow
     def writer():
-        return Session().run(
+        return Provider().run(
             "Write report",
             writes=[Artifact.text("result.txt", required=True)],
-            retries=0,
+            output_retries=0,
         )
 
     provider = ConfirmedStoppedProvider([uncertain, "retry forgot its file"])
@@ -166,14 +254,14 @@ def test_worklist_alias_and_latest_artifact_are_visible_after_resume(tmp_path):
 
     @workflow
     def plan():
-        response = Session().run(
+        response = Provider().run(
             "Create work", writes=[Artifact.json("work.json", required=True)]
         )
         work = Worklist.from_artifact(response.artifacts.work)
         for item in work:
             work.complete(item)
             if item.id == "a":
-                ask("Continue?")
+                ask_human("Continue?")
         return work.artifact
 
     provider = FakeProvider([write_plan])
@@ -185,7 +273,7 @@ def test_worklist_alias_and_latest_artifact_are_visible_after_resume(tmp_path):
             "completed",
             "pending",
         ]
-        resumed = client.resume(paused.run_id, workflow=plan, answer="yes")
+        resumed = client.resume(paused.run_id, workflow=plan, answers={client.pending(paused.run_id)[0]["operation_id"]: "yes"})
         inspected = client.inspect(paused.run_id)
     assert resumed.ok, resumed.error
     assert [item["status"] for item in resumed.value.read_json()["items"]] == [
@@ -217,7 +305,7 @@ def test_raw_read_publication_recovers_before_ledger_finish(tmp_path, monkeypatc
 
     @workflow
     def reader():
-        return Session().run("Read input", reads=["input.txt"]).value
+        return Provider().run("Read input", reads=["input.txt"]).value
 
     provider = FakeProvider([inspect_request])
     with Botpipe(tmp_path, provider=provider) as client:
@@ -247,8 +335,8 @@ def test_parallel_isolated_artifacts_recover_independently(tmp_path, monkeypatch
     right = tmp_path / "right"
     left.mkdir()
     right.mkdir()
-    shared = tmp_path / "input.txt"
-    shared.write_text("shared observation")
+    (left / "input.txt").write_text("shared observation")
+    (right / "input.txt").write_text("shared observation")
 
     def write(request):
         request.artifacts["report"].write_text(request.workspace.name)
@@ -258,7 +346,7 @@ def test_parallel_isolated_artifacts_recover_independently(tmp_path, monkeypatch
     def writer():
         return parallel(
             lambda: (
-                Session()
+                Provider()
                 .run(
                     "Write left",
                     workspace=left,
@@ -268,7 +356,7 @@ def test_parallel_isolated_artifacts_recover_independently(tmp_path, monkeypatch
                 .artifacts.report
             ),
             lambda: (
-                Session()
+                Provider()
                 .run(
                     "Write right",
                     workspace=right,
@@ -297,7 +385,8 @@ def test_parallel_isolated_artifacts_recover_independently(tmp_path, monkeypatch
         paused = client.run(writer)
         assert paused.status == "interrupted", paused.error
         assert len(provider.calls) == 2
-        shared.unlink()
+        (left / "input.txt").unlink()
+        (right / "input.txt").unlink()
         for request in provider.calls:
             request.artifacts["report"].unlink()
         resumed = client.resume(paused.run_id, workflow=writer)

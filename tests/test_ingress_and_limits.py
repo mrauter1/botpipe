@@ -11,8 +11,8 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel, model_validator
 
-from botpipe import Botpipe, Session, activity, ask, workflow
-from botpipe.config import ConfigError, load_config
+from botpipe import Botpipe, Provider, activity, ask_human, workflow
+from botpipe.config import ConfigurationError, load_config
 from botpipe.limits import RunLimits
 from botpipe.providers import FakeProvider
 
@@ -55,14 +55,14 @@ def test_model_input_is_bound_once_and_internal_calls_do_not_revalidate(tmp_path
     @workflow
     def root(value: Input):
         result = child(value)
-        ask("continue?")
+        ask_human("continue?")
         return result
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(root, {"number": 1})
         assert paused.status == "awaiting_input", paused.error
         assert calls == [1]
-        resumed = client.resume(paused.run_id, answer="yes", workflow=root)
+        resumed = client.resume(paused.run_id, answers={client.pending(paused.run_id)[0]["operation_id"]: "yes"}, workflow=root)
         assert resumed.ok, resumed.error
         assert resumed.value.number == 2
         assert calls == [1]
@@ -86,7 +86,7 @@ def test_human_answer_checkpoint_skips_validation_after_commit_crash(
 
     @workflow
     def approval():
-        return ask("number?", returns=Answer)
+        return ask_human("number?", returns=Answer)
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(approval)
@@ -97,7 +97,7 @@ def test_human_answer_checkpoint_skips_validation_after_commit_crash(
 
         monkeypatch.setattr(client.journal, "finish", crash)
         with pytest.raises(SystemExit):
-            client.resume(paused.run_id, workflow=approval, answer={"number": 1})
+            client.resume(paused.run_id, workflow=approval, answers={client.pending(paused.run_id)[0]["operation_id"]: {"number": 1}})
         assert calls == [1]
         monkeypatch.setattr(client.journal, "finish", finish)
         resumed = client.resume(paused.run_id, workflow=approval)
@@ -151,7 +151,7 @@ def test_fresh_process_resume_registers_input_types_and_preserves_state(
     prefix = (
         "from typing import Generic, TypeVar\n"
         "from pydantic import BaseModel, RootModel\n"
-        "from botpipe import workflow, ask\n"
+        "from botpipe import workflow, ask_human\n"
         "T = TypeVar('T')\n"
         "class Box(BaseModel, Generic[T]):\n"
         "    item: T\n"
@@ -164,7 +164,7 @@ def test_fresh_process_resume_registers_input_types_and_preserves_state(
             "        item: int\n"
             "    @workflow\n"
             "    def echo(value: Input):\n"
-            "        ask('continue?')\n"
+            "        ask_human('continue?')\n"
             "        return value\n"
             "    return echo\n"
             "echo = make()\n"
@@ -181,14 +181,14 @@ def test_fresh_process_resume_registers_input_types_and_preserves_state(
         body = (
             "@workflow\n"
             f"def echo(value: {annotation}):\n"
-            "    ask('continue?')\n"
+            "    ask_human('continue?')\n"
             "    return value\n"
         )
     source = tmp_path / "flow.py"
     source.write_text(prefix + body)
     env = _subprocess_env()
 
-    def cli(*arguments):
+    def cli(*arguments, expected=0):
         result = subprocess.run(
             [
                 sys.executable,
@@ -204,12 +204,27 @@ def test_fresh_process_resume_registers_input_types_and_preserves_state(
             text=True,
             timeout=20,
         )
-        assert result.returncode == 0, result.stderr or result.stdout
+        assert result.returncode == expected, result.stderr or result.stdout
         return json.loads(result.stdout)
 
-    first = cli("run", f"{source}:echo", "--arg", json.dumps(raw), "--run-id", "fresh")
+    first = cli(
+        "run",
+        f"{source}:echo",
+        "--arg",
+        json.dumps(raw),
+        "--run-id",
+        "fresh",
+        expected=4,
+    )
     assert first["status"] == "awaiting_input"
-    resumed = cli("resume", "fresh", "--workflow", f"{source}:echo", "--answer", "yes")
+    resumed = cli(
+        "answer",
+        "fresh",
+        first["pending_input"]["operation_id"],
+        "yes",
+        "--workflow",
+        f"{source}:echo",
+    )
     assert resumed["status"] == "completed"
     assert resumed["value"] == raw
     replayed = cli("resume", "fresh", "--workflow", f"{source}:echo")
@@ -219,11 +234,11 @@ def test_fresh_process_resume_registers_input_types_and_preserves_state(
 def test_resumed_limits_are_run_owned_and_inherited_by_children(tmp_path):
     @workflow
     def child():
-        return Session().run("answer").value
+        return Provider().run("answer").value
 
     @workflow
     def parent():
-        ask("continue?")
+        ask_human("continue?")
         return child()
 
     @workflow
@@ -234,7 +249,7 @@ def test_resumed_limits_are_run_owned_and_inherited_by_children(tmp_path):
     with Botpipe(tmp_path, provider=provider, max_operations=1, timeout=10) as client:
         paused = client.run(parent)
         resumed = client.resume(
-            paused.run_id, workflow=parent, answer="yes", max_operations=7, timeout=99
+            paused.run_id, workflow=parent, answers={client.pending(paused.run_id)[0]["operation_id"]: "yes"}, max_operations=7, timeout=99
         )
         assert resumed.ok, resumed.error
         assert provider.calls[0].timeout == 99
@@ -253,7 +268,7 @@ def test_operation_limit_validation_is_shared(tmp_path, value):
         Botpipe(tmp_path, provider=FakeProvider([]), max_operations=value)
     path = tmp_path / "botpipe.json"
     path.write_text(json.dumps({"max_operations": value}))
-    with pytest.raises(ConfigError, match="positive integer"):
+    with pytest.raises(ConfigurationError, match="positive integer"):
         load_config(tmp_path)
 
 
@@ -265,14 +280,14 @@ def test_timeout_validation_is_shared(tmp_path, value):
         Botpipe(tmp_path, provider=FakeProvider([]), timeout=value)
     path = tmp_path / "botpipe.json"
     path.write_text(json.dumps({"timeout": value}))
-    with pytest.raises(ConfigError, match="finite positive"):
+    with pytest.raises(ConfigurationError, match="finite positive"):
         load_config(tmp_path)
 
 
 def test_invalid_resume_limits_leave_record_and_client_unchanged(tmp_path):
     @workflow
     def approval():
-        return ask("continue?")
+        return ask_human("continue?")
 
     with Botpipe(
         tmp_path, provider=FakeProvider([]), max_operations=3, timeout=10
@@ -330,13 +345,13 @@ def test_exception_replay_preserves_slots_without_running_user_init(
         try:
             fail()
         except Failure as error:
-            ask("continue?")
+            ask_human("continue?")
             return error.code, getattr(error, "filename", None)
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(job)
         assert paused.status == "awaiting_input", paused.error
-        resumed = client.resume(paused.run_id, workflow=job, answer="yes")
+        resumed = client.resume(paused.run_id, workflow=job, answers={client.pending(paused.run_id)[0]["operation_id"]: "yes"})
         assert resumed.ok, resumed.error
         assert resumed.value == (7, "/missing/file" if native_base is OSError else None)
         assert calls == [7]

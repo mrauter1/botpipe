@@ -1,113 +1,108 @@
 # Authoring workflows
 
-A workflow is an ordinary sync or async Python function decorated with
-`@workflow`.
+A workflow is an ordinary typed sync or async Python function decorated with
+`@workflow`. Python owns conditions, loops, calls, and returns. Provider
+operations, activities, human input, worklist snapshots, and artifact capture
+form the durable boundaries.
 
 ```python
-from botpipe import Session, ask, workflow
+from botpipe import Provider, Session, ask_human, workflow
 
 
 @workflow(name="release", version="2")
 def release(version: str) -> str:
-    review = Session.task("review").run(
+    reviewer = Provider(session=Session())
+    review = reviewer.query(
         "Review this release candidate.", input={"version": version}
     )
     if review.value != "approved":
-        reason = ask("Why should this release proceed?", returns=str)
+        reason = ask_human("Why should this release proceed?", returns=str)
         return f"held: {reason}"
     return "approved"
 ```
 
-Use normal Python for decisions and loops. Do not model routes, transitions, or
-mutable workflow state separately.
+## Choose the operation
 
-## Inputs and returns
+Use `generate` for a response from supplied immutable context. It denies model
+commands and autonomous tools by default. A narrowly required read-only command
+must be granted as one exact argv tuple with `allow_commands`; a shell string,
+argument pattern, or prior turn does not grant authority.
 
-Use annotations. Pydantic models, dataclasses, paths, and JSON-compatible
-collections make the durable contract explicit. CLI invocation validates inputs
-before a run starts.
+Use `query` when the provider must list, search, read, or run constrained
+read-only commands within an authorized scope. An omitted query scope uses the
+workspace; an explicit empty scope disables local discovery. Network reads need
+a separately configured read service.
 
-```python
-class Change(BaseModel):
-    request: str
-    test_command: str = "pytest -q"
+Use `run` when the provider must edit a workspace, invoke effectful tools, or
+produce declared files. Use `@activity` for application-owned I/O such as API
+calls. `activity(retry_safe=False)` ensures an interrupted effect waits for
+operator reconciliation before another attempt.
 
-@workflow
-async def implement(change: Change) -> Report: ...
-```
+`generate` and `query` do not accept `writes`. A provider capability mismatch
+raises `CapabilityError`; Botpipe does not substitute another backend.
 
-You may edit activities, helpers, and workflow implementations between executions.
-Completed operations replay their saved outcomes; future work uses current code.
-Keep the recorded operation sequence, logical identities, and inputs consistent.
-Stored values must still match their type and field-layout contracts. A completed
-run always returns its saved result without executing the workflow again.
+## Sessions and roles
 
-## Sessions
-
-`Session()` creates a workflow-scoped conversation. `Session.task(key)` persists
-continuity for a task, while `Session.work_item(item, key)` isolates continuity
-per durable work item. `Session.fresh()` explicitly starts without prior provider
-conversation.
+Every conversation-capable `Provider()` gets its own managed session. Variants
+created by `with_config` share that exact lazily initialized session and pinned
+backend selection.
 
 ```python
-session = Session.task("implementation")
-plan = session.run("Inspect the repository and make a plan.", returns=Plan)
-done = session.run("Implement the plan and run its checks.", input=plan.value)
+base = Provider()
+planner = base.with_config(instructions="Plan concrete steps.")
+builder = base.with_config(instructions="Implement and verify.")
+
+plan = planner.query(request, returns=Plan)
+change = builder.run("Implement the plan.", input=plan.value)
 ```
 
-Provider operations on one mutable session are serialized. Give independent
-parallel branches separate sessions.
+Pass `session=Session()` for a separate continuing conversation. Pass
+`session=None` to the constructor or one call for independent calls. Give
+parallel branches separate sessions; editing branches also need isolated
+workspaces and non-conflicting output paths.
 
-## Prompts and effects
+## Types, results, and artifacts
 
-Plain strings are inline prompts. Use `Prompt.file(path)` for a source-controlled
-prompt relative to the workflow file. Templates render with strict Jinja rules.
+Use module-level Pydantic models, dataclasses, enums, paths, and JSON-compatible
+collections for durable contracts. Provider output and human answers are
+validated before their normalized state is committed. Output repairs use the
+bounded `output_retries` argument; transport retry and uncertain-effect
+reconciliation are separate mechanisms.
 
-Declare provider-written outputs with `writes=` and material inputs with
-`reads=`. Use `@activity` for other external I/O. This keeps replay honest: a
-filesystem read, HTTP request, subprocess, random value, or clock value that can
-change workflow behavior belongs behind an operation.
+Declare provider destinations with `Artifact.json`, `.md`, `.text`, or `.raw`
+in `writes=`. Mark an output required when later behavior depends on it.
+`Result.artifacts` contains that operation's immutable versions. A live
+workspace file is not historical evidence.
 
-## Artifacts and worklists
+Use `Worklist.from_artifact` when code needs durable item selection and
+completion. Resume retains the recorded item order and payload even if a live
+source later changes.
+
+## Human input and recovery
+
+`ask_human(question, returns=Type)` suspends a workflow. Each pending request
+has an operation ID, so concurrent questions remain targetable:
 
 ```python
-report = Artifact.md("reports/final.md", required=True)
-result = Session.task().run("Write the final report.", writes=(report,))
-print(result.artifacts.report.read_text())
+pending = client.pending(run_id)
+result = client.answer(run_id, pending[0]["operation_id"], "yes")
 ```
 
-Captured artifacts are immutable snapshots. `source_path` identifies the
-provider destination; `path` identifies the durable snapshot.
+An invalid value keeps the same request pending with a diagnostic. Resume does
+not guess which question an answer belongs to.
 
-`Worklist.from_artifact()` snapshots its selected items before iteration.
-Resume uses that historical selection even if the live source later changes.
-Completing an item produces a new logical artifact version.
+An operation that may have started an effect without a committed outcome is
+`interrupted`. Inspect it and call `resolve(run_id, operation_id, retry=True)`
+or supply the observed `response`. Repeating an uncertain effect always needs
+explicit authorization. Artifact reconciliation additionally requires the full
+declared digest/absence map.
 
-## Nested and parallel work
+## Source edits and persistence
 
-Call a decorated workflow normally to create a durable child. Use
-`parallel(lambda: ..., lambda: ...)` for independent work; results retain input
-order. Shared-workspace parallel sessions must be read-only. Give an editing
-branch its own `Session.run(..., workspace=isolated_path)`, separate session, and
-non-conflicting output paths.
+Completed operations replay their saved outcomes while future operations use
+current code. Keep the recorded operation prefix, identities, inputs, and typed
+storage contracts compatible. A completed root returns its saved result.
 
-## Human input and interruption
-
-`ask(question, returns=Type)` pauses with `awaiting_input`. Resume through the
-SDK or CLI with a typed answer. The answer is validated against `Type` before it
-is recorded. A rejected answer leaves the same request pending and includes a
-`diagnostic` in `pending_input`, so it can be corrected with another resume.
-Activities default to `retry_safe=True`, so unfinished calls can run again on
-resume. Use `@activity(retry_safe=False)` when repeating a call requires an
-explicit decision. An uncertain activity with that setting pauses as
-`interrupted`; inspect it and call `resolve(..., retry=True)` or
-`resolve(..., response=value)` explicitly. Completed calls reuse their saved
-outcomes in either case.
-
-If a provider completed before its artifact inventory was saved, inspect its
-declared files and approve their exact contents before resuming. For example,
-`client.resolve(run_id, operation_id, artifact_digests={"report": digest})`
-accepts the inspected SHA-256 digest for `report`. Include every declared name;
-use `None` only for an absent optional artifact. The CLI equivalent is
-`botpipe resolve RUN OP --artifact-digests '{"report":"<sha256>"}'`.
-This records operator provenance and does not bypass a running or unknown writer.
+Botpipe 2.0 reads only its own journal format. Start with a fresh state directory
+when migrating an application from an earlier release; historical journals are
+not imported or converted.

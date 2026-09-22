@@ -10,11 +10,15 @@ from pathlib import Path
 
 import pytest
 
-from botpipe.policy import NetworkMode, Policy, SandboxMode
+import botpipe.providers as provider_module
+
+from botpipe.policy import NetworkMode, OperationKind, Policy, SandboxMode
 from botpipe.providers import (
+    CapabilityError,
     ClaudeProvider,
     CodexProvider,
     FakeProvider,
+    PiProvider,
     ProviderError,
     ProviderInterruptedError,
     ProviderPolicyError,
@@ -47,6 +51,21 @@ def executable(tmp_path: Path, body: str) -> tuple[str, ...]:
     script = tmp_path / "provider.py"
     script.write_text(body, encoding="utf-8")
     return sys.executable, str(script)
+
+
+def test_native_stream_capture_fails_at_bounded_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(provider_module, "_MAX_NATIVE_STREAM_BYTES", 1024)
+    command = executable(
+        tmp_path,
+        "import sys\nsys.stdout.write('x' * 2048)\nsys.stdout.flush()\n",
+    )
+
+    with pytest.raises(ProviderError, match="capture limit"):
+        CodexProvider(command).run(request(tmp_path))
+
+    assert json.loads(receipt_path(request(tmp_path)).read_text())["status"] == "failed"
 
 
 def test_codex_retains_raw_receipt_and_recovers_without_dispatch(
@@ -427,3 +446,74 @@ def test_fake_provider_supports_values_and_artifact_callbacks(tmp_path: Path) ->
     assert json.loads(second.text) == {"ok": True}
     assert target.read_text() == "created"
     assert len(fake.calls) == 2
+
+
+@pytest.mark.parametrize(
+    "provider",
+    [CodexProvider(("missing",)), ClaudeProvider(("missing",)), PiProvider(("missing",))],
+)
+def test_unproved_query_profile_fails_before_dispatch(
+    tmp_path: Path, provider: object
+) -> None:
+    req = request(tmp_path, operation=OperationKind.QUERY)
+    with pytest.raises(CapabilityError, match="query"):
+        provider.run(req)  # type: ignore[attr-defined]
+    assert not req.receipt_dir.exists()
+
+
+@pytest.mark.parametrize(
+    "provider", [CodexProvider(("missing",)), ClaudeProvider(("missing",)), PiProvider(("missing",))]
+)
+def test_exact_command_grant_requires_native_mediator(
+    tmp_path: Path, provider: object
+) -> None:
+    req = request(
+        tmp_path,
+        operation=OperationKind.GENERATE,
+        allow_commands=(("git", "status", "--short"),),
+    )
+    with pytest.raises(CapabilityError, match="exact-argv|operation='generate'"):
+        provider.run(req)  # type: ignore[attr-defined]
+    assert not req.receipt_dir.exists()
+
+
+def test_claude_tool_free_generation_closes_ambient_surfaces(tmp_path: Path) -> None:
+    provider = ClaudeProvider(("claude",))
+    req = request(tmp_path, operation=OperationKind.GENERATE)
+    provider.validate_request(req)
+    command, _, emission = provider._build(req, req.policy.effective())
+    settings = json.loads((req.receipt_dir / emission["settings"]).read_text())
+    assert "--bare" in command
+    assert "--restricted" in command
+    assert "--strict-mcp-config" in command
+    assert command[command.index("--tools") + 1] == ""
+    assert command[command.index("--permission-mode") + 1] == "dontAsk"
+    assert "*" in settings["permissions"]["deny"]
+
+
+def test_pi_tool_free_generation_disables_all_resource_discovery(tmp_path: Path) -> None:
+    provider = PiProvider(("pi",))
+    req = request(tmp_path, operation="generate", instructions="Answer concisely.")
+    provider.validate_request(req)
+    command, env, emission = provider._build(req, req.policy.effective())
+    assert req.operation is OperationKind.GENERATE
+    for flag in (
+        "--no-tools",
+        "--no-extensions",
+        "--no-skills",
+        "--no-prompt-templates",
+        "--no-themes",
+        "--no-context-files",
+        "--no-approve",
+    ):
+        assert flag in command
+    assert env["PI_OFFLINE"] == "1"
+    assert emission["tool_profile"] == "none"
+
+
+def test_request_rejects_shell_strings_and_freezes_settings(tmp_path: Path) -> None:
+    with pytest.raises(TypeError, match="argv sequences"):
+        request(tmp_path, allow_commands=("git status",))
+    req = request(tmp_path, settings={"profile": "x"})
+    with pytest.raises(TypeError):
+        req.settings["profile"] = "y"  # type: ignore[index]

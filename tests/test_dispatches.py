@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import sys
 
-from botpipe import Botpipe, Policy, Session, provider_budget, workflow
+from botpipe import Botpipe, Policy, Provider, provider_budget, workflow
 from botpipe.providers import (
     CodexProvider,
     FakeProvider,
@@ -26,7 +26,7 @@ def test_nested_budgets_share_one_dispatch_identity_and_replay_emits_none(tmp_pa
         with provider_budget(max_turns=2):
             with provider_budget(max_turns=2):
                 return (
-                    Session()
+                    Provider()
                     .run("work", policy=Policy(model="example", effort="high"))
                     .value
                 )
@@ -65,7 +65,7 @@ def test_nested_budgets_share_one_dispatch_identity_and_replay_emits_none(tmp_pa
 def test_retry_retains_unknown_failed_attempt_instead_of_overwriting_it(tmp_path):
     @workflow
     def work():
-        return Session().run("work").value
+        return Provider().run("work").value
 
     provider = FakeProvider(
         [
@@ -96,7 +96,7 @@ def test_retry_retains_unknown_failed_attempt_instead_of_overwriting_it(tmp_path
 def test_schema_repairs_are_separate_physical_dispatches(tmp_path):
     @workflow
     def work():
-        return Session().run("number", returns=int).value
+        return Provider().run("number", returns=int).value
 
     with Botpipe(
         tmp_path,
@@ -111,7 +111,8 @@ def test_schema_repairs_are_separate_physical_dispatches(tmp_path):
         records = attempts(client, result.run_id)
         assert result.value == 42
         assert len({d["dispatch_id"] for d in records}) == 2
-        assert len({d["operation_id"] for d in records}) == 2
+        assert len({d["operation_id"] for d in records}) == 1
+        assert [d["generation"] for d in records] == [0, 1]
         assert [d["outcome"] for d in records] == ["completed", "completed"]
         assert result.usage == {"total_tokens": 12}
 
@@ -124,7 +125,7 @@ def test_native_failure_preserves_partial_usage_and_timeout_fact(tmp_path):
 
     @workflow
     def work():
-        return Session().run("work").value
+        return Provider().run("work").value
 
     with Botpipe(
         tmp_path, provider=CodexProvider((sys.executable, str(script))), timeout=0.1
@@ -143,7 +144,7 @@ def test_native_failure_preserves_partial_usage_and_timeout_fact(tmp_path):
 def test_interrupt_is_recorded_without_inventing_usage(tmp_path):
     @workflow
     def work():
-        return Session().run("work").value
+        return Provider().run("work").value
 
     with Botpipe(tmp_path, provider=FakeProvider([KeyboardInterrupt()])) as client:
         result = client.run(work)

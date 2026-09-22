@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from botpipe import Artifact, Session, activity, ask, current_run, workflow
+from botpipe import Artifact, Provider, activity, ask_human, current_run, workflow
 from botpipe.workflows.goal import goal
 
 
@@ -144,13 +144,13 @@ def image_to_game(
     ctx = current_run()
     request = (params_message or message or "").strip()
     if not request:
-        request = ask("Describe the browser game to create.", returns=str).strip()
+        request = ask_human("Describe the browser game to create.", returns=str).strip()
 
     candidates = _reference_candidates(str(ctx.workspace), reference_image_path)
     selected: str | None = None
     if reference_image_path:
         if not candidates:
-            replacement = ask(
+            replacement = ask_human(
                 "The supplied reference image was not a readable supported image. Provide a valid path or say prompt-derived.",
                 returns=str,
             ).strip()
@@ -169,7 +169,7 @@ def image_to_game(
     elif len(candidates) == 1:
         selected, mode = candidates[0], "inferred_file"
     elif len(candidates) > 1:
-        choice = ask(
+        choice = ask_human(
             "Multiple reference images were found. Provide the exact image path, or say prompt-derived.",
             returns=str,
         ).strip()
@@ -221,7 +221,8 @@ def image_to_game(
     audit_spec = Artifact.md(
         str(ctx.folder / "goal_input_audit.md"), name="goal_input_audit", required=True
     )
-    builder, verifier = Session(key="goal-builder"), Session.fresh()
+    builder = Provider()
+    verifier = builder.with_config(session=None)
     feedback: tuple[Any, ...] = ()
     while True:
         built = builder.run(

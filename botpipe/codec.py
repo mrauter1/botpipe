@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import base64
+import contextvars
 import dataclasses
 import importlib
 import json
 import math
 import re
 import sys
+from collections.abc import Mapping
+from contextlib import contextmanager
 from datetime import date, datetime, timedelta, timezone
 from enum import CONFORM, EJECT, KEEP, STRICT, Enum, EnumType, Flag
 from inspect import get_annotations, getattr_static
@@ -36,6 +39,9 @@ from typing import (
 from pydantic import BaseModel, Secret, SecretBytes, SecretStr, TypeAdapter
 
 _TYPES: dict[str, type] = {}
+_CONTRACT_REGISTRY = contextvars.ContextVar(
+    "botpipe_contract_registry", default=MappingProxyType({})
+)
 _STATE_VERSION = 1
 _MAX_DEPTH = 100
 _MAX_VALUES = 100_000
@@ -54,21 +60,104 @@ def type_name(cls):
     return name
 
 
+def normalize_contract_registry(value=None):
+    """Validate an explicit recorded-type to runtime-type restoration registry.
+
+    Registry keys are the type references stored in durable records. Values are
+    candidate runtime types. The candidate's structural contract is still
+    compared with the stored contract before any value is decoded.
+    """
+
+    if value is None:
+        return MappingProxyType({})
+    if not isinstance(value, Mapping):
+        raise TypeError("contract_registry must map recorded type names to types")
+    result = {}
+    for name, cls in value.items():
+        if type(name) is not str or not _TYPE_NAME.fullmatch(name):
+            raise TypeError(f"Invalid contract registry type reference {name!r}")
+        if not isinstance(cls, type):
+            raise TypeError(
+                f"Contract registry entry {name!r} must be a type, got "
+                f"{type(cls).__name__}"
+            )
+        result[name] = cls
+    return MappingProxyType(result)
+
+
+@contextmanager
+def use_contract_registry(value=None):
+    """Resolve durable types through one runtime-scoped explicit registry."""
+
+    registry = (
+        value
+        if isinstance(value, MappingProxyType)
+        else normalize_contract_registry(value)
+    )
+    token = _CONTRACT_REGISTRY.set(registry)
+    try:
+        yield
+    finally:
+        _CONTRACT_REGISTRY.reset(token)
+
+
+def _registry_contract_aliases():
+    aliases = {}
+    for recorded_name, cls in _CONTRACT_REGISTRY.get().items():
+        candidate_name = f"{cls.__module__}:{cls.__qualname__}"
+        existing = aliases.get(candidate_name)
+        if existing is not None and existing != recorded_name:
+            raise TypeError(
+                f"Contract registry type {candidate_name} is registered for "
+                "multiple recorded identities"
+            )
+        aliases[candidate_name] = recorded_name
+    return aliases
+
+
+def _registered_contract_identity(value):
+    """Translate candidate type identities to their recorded registry keys."""
+
+    aliases = _registry_contract_aliases()
+
+    def replace(item):
+        if type(item) is list:
+            return [replace(child) for child in item]
+        if type(item) is not dict:
+            return item
+        result = {}
+        for key, child in item.items():
+            if key in {"type", "name"} and type(child) is str:
+                result[key] = aliases.get(child, child)
+            else:
+                result[key] = replace(child)
+        return result
+
+    return replace(value)
+
+
 def resolve_type(name):
     if type(name) is not str or not _TYPE_NAME.fullmatch(name):
         raise TypeError(f"Invalid durable type reference {name!r}")
+    registered = _CONTRACT_REGISTRY.get().get(name)
+    if registered is not None:
+        return registered
     module, qualname = name.split(":", 1)
     if "<locals>" in qualname:
         if name in _TYPES:
             return _TYPES[name]
-        raise TypeError(f"Local type {name} must be registered by the resumed workflow")
+        raise TypeError(
+            f"Local type {name} is not importable; supply it through "
+            "Botpipe(contract_registry={recorded_type_name: type}) when resuming"
+        )
     # Generated generic classes (for example Model[int]) cannot be recovered by
     # attribute traversal. schema_for() registers annotated generated classes.
     if any(character in qualname for character in "[] ,"):
         if name in _TYPES:
             return _TYPES[name]
         raise TypeError(
-            f"Generated type {name} must be registered by the resumed workflow"
+            f"Generated type {name} is not importable; supply it through "
+            "Botpipe(contract_registry={recorded_type_name: type}) when resuming"
         )
     value = importlib.import_module(module)
     for part in qualname.split("."):
@@ -971,11 +1060,16 @@ def encode(value):
 
 def _encode(value, path, depth, traversal, contracts):
     from .artifacts import ArtifactHandle, ArtifactMap
+    from .sessions import Session
 
     identity = traversal.visit(
         value, path, depth, compound=isinstance(value, ArtifactMap)
     )
     try:
+        if isinstance(value, Session):
+            record = value.to_record()
+            _plain_json(record, f"{path}.value", depth + 1, traversal)
+            return {"$botpipe": "session", "value": record}
         if isinstance(value, (Secret, SecretStr, SecretBytes)):
             raise TypeError(f"{path}: secret values are not durable")
         if isinstance(value, ArtifactHandle):
@@ -1455,6 +1549,18 @@ def verify_contracts(value, path="$"):
                     )
                 _plain_json(body, f"{item_path}.value", depth + 1, traversal)
                 return
+            if kind == "session":
+                record = _record(item, item_path, {"$botpipe", "value"})
+                body = record["value"]
+                if type(body) is not dict:
+                    raise TypeError(
+                        f"{item_path}.value: session record must be an object"
+                    )
+                _plain_json(body, f"{item_path}.value", depth + 1, traversal)
+                from .sessions import Session
+
+                Session.from_record(body)
+                return
             if kind in {"dict", "mappingproxy", "artifacts"}:
                 record = _record(item, item_path, {"$botpipe", "value"})
                 body = _string_mapping(record["value"], f"{item_path}.value")
@@ -1507,7 +1613,9 @@ def _verify_contract(
 ):
     stored = record["contract"]
     cls = resolve_type(record["type"])
-    actual = contracts.for_type(cls, f"{path}.contract")
+    actual = _registered_contract_identity(
+        contracts.for_type(cls, f"{path}.contract")
+    )
     expected = verified_contracts.get(record["type"])
     if expected is None:
         _plain_json(stored, f"{path}.contract", 0, contract_traversal)
@@ -1561,6 +1669,14 @@ def _decode(value, path, depth, traversal):
             from .artifacts import ArtifactHandle
 
             return ArtifactHandle.from_record(record["value"])
+        if kind == "session":
+            record = _record(value, path, {"$botpipe", "value"})
+            if type(record["value"]) is not dict:
+                raise TypeError(f"{path}.value: session record must be an object")
+            _plain_json(record["value"], f"{path}.value", depth + 1, traversal)
+            from .sessions import Session
+
+            return Session.from_record(record["value"])
         if kind == "artifacts":
             record = _record(value, path, {"$botpipe", "value"})
             body = _string_mapping(record["value"], f"{path}.value")

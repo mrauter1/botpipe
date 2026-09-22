@@ -63,7 +63,7 @@ After writing every declared artifact, return a JSON result matching the injecte
 
 - Ranking recursive-improvement candidates.
 - Publishing the final cycle package.
-- Mutating workflow packages or `.botpipe` history.
+- Mutating workflow packages or `.botpipe-v2` history.
 
 ## Forbidden
 

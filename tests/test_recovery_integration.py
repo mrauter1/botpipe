@@ -5,7 +5,7 @@ from copy import deepcopy
 
 import pytest
 
-from botpipe import Artifact, Botpipe, BotpipeError, ReplayMismatch, Session, workflow
+from botpipe import Artifact, Botpipe, BotpipeError, ReplayMismatch, Provider, workflow
 from botpipe.providers import (
     FakeProvider,
     ProviderError,
@@ -29,7 +29,7 @@ def test_recovered_completion_overrides_conflicting_operator_response(tmp_path):
 
     @workflow
     def conversation():
-        session = Session()
+        session = Provider()
         return session.run("first").value, session.run("second").value
 
     provider = ReceiptedProvider(
@@ -83,7 +83,7 @@ def test_unknown_recovery_blocks_every_resolution_without_changing_journal(
 ):
     @workflow
     def work():
-        return Session().run("effectful work").value
+        return Provider().run("effectful work").value
 
     provider = _LegacyRecoveryProvider(recovery)
     with Botpipe(tmp_path, provider=provider) as client:
@@ -110,7 +110,7 @@ def test_unknown_recovery_blocks_every_resolution_without_changing_journal(
 def test_manual_recovery_uses_timeout_recorded_for_run(tmp_path):
     @workflow
     def work():
-        return Session().run("effectful work").value
+        return Provider().run("effectful work").value
 
     provider = _LegacyRecoveryProvider(None)
     with Botpipe(tmp_path, provider=provider, timeout=7.5) as client:
@@ -128,7 +128,7 @@ def test_manual_recovery_uses_timeout_recorded_for_run(tmp_path):
 def test_known_stopped_attempt_only_reexecutes_after_retry_authorization(tmp_path):
     @workflow
     def work():
-        return Session().run("effectful work").value
+        return Provider().run("effectful work").value
 
     provider = FakeProvider([ProviderError("known synchronous failure"), "done"])
     with Botpipe(tmp_path, provider=provider) as client:
@@ -161,7 +161,7 @@ def test_repeated_live_reconciliation_remains_fenced(tmp_path):
 
     @workflow
     def work():
-        return Session().run("effectful work").value
+        return Provider().run("effectful work").value
 
     provider = LiveProvider([SystemExit("runtime interrupted")])
     with Botpipe(tmp_path, provider=provider) as client:
@@ -178,14 +178,14 @@ def test_repeated_live_reconciliation_remains_fenced(tmp_path):
         assert len(provider.calls) == 1
 
 
-def test_recovery_requires_recorded_provider_configuration(tmp_path):
+def test_recovery_uses_recorded_provider_snapshot_after_default_changes(tmp_path):
     class StoppedProvider(FakeProvider):
         def recover(self, request: ProviderRequest):
             return Stopped("attempt is quiescent")
 
     @workflow
     def work():
-        return Session().run("effectful work").value
+        return Provider().run("effectful work").value
 
     provider = StoppedProvider([SystemExit("runtime interrupted")])
     with Botpipe(tmp_path, provider=provider) as client:
@@ -195,10 +195,14 @@ def test_recovery_requires_recorded_provider_configuration(tmp_path):
         before = deepcopy(client.journal.get(operation["id"])["response"])
         client.provider_config = {"changed": True}
 
-        with pytest.raises(ReplayMismatch, match="Provider configuration changed"):
-            client.resolve("configuration-fence", operation["id"], retry=True)
+        client.resolve(
+            "configuration-fence", operation["id"], retry=True
+        )
 
-        assert client.journal.get(operation["id"])["response"] == before
+        assert client.journal.run("configuration-fence")["provider_config"] == {}
+        after = client.journal.get(operation["id"])["response"]
+        assert after != before
+        assert after["retry_authorized"] is True
 
 
 def test_explicit_unknown_outcome_blocks_manual_response(tmp_path):
@@ -208,7 +212,7 @@ def test_explicit_unknown_outcome_blocks_manual_response(tmp_path):
 
     @workflow
     def work():
-        return Session().run("effectful work").value
+        return Provider().run("effectful work").value
 
     provider = UnknownProvider([SystemExit("runtime interrupted")])
     with Botpipe(tmp_path, provider=provider) as client:
@@ -238,8 +242,8 @@ def test_manual_response_cancels_pending_retry_without_preparing_new_outputs(tmp
 
     @workflow
     def writer():
-        return Session().run(
-            "write", writes=[Artifact.text(destination, required=True)], retries=0
+        return Provider().run(
+            "write", writes=[Artifact.text(destination, required=True)], output_retries=0
         )
 
     provider = StoppedProvider([interrupted])
@@ -279,7 +283,7 @@ def test_invalid_completed_response_stays_uncommitted(tmp_path, resolution):
 
     @workflow
     def job():
-        return Session().run("work")
+        return Provider().run("work")
 
     provider = MalformedProvider([KeyboardInterrupt()])
     with Botpipe(tmp_path, provider=provider) as client:

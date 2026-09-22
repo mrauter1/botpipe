@@ -428,7 +428,7 @@ def _safe_relative(value: str | Path) -> str:
         or any(part in {"", ".", ".."} for part in path.parts)
     ):
         raise ValueError(f"candidate path must stay repo-relative: {value}")
-    if path.parts[0] in {".git", ".botpipe"} or "__pycache__" in path.parts:
+    if path.parts[0] in {".git", ".botpipe", ".botpipe-v2"} or "__pycache__" in path.parts:
         raise ValueError(f"candidate path targets protected runtime state: {value}")
     return path.as_posix()
 
@@ -537,6 +537,7 @@ def _ignore_runtime_state(_directory: str, names: list[str]) -> set[str]:
     ignored = {
         ".git",
         ".botpipe",
+        ".botpipe-v2",
         ".pytest_cache",
         ".mypy_cache",
         ".ruff_cache",

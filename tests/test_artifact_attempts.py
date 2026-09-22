@@ -5,7 +5,7 @@ import hashlib
 import pytest
 from pydantic import BaseModel, field_validator
 
-from botpipe import Artifact, Botpipe, Session, workflow
+from botpipe import Artifact, Botpipe, Provider, workflow
 from botpipe.artifacts import ArtifactStore
 from botpipe.providers import FakeProvider, ProviderPolicyError, ProviderResponse
 from botpipe.recovery import Stopped
@@ -46,7 +46,7 @@ def test_exhausted_repairs_restore_every_original_and_require_fresh_outputs(
 
     @workflow
     def writer():
-        return Session().run("write", writes=declarations, retries=1)
+        return Provider().run("write", writes=declarations, output_retries=1)
 
     provider = FakeProvider([invalid, missing])
     with Botpipe(tmp_path, provider=provider) as client:
@@ -62,7 +62,7 @@ def test_exhausted_repairs_restore_every_original_and_require_fresh_outputs(
 def test_codec_preflight_failure_rolls_back_without_repeating_provider(
     tmp_path, monkeypatch
 ):
-    import botpipe.sessions as sessions
+    import botpipe.operations as operations
 
     first = tmp_path / "first.txt"
     second = tmp_path / "second.txt"
@@ -76,7 +76,7 @@ def test_codec_preflight_failure_rolls_back_without_repeating_provider(
 
     @workflow
     def writer():
-        return Session().run(
+        return Provider().run(
             "write",
             writes=[
                 Artifact.text("first.txt", required=True),
@@ -84,14 +84,14 @@ def test_codec_preflight_failure_rolls_back_without_repeating_provider(
             ],
         )
 
-    real_encode = sessions.codec.encode
+    real_encode = operations.codec.encode
 
     def reject_value(value, **options):
         if value == "unsupported checkpoint":
             raise TypeError("value cannot be stored")
         return real_encode(value, **options)
 
-    monkeypatch.setattr(sessions.codec, "encode", reject_value)
+    monkeypatch.setattr(operations.codec, "encode", reject_value)
     provider = FakeProvider([write])
     with Botpipe(tmp_path, provider=provider) as client:
         result = client.run(writer)
@@ -124,7 +124,7 @@ def test_new_client_recovers_typed_value_and_capture_after_finish_crash(
 
     @workflow
     def writer():
-        return Session().run(
+        return Provider().run(
             "write",
             returns=Answer,
             writes=[
@@ -182,10 +182,10 @@ def test_resume_finishes_rollback_interrupted_after_quarantine(tmp_path, monkeyp
 
     @workflow
     def writer():
-        return Session().run(
+        return Provider().run(
             "write",
             writes=[Artifact.json(destination, required=True)],
-            retries=0,
+            output_retries=0,
         )
 
     provider = FakeProvider([invalid])
@@ -234,7 +234,7 @@ def test_authorized_retry_resumes_between_old_rollback_and_new_prepare(
 
     @workflow
     def writer():
-        return Session().run(
+        return Provider().run(
             "write", writes=[Artifact.text(destination, required=True)]
         )
 
@@ -279,7 +279,7 @@ def test_capture_oserror_stays_interrupted_and_recovers_without_provider(
 
     @workflow
     def writer():
-        return Session().run(
+        return Provider().run(
             "write", writes=[Artifact.text(destination, required=True)]
         )
 
@@ -330,7 +330,7 @@ def test_invalid_response_envelope_preserves_uncertain_outputs(tmp_path, fields)
 
     @workflow
     def writer():
-        return Session().run(
+        return Provider().run(
             "write", writes=[Artifact.text(destination, required=True)]
         )
 
@@ -358,7 +358,7 @@ def test_preparation_io_failure_resumes_before_first_dispatch(tmp_path, monkeypa
 
     @workflow
     def writer():
-        return Session().run(
+        return Provider().run(
             "write", writes=[Artifact.text(destination, required=True)]
         )
 
@@ -394,7 +394,7 @@ def test_rejected_dispatch_resumes_interrupted_restoration(tmp_path, monkeypatch
 
     @workflow
     def writer():
-        return Session().run(
+        return Provider().run(
             "write", writes=[Artifact.text(first), Artifact.text(second)]
         )
 
@@ -439,7 +439,7 @@ def test_checkpoint_io_failure_recovers_without_dispatch(
 
     @workflow
     def writer():
-        return Session().run(
+        return Provider().run(
             "write", writes=[Artifact.text("result.txt", required=True)]
         )
 
@@ -505,7 +505,7 @@ def test_partial_capture_uses_published_blob_after_mutable_source_edit(
 
     @workflow
     def writer():
-        return Session().run(
+        return Provider().run(
             "write",
             writes=[
                 Artifact.text(first, required=True),
@@ -558,7 +558,7 @@ def test_partial_capture_fences_changed_source_until_intended_bytes_return(
 
     @workflow
     def writer():
-        return Session().run(
+        return Provider().run(
             "write",
             writes=[
                 Artifact.text(first, required=True),

@@ -3,13 +3,109 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
 
-from botpipe import Botpipe, activity, ask, workflow
+from botpipe import Botpipe, activity, ask_human, workflow
 from botpipe.errors import ActivityFailed
 from botpipe.providers import FakeProvider
+
+
+def test_completed_run_uses_explicit_contract_registry_for_local_type(tmp_path):
+    @dataclass
+    class Original:
+        count: int
+
+    @workflow
+    def identity(value):
+        return value
+
+    with Botpipe(tmp_path, provider=FakeProvider([])) as client:
+        completed = client.run(identity, Original(7), run_id="local-contract")
+        assert completed.ok
+        encoded_args = client.journal.run(completed.run_id)["args"]
+        recorded_name = encoded_args["value"][0]["type"]
+
+    from botpipe import codec
+    from botpipe.errors import ReplayMismatch
+
+    codec._TYPES.pop(recorded_name)
+    with Botpipe(tmp_path, provider=FakeProvider([])) as missing:
+        with pytest.raises(ReplayMismatch, match="contract_registry"):
+            missing.resume(completed.run_id, workflow=identity)
+
+    @dataclass
+    class Compatible:
+        count: int
+
+    with Botpipe(
+        tmp_path,
+        provider=FakeProvider([]),
+        contract_registry={recorded_name: Compatible},
+    ) as restored:
+        replay = restored.resume(completed.run_id, workflow=identity)
+        assert replay.ok
+        assert type(replay.value) is Compatible
+        assert replay.value.count == 7
+
+
+def test_contract_registry_restores_local_type_in_fresh_process(tmp_path):
+    create = tmp_path / "create_local_contract.py"
+    create.write_text(
+        "from dataclasses import dataclass\n"
+        "from botpipe import Botpipe, workflow\n"
+        "from botpipe.providers import FakeProvider\n"
+        "def original_type():\n"
+        "    @dataclass\n"
+        "    class Local:\n"
+        "        count: int\n"
+        "    return Local\n"
+        "Local = original_type()\n"
+        "@workflow\n"
+        "def identity(value): return value\n"
+        "with Botpipe('.', provider=FakeProvider([])) as client:\n"
+        "    result = client.run(identity, Local(11), run_id='local-registry')\n"
+        "    assert result.ok, result.error\n",
+        encoding="utf-8",
+    )
+    restore = tmp_path / "restore_local_contract.py"
+    restore.write_text(
+        "from dataclasses import dataclass\n"
+        "from botpipe import Botpipe, workflow\n"
+        "from botpipe.providers import FakeProvider\n"
+        "def replacement_type():\n"
+        "    @dataclass\n"
+        "    class Local:\n"
+        "        count: int\n"
+        "    return Local\n"
+        "Local = replacement_type()\n"
+        "@workflow\n"
+        "def identity(value): return value\n"
+        "recorded = '__main__:original_type.<locals>.Local'\n"
+        "with Botpipe('.', provider=FakeProvider([]), contract_registry={recorded: Local}) as client:\n"
+        "    result = client.resume('local-registry', workflow=identity)\n"
+        "    assert result.ok, result.error\n"
+        "    assert type(result.value) is Local and result.value.count == 11\n",
+        encoding="utf-8",
+    )
+    environment = {
+        **os.environ,
+        "PYTHONPATH": os.pathsep.join(
+            (str(Path(__file__).resolve().parents[1]), os.environ.get("PYTHONPATH", ""))
+        ),
+    }
+    for script in (create, restore):
+        completed = subprocess.run(
+            [sys.executable, str(script)],
+            cwd=tmp_path,
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert completed.returncode == 0, completed.stderr
 
 
 def test_wait_input_lost_ack_keeps_authoritative_waiting_checkpoint(
@@ -17,7 +113,7 @@ def test_wait_input_lost_ack_keeps_authoritative_waiting_checkpoint(
 ):
     @workflow
     def approval():
-        return ask("approve?", returns=bool)
+        return ask_human("approve?", returns=bool)
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         wait_input = client.journal.wait_input
@@ -34,7 +130,7 @@ def test_wait_input_lost_ack_keeps_authoritative_waiting_checkpoint(
         assert operation["error"] is None
 
         monkeypatch.setattr(client.journal, "wait_input", wait_input)
-        resumed = client.resume(paused.run_id, workflow=approval, answer=True)
+        resumed = client.resume(paused.run_id, workflow=approval, answers={client.pending(paused.run_id)[0]["operation_id"]: True})
         assert resumed.value is True
 
 
@@ -51,12 +147,12 @@ def test_builtin_oserror_replay_preserves_native_unset_state(tmp_path):
         try:
             fail()
         except OSError as error:
-            ask("continue?")
+            ask_human("continue?")
             return str(error), error.args, error.filename
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(job)
-        resumed = client.resume(paused.run_id, workflow=job, answer="yes")
+        resumed = client.resume(paused.run_id, workflow=job, answers={client.pending(paused.run_id)[0]["operation_id"]: "yes"})
         assert resumed.value == ("disk broke", ("disk broke",), None)
         assert calls == [1]
 
@@ -79,12 +175,12 @@ def test_unsupported_exception_state_falls_back_on_initial_and_replay(tmp_path):
         try:
             fail()
         except ActivityFailed as error:
-            ask("continue?")
+            ask_human("continue?")
             return str(error)
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(job)
-        resumed = client.resume(paused.run_id, workflow=job, answer="yes")
+        resumed = client.resume(paused.run_id, workflow=job, answers={client.pending(paused.run_id)[0]["operation_id"]: "yes"})
         assert resumed.value.endswith("Unsupported: unsupported")
         assert calls == [1]
 

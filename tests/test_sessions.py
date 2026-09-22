@@ -1,22 +1,126 @@
 from __future__ import annotations
 
 import hashlib
+import sqlite3
 
 import pytest
 from pydantic import BaseModel
 
-from botpipe import Artifact, Botpipe, BotpipeError, Session, activity, workflow
+from botpipe import Artifact, Botpipe, BotpipeError, Provider, Session, activity, workflow
 from botpipe.providers import FakeProvider, ProviderInterruptedError, ProviderResponse
+from botpipe.recovery import Completed
+
+
+def test_old_journal_is_rejected_before_schema_mutation(tmp_path):
+    from botpipe.journal import Journal
+
+    path = tmp_path / "state.sqlite3"
+    db = sqlite3.connect(path)
+    db.executescript("CREATE TABLE legacy(value TEXT); PRAGMA user_version=1;")
+    db.close()
+
+    with pytest.raises(ValueError, match="fresh state directory"):
+        Journal(path)
+
+    check = sqlite3.connect(path)
+    try:
+        tables = {
+            row[0]
+            for row in check.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        }
+        assert tables == {"legacy"}
+        assert check.execute("PRAGMA user_version").fetchone()[0] == 1
+    finally:
+        check.close()
+
+
+def test_session_codec_preserves_an_unbound_resource_reference():
+    from botpipe import codec
+
+    original = Session()
+    restored = codec.decode(codec.encode(original))
+    assert isinstance(restored, Session)
+    assert restored.id is None
+    assert restored.to_record()["token"] == original.to_record()["token"]
+
+
+def test_session_revision_rejects_a_stale_loaded_handle(tmp_path):
+    provider = FakeProvider(
+        [
+            ProviderResponse("one", "native"),
+            ProviderResponse("bound", "native"),
+            ProviderResponse("advanced", "native"),
+        ]
+    )
+    with Botpipe(tmp_path, provider=provider) as client:
+        first = Provider(runtime=client)
+        first.generate("one")
+        stale = Session.load(first.session.id, state_dir=client.state_dir)
+        # A suspended run binds through the real provider path, capturing the
+        # full selected profile/adapter affinity at revision two.
+        @workflow
+        def suspended_turn(session):
+            Provider(session=session).generate("bind")
+            ask_human("continue?")
+            return Provider(session=session).generate("stale")
+
+        from botpipe import ask_human
+
+        paused = client.run(suspended_turn, stale)
+        assert paused.status == "awaiting_input"
+        external = Session.load(first.session.id, state_dir=client.state_dir)
+        Provider(runtime=client, session=external).generate("advance")
+        result = client.answer(
+            paused.run_id,
+            paused.pending_input["operation_id"],
+            "yes",
+            workflow=suspended_turn,
+        )
+        assert result.status == "failed"
+        assert "SessionHistoryConflict" in result.error
+
+
+def test_replay_detects_changed_session_alias_sharing(tmp_path):
+    from botpipe import ask_human
+
+    split = False
+
+    @workflow
+    def conversation():
+        shared = Session()
+        Provider(session=shared).generate("one")
+        selected = Session() if split else shared
+        Provider(session=selected).generate("two")
+        return ask_human("continue?")
+
+    provider = FakeProvider(
+        [ProviderResponse("one", "native"), ProviderResponse("two", "native")]
+    )
+    with Botpipe(tmp_path, provider=provider) as client:
+        paused = client.run(conversation)
+        assert paused.status == "awaiting_input"
+        split = True
+        completed = client.answer(
+            paused.run_id,
+            paused.pending_input["operation_id"],
+            "yes",
+            workflow=conversation,
+        )
+        assert completed.status == "failed"
+        assert "ReplayMismatch" in completed.error
+        assert len(provider.calls) == 2
 
 
 def test_constructor_sessions_are_independent_and_task_sessions_persist(tmp_path):
     @workflow
     def talk():
         first, second = Session(), Session()
-        first.run("first")
-        second.run("second")
-        first.run("continue first")
-        Session.task("persistent").run("task conversation")
+        Provider(session=first).run("first")
+        Provider(session=second).run("second")
+        Provider(session=first).run("continue first")
+        Provider(session=Session.task("persistent")).run("task conversation")
 
     provider = FakeProvider(
         [
@@ -48,11 +152,11 @@ def test_explicit_retry_recovers_completed_receipt_before_preparing_new_artifact
             raise KeyboardInterrupt()
 
         def recover(self, request):
-            return self.receipt
+            return Completed(self.receipt)
 
     @workflow
     def report():
-        return Session().run(
+        return Provider().run(
             "report", writes=Artifact.text("report.txt", required=True)
         )
 
@@ -97,7 +201,7 @@ def test_explicit_retry_does_not_remove_files_from_live_provider(tmp_path):
 
     @workflow
     def report():
-        return Session().run(
+        return Provider().run(
             "report", writes=Artifact.text("report.txt", required=True)
         )
 
@@ -125,7 +229,7 @@ def test_repair_usage_is_charged_once_in_results_and_run_totals(tmp_path):
 
     @workflow
     def review():
-        return Session().run("review", returns=Answer)
+        return Provider().run("review", returns=Answer)
 
     provider = FakeProvider(
         [
@@ -175,7 +279,7 @@ def test_inspection_does_not_require_original_result_model_type(tmp_path):
 
     @workflow
     def answer():
-        return Session().run("answer", returns=LocalAnswer)
+        return Provider().run("answer", returns=LocalAnswer)
 
     with Botpipe(tmp_path, provider=FakeProvider(['{"accepted":true}'])) as client:
         result = client.run(answer)
@@ -183,7 +287,7 @@ def test_inspection_does_not_require_original_result_model_type(tmp_path):
         codec._TYPES.pop(f"{LocalAnswer.__module__}:{LocalAnswer.__qualname__}")
         details = client.inspect(result.run_id)
         assert details["run"]["status"] == "completed"
-        assert len(details["operations"]) == 2
+        assert len(details["operations"]) == 3
 
 
 def test_repeated_retry_authorization_cannot_advance_past_live_attempt(tmp_path):
@@ -198,7 +302,7 @@ def test_repeated_retry_authorization_cannot_advance_past_live_attempt(tmp_path)
 
     @workflow
     def report():
-        return Session().run(
+        return Provider().run(
             "report", writes=Artifact.text("report.txt", required=True)
         )
 
@@ -227,7 +331,7 @@ def test_observed_response_cannot_release_a_known_live_provider(tmp_path):
 
     @workflow
     def report():
-        return Session().run("report")
+        return Provider().run("report")
 
     with Botpipe(tmp_path, provider=LiveProvider([KeyboardInterrupt()])) as client:
         paused = client.run(report)

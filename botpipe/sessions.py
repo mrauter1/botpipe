@@ -1,674 +1,382 @@
-"""Durable, typed provider turns using runtime-owned session objects."""
+"""Lazy durable conversation handles.
+
+Sessions carry identity and continuation state. Provider execution lives in
+``operations.py``; constructing a Session never resolves configuration or
+touches the state store.
+"""
 
 from __future__ import annotations
 
 import hashlib
 import json
-import os
 import re
 import threading
-from contextlib import ExitStack
-from dataclasses import replace
+import uuid
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, TypeVar, overload
+from typing import Any, Mapping
 
-from pydantic import TypeAdapter
-
-from . import codec
-from .artifacts import (
-    Artifact,
-    ArtifactError,
-    ArtifactHandle,
-    ArtifactMap,
-    ArtifactStore,
-)
-from .errors import BotpipeError, BudgetExceeded, UncertainOperation
-from .models import Result
-from .policy import Policy, SandboxMode
-from .prompts import Prompt
-from .providers import (
-    ProviderPolicyError,
-    ProviderRequest,
-    ProviderResponse,
-    ProviderTimeoutError,
-)
-from .provider_checkpoints import (
-    EmptyCheckpoint,
-    IntentCheckpoint,
-    NotDispatchedCheckpoint,
-    PreparingCheckpoint,
-    ProviderCheckpoint,
-    ProviderLifecycle,
-    RecoveryAction,
-    RespondedCheckpoint,
-    RetryAuthorizedCheckpoint,
-    ValidatedCheckpoint,
-    ValidationFailedCheckpoint,
-)
-from .runtime import _async_call, current_run
-from .recovery import recover_outcome
-
-T = TypeVar("T")
+from .errors import BotpipeError
 
 
-class OutputValidationError(ValueError):
-    """The completed provider turn did not satisfy its output contract."""
+class SessionError(BotpipeError):
+    """Base class for conversation identity and ownership failures."""
 
 
-def _json(value):
-    return json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
+class SessionAffinityError(SessionError):
+    """A conversation was used with an incompatible native environment."""
+
+
+class SessionBusy(SessionError):
+    """Another unresolved operation currently owns the conversation."""
+
+
+class SessionHistoryConflict(SessionError):
+    """The conversation advanced beyond the revision expected by this handle."""
+
+
+@dataclass(frozen=True)
+class SessionLease:
+    session_id: str
+    revision: int
+    native_session_id: str | None
+
+
+def _safe_key(value: str, label: str = "Session key") -> str:
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"{label} must be a nonempty string")
+    if len(value) > 1000 or "\x00" in value:
+        raise ValueError(f"{label} is invalid")
+    return value
+
+
+def _plain_affinity(value: Mapping[str, Any] | None) -> dict[str, Any]:
+    result = {} if value is None else dict(value)
+    if not all(type(key) is str for key in result):
+        raise TypeError("Session affinity keys must be strings")
+    try:
+        encoded = json.dumps(
+            result, sort_keys=True, separators=(",", ":"), allow_nan=False
+        )
+    except (TypeError, ValueError) as exc:
+        raise TypeError("Session affinity must contain JSON values") from exc
+    return json.loads(encoded)
 
 
 class Session:
-    """An opaque conversation handle; each call is a separate durable operation."""
+    """A lazy logical conversation reference."""
 
-    def __init__(self, *, key="default", _scope="run", _item=None):
-        ctx = current_run()
-        if not isinstance(key, str) or not key:
-            raise ValueError("Session key must be a nonempty string")
-        identity = {
-            "scope": _scope,
-            "key": key,
-            "workflow": ctx.definition.name,
-            "task": ctx.task_id,
-            "provider": ctx.client.provider_name,
-        }
-        if _scope == "run":
-            identity.update(run=ctx.run_id, scope_path=ctx.scope, ordinal=ctx.ordinal)
-        elif _scope == "fresh":
-            identity.update(run=ctx.run_id, scope_path=ctx.scope, ordinal=ctx.ordinal)
-        elif _scope == "item":
-            identity.update(worklist=_item.worklist, item=_item.id)
-        self.key = ctx.operation(
-            "session",
-            identity,
-            lambda: hashlib.sha256(codec.dumps(identity).encode()).hexdigest(),
-            retry_safe=True,
-        )
-        self.task_id = ctx.task_id
-        self.client = ctx.client
+    def __init__(self) -> None:
+        # This token is only a durable reference token when the handle itself is
+        # an input (for example a standalone operation). It is never the
+        # canonical conversation identity and is excluded from workflow alias
+        # matching, which is based on stable operation position.
+        self._token = uuid.uuid4().hex
+        self._scope = "anonymous"
+        self._key: str | None = None
+        self._item: tuple[str, str] | None = None
+        self._requested_id: str | None = None
+        self._requested_state_dir: Path | None = None
+        self._canonical_id: str | None = None
+        self._store: str | None = None
+        self._affinity: dict[str, Any] | None = None
+        self._revision: int | None = None
+        self._aliases: set[tuple[str, str]] = set()
+        self._guard = threading.RLock()
 
     @classmethod
-    def task(cls, key="default"):
-        return cls(key=key, _scope="task")
+    def task(cls, key: str = "default") -> Session:
+        result = cls()
+        result._scope = "task"
+        result._key = _safe_key(key)
+        return result
 
     @classmethod
-    def work_item(cls, item, key="default"):
-        return cls(key=key, _scope="item", _item=item)
+    def work_item(cls, item: Any, key: str = "default") -> Session:
+        worklist = getattr(item, "worklist", None)
+        item_id = getattr(item, "id", None)
+        if not isinstance(worklist, str) or not worklist:
+            raise TypeError("work_item requires a WorkItem with a worklist identity")
+        if not isinstance(item_id, str) or not item_id:
+            raise TypeError("work_item requires a WorkItem with an item identity")
+        result = cls()
+        result._scope = "work_item"
+        result._key = _safe_key(key)
+        result._item = (worklist, item_id)
+        return result
 
     @classmethod
-    def fresh(cls):
-        return cls(_scope="fresh")
-
-    @overload
-    def run(
-        self, prompt: str | Prompt, *, returns: type[T], **kwargs: Any
-    ) -> Result[T]: ...
-
-    @overload
-    def run(self, prompt: str | Prompt, **kwargs: Any) -> Result[str]: ...
-
-    def run(
-        self,
-        prompt,
-        *,
-        input=None,
-        reads=(),
-        writes=(),
-        returns=str,
-        policy=None,
-        name=None,
-        retries=2,
-        workspace=None,
-    ):
-        ctx = current_run()
-        if ctx.client is not self.client or ctx.task_id != self.task_id:
-            raise BotpipeError(
-                "A Session belongs to the task and client that created it"
-            )
-        if not isinstance(retries, int) or isinstance(retries, bool) or retries < 0:
-            raise ValueError("retries must be a nonnegative integer")
-        effective = Policy.resolve(ctx.policy, policy).effective()
-        target = Path(workspace).resolve() if workspace is not None else ctx.workspace
-        if not target.is_dir():
-            raise ValueError(f"Provider workspace is not a directory: {target}")
-        if (
-            ctx.parallel_branch
-            and effective.sandbox_mode != SandboxMode.READ_ONLY
-            and target == ctx.workspace
+    def load(cls, session_id: str, *, state_dir: str | Path | None = None) -> Session:
+        if not isinstance(session_id, str) or not re.fullmatch(
+            r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,255}", session_id
         ):
-            raise BotpipeError(
-                "Parallel editing requires a separate workspace= for each branch; use read_only for shared-workspace reviews"
-            )
-        if isinstance(writes, Artifact):
-            writes = (writes,)
-        writes = tuple(writes)
-        if not all(isinstance(item, Artifact) for item in writes):
-            raise TypeError("writes must contain Artifact declarations")
-        if writes and effective.sandbox_mode == SandboxMode.READ_ONLY:
-            raise ProviderPolicyError(
-                "read_only cannot create artifacts; use a writable isolated workspace for parallel outputs"
-            )
-        store = ArtifactStore(
-            ctx.folder,
-            workspace=target,
-            forbidden_paths=(
-                ctx.client.journal.path,
-                ctx.workspace / ".botpipe-workspace.lock",
-                target / ".botpipe-workspace.lock",
-            ),
+            raise ValueError("session_id must be a safe nonempty identifier")
+        result = cls()
+        result._scope = "loaded"
+        result._requested_id = session_id
+        result._requested_state_dir = (
+            Path(state_dir).expanduser() if state_dir is not None else None
         )
-        read_store = ArtifactStore(
-            ctx.folder,
-            workspace=ctx.workspace,
-            forbidden_paths=(
-                ctx.client.journal.path,
-                ctx.workspace / ".botpipe-workspace.lock",
-            ),
-        )
-        if isinstance(reads, ArtifactHandle):
-            reads = (reads,)
-        elif isinstance(reads, ArtifactMap):
-            reads = tuple(reads.values())
-        elif isinstance(reads, (str, Path)):
-            reads = (reads,)
-        handles = []
-        for read in reads:
-            if isinstance(read, ArtifactHandle):
-                read.read_bytes()
-                handles.append(read)
-            else:
-                path = Path(read)
-                path = path if path.is_absolute() else ctx.workspace / path
-                path = Path(os.path.abspath(path))
+        return result
 
-                def snapshot(path=path):
-                    recovered = read_store.published(ctx.operation_id)
-                    if recovered is not None:
-                        return recovered
-                    observed = path.resolve()
-                    if (
-                        not observed.is_relative_to(ctx.workspace)
-                        or not observed.is_file()
-                    ):
-                        raise ArtifactError(
-                            f"Read path must be a file in the workspace: {path}"
-                        )
-                    return read_store.publish(
-                        Artifact.raw(observed, name=path.stem),
-                        observed.read_bytes(),
-                        ctx.operation_id,
-                    )
+    @property
+    def id(self) -> str | None:
+        """The canonical identity, once selected for use."""
 
-                handles.append(
-                    ctx.operation(
-                        "read", {"path": str(path)}, snapshot, retry_safe=True
-                    )
+        return self._canonical_id
+
+    @property
+    def revision(self) -> int | None:
+        return self._revision
+
+    @property
+    def scope(self) -> str:
+        return self._scope
+
+    def _descriptor(self, ctx: Any) -> dict[str, Any]:
+        descriptor: dict[str, Any] = {"scope": self._scope}
+        if self._scope == "task":
+            descriptor.update(task_id=ctx.task_id, key=self._key)
+        elif self._scope == "work_item":
+            descriptor.update(
+                task_id=ctx.task_id,
+                worklist=self._item[0],
+                item=self._item[1],
+                key=self._key,
+            )
+        elif self._scope == "loaded":
+            descriptor["session_id"] = self._requested_id
+        return descriptor
+
+    def bind(
+        self,
+        ctx: Any,
+        backend_name: str,
+        workspace: str | Path | None,
+        affinity: Mapping[str, Any] | None = None,
+    ) -> str:
+        """Bind on first selected use and record the handle alias in this scope."""
+
+        _safe_key(backend_name, "backend_name")
+        store = str(ctx.journal.path.resolve())
+        if self._requested_state_dir is not None:
+            actual_state = Path(ctx.client.state_dir).resolve()
+            requested_state = self._requested_state_dir.resolve()
+            if actual_state != requested_state:
+                raise SessionAffinityError(
+                    f"Session {self._requested_id} belongs to state directory "
+                    f"{requested_state}, not {actual_state}"
                 )
-        rendered = (
-            prompt if isinstance(prompt, Prompt) else Prompt.inline(str(prompt))
-        ).render(input)
-        schema = None if returns is str else codec.schema_for(returns)
-        with ctx._guard:
-            lock = ctx._session_locks.setdefault(self.key, threading.Lock())
-            workspace_lock = ctx._workspace_locks.setdefault(
-                str(target), threading.Lock()
-            )
-        if not lock.acquire(blocking=False):
-            raise BotpipeError(
-                "Concurrent calls cannot share one mutable Session; use separate sessions"
-            )
-        acquired_workspace = False
-        target_ownership = ExitStack()
-        owns_target = False
-        try:
-            if ctx.parallel_branch and effective.sandbox_mode != SandboxMode.READ_ONLY:
-                acquired_workspace = workspace_lock.acquire(blocking=False)
-                if not acquired_workspace:
-                    raise BotpipeError(
-                        "Concurrent editing branches cannot share a workspace"
-                    )
-            feedback = None
-            repair_usage = {}
-            for attempt in range(retries + 1):
-                inputs = {
-                    "session": self.key,
-                    "prompt": rendered,
-                    "input": input,
-                    "reads": handles,
-                    "writes": [a.to_record() for a in writes],
-                    "schema": schema,
-                    "policy": effective.to_dict(),
-                    "workspace": str(target),
-                    "attempt": attempt,
-                    "feedback": feedback,
-                }
+        effective_affinity = _plain_affinity(affinity)
+        effective_affinity.update(
+            backend=backend_name,
+            workspace=str(Path(workspace or ctx.workspace).resolve()),
+        )
+        descriptor = self._descriptor(ctx)
+        alias = (ctx.execution_id, ctx.scope)
 
-                def execute(recover=False):
-                    operation_id = ctx.operation_id
-                    fresh_response = False
-                    row = ctx.journal.get(operation_id)
-                    checkpoint = ProviderCheckpoint.from_record(row.get("response"))
-                    generation = checkpoint.generation
-                    authorized = isinstance(checkpoint, RetryAuthorizedCheckpoint)
-                    prepared_generation = checkpoint.attempt_generation
-                    artifact_operation = (
-                        f"{operation_id}:generation:{prepared_generation}"
-                    )
+        with self._guard:
+            if self._store is not None and self._store != store:
+                raise SessionAffinityError(
+                    "A bound Session cannot move to a different state store"
+                )
+            if self._affinity is not None and self._affinity != effective_affinity:
+                raise SessionAffinityError(
+                    "Session backend, account, model, or workspace affinity changed"
+                )
+            if alias in self._aliases:
+                assert self._canonical_id is not None
+                return self._canonical_id
 
-                    def rollback():
-                        try:
-                            store.rollback(artifact_operation)
-                        except (OSError, ArtifactError) as exc:
-                            raise UncertainOperation(
-                                f"Artifact rollback is incomplete; resume after resolving the conflict: {exc}",
-                                operation_id,
-                            ) from exc
+            inputs = {"session": descriptor, "affinity": effective_affinity}
 
-                    def restore():
-                        try:
-                            store.restore(artifact_operation)
-                        except (OSError, ArtifactError) as exc:
-                            raise UncertainOperation(
-                                f"Artifact restoration is incomplete; resume after resolving the conflict: {exc}",
-                                operation_id,
-                            ) from exc
-                        nonlocal checkpoint
-                        if (
-                            isinstance(checkpoint, NotDispatchedCheckpoint)
-                            and checkpoint.restoration_pending
-                        ):
-                            checkpoint = replace(checkpoint, restoration_pending=False)
-                            ctx.save_response(operation_id, checkpoint.to_record())
-
-                    if isinstance(checkpoint, NotDispatchedCheckpoint):
-                        restore()
-                        if checkpoint.error_kind == "policy_error":
-                            raise ProviderPolicyError(checkpoint.error)
-                        raise BudgetExceeded(checkpoint.error)
-
-                    if isinstance(checkpoint, ValidationFailedCheckpoint):
-                        # The provider completed, then validation failed. Finish
-                        # an interrupted rollback before replaying that failure.
-                        rollback()
-                        error = checkpoint.output_error
-                        failure = (
-                            OutputValidationError if error["retryable"] else TypeError
+            def establish() -> dict[str, Any]:
+                canonical = self._canonical_id
+                if canonical is None:
+                    if self._scope == "loaded":
+                        canonical = self._requested_id
+                    elif self._scope in {"task", "work_item"}:
+                        seed = json.dumps(
+                            {"store": store, "descriptor": descriptor},
+                            sort_keys=True,
+                            separators=(",", ":"),
                         )
-                        raise failure(error["message"])
-                    if isinstance(checkpoint, ValidatedCheckpoint):
-                        try:
-                            captured = store.captured(artifact_operation)
-                        except (OSError, ArtifactError) as exc:
-                            raise UncertainOperation(
-                                f"Artifact capture needs recovery: {exc}", operation_id
-                            ) from exc
-                        if captured is not None:
-                            return Result(
-                                codec.decode(checkpoint.validated_value),
-                                captured,
-                                checkpoint.response.usage,
-                                operation_id,
-                            )
-                    preparing = isinstance(
-                        checkpoint, (EmptyCheckpoint, PreparingCheckpoint)
-                    )
-                    if isinstance(checkpoint, EmptyCheckpoint):
-                        # Validate paths before any destination can move. This
-                        # marker proves a resumed preparation has not dispatched.
-                        store.destinations(writes)
-                        checkpoint = PreparingCheckpoint(generation)
-                        ctx.save_response(operation_id, checkpoint.to_record())
-                    try:
-                        destinations = (
-                            store.destinations(writes)
-                            if authorized
-                            else store.prepare(writes, artifact_operation)
-                        )
-                    except (OSError, ArtifactError) as exc:
-                        raise UncertainOperation(
-                            f"Artifact preparation is incomplete; resume after resolving the conflict: {exc}",
-                            operation_id,
-                        ) from exc
-                    complete_prompt = rendered
-                    if input is not None:
-                        serial = (
-                            input.model_dump(mode="json")
-                            if hasattr(input, "model_dump")
-                            else input
-                        )
-                        complete_prompt += "\n\nInput:\n" + _json(serial)
-                    if handles:
-                        complete_prompt += (
-                            "\n\nRead these immutable input artifacts:\n"
-                            + _json(
-                                [
-                                    {
-                                        "name": h.name,
-                                        "path": str(h.path),
-                                        "kind": h.kind,
-                                    }
-                                    for h in handles
-                                ]
-                            )
-                        )
-                    if writes:
-                        complete_prompt += (
-                            "\n\nWrite the declared artifacts to these exact paths. Required files must be created in this turn:\n"
-                            + _json(
-                                [
-                                    {**a.to_record(), "path": str(destinations[a.name])}
-                                    for a in writes
-                                ]
-                            )
-                        )
-                    if schema is not None:
-                        complete_prompt += (
-                            "\n\nReturn only JSON matching this schema:\n"
-                            + _json(schema)
-                        )
-                    if feedback:
-                        complete_prompt += (
-                            "\n\nRepair the previous output contract failure and produce all required files again:\n"
-                            + feedback
-                        )
-                    binding = ctx.journal.session(self.key) or {}
-                    request_data = checkpoint.request_data or {
-                        "session_id": binding.get("session_id"),
-                        "receipt_dir": str(ctx.folder / "receipts"),
-                        "prompt": complete_prompt,
-                        "artifacts": {
-                            name: str(path) for name, path in destinations.items()
-                        },
-                        "reads": [str(handle.path) for handle in handles],
-                    }
-                    request = ProviderRequest(
-                        operation_id=operation_id,
-                        prompt=complete_prompt,
-                        workspace=target,
-                        session_id=request_data.get("session_id"),
-                        output_schema=schema,
-                        policy=effective,
-                        artifacts=destinations,
-                        receipt_dir=ctx.folder / "receipts",
-                        timeout=ctx.limits.timeout,
-                        attempt=prepared_generation + 1,
-                        reads=tuple(handle.path for handle in handles),
-                    )
-                    if authorized:
-                        # Reconcile before touching destinations: the previous
-                        # process may still be writing them, or its completed
-                        # response may already be recoverable from a receipt.
-                        outcome = recover_outcome(ctx.client.provider, request)
-                        action = ProviderLifecycle.recovery_action(checkpoint, outcome)
-                        if action is RecoveryAction.USE_RESPONSE:
-                            generation = prepared_generation
-                            checkpoint = ProviderLifecycle.completed(
-                                checkpoint, outcome.response
-                            )
-                            ctx.save_response(
-                                operation_id,
-                                checkpoint.to_record(),
-                                session_key=self.key,
-                            )
-                        elif action is RecoveryAction.START_RETRY:
-                            rollback()
-                            artifact_operation = (
-                                f"{operation_id}:generation:{generation}"
-                            )
-                            try:
-                                destinations = store.prepare(writes, artifact_operation)
-                            except (OSError, ArtifactError) as exc:
-                                raise UncertainOperation(
-                                    f"Artifact preparation is incomplete; resume after resolving the conflict: {exc}",
-                                    operation_id,
-                                ) from exc
-                            request = replace(
-                                request, artifacts=destinations, attempt=generation + 1
-                            )
-                        else:
-                            raise UncertainOperation(
-                                outcome.detail
-                                or "Provider is not confirmed stopped; retry is blocked",
-                                operation_id,
-                            )
-                    if isinstance(checkpoint, RespondedCheckpoint):
-                        response = checkpoint.response
+                        canonical = "session-" + hashlib.sha256(
+                            seed.encode()
+                        ).hexdigest()
                     else:
-                        if authorized or preparing or not recover:
-                            checkpoint = IntentCheckpoint(generation, request_data)
-                            ctx.save_response(
-                                operation_id,
-                                checkpoint.to_record(),
-                            )
-                        dispatched = False
-                        try:
-                            if recover and not authorized and not preparing:
-                                outcome = recover_outcome(ctx.client.provider, request)
-                                action = ProviderLifecycle.recovery_action(
-                                    checkpoint, outcome
-                                )
-                                if action is not RecoveryAction.USE_RESPONSE:
-                                    raise UncertainOperation(
-                                        outcome.detail
-                                        or "Provider intent has no durable response; reconcile before retrying",
-                                        operation_id,
-                                    )
-                                response = outcome.response
-                            else:
-                                if not getattr(
-                                    ctx.client.provider, "_reserves_dispatch", False
-                                ):
-                                    from .dispatches import Dispatch
+                        canonical = "session-" + uuid.uuid4().hex
+                record = ctx.journal.bind_session(
+                    canonical,
+                    scope=descriptor,
+                    affinity=effective_affinity,
+                    require_existing=self._scope == "loaded",
+                )
+                return {"session_id": canonical, "revision": record["revision"]}
 
-                                    dispatch = Dispatch(ctx.client.provider, request)
-                                    request = replace(request, timeout=dispatch.timeout)
-                                    dispatched = True
-                                    dispatch.started()
-                                    try:
-                                        response = ctx.client.provider.run(request)
-                                        if not isinstance(response, ProviderResponse):
-                                            raise TypeError(
-                                                "Provider returned an invalid response object"
-                                            )
-                                        response.to_record()
-                                    except BaseException as exc:
-                                        dispatch.finish(
-                                            "timed_out"
-                                            if isinstance(exc, ProviderTimeoutError)
-                                            else "failed"
-                                            if isinstance(exc, Exception)
-                                            else "interrupted",
-                                            usage=getattr(exc, "usage", None),
-                                            error=exc,
-                                        )
-                                        raise
-                                    dispatch.finish(
-                                        "completed"
-                                        if isinstance(response, ProviderResponse)
-                                        else "failed",
-                                        usage=getattr(response, "usage", None),
-                                    )
-                                else:
-                                    response = ctx.client.provider.run(request)
-                                fresh_response = True
-                        except BudgetExceeded as exc:
-                            if not dispatched:
-                                checkpoint = NotDispatchedCheckpoint(
-                                    generation,
-                                    request_data,
-                                    True,
-                                    "budget_error",
-                                    str(exc),
-                                )
-                                ctx.save_response(operation_id, checkpoint.to_record())
-                                restore()
-                            else:
-                                raise UncertainOperation(
-                                    str(exc), operation_id
-                                ) from exc
-                            raise
-                        except ProviderPolicyError as exc:
-                            if dispatched:
-                                raise UncertainOperation(
-                                    str(exc), operation_id
-                                ) from exc
-                            checkpoint = NotDispatchedCheckpoint(
-                                generation,
-                                request_data,
-                                True,
-                                "policy_error",
-                                str(exc),
-                            )
-                            ctx.save_response(operation_id, checkpoint.to_record())
-                            restore()
-                            raise
-                        except Exception as exc:
-                            raise UncertainOperation(str(exc), operation_id) from exc
-                        if not isinstance(response, ProviderResponse):
-                            raise UncertainOperation(
-                                "Provider returned an invalid response; reconcile its effects",
-                                operation_id,
-                            )
-                        try:
-                            response.to_record()
-                        except (ValueError, TypeError, RecursionError) as exc:
-                            raise UncertainOperation(
-                                f"Provider returned an invalid response: {exc}",
-                                operation_id,
-                            ) from exc
-                        checkpoint = RespondedCheckpoint(
-                            generation, request_data, response
-                        )
-                        ctx.save_response(
-                            operation_id,
-                            checkpoint.to_record(),
-                            session_key=self.key,
-                        )
-                    try:
-                        if isinstance(checkpoint, ValidatedCheckpoint):
-                            value = codec.decode(checkpoint.validated_value)
-                        elif returns is str:
-                            value = response.text
-                        else:
-                            text = response.text.strip()
-                            fenced = re.fullmatch(
-                                r"```(?:json)?\s*\n(.*?)\n```", text, re.DOTALL
-                            )
-                            value = TypeAdapter(returns).validate_json(
-                                fenced.group(1) if fenced else text
-                            )
-                        if not isinstance(checkpoint, ValidatedCheckpoint):
-                            # Persist normalized state before capture. Recovery
-                            # can finish the same result without rerunning hooks.
-                            value_record = codec.encode(value)
-                            codec.encode(
-                                Result(
-                                    value, ArtifactMap(), response.usage, operation_id
-                                )
-                            )
-                            checkpoint = ValidatedCheckpoint(
-                                generation=checkpoint.generation,
-                                request=checkpoint.request,
-                                response=checkpoint.response,
-                                artifact_resolution=checkpoint.artifact_resolution,
-                                validated_value=value_record,
-                            )
-                            ctx.save_response(
-                                operation_id,
-                                checkpoint.to_record(),
-                                session_key=self.key,
-                            )
-                        artifacts = store.capture(
-                            writes,
-                            artifact_operation,
-                            recover=not fresh_response,
-                            expected_digests=(checkpoint.artifact_resolution or {}).get(
-                                "digests"
-                            ),
-                        )
-                    except (ValueError, TypeError) as exc:
-                        retryable = isinstance(exc, ValueError)
-                        checkpoint = ProviderLifecycle.validation_failed(
-                            checkpoint,
-                            message=str(exc),
-                            retryable=retryable,
-                        )
-                        ctx.save_response(
-                            operation_id,
-                            checkpoint.to_record(),
-                            session_key=self.key,
-                        )
-                        rollback()
-                        if retryable:
-                            raise OutputValidationError(str(exc)) from exc
-                        raise
-                    except OSError as exc:
-                        raise UncertainOperation(
-                            f"Artifact publication is incomplete; resume to finish it: {exc}",
-                            operation_id,
-                        ) from exc
-                    return Result(value, artifacts, response.usage, operation_id)
+            bound = ctx.operation(
+                "session_alias",
+                inputs,
+                establish,
+                retry_safe=True,
+                name="session",
+            )
+            if (
+                type(bound) is not dict
+                or type(bound.get("session_id")) is not str
+                or type(bound.get("revision")) is not int
+            ):
+                raise SessionError("Recorded session alias is malformed")
+            record = ctx.journal.bind_session(
+                bound["session_id"],
+                scope=descriptor,
+                affinity=effective_affinity,
+                require_existing=True,
+            )
+            self._canonical_id = bound["session_id"]
+            self._revision = bound["revision"]
+            self._store = store
+            self._affinity = effective_affinity
+            self._aliases.add(alias)
+            if record["revision"] < self._revision:
+                raise SessionError("Recorded session revision moved backwards")
+            return self._canonical_id
 
-                # Alternate writable workspaces need the same cross-process
-                # ownership fence as the client's primary workspace. Completed
-                # replay consumes only the journal and does not claim a target.
-                if (
-                    target != ctx.workspace
-                    and effective.sandbox_mode != SandboxMode.READ_ONLY
-                    and not owns_target
-                ):
-                    pending = ctx.journal.get(f"{ctx.run_id}:{ctx.scope}:{ctx.ordinal}")
-                    if pending is None or pending["status"] not in (
-                        "completed",
-                        "failed",
-                    ):
-                        target_ownership.enter_context(
-                            ctx.client._ownership(ctx.run_id, workspace=target)
-                        )
-                        owns_target = True
-                try:
-                    result = ctx.operation(
-                        "provider",
-                        inputs,
-                        execute,
-                        recover=lambda: execute(True),
-                        name=name,
-                    )
-                    usage = dict(repair_usage)
-                    for key, value in result.usage.items():
-                        if isinstance(value, (int, float)) and not isinstance(
-                            value, bool
-                        ):
-                            usage[key] = usage.get(key, 0) + value
-                        else:
-                            usage[key] = value
-                    return replace(result, usage=usage)
-                except OutputValidationError as exc:
-                    operation_id = f"{ctx.run_id}:{ctx.scope}:{ctx.ordinal - 1}"
-                    response = ctx.journal.get(operation_id).get("response") or {}
-                    for key, value in response.get("usage", {}).items():
-                        if isinstance(value, (int, float)) and not isinstance(
-                            value, bool
-                        ):
-                            repair_usage[key] = repair_usage.get(key, 0) + value
-                    exc.usage = dict(repair_usage)
-                    if attempt == retries:
-                        raise
-                    feedback = str(exc)
-        finally:
-            target_ownership.close()
-            if acquired_workspace:
-                workspace_lock.release()
-            lock.release()
+    def claim(self, ctx: Any, operation_id: str | None = None) -> SessionLease:
+        """Acquire exclusive ownership before an attempt may dispatch."""
 
-    @overload
-    async def arun(
-        self, prompt: str | Prompt, *, returns: type[T], **kwargs: Any
-    ) -> Result[T]: ...
+        with self._guard:
+            if self._canonical_id is None or self._revision is None:
+                raise SessionError("Session must be bound before it can be claimed")
+            operation_id = operation_id or ctx.operation_id
+            if not isinstance(operation_id, str) or not operation_id:
+                raise SessionError("A durable operation identity is required")
+            record = ctx.journal.claim_session(
+                self._canonical_id,
+                run_id=ctx.run_id,
+                operation_id=operation_id,
+                expected_revision=self._revision,
+                affinity=self._affinity,
+            )
+            return SessionLease(
+                self._canonical_id,
+                record["revision"],
+                record.get("native_session_id"),
+            )
 
-    @overload
-    async def arun(self, prompt: str | Prompt, **kwargs: Any) -> Result[str]: ...
+    def advancement(self, native_session_id: str | None = None) -> dict[str, Any]:
+        """Describe an atomic response/session advancement for Journal.response."""
 
-    async def arun(self, prompt, **kwargs):
-        return await _async_call(self.run, prompt, **kwargs)
+        with self._guard:
+            if self._canonical_id is None or self._revision is None:
+                raise SessionError("Session must be bound before it can advance")
+            return {
+                "session_id": self._canonical_id,
+                "expected_revision": self._revision,
+                "native_session_id": native_session_id,
+            }
+
+    def advanced(self, revision: int) -> None:
+        if type(revision) is not int or revision < 1:
+            raise SessionError("Committed session revision is malformed")
+        with self._guard:
+            if self._revision is not None and revision < self._revision:
+                raise SessionHistoryConflict("Session revision moved backwards")
+            self._revision = revision
+
+    def observe_operation(self, ctx: Any, operation_id: str) -> None:
+        """Apply the revision recorded by a replayed provider operation."""
+
+        record = ctx.journal.get(operation_id)
+        if record is None or record.get("session_id") != self._canonical_id:
+            return
+        revision = record.get("session_revision")
+        if revision is not None:
+            self.advanced(revision)
+
+    def release(self, ctx: Any, operation_id: str | None = None) -> None:
+        """Release after authoritative stopped/no-turn evidence."""
+
+        with self._guard:
+            if self._canonical_id is None:
+                return
+            ctx.journal.release_session(
+                self._canonical_id,
+                run_id=ctx.run_id,
+                operation_id=operation_id or ctx.operation_id,
+            )
+
+    def to_record(self) -> dict[str, Any]:
+        state_dir = self._requested_state_dir
+        if state_dir is None and self._store is not None:
+            state_dir = Path(self._store).parent
+        return {
+            "version": 1,
+            "token": self._token,
+            "scope": self._scope,
+            "key": self._key,
+            "item": list(self._item) if self._item is not None else None,
+            "session_id": self._canonical_id or self._requested_id,
+            "state_dir": str(state_dir) if state_dir is not None else None,
+            "affinity": self._affinity,
+            "revision": self._revision,
+        }
+
+    @classmethod
+    def from_record(cls, record: Mapping[str, Any]) -> Session:
+        expected = {
+            "version", "token", "scope", "key", "item", "session_id",
+            "state_dir", "affinity", "revision",
+        }
+        if type(record) is not dict or set(record) != expected:
+            raise TypeError("Malformed durable Session reference")
+        if record["version"] != 1 or record["scope"] not in {
+            "anonymous", "task", "work_item", "loaded",
+        }:
+            raise TypeError("Unsupported durable Session reference")
+        token = record["token"]
+        if type(token) is not str or not re.fullmatch(r"[0-9a-f]{32}", token):
+            raise TypeError("Malformed Session reference token")
+        result = cls()
+        result._token = token
+        result._scope = record["scope"]
+        result._key = record["key"]
+        item = record["item"]
+        if item is not None:
+            if type(item) is not list or len(item) != 2 or not all(
+                type(value) is str and value for value in item
+            ):
+                raise TypeError("Malformed Session work-item reference")
+            result._item = (item[0], item[1])
+        session_id = record["session_id"]
+        if session_id is not None and type(session_id) is not str:
+            raise TypeError("Malformed Session identity")
+        result._requested_id = session_id if result._scope == "loaded" else None
+        result._canonical_id = session_id
+        state_dir = record["state_dir"]
+        if state_dir is not None and type(state_dir) is not str:
+            raise TypeError("Malformed Session state directory")
+        result._requested_state_dir = Path(state_dir) if state_dir else None
+        affinity = record["affinity"]
+        result._affinity = None if affinity is None else _plain_affinity(affinity)
+        revision = record["revision"]
+        if revision is not None and (type(revision) is not int or revision < 0):
+            raise TypeError("Malformed Session revision")
+        result._revision = revision
+        if result._scope == "anonymous" and (
+            result._key is not None or result._item is not None
+        ):
+            raise TypeError("Malformed anonymous Session reference")
+        if result._scope == "task" and (
+            not isinstance(result._key, str) or not result._key
+        ):
+            raise TypeError("Malformed task Session reference")
+        if result._scope == "work_item" and (
+            not isinstance(result._key, str)
+            or not result._key
+            or result._item is None
+        ):
+            raise TypeError("Malformed work-item Session reference")
+        if result._scope == "loaded" and result._requested_id is None:
+            raise TypeError("Loaded Session reference requires a session identity")
+        return result

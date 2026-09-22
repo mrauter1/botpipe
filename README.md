@@ -1,185 +1,208 @@
 # Botpipe
 
-Botpipe runs ordinary Python functions as durable agent workflows. The function
-owns control flow; Botpipe records provider calls, activities, nested workflows,
-human input, artifacts, and their outcomes so a resumed run reuses completed
-work.
+Botpipe is a provider-first Python SDK and durable workflow runtime. Providers
+perform work, sessions carry conversation continuity, ordinary Python expresses
+the process, and Botpipe records operations and outcomes for inspection and
+recovery.
 
-> **Invariant:** Python owns control flow. Every material observation or external
-> effect goes through a recorded Botpipe operation.
+Botpipe 2.0 is a clean break. It does not read, migrate, replay, or analyze
+execution journals created by earlier versions.
+
+This rewrite is a development build. The [native capability matrix](docs/native-capability-evidence.md)
+records supported interfaces and outstanding release gates. Unsupported
+operations fail before dispatch; the full native conformance baseline has not
+passed.
 
 ## Install
 
 Botpipe requires Python 3.12 or newer.
 
 ```bash
-pip install -e .
+pip install botpipe
 ```
 
-The default provider is Codex CLI. Select a different installed provider with
-`Botpipe(provider=...)`, `--provider`, or `botpipe.toml`.
+## First call
 
-## A real workflow
+Select a default provider in `botpipe.toml`:
 
-The packaged Ralph loop is ordinary Python. This is its current workflow body;
-the prompt constants and typed review contract live beside it in the same
-module.
+```toml
+default_provider = "claude"
+```
+
+Then use the ordinary `Provider()` facade:
 
 ```python
-from botpipe import Artifact, Botpipe, Session, Worklist, workflow
-from botpipe.workflows.ralph_loop.workflow import (
-    IMPLEMENT,
-    PLAN,
-    REVIEW_IMPLEMENTATION,
-    REVIEW_PLAN,
-    ReviewDecision,
+from botpipe import Provider
+
+provider = Provider()
+answer = provider.generate("Explain the purpose of a database index.")
+print(answer.value)
+```
+
+There is no implicit vendor fallback. If no default is configured, a default
+provider operation raises `ConfigurationError` before dispatch. Explicit
+constructors such as `Codex()`, `ClaudeCode()`, `Pi()`, and `Jev()` select that
+backend deliberately.
+
+The example requires the Claude CLI profile documented in the capability
+matrix. Codex's current CLI profile supports `run`; it does not support
+tool-free `generate`. The query and exact-command examples below require a
+mediated SDK profile and a host that passes its isolation checks.
+
+## Operations and sessions
+
+`generate`, `query`, and `run` state the authority a call needs:
+
+- `generate` uses supplied context and has no commands or autonomous tools by
+  default. `allow_commands` may grant exact read-only argv tuples.
+- `query` may discover information through enforced read-only operations within
+  its effective scope. It cannot write to the provider workspace or mutate a
+  remote service.
+- `run` may make changes within the effective policy and declared workspace.
+- `decide` uses a provider's native structured decision contract.
+- `ask_human` requests typed human input from a workflow.
+
+Conversation-capable providers use a private managed session by default:
+
+```python
+from botpipe import Provider, Session
+
+base = Provider()
+base.generate("Remember that the service uses PostgreSQL.")
+answer = base.generate("Which database does the service use?")
+
+reviewer = base.with_config(instructions="Review critically.")
+independent_reviewer = base.with_config(session=Session())
+stateless = Provider(session=None)
+one_off = base.generate("Explain indexes.", session=None)
+```
+
+Construction and `with_config` do no I/O. Backend selection is resolved lazily
+at first effective use, then pinned across the provider family. Derivation is
+immutable: omitted values inherit, explicit nullable values clear, and
+collections replace.
+
+Exact command grants do not grant write authority:
+
+```python
+status = Provider().generate(
+    "Summarize the repository status.",
+    allow_commands=(("git", "status", "--short"),),
 )
+```
+
+## A complete workflow
+
+```python
+from pydantic import BaseModel
+from botpipe import Artifact, Botpipe, Provider, Session, ask_human, parallel, workflow
 
 
-@workflow(name="ralph_loop", version="1")
-def ralph_loop(request: str):
-    work = Artifact.json("work.json", required=True)
-    plan_review = Artifact.md("plan_review.md", required=True)
-    planner = Session(key="planner")
-    plan_reviewer = Session(key="plan-reviewer")
-    feedback = ()
-
-    while True:
-        plan = planner.run(PLAN, input=request, reads=feedback, writes=(work,))
-        review = plan_reviewer.run(
-            REVIEW_PLAN,
-            input=request,
-            reads=(plan.artifacts.work,),
-            writes=(plan_review,),
-            returns=ReviewDecision,
-        )
-        if review.value.verdict == "accepted":
-            break
-        feedback = (review.artifacts.plan_review,)
-
-    items = Worklist.from_artifact(plan.artifacts.work, collection="items")
-    for item in items:
-        session = Session.work_item(item)
-        item_review = Artifact.md(
-            f"items/{item.dir_key}/implementation_review.md",
-            required=True,
-        )
-        feedback = ()
-        while True:
-            session.run(
-                IMPLEMENT,
-                input=item.payload,
-                reads=(items.artifact, *feedback),
-            )
-            review = session.run(
-                REVIEW_IMPLEMENTATION,
-                input=item.payload,
-                reads=(items.artifact,),
-                writes=(item_review,),
-                returns=ReviewDecision,
-            )
-            if review.value.verdict == "accepted":
-                items.complete(item)
-                break
-            feedback = (review.artifacts.implementation_review,)
-
-    return items.artifact
+class Plan(BaseModel):
+    steps: list[str]
 
 
-result = Botpipe(workspace=".").run(
-    ralph_loop,
-    "Add CSV export support and cover it with tests.",
-    task_id="csv-export",
-)
+@workflow(name="implement_change", version="2")
+def implement_change(request: str):
+    base = Provider()
+    planner = base.with_config(instructions="Create a concrete plan.")
+    builder = base.with_config(instructions="Implement and verify the plan.")
+    plan = planner.query(request, returns=Plan)
+    change = builder.run(
+        "Implement this plan and write the verification report.",
+        input=plan.value,
+        writes=(Artifact.md("verification.md", required=True),),
+    )
+    correctness, clarity = parallel(
+        lambda: base.with_config(session=Session()).query(
+            "Review correctness.", input=change.value
+        ),
+        lambda: base.with_config(session=Session()).generate(
+            "Review clarity from the supplied result.", input=change.value
+        ),
+    )
+    if correctness.value != "approved":
+        reason = ask_human("Why should this change proceed?", returns=str)
+        return {"status": "held", "reason": reason}
+    return {
+        "status": "approved",
+        "clarity": clarity.value,
+        "report": change.artifacts["verification"],
+    }
+
+
+client = Botpipe(workspace=".")
+result = client.run(implement_change, "Add CSV export", task_id="csv-export")
 print(result.status, result.run_id)
 ```
 
-Strings are inline prompts. `Prompt.file("review.md")` loads a file relative to
-the workflow source. Jinja rendering is strict and receives the operation input
-and run information.
-
-## Command line
-
-Workflow references may be catalog names, `package.module:function`, or
-`path/to/file.py:function`.
-
-```bash
-botpipe workflows list --workspace .
-botpipe workflows show my_package.flow:fix_issue --workspace .
-
-botpipe run my_package.flow:fix_issue \
-  --input '{"request":{"issue":"CSV export loses UTF-8 characters"}}' \
-  --task-id csv-utf8 --workspace .
-
-botpipe runs list --status awaiting_input --workspace .
-botpipe runs show RUN_ID --workspace .
-botpipe runs logs RUN_ID --workspace .
-botpipe resume RUN_ID --answer 'yes' --workspace .
-
-# An uncertain external effect is never retried silently.
-botpipe resolve RUN_ID OPERATION_ID --retry --workspace .
-# Or record the response that actually occurred, then resume.
-botpipe resolve RUN_ID OPERATION_ID --response '{"id":"remote-42"}' --workspace .
-```
-
-The familiar plain request form remains available for a workflow whose first
-parameter is a string:
-
-```bash
-botpipe run ralph_loop "Implement CSV export and test it" --workspace .
-```
+`Result[T]` always exposes `value`, operation artifacts, usage, `run_id`, and
+`operation_id`. `RunResult[T].value` is exactly what the workflow returned.
+Multiple provider-written outputs remain separate immutable artifact handles;
+run-wide aggregation keeps producing scope, operation, name, and version.
 
 ## Configuration
 
-Botpipe reads `botpipe.toml`, `.botpipe.toml`, or `[tool.botpipe]` in
-`pyproject.toml`. Explicit CLI options win.
+Botpipe selects one source: explicit SDK/CLI `--config`, then
+`BOTPIPE_CONFIG`, then a workspace `botpipe.toml` (JSON/YAML equivalents are
+also recognized), then `[tool.botpipe]` in `pyproject.toml`. It never recursively
+merges competing files. Relative paths are resolved from the workspace.
 
 ```toml
-provider = "codex"
+default_provider = "claude"
+default_profile = "project"
+state_dir = ".botpipe-v2"
 max_operations = 500
 timeout = 1800
 
-[provider_config]
-command = ["codex", "exec"]
-
 [policy]
-model = "gpt-5.5"
-effort = "high"
 sandbox_mode = "workspace_write"
 network = "none"
+
+[providers.claude]
+query_read_roots = ["."]
+generate_allow_commands = [["git", "status", "--short"]]
+
+[providers.claude.options]
+interface = "agent_sdk"
+
+[providers.claude.profiles.project]
+generate_allow_commands = []
 ```
 
-Provider policies describe intended and enforceable access. A provider must
-reject controls it cannot honor; Botpipe does not turn a prompt instruction into
-a security boundary.
+This mediated profile requires `pip install 'botpipe[claude-sdk]'`, native
+authentication, and the supported local sandbox described in the matrix.
 
-## Durable behavior
+An omitted `query_read_roots` uses the workspace default. An explicit empty
+array disables local discovery. CLI/application overrides replace configured
+maps and collections rather than recursively merging them. Credentials never
+belong in serializable settings, including provider `options` or embedded URL
+user information; use environment credentials, a credential-source reference,
+or an injected live adapter.
 
-- `@workflow` wraps sync or async functions. Calling another decorated workflow
-  creates a durable child scope.
-- `Session.run()` records a provider operation. The same mutable session is
-  serialized; use separate sessions for parallel work.
-- `@activity` records custom Python I/O and defaults to `retry_safe=True`, so
-  unfinished calls can run again on resume. Set `retry_safe=False` to require
-  explicit operator reconciliation before repeating an interrupted call.
-- `ask()` records a typed human-input request. Resume with an answer.
-- `parallel()` gives every callable a stable independent scope and preserves
-  result order.
-- Completed outcomes are immutable. Resume matches operation identity and
-  inputs and checks stored-data contracts. Code edits are allowed: future work
-  uses current code, while completed runs return their saved results.
-- Botpipe provides durable replay, not an exactly-once claim for external
-  systems.
-
-See [Authoring](docs/authoring.md), [SDK](docs/sdk.md),
-[Architecture](docs/architecture.md), [CLI](docs/cli.md), the
-[Optimizer guide](docs/optimizer.md), and the
-[major-version migration guide](docs/migration.md).
-
-## Development
+## Command line
 
 ```bash
-python -m pytest -q
+botpipe workflows list --workspace .
+botpipe workflows show package.flow:implement --workspace .
+botpipe run package.flow:implement "Add CSV export" --task-id csv --workspace .
+botpipe runs list --status awaiting_input --workspace .
+botpipe runs show RUN_ID --workspace .
+botpipe runs logs RUN_ID --workspace .
+botpipe pending RUN_ID --workspace .
+botpipe answer RUN_ID OPERATION_ID '"yes"' --workspace .
+botpipe resume RUN_ID --workspace .
+botpipe resolve RUN_ID OPERATION_ID --retry --workspace .
 ```
 
-Botpipe is licensed under Apache-2.0.
+Commands write JSON to stdout and diagnostics to stderr. Catalog listing parses
+Python and manifests without importing workflow modules. Execution accepts a
+catalog name, `module:function`, or `file.py:function`, and rejects ambiguous
+effective names.
+
+See [Authoring](docs/authoring.md), [SDK](docs/sdk.md),
+[Architecture](docs/architecture.md), [CLI](docs/cli.md), and the
+[2.0 migration guide](docs/migration.md). The
+[native capability evidence](docs/native-capability-evidence.md) records the
+current adapter limits and proof status without treating fake-provider tests as
+native conformance.

@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from .config import ConfigError, load_config
+from .config import ConfigurationError, load_config
 from .discovery import (
     WorkflowDiscoveryError,
     WorkflowInputError,
@@ -22,6 +22,8 @@ EXIT_OK = 0
 EXIT_RUNTIME = 1
 EXIT_USAGE = 2
 EXIT_NOT_FOUND = 3
+EXIT_AWAITING_INPUT = 4
+EXIT_INTERRUPTED = 5
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -64,26 +66,29 @@ def build_parser() -> argparse.ArgumentParser:
     resume.add_argument(
         "--workflow", help="Required for a non-importable local workflow."
     )
-    answer = resume.add_mutually_exclusive_group()
-    answer.add_argument(
-        "--answer", help="JSON answer, or plain text when it is not valid JSON."
-    )
-    answer.add_argument(
-        "--answer-file", type=Path, help="Read a JSON answer from a file."
-    )
     resume.set_defaults(handler=_resume)
 
     answer_command = commands.add_parser(
-        "answer", parents=[_client_parser()], help="Answer a paused run."
+        "answer", parents=[_client_parser()], help="Answer one pending human request."
     )
     answer_command.add_argument("run_id")
+    answer_command.add_argument("operation_id")
     answer_command.add_argument(
-        "answer", help="JSON answer, or plain text when it is not valid JSON."
+        "answer", nargs="?", help="JSON answer, or plain text when it is not valid JSON."
+    )
+    answer_command.add_argument(
+        "--answer-file", type=Path, help="Read a JSON answer from a file."
     )
     answer_command.add_argument(
         "--workflow", help="Required for a non-importable local workflow."
     )
     answer_command.set_defaults(handler=_answer)
+
+    pending = commands.add_parser(
+        "pending", parents=[_client_parser()], help="List a run's pending human requests."
+    )
+    pending.add_argument("run_id")
+    pending.set_defaults(handler=_pending)
 
     resolve = commands.add_parser(
         "resolve", parents=[_client_parser()], help="Resolve an interrupted operation."
@@ -137,13 +142,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     runs_logs.set_defaults(handler=_runs_logs)
 
-    # Keep the familiar top-level spelling while making `runs logs` discoverable.
-    logs = commands.add_parser(
-        "logs", parents=[_client_parser()], help="Alias for `runs logs`."
-    )
-    logs.add_argument("run_id")
-    logs.add_argument("--operations", action="store_true")
-    logs.set_defaults(handler=_runs_logs)
     return parser
 
 
@@ -152,7 +150,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         args = parser.parse_args(argv)
         return int(args.handler(args))
-    except (ConfigError, WorkflowInputError) as exc:
+    except (ConfigurationError, WorkflowInputError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_USAGE
     except (WorkflowDiscoveryError, FileNotFoundError) as exc:
@@ -179,6 +177,7 @@ def _client_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--state-dir", type=Path)
     parser.add_argument("--provider")
+    parser.add_argument("--profile")
     parser.add_argument("--provider-config", help="Provider-specific JSON object.")
     parser.add_argument(
         "--policy",
@@ -188,6 +187,14 @@ def _client_parser() -> argparse.ArgumentParser:
     parser.add_argument("--model", help="Convenience override for policy.model.")
     parser.add_argument(
         "--effort", "--model-effort", help="Convenience override for policy.effort."
+    )
+    parser.add_argument(
+        "--generate-commands",
+        help="JSON array of exact read-only argv arrays; [] clears configured grants.",
+    )
+    parser.add_argument(
+        "--query-read-roots",
+        help="JSON array of readable roots; [] disables local workspace discovery.",
     )
     parser.add_argument("--max-operations", type=int)
     parser.add_argument("--timeout", type=float)
@@ -248,10 +255,6 @@ def _resume(args: argparse.Namespace) -> int:
         resolve_workflow(args.workflow, args.workspace) if args.workflow else None
     )
     kwargs: dict[str, Any] = {}
-    if args.answer_file is not None:
-        kwargs["answer"] = _read_json_file(args.answer_file)
-    elif args.answer is not None:
-        kwargs["answer"] = _json_or_text(args.answer)
     if workflow is not None:
         kwargs["workflow"] = workflow
     if args.max_operations is not None:
@@ -260,21 +263,46 @@ def _resume(args: argparse.Namespace) -> int:
         kwargs["timeout"] = args.timeout
     result = client.resume(args.run_id, **kwargs)
     _emit(result)
-    if "answer" in kwargs and _value(result, "status") == "awaiting_input":
-        pending = _value(result, "pending_input") or {}
-        if pending.get("diagnostic") is not None:
-            return EXIT_USAGE
     return _result_exit_code(result)
 
 
 def _answer(args: argparse.Namespace) -> int:
-    args.answer_file = None
-    return _resume(args)
+    if args.answer is not None and args.answer_file is not None:
+        raise WorkflowInputError("use only one of ANSWER and --answer-file")
+    if args.answer is None and args.answer_file is None:
+        raise WorkflowInputError("provide ANSWER or --answer-file")
+    value = (
+        _read_json_file(args.answer_file)
+        if args.answer_file is not None
+        else _json_or_text(args.answer)
+    )
+    workflow = resolve_workflow(args.workflow, args.workspace) if args.workflow else None
+    kwargs: dict[str, Any] = {}
+    if workflow is not None:
+        kwargs["workflow"] = workflow
+    if args.max_operations is not None:
+        kwargs["max_operations"] = args.max_operations
+    if args.timeout is not None:
+        kwargs["timeout"] = args.timeout
+    result = _client(args).answer(args.run_id, args.operation_id, value, **kwargs)
+    _emit(result)
+    if _value(result, "status") == "awaiting_input":
+        pending = _value(result, "pending_input") or {}
+        if pending.get("operation_id") == args.operation_id and pending.get("diagnostic"):
+            return EXIT_USAGE
+    return _result_exit_code(result)
+
+
+def _pending(args: argparse.Namespace) -> int:
+    _emit(_client(args).pending(args.run_id))
+    return EXIT_OK
 
 
 def _resolve(args: argparse.Namespace) -> int:
     client = _client(args)
-    options = {"retry": args.retry}
+    options: dict[str, Any] = {}
+    if args.retry:
+        options["retry"] = True
     if args.response is not None:
         # Passing the keyword is significant: JSON null is a valid activity result.
         options["response"] = _json_or_text(args.response)
@@ -334,20 +362,29 @@ def _client(args: argparse.Namespace) -> Any:
         if args.provider_config
         else None
     )
-    policy = _policy_input(args.policy) if args.policy else None
-    if args.model is not None or args.effort is not None:
-        policy = dict(policy or {})
-        if args.model is not None:
-            policy["model"] = args.model
-        if args.effort is not None:
-            policy["effort"] = args.effort
+    policy = _policy_input(args.policy, args.workspace) if args.policy else None
+    generate_commands = (
+        _json_array(args.generate_commands, "--generate-commands")
+        if args.generate_commands is not None
+        else None
+    )
+    query_read_roots = (
+        _json_array(args.query_read_roots, "--query-read-roots")
+        if args.query_read_roots is not None
+        else None
+    )
     config = load_config(
         args.workspace,
         path=args.config,
         provider=args.provider,
+        profile=args.profile,
         state_dir=args.state_dir,
         policy=policy,
         provider_config=provider_config,
+        model=args.model,
+        effort=args.effort,
+        generate_allow_commands=generate_commands,
+        query_read_roots=query_read_roots,
         max_operations=args.max_operations,
         timeout=args.timeout,
     )
@@ -391,8 +428,10 @@ def _invocation(args: argparse.Namespace) -> tuple[tuple[Any, ...], dict[str, An
     return tuple(positional), keyword
 
 
-def _policy_input(value: str) -> dict[str, Any]:
+def _policy_input(value: str, workspace: Path) -> dict[str, Any]:
     path = Path(value).expanduser()
+    if not path.is_absolute():
+        path = Path(workspace).expanduser().resolve() / path
     if path.is_file():
         if path.suffix.lower() == ".json":
             return _json_object(path.read_text(encoding="utf-8"), "--policy")
@@ -401,7 +440,7 @@ def _policy_input(value: str) -> dict[str, Any]:
 
             payload = tomllib.loads(path.read_text(encoding="utf-8"))
             return dict(payload.get("policy", payload))
-        raise ConfigError("--policy files must be JSON or TOML")
+        raise ConfigurationError("--policy files must be JSON or TOML")
     return _json_object(value, "--policy")
 
 
@@ -422,15 +461,15 @@ def _read_json_file(path: Path) -> Any:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except OSError as exc:
-        raise ConfigError(f"could not read {path}: {exc}") from exc
+        raise ConfigurationError(f"could not read {path}: {exc}") from exc
     except json.JSONDecodeError as exc:
-        raise ConfigError(f"{path} is not valid JSON: {exc.msg}") from exc
+        raise ConfigurationError(f"{path} is not valid JSON: {exc.msg}") from exc
 
 
 def _json_object(value: str, option: str) -> dict[str, Any]:
     payload = _json_value(value, option)
     if not isinstance(payload, dict):
-        raise ConfigError(f"{option} must be a JSON object")
+        raise ConfigurationError(f"{option} must be a JSON object")
     return payload
 
 
@@ -438,7 +477,14 @@ def _json_value(value: str, option: str) -> Any:
     try:
         return json.loads(value)
     except json.JSONDecodeError as exc:
-        raise ConfigError(f"{option} must be valid JSON: {exc.msg}") from exc
+        raise ConfigurationError(f"{option} must be valid JSON: {exc.msg}") from exc
+
+
+def _json_array(value: str, option: str) -> list[Any]:
+    payload = _json_value(value, option)
+    if not isinstance(payload, list):
+        raise ConfigurationError(f"{option} must be a JSON array")
+    return payload
 
 
 def _json_or_text(value: str) -> Any:
@@ -450,6 +496,10 @@ def _json_or_text(value: str) -> Any:
 
 def _result_exit_code(result: Any) -> int:
     status = _value(result, "status")
+    if status == "awaiting_input":
+        return EXIT_AWAITING_INPUT
+    if status == "interrupted":
+        return EXIT_INTERRUPTED
     return EXIT_RUNTIME if status in {"failed", "budget_exceeded"} else EXIT_OK
 
 
@@ -472,6 +522,7 @@ def _jsonable(value: Any) -> Any:
         return {
             field.name: _jsonable(getattr(value, field.name))
             for field in dataclasses.fields(value)
+            if field.name != "exception"
         }
     if isinstance(value, Mapping):
         return {str(key): _jsonable(item) for key, item in value.items()}

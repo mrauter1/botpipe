@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from botpipe import Botpipe, Policy, Session, provider_budget, workflow
+from botpipe import Botpipe, Policy, Provider, provider_budget, workflow
 from botpipe.processes import ProcessContainment
 from botpipe.providers import CodexProvider
 
@@ -45,11 +45,12 @@ def test_successful_native_leader_cannot_leave_effectful_descendant(tmp_path):
         "import subprocess,sys,json\n"
         f"subprocess.Popen([sys.executable,'-c',{child!r}])\n"
         "print(json.dumps({'type':'item.completed','item':{'type':'agent_message','text':'done'}}))\n"
+        "print(json.dumps({'type':'turn.completed'}))\n"
     )
 
     @workflow
     def work():
-        return Session().run("work").value
+        return Provider().run("work").value
 
     with Botpipe(
         tmp_path, provider=CodexProvider((sys.executable, str(script)))
@@ -66,7 +67,7 @@ def test_native_budget_timeout_cannot_be_overridden_by_policy(tmp_path):
     @workflow
     def work():
         with provider_budget(max_turns=1, turn_timeout_seconds=0.05):
-            Session().run("work", policy=Policy(timeout=10))
+            Provider().run("work", policy=Policy(timeout=10))
 
     started = time.monotonic()
     with Botpipe(

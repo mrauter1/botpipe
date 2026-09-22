@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 import botpipe
-from botpipe import Botpipe, Policy, Session, parallel, workflow
+from botpipe import Botpipe, Policy, Provider, parallel, workflow
 from botpipe._callables import describe_callable
 from botpipe.providers import FakeProvider
 from botpipe.runtime import _function_version
@@ -159,7 +159,7 @@ def test_parallel_supports_lambda_wrapped_method_and_callable_instance(tmp_path)
 def test_partial_live_session_method_does_not_serialize_receiver(tmp_path):
     @workflow
     def job():
-        session = Session()
+        session = Provider()
         turn = functools.partial(
             session.run,
             "review",
@@ -221,10 +221,10 @@ def test_raw_paused_branch_uses_current_model_helper_after_edit(tmp_path):
     )
     _write(
         tmp_path / "branchpkg/branch.py",
-        "from botpipe import ask\n"
+        "from botpipe import ask_human\n"
         "from .model import Config\n"
         "def wait():\n"
-        "    answer = ask('continue?')\n"
+        "    answer = ask_human('continue?')\n"
         "    return Config().label, answer\n",
     )
     _write(tmp_path / "rootpkg/__init__.py", "")
@@ -247,13 +247,7 @@ def test_raw_paused_branch_uses_current_model_helper_after_edit(tmp_path):
     )
     resume = _write(
         tmp_path / "resume.py",
-        "from botpipe import Botpipe\n"
-        "from botpipe.providers import FakeProvider\n"
-        "from rootpkg.workflow import job\n"
-        "with Botpipe('.', provider=FakeProvider([])) as client:\n"
-        "    result = client.resume('paused', workflow=job, answer='yes')\n"
-        "    assert result.ok and result.value == [('current', 'yes')], result\n"
-        "    assert len(client.journal.operations('paused')) == 2\n",
+        'from botpipe import Botpipe\nfrom botpipe.providers import FakeProvider\nfrom rootpkg.workflow import job\nwith Botpipe(\'.\', provider=FakeProvider([])) as client:\n    result = client.resume(\'paused\', workflow=job, answers={client.pending(\'paused\')[0]["operation_id"]: \'yes\'})\n    assert result.ok and result.value == [(\'current\', \'yes\')], result\n    assert len(client.journal.operations(\'paused\')) == 2\n',
     )
 
     first = _run(start)
@@ -280,12 +274,12 @@ def test_parallel_result_owns_cross_package_type_and_replays_unchanged(tmp_path)
     _write(tmp_path / "rootpkg/__init__.py", "")
     _write(
         tmp_path / "rootpkg/workflow.py",
-        "from botpipe import ask, parallel, workflow\n"
+        "from botpipe import ask_human, parallel, workflow\n"
         "from branchpkg.branch import produce\n"
         "@workflow\n"
         "def job():\n"
         "    values = parallel(produce)\n"
-        "    ask('continue?')\n"
+        "    ask_human('continue?')\n"
         "    return values\n",
     )
     start = _write(
@@ -300,14 +294,7 @@ def test_parallel_result_owns_cross_package_type_and_replays_unchanged(tmp_path)
     )
     resume = _write(
         tmp_path / "resume.py",
-        "from botpipe import Botpipe\n"
-        "from botpipe.providers import FakeProvider\n"
-        "from rootpkg.workflow import job\n"
-        "with Botpipe('.', provider=FakeProvider([])) as client:\n"
-        "    result = client.resume('typed', workflow=job, answer='yes')\n"
-        "    assert result.ok, result.error\n"
-        "    assert result.value[0].amount == 3\n"
-        "    assert len(client.journal.operations('typed')) == 2\n",
+        'from botpipe import Botpipe\nfrom botpipe.providers import FakeProvider\nfrom rootpkg.workflow import job\nwith Botpipe(\'.\', provider=FakeProvider([])) as client:\n    result = client.resume(\'typed\', workflow=job, answers={client.pending(\'typed\')[0]["operation_id"]: \'yes\'})\n    assert result.ok, result.error\n    assert result.value[0].amount == 3\n    assert len(client.journal.operations(\'typed\')) == 2\n',
     )
 
     first = _run(start)

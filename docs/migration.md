@@ -1,93 +1,98 @@
-# Migrating to the durable-functions API
+# Migrating to Botpipe 2.0
 
-This release replaces the graph compiler, routes, mutable workflow state, step
-classes, and the filesystem runner with one durable Python runtime. It is a major
-API break; existing workflows should be ported rather than wrapped.
+Botpipe 2.0 replaces the earlier execution API with a configured provider facade
+and one imperative workflow runtime. Port applications directly; the package
+does not ship compatibility wrappers.
 
-The durable API retains the behaviors that matter: provider policy and sessions,
-typed outputs, immutable artifacts, worklists, human input, nested workflows,
-deterministic concurrency, configuration, CLI history, runtime inspection, and
-observation-based optimization. Graph-only topology, route-reporting, compiler,
-mutable-state, and checkpoint-repair APIs are retired. Their structural tests
-are replaced by behavioral tests at the workflow, interruption, replay,
-artifact, and CLI boundaries.
-
-## Authoring changes
-
-| Earlier API | Durable-functions API |
+| Earlier concept | Botpipe 2.0 |
 | --- | --- |
-| `class Flow(Workflow)` | `@workflow def flow(...):` |
-| `step`, `python_step`, `produce_verify_step` | `Session.run` and `@activity` |
-| `Route`, `Goto`, `FINISH`, `SELF` | Python `if`, `for`, `while`, calls, returns |
-| `ctx.state`, `StateVar`, params classes | local variables and typed arguments |
-| workflow artifacts with Jinja paths | `Artifact.*` paths relative to the run folder |
-| step transitions and compiled topology | observed operations and runtime scopes |
-| input handlers | `ask(..., returns=...)` and `resume(answer=...)` |
-| runtime filesystem checkpoint repair | SQLite ledger replay and explicit resolution |
+| Vendor chosen implicitly | `Provider()` with a configured default, or an explicit vendor constructor |
+| `Session.run(...)` | `Provider(session=session).run(...)` |
+| General provider request | `generate`, `query`, `run`, or `decide`, chosen by required capability |
+| Provider `retries=` | `output_retries=` for typed output repair |
+| `ask(...)` / unscoped resume answer | `ask_human(...)` and an answer targeted by operation ID |
+| Provider-free fresh session helper | `Provider(session=None)` or a per-call `session=None` |
+| Graph, route, and mutable workflow state | Ordinary Python control flow and typed local values |
+| Static graph inspection | Callable contract before execution and observed operations afterward |
+| Old journal migration | A fresh 2.0 state directory |
 
-The porting rule is: Python owns control flow, while every material observation
-or external effect crosses a recorded operation boundary.
+## Provider calls
+
+Before:
 
 ```python
-# before
-class Review(Workflow):
-    draft = produce_verify_step(...)
-    transitions = {draft: Route("accepted", FINISH), ...}
-
-# after
-@workflow(version="1")
-def review(request: Request) -> Report:
-    session = Session.task("draft")
-    while True:
-        draft = session.run("Draft the report.", input=request, returns=Report)
-        verdict = Session.fresh().run("Review independently.", input=draft.value, returns=Verdict)
-        if verdict.value.accepted:
-            return draft.value
+session = Session.task("builder")
+result = session.run(prompt, input=request, returns=Report, retries=2)
 ```
 
-## Runtime changes
+After:
 
-`Botpipe.run()` now accepts the callable (or a discovered name) and its ordinary
-arguments. It returns `RunResult`; run history is available through `runs()` and
-`inspect()` on the same client. `resume()` uses a run ID, with an optional
-workflow only for non-importable local callables.
-
-Provider calls and custom activities are not assumed exactly once. A started
-unsafe operation without a committed result becomes `interrupted`. Inspect the
-operation, then call `resolve(..., retry=True)` or
-`resolve(..., response=observed_value)`.
-
-For providers, both resolutions require recovery evidence. A completed receipt
-takes precedence; running or unknown attempts remain blocked. Custom providers
-should return explicit outcomes from `botpipe.recovery`. Returning `None` no
-longer authorizes replacement of an uncertain provider response.
-
-## Discovery and CLI changes
-
-Catalog names remain supported. Direct references now point to Python functions:
-`package.module:function` or `path.py:function`. `workflow.toml` is optional
-metadata, not executable topology.
-
-Run inspection distinguishes a declared callable contract from an observed
-runtime graph. There is no complete static graph for arbitrary Python control
-flow.
-
-Task-based run lookup was replaced by direct run IDs:
-
-```bash
-botpipe run ralph_loop "Implement the change" --task-id change-42
-botpipe runs show RUN_ID
-botpipe resume RUN_ID --answer yes
+```python
+session = Session()
+builder = Provider(session=session)
+result = builder.run(prompt, input=request, returns=Report, output_retries=2)
 ```
 
-## Persistence format
+Use `generate` when all evidence is supplied and no command is needed. Grant an
+exception only as an exact read-only argv tuple. Use `query` for autonomous
+read-only discovery, including enforced read-only commands. Use `run` when the
+provider may edit or invoke effects. A reviewer that executes tests or writes a
+report therefore remains a `run` call.
 
-This greenfield runtime supports its current journal and durable-value format.
-It has no readers or migration policy for earlier experimental formats.
+`Provider()` creates managed conversation continuity. Configuration roles made
+with `with_config` share that session. Pass a new `Session()` for an independent
+continuing reviewer and `session=None` for independent calls.
 
-Implementation edits do not require a new run. Recorded operations replay their
-saved outcomes; future operations use current code. The recorded operation
-sequence, logical identities, inputs, and stored-data contracts must still match.
-Completed root runs retain their saved result. Source revisions are observations
-for inspection and optimization, not replay gates. See [architecture](architecture.md)
-for the matching, retry, and storage guarantees.
+## Runtime and human input
+
+`Botpipe.run()` accepts the workflow callable or discovered reference and its
+ordinary arguments. `RunResult.value` is exactly the function return value.
+Nested workflows return their ordinary function value.
+
+Human input is explicitly targeted:
+
+```python
+questions = client.pending(run_id)
+client.answer(run_id, questions[0]["operation_id"], answer)
+```
+
+CLI equivalents are `botpipe pending RUN_ID` and
+`botpipe answer RUN_ID OPERATION_ID ANSWER`.
+
+## Configuration
+
+Rename the provider key to `default_provider` and put adapter options below the
+provider. Model and effort are common settings; adapter command/configuration
+belongs under `options`.
+
+```toml
+default_provider = "codex"
+default_profile = "project"
+
+[providers.codex]
+model = "gpt-5.5"
+effort = "high"
+generate_allow_commands = []
+
+[providers.codex.options]
+command = ["codex", "exec"]
+
+[providers.codex.profiles.project]
+query_read_roots = ["."]
+```
+
+The source precedence is explicit path, `BOTPIPE_CONFIG`, one workspace config,
+then `[tool.botpipe]`. Sources are not merged. Explicit collections and maps
+replace configured values.
+
+## Execution history
+
+Pre-2.0 journals and persisted state are outside the supported format. Botpipe
+does not inspect, import, convert, replay, resume, reconcile, or use them as
+optimizer evidence. Keep an old environment if its historical inspection is
+needed, and configure a fresh state directory for 2.0.
+The default is `.botpipe-v2`, separate from the earlier `.botpipe` location.
+
+Within the 2.0 journal format, compatible source edits remain supported:
+committed operations replay, future operations use current code, and an
+incompatible recorded input or typed storage contract fails before new effects.

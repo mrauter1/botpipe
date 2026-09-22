@@ -26,10 +26,10 @@ def test_parallel_prompt_uses_nearest_application_source(tmp_path, nested, callb
     )
     body = (
         "from functools import partial\n"
-        "from botpipe import Policy, Prompt, Session, parallel, workflow\n"
+        "from botpipe import Policy, Prompt, Provider, parallel, workflow\n"
         "@workflow\n"
         "def job():\n"
-        "    session = Session()\n"
+        "    session = Provider()\n"
         "    policy = Policy(sandbox_mode='read_only')\n"
         f"    return parallel({expression})[0].value\n"
     )

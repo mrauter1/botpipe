@@ -97,7 +97,7 @@ def test_devloop_docloop_runs_phase_repair_free_path_and_final_audit(
     tmp_path: Path,
 ) -> None:
     request_ref = str(
-        tmp_path / ".botpipe" / "tasks" / "dev" / "runs" / "run" / "request.md"
+        tmp_path / ".botpipe-v2" / "tasks" / "dev" / "runs" / "run" / "request.md"
     )
     phase_plan = {
         "version": 1,
@@ -176,7 +176,7 @@ def test_devloop_docloop_runs_phase_repair_free_path_and_final_audit(
     assert result.value.completed_phases == ["p1"]
     strategy = (
         tmp_path
-        / ".botpipe"
+        / ".botpipe-v2"
         / "tasks"
         / "dev"
         / "test"
@@ -192,7 +192,7 @@ def test_devloop_repairs_phase_item_and_records_skipped_followup(
     tmp_path: Path,
 ) -> None:
     request_ref = str(
-        tmp_path / ".botpipe" / "tasks" / "repair" / "runs" / "run" / "request.md"
+        tmp_path / ".botpipe-v2" / "tasks" / "repair" / "runs" / "run" / "request.md"
     )
     base = {
         "version": 1,
@@ -320,7 +320,7 @@ def _goal_provider(tmp_path: Path, task_id: str) -> FakeProvider:
     def plan(req):
         goal_payload = json.loads(
             (
-                tmp_path / ".botpipe" / "tasks" / task_id / "goal" / "goal.json"
+                tmp_path / ".botpipe-v2" / "tasks" / task_id / "goal" / "goal.json"
             ).read_text()
         )
         _write(
@@ -420,6 +420,38 @@ def test_goal_budget_pause_and_explicit_replan(tmp_path: Path) -> None:
     assert replanned.value.status == "complete"
 
 
+def test_goal_edit_resume_clear_and_missing_status(tmp_path: Path) -> None:
+    initial = _goal_provider(tmp_path, "commands")
+    limited_provider = FakeProvider([next(initial._responses) for _ in range(4)])
+    with Botpipe(tmp_path, provider=limited_provider) as runtime:
+        limited = runtime.run(
+            goal, "original objective", max_goal_turns=1,
+            task_id="commands", run_id="limited",
+        )
+        assert limited.value.status == "budget_limited"
+
+    with Botpipe(tmp_path, provider=_goal_provider(tmp_path, "commands")) as runtime:
+        edited = runtime.run(
+            goal, action="edit", objective="revised objective", max_goal_turns=5,
+            task_id="commands", run_id="edited",
+        )
+        assert edited.ok, edited.error
+        assert edited.value.status == "complete"
+        assert edited.value.objective == "revised objective"
+
+    no_calls = FakeProvider([])
+    with Botpipe(tmp_path, provider=no_calls) as runtime:
+        resumed = runtime.run(goal, action="resume", task_id="commands")
+        assert resumed.value.status == "complete"
+        assert resumed.value.goal_id == edited.value.goal_id
+        cleared = runtime.run(goal, action="clear", task_id="commands")
+        assert cleared.value.status == "cleared"
+        assert not Path(cleared.value.goal_path).exists()
+        missing = runtime.run(goal, action="status", task_id="commands")
+        assert missing.value.status == "missing"
+    assert no_calls.calls == []
+
+
 def test_goal_budget_counts_provider_contract_repair_attempts(tmp_path: Path) -> None:
     def malformed(req):
         _write(req, "subgoals", "not json")
@@ -428,7 +460,7 @@ def test_goal_budget_counts_provider_contract_repair_attempts(tmp_path: Path) ->
     def repaired(req):
         goal_payload = json.loads(
             (
-                tmp_path / ".botpipe" / "tasks" / "repair-budget" / "goal" / "goal.json"
+                tmp_path / ".botpipe-v2" / "tasks" / "repair-budget" / "goal" / "goal.json"
             ).read_text()
         )
         _write(
@@ -615,3 +647,43 @@ def test_code_to_workflow_runs_distill_design_build_and_publication(
     assert result.status == "completed"
     assert result.value.generated_workflow_name == "generated"
     assert Path(result.value.publication_receipt).is_file()
+
+
+def test_code_to_workflow_trace_corpus_reads_current_journal_projection(tmp_path):
+    from botpipe import Provider, workflow
+    from botpipe.workflows.code_to_workflow.specs import collect_trace_corpus
+
+    @workflow(name="trace_fixture")
+    def traced():
+        return Provider(session=None).generate("record evidence").value
+
+    with Botpipe(tmp_path, provider=FakeProvider(["observed"])) as client:
+        completed = client.run(
+            traced, task_id="trace-task", run_id="trace-run"
+        )
+        assert completed.ok, completed.error
+
+    corpus = collect_trace_corpus(tmp_path)
+    projected = next(
+        run for run in corpus["botpipe_runs"] if run["run_id"] == "trace-run"
+    )
+    assert projected["workflow_name"] == "trace_fixture"
+    assert projected["status"] == "completed"
+    assert any(step["event"] == "provider" for step in projected["step_outcomes"])
+
+
+def test_code_to_workflow_trace_corpus_rejects_unknown_state_store(tmp_path):
+    import sqlite3
+
+    import pytest
+
+    from botpipe.workflows.code_to_workflow.specs import collect_trace_corpus
+
+    state = tmp_path / ".botpipe-v2" / "state.sqlite3"
+    state.parent.mkdir()
+    with sqlite3.connect(state) as connection:
+        connection.execute("PRAGMA application_id=1")
+        connection.execute("PRAGMA user_version=1")
+
+    with pytest.raises(ValueError, match="Incompatible Botpipe state store"):
+        collect_trace_corpus(tmp_path)

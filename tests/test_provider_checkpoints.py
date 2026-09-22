@@ -6,7 +6,7 @@ from pydantic import BaseModel, model_validator
 from botpipe import (
     Artifact,
     Botpipe,
-    Session,
+    Provider,
     UncertainOperation,
     provider_budget,
     workflow,
@@ -31,6 +31,11 @@ from botpipe.recovery import Completed, Running, Stopped, Unknown
 
 
 REQUEST = {
+    "operation": "run",
+    "provider": "fake",
+    "instructions": None,
+    "settings": {},
+    "allow_commands": [],
     "session_id": None,
     "receipt_dir": "/tmp/receipts",
     "prompt": "work",
@@ -86,7 +91,7 @@ RESPONSE = {
         ),
     ],
 )
-def test_legacy_checkpoint_states_round_trip(record, kind):
+def test_current_checkpoint_states_round_trip(record, kind):
     checkpoint = ProviderCheckpoint.from_record(record)
     assert type(checkpoint) is kind
     assert ProviderCheckpoint.from_record(checkpoint.to_record()) == checkpoint
@@ -220,7 +225,7 @@ def test_only_stopped_authorized_attempt_may_start_retry():
 def test_malformed_checkpoint_does_not_fail_operation_or_redispatch(tmp_path):
     @workflow
     def work():
-        return Session().run("effectful work")
+        return Provider().run("effectful work")
 
     provider = FakeProvider([KeyboardInterrupt("crash after dispatch")])
     with Botpipe(tmp_path, provider=provider) as client:
@@ -247,13 +252,13 @@ def _fail_response_once(client, monkeypatch, predicate, *, after_commit):
     original = client.journal.response
     observations = []
 
-    def fault(operation_id, record, session_key=None):
+    def fault(operation_id, record, **kwargs):
         if not observations and predicate(record):
             if after_commit:
-                original(operation_id, record, session_key)
+                original(operation_id, record, **kwargs)
             observations.append(client.journal.get(operation_id).get("response"))
             raise OSError("checkpoint acknowledgement lost")
-        return original(operation_id, record, session_key)
+        return original(operation_id, record, **kwargs)
 
     monkeypatch.setattr(client.journal, "response", fault)
     return observations, original
@@ -266,7 +271,7 @@ def test_pre_dispatch_checkpoint_ack_loss_never_duplicates_dispatch(
 ):
     @workflow
     def work():
-        return Session().run("work").value
+        return Provider().run("work").value
 
     def target(record):
         if transition == "preparing":
@@ -306,8 +311,8 @@ def test_non_dispatch_checkpoint_ack_loss_preserves_restoration_state(
     @workflow
     def work():
         with provider_budget(max_turns=1):
-            Session().run("consume budget")
-            return Session().run(
+            Provider().run("consume budget")
+            return Provider().run(
                 "denied", writes=Artifact.text(destination, required=True)
             )
 
@@ -331,7 +336,7 @@ def test_non_dispatch_checkpoint_ack_loss_preserves_restoration_state(
         if transition == "restored" or after_commit:
             result = client.resume(first.run_id, workflow=work)
             operation = client.journal.get(operation["id"])
-            assert result.status == "budget_exceeded"
+            assert result.status == "budget_exceeded", result.error
             assert destination.read_text() == "before"
             assert operation["response"]["restoration_pending"] is False
         else:
@@ -368,7 +373,7 @@ def test_output_error_checkpoint_ack_loss_has_no_duplicate_dispatch(
 
     @workflow
     def work():
-        return Session().run("work", returns=Answer, retries=0)
+        return Provider().run("work", returns=Answer, output_retries=0)
 
     provider = FakeProvider(['{"accepted": true}'])
     with Botpipe(tmp_path, provider=provider) as client:
@@ -403,7 +408,7 @@ def test_retry_authorization_ack_loss_never_skips_generation(
 ):
     @workflow
     def work():
-        return Session().run("work").value
+        return Provider().run("work").value
 
     provider = FakeProvider([ProviderError("stopped"), "done"])
     with Botpipe(tmp_path, provider=provider) as client:
@@ -440,3 +445,67 @@ def test_retry_authorization_ack_loss_never_skips_generation(
         assert observations[0]["generation"] == 0
         assert result.status == "interrupted"
         assert len(provider.calls) == 1
+
+
+def test_authorized_retry_does_not_consume_output_repair_allowance(tmp_path):
+    @workflow
+    def work():
+        return Provider().run("work", returns=int, output_retries=1).value
+
+    provider = FakeProvider([ProviderError("stopped"), "invalid", "42"])
+    with Botpipe(tmp_path, provider=provider) as client:
+        first = client.run(work, run_id="retry-then-repair")
+        assert first.status == "interrupted"
+        operation = next(
+            row
+            for row in client.journal.operations(first.run_id)
+            if row["kind"] == "provider"
+        )
+        client.resolve(first.run_id, operation["id"], retry=True)
+        completed = client.resume(first.run_id, workflow=work)
+
+        assert completed.ok, completed.error
+        assert completed.value == 42
+        assert len(provider.calls) == 3
+        saved = client.journal.get(operation["id"])["response"]
+        assert saved["generation"] == 2
+        assert len(saved["repairs"]) == 1
+
+
+def test_predispatch_cancellation_checkpoint_resumes_same_generation(tmp_path):
+    from botpipe import current_run
+
+    cancel_once = [True]
+
+    @workflow
+    def work():
+        if cancel_once:
+            cancel_once.pop()
+            context = current_run()
+            context.journal.update_run(
+                context.run_id,
+                cancel_requested_at="requested",
+            )
+        return Provider().run("work").value
+
+    provider = FakeProvider(["done"])
+    with Botpipe(tmp_path, provider=provider) as client:
+        interrupted = client.run(work, run_id="cancel-before-dispatch")
+        assert interrupted.status == "interrupted"
+        assert not provider.calls
+        operation = next(
+            row
+            for row in client.journal.operations(interrupted.run_id)
+            if row["kind"] == "provider"
+        )
+        assert operation["response"]["cancellation_error"]
+        assert operation["response"]["generation"] == 0
+        assert client.journal.run(interrupted.run_id).get(
+            "cancellation_confirmed_at"
+        ) is None
+
+        completed = client.resume(interrupted.run_id, workflow=work)
+        assert completed.ok, completed.error
+        assert completed.value == "done"
+        assert len(provider.calls) == 1
+        assert provider.calls[0].attempt == 1

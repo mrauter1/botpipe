@@ -49,7 +49,7 @@ def project_run(snapshot: JournalSnapshot) -> RunReadProjection:
                 observed, record["usage"]
             )
         else:
-            # Preserve legacy/manual response usage only when no immutable
+            # Preserve manually reconciled response usage only when no immutable
             # physical dispatch evidence exists. It must never fill a dispatch
             # whose usage is unknown or partial.
             response = record.get("response") or {}

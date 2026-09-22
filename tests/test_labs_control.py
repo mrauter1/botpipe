@@ -185,7 +185,11 @@ def test_domain_verifier_contract_repairs_invalid_payload_without_repeating_prod
         assert assessment_turns == 2
         assert len(provider.calls) == 9
         operations = _provider_operations(client, result.run_id)
-        assert sum(row["status"] == "failed" for row in operations) == 1
+        assert len(operations) == 8
+        repaired = [row for row in operations if row["response"].get("repairs")]
+        assert len(repaired) == 1
+        assert repaired[0]["status"] == "completed"
+        assert len(repaired[0]["response"]["repairs"]) == 1
 
 
 def test_optimizer_without_observations_packages_an_explicit_noop(tmp_path):
@@ -251,13 +255,35 @@ def test_missing_prerequisite_pauses_then_resumes_same_phase_with_answer(
             "Where is the production rollback evidence?"
             in paused.pending_input["question"]
         )
-        result = client.resume(
-            paused.run_id, answer="Production rollback evidence is in rollback.json."
+        result = client.answer(
+            paused.run_id,
+            paused.pending_input["operation_id"],
+            "Production rollback evidence is in rollback.json.",
         )
         assert result.ok, result.error
         assert len(provider.calls) == 10
         assert "rollback.json" in json.dumps(producer_inputs[1])
         assert len(result.value.phases) == 4
+
+
+def test_terminal_phase_failure_stops_before_later_phases_or_publication(tmp_path):
+    def answer(request):
+        return _release_answer(
+            request,
+            outcome="failed" if not request.artifacts else "accepted",
+        )
+
+    provider = FakeProvider([answer] * 4)
+    with Botpipe(tmp_path, provider=provider) as client:
+        result = client.run(
+            ReleaseCandidateToGoNoGo,
+            Params(release_name="rejected release"),
+        )
+
+    assert result.status == "failed"
+    assert "frame_release verification returned failed" in result.error
+    assert len(provider.calls) == 2
+    assert sum(bool(request.artifacts) for request in provider.calls) == 1
 
 
 def test_optimizer_insufficient_evidence_skips_generation(tmp_path):

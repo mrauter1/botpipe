@@ -70,6 +70,24 @@ def test_workspace_name_shadows_packaged_name(tmp_path: Path) -> None:
     assert entry.source_kind == "workspace"
 
 
+def test_duplicate_effective_catalog_names_are_reported_as_ambiguous(tmp_path: Path) -> None:
+    _write_workflow(tmp_path, "first")
+    _write_workflow(tmp_path, "second")
+    for manifest in (tmp_path / ".botpipe" / "workflows").glob("*/workflow.toml"):
+        manifest.write_text(
+            'name = "duplicate"\nfunction = "greet"\n', encoding="utf-8"
+        )
+
+    entries = [
+        entry
+        for entry in discover_workflows(tmp_path, include_labs=False)
+        if entry.name == "duplicate"
+    ]
+    assert len(entries) == 2
+    with pytest.raises(WorkflowDiscoveryError, match="ambiguous"):
+        resolve_workflow("duplicate", tmp_path)
+
+
 def test_file_reference_rejects_cached_module_from_another_checkout(tmp_path):
     sources = []
     for checkout, value in (("original", 1), ("candidate", 2)):

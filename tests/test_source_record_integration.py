@@ -54,7 +54,7 @@ def test_pure_nested_workflow_accepts_runtime_subtype_method_edit(tmp_path):
         {
             "workflow.py": (
                 "from pathlib import Path\n"
-                "from botpipe import activity, ask, workflow\n"
+                "from botpipe import activity, ask_human, workflow\n"
                 "from childpkg.workflow import echo\n"
                 "@activity\n"
                 "def effect():\n"
@@ -64,7 +64,7 @@ def test_pure_nested_workflow_accepts_runtime_subtype_method_edit(tmp_path):
                 "def job(value):\n"
                 "    effect()\n"
                 "    result = echo(value)\n"
-                "    ask('continue?')\n"
+                "    ask_human('continue?')\n"
                 "    return result\n"
             )
         },
@@ -106,11 +106,7 @@ def test_pure_nested_workflow_accepts_runtime_subtype_method_edit(tmp_path):
     resume = _script(
         tmp_path,
         "resume.py",
-        "from botpipe import Botpipe\n"
-        "from botpipe.providers import FakeProvider\n"
-        "from rootpkg.workflow import job\n"
-        "with Botpipe('.', provider=FakeProvider([])) as client:\n"
-        "    client.resume('nested', workflow=job, answer='yes')\n",
+        'from botpipe import Botpipe\nfrom botpipe.providers import FakeProvider\nfrom rootpkg.workflow import job\nwith Botpipe(\'.\', provider=FakeProvider([])) as client:\n    client.resume(\'nested\', workflow=job, answers={client.pending(\'nested\')[0]["operation_id"]: \'yes\'})\n',
     )
     inspect_completed = _script(
         tmp_path,
@@ -162,7 +158,7 @@ def test_nested_runtime_subtype_in_activity_result_accepts_method_edit(
             "workflow.py": (
                 "import importlib\n"
                 "from pathlib import Path\n"
-                "from botpipe import activity, ask, workflow\n"
+                "from botpipe import activity, ask_human, workflow\n"
                 "from .models import Envelope\n"
                 "@activity\n"
                 "def produce() -> Envelope:\n"
@@ -173,7 +169,7 @@ def test_nested_runtime_subtype_in_activity_result_accepts_method_edit(
                 "@workflow\n"
                 "def job():\n"
                 "    result = produce()\n"
-                "    ask('continue?')\n"
+                "    ask_human('continue?')\n"
                 "    return result\n"
             ),
         },
@@ -191,11 +187,7 @@ def test_nested_runtime_subtype_in_activity_result_accepts_method_edit(
     resume = _script(
         tmp_path,
         "resume.py",
-        "from botpipe import Botpipe\n"
-        "from botpipe.providers import FakeProvider\n"
-        "from owned.workflow import job\n"
-        "with Botpipe('.', provider=FakeProvider([])) as client:\n"
-        "    client.resume('activity-result', workflow=job, answer='yes')\n",
+        'from botpipe import Botpipe\nfrom botpipe.providers import FakeProvider\nfrom owned.workflow import job\nwith Botpipe(\'.\', provider=FakeProvider([])) as client:\n    client.resume(\'activity-result\', workflow=job, answers={client.pending(\'activity-result\')[0]["operation_id"]: \'yes\'})\n',
     )
 
     first = _run(start)
@@ -308,11 +300,11 @@ def test_inspection_reads_artifacts_when_owned_result_module_is_unavailable(tmp_
                 "from pydantic import BaseModel\nclass Report(BaseModel): title: str\n"
             ),
             "workflow.py": (
-                "from botpipe import Artifact, Session, workflow\n"
+                "from botpipe import Artifact, Provider, workflow\n"
                 "from .models import Report\n"
                 "@workflow\n"
                 "def job():\n"
-                "    turn = Session().run(\n"
+                "    turn = Provider().run(\n"
                 "        'report',\n"
                 "        writes=(Artifact.text('report.txt', required=True),),\n"
                 "        returns=Report,\n"

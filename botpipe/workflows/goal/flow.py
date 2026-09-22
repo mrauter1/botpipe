@@ -13,9 +13,10 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from botpipe import (
     Artifact,
     OutputValidationError,
+    Provider,
     Session,
     activity,
-    ask,
+    ask_human,
     current_run,
     workflow,
 )
@@ -341,7 +342,7 @@ def _charge(goal: GoalRecord, subgoal: SubgoalRecord | None, *results: Any) -> N
 
 
 def _goal_turn(
-    session: Session,
+    provider: Provider,
     prompt: str,
     goal_record: GoalRecord,
     plan: SubgoalPlan | None,
@@ -353,7 +354,7 @@ def _goal_turn(
 ):
     """Persist usage from an exhausted output-contract repair before failing."""
     try:
-        return session.run(prompt, **kwargs)
+        return provider.run(prompt, **kwargs)
     except OutputValidationError as exc:
         tokens = _usage_tokens(getattr(exc, "usage", {}))
         goal_record.tokens_used += tokens
@@ -531,7 +532,7 @@ def goal(
         return _output(goal_path, plan_path, status_path, final_path, goal_record)
 
     if options.action in {"resume", "edit", "replan"} and goal_record is None:
-        objective_answer = ask(
+        objective_answer = ask_human(
             "No goal exists. What objective should be set?", returns=str
         )
         options = options.model_copy(
@@ -553,7 +554,7 @@ def goal(
         if goal_record.status == "complete":
             return _output(goal_path, plan_path, status_path, final_path, goal_record)
         if options.action == "edit":
-            edited = (options.objective or "").strip() or ask(
+            edited = (options.objective or "").strip() or ask_human(
                 "What is the revised objective?", returns=str
             )
             goal_record.objective = edited
@@ -569,7 +570,7 @@ def goal(
         if options.max_goal_turns is not None:
             goal_record.max_goal_turns = options.max_goal_turns
     elif options.action == "set":
-        requested = (options.objective or "").strip() or ask(
+        requested = (options.objective or "").strip() or ask_human(
             "What objective should this goal pursue?", returns=str
         )
         if (
@@ -577,7 +578,7 @@ def goal(
             and goal_record.status != "complete"
             and not options.replace_existing
         ):
-            replace = ask(
+            replace = ask_human(
                 "An active goal exists. Replace it? Return true or false.", returns=bool
             )
             if not replace:
@@ -620,7 +621,7 @@ def goal(
     goal_audit = Artifact.md(
         str(folder / "goal_audit.md"), name="goal_audit", required=True
     )
-    goal_session = Session.task(key="goal-main")
+    goal_session = Provider(session=Session.task(key="goal-main"))
     latest_plan_audit = None
     latest_subgoal_audit = None
 
@@ -668,7 +669,7 @@ def goal(
                         break
                     continue
                 reviewed = _goal_turn(
-                    Session.fresh(),
+                    goal_session.with_config(session=None),
                     PLAN_REVIEW,
                     goal_record,
                     plan,
@@ -738,7 +739,7 @@ def goal(
                     goal_path, plan_path, status_path, final_path, goal_record
                 )
             final_turn = _goal_turn(
-                Session.fresh(),
+                goal_session.with_config(session=None),
                 FINAL_VERIFY,
                 goal_record,
                 plan,
@@ -824,14 +825,16 @@ def goal(
         selected = _find(plan, goal_record.active_subgoal_id)
         assert selected is not None
         _write_report(str(status_path), _status_text(goal_record, plan))
-        session = Session.task(key=f"goal:{goal_record.goal_id}:{selected.id}")
+        provider = goal_session.with_config(
+            session=Session.task(key=f"goal:{goal_record.goal_id}:{selected.id}")
+        )
         work_reads: list[Any] = [goal_spec.path, plan_spec.path, status_spec.path]
         if latest_plan_audit is not None:
             work_reads.append(latest_plan_audit)
         if latest_subgoal_audit is not None:
             work_reads.append(latest_subgoal_audit)
         work_turn = _goal_turn(
-            session,
+            provider,
             WORK,
             goal_record,
             plan,
@@ -865,7 +868,7 @@ def goal(
         if latest_subgoal_audit is not None:
             verify_reads.append(latest_subgoal_audit)
         verify_turn = _goal_turn(
-            Session.fresh(),
+            goal_session.with_config(session=None),
             VERIFY,
             goal_record,
             plan,

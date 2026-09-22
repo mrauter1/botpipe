@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from botpipe import Artifact, Botpipe, BotpipeError, Session, workflow
+from botpipe import Artifact, Botpipe, BotpipeError, Provider, workflow
 from botpipe.artifacts import ArtifactStore
 from botpipe.providers import FakeProvider, ProviderResponse
 from botpipe.recovery import Running, Unknown
@@ -36,7 +36,7 @@ def test_interrupted_initial_capture_requires_explicit_file_identity(
 
     @workflow
     def job():
-        return Session().run(
+        return Provider().run(
             "write",
             writes=[Artifact.text(destination, required=True), Artifact.text(optional)],
         )
@@ -120,10 +120,10 @@ def test_reconciled_invalid_artifact_is_validated_during_capture_and_repaired(
 
     @workflow
     def job():
-        return Session().run(
+        return Provider().run(
             "write",
             writes=[Artifact.json(destination, required=True)],
-            retries=1,
+            output_retries=1,
         )
 
     capture = ArtifactStore.capture
@@ -170,7 +170,7 @@ def test_adopted_files_must_still_match_when_resume_runs(tmp_path, monkeypatch):
 
     @workflow
     def job():
-        return Session().run(
+        return Provider().run(
             "write", writes=[Artifact.text(destination, required=True)]
         )
 
@@ -196,18 +196,18 @@ def test_adopted_files_must_still_match_when_resume_runs(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("outcome", [Unknown("unknown writer"), Running("live writer")])
 def test_artifact_reconciliation_cannot_bypass_writer_safety(tmp_path, outcome):
-    class Provider(FakeProvider):
+    class RecoveringProvider(FakeProvider):
         def recover(self, request):
             return outcome
 
     @workflow
     def job():
-        return Session().run(
+        return Provider().run(
             "write", writes=[Artifact.text("result.txt", required=True)]
         )
 
     with Botpipe(
-        tmp_path, provider=Provider([SystemExit("interrupted dispatch")])
+        tmp_path, provider=RecoveringProvider([SystemExit("interrupted dispatch")])
     ) as client:
         with pytest.raises(SystemExit):
             client.run(job, run_id="uncertain")
@@ -228,7 +228,7 @@ def test_optional_absence_is_durable_after_inventory(tmp_path, monkeypatch):
 
     @workflow
     def job():
-        return Session().run("optional", writes=[Artifact.text(destination)])
+        return Provider().run("optional", writes=[Artifact.text(destination)])
 
     capture = ArtifactStore.capture
 
@@ -249,7 +249,7 @@ def test_optional_absence_is_durable_after_inventory(tmp_path, monkeypatch):
 def test_no_write_response_can_recover_without_capture_inventory(tmp_path, monkeypatch):
     @workflow
     def job():
-        return Session().run("text only")
+        return Provider().run("text only")
 
     capture = ArtifactStore.capture
     with Botpipe(tmp_path, provider=FakeProvider(["done"])) as client:
@@ -278,7 +278,7 @@ def test_approved_artifact_drift_cannot_trigger_output_repair(
 
     @workflow
     def job():
-        return Session().run(
+        return Provider().run(
             "write", writes=[Artifact.json(destination, required=True)]
         )
 

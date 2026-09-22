@@ -167,7 +167,7 @@ def test_fresh_process_enum_presentations_do_not_change_storage(tmp_path):
     initial_source = (
         "from enum import Flag\n"
         "from pathlib import Path\n"
-        "from botpipe import activity, ask, workflow\n"
+        "from botpipe import activity, ask_human, workflow\n"
         "class Permission(Flag):\n"
         "    READ = 1\n"
         "    WRITE = 2\n"
@@ -185,7 +185,7 @@ def test_fresh_process_enum_presentations_do_not_change_storage(tmp_path):
         "@workflow\n"
         "def job():\n"
         "    result = produce()\n"
-        "    ask('continue?')\n"
+        "    ask_human('continue?')\n"
         "    return result\n"
     )
     module.write_text(initial_source)
@@ -204,26 +204,7 @@ def test_fresh_process_enum_presentations_do_not_change_storage(tmp_path):
     module.write_text(initial_source.replace("+ 100", "+ 2_000"))
     resume = tmp_path / "resume.py"
     resume.write_text(
-        "from botpipe import Botpipe\n"
-        "from botpipe.providers import FakeProvider\n"
-        "from state import job\n"
-        "with Botpipe('.', provider=FakeProvider([])) as client:\n"
-        "    result = client.resume(\n"
-        "        'enum-presentation', workflow=job, answer='yes'\n"
-        "    )\n"
-        "    assert result.ok, result.error\n"
-        "    restored = result.value\n"
-        "    assert restored.name == 'display:READ|WRITE'\n"
-        "    assert restored.value == 2003\n"
-        "    operation = next(\n"
-        "        row for row in client.journal.operations('enum-presentation')\n"
-        "        if row['kind'] == 'activity'\n"
-        "    )\n"
-        "    assert operation['result']['member'] == 'READ|WRITE'\n"
-        "    assert operation['result']['value'] == 3\n"
-        "    assert operation['result']['contract']['members'] == [\n"
-        "        ['READ', 1], ['WRITE', 2]\n"
-        "    ]\n"
+        'from botpipe import Botpipe\nfrom botpipe.providers import FakeProvider\nfrom state import job\nwith Botpipe(\'.\', provider=FakeProvider([])) as client:\n    result = client.resume(\n        \'enum-presentation\', workflow=job, answers={client.pending(\'enum-presentation\')[0]["operation_id"]: \'yes\'}\n    )\n    assert result.ok, result.error\n    restored = result.value\n    assert restored.name == \'display:READ|WRITE\'\n    assert restored.value == 2003\n    operation = next(\n        row for row in client.journal.operations(\'enum-presentation\')\n        if row[\'kind\'] == \'activity\'\n    )\n    assert operation[\'result\'][\'member\'] == \'READ|WRITE\'\n    assert operation[\'result\'][\'value\'] == 3\n    assert operation[\'result\'][\'contract\'][\'members\'] == [\n        [\'READ\', 1], [\'WRITE\', 2]\n    ]\n'
     )
     resumed = _run(resume)
     assert resumed.returncode == 0, resumed.stderr
