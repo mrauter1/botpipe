@@ -101,6 +101,7 @@ jobs:
 
   tests:
     runs-on: ubuntu-22.04
+    timeout-minutes: 15
     env:
       BOTPIPE_REQUIRE_NATIVE_CONTAINMENT: "1"
     strategy:
@@ -121,7 +122,9 @@ jobs:
           python -m pip install -e '.[test]' build
 
       - name: Run tests
-        run: python -m pytest -q
+        run: >-
+          python -m pytest -q
+          -o faulthandler_timeout=120 -o faulthandler_exit_on_timeout=true
 
       - name: Check minimum Pydantic compatibility
         if: matrix.python-version == '3.12'
