@@ -316,12 +316,14 @@ def test_recovery_only_replaces_overlapping_same_run_claims(tmp_path: Path) -> N
         pass
     with coordinator.claim(right, journal, "run", "write"):
         pass
-    before = {row["workspace"]: row["token"] for row in _claim_rows(coordinator)}
+    before = {Path(row["workspace"]): row["token"] for row in _claim_rows(coordinator)}
 
     with coordinator.claim(left, journal, "run", "write", recovery=True):
-        during = {row["workspace"]: row["token"] for row in _claim_rows(coordinator)}
-        assert during[str(right)] == before[str(right)]
-        assert during[str(left)] != before[str(left)]
+        during = {
+            Path(row["workspace"]): row["token"] for row in _claim_rows(coordinator)
+        }
+        assert during[right] == before[right]
+        assert during[left] != before[left]
 
 
 def test_narrow_root_recovery_retains_then_replaces_same_run_ancestor(
@@ -340,8 +342,10 @@ def test_narrow_root_recovery_retains_then_replaces_same_run_ancestor(
     with coordinator.claim(
         child, journal, "run", "write", recovery=True
     ) as child_lease:
-        rows = {row["workspace"]: row["token"] for row in _claim_rows(coordinator)}
-        assert rows == {str(root): old_root.token, str(child): child_lease.token}
+        rows = {
+            Path(row["workspace"]): row["token"] for row in _claim_rows(coordinator)
+        }
+        assert rows == {root: old_root.token, child: child_lease.token}
 
         with coordinator.claim(
             root,
@@ -351,10 +355,12 @@ def test_narrow_root_recovery_retains_then_replaces_same_run_ancestor(
             parent=child_lease,
             recovery=True,
         ) as recovered_root:
-            rows = {row["workspace"]: row["token"] for row in _claim_rows(coordinator)}
+            rows = {
+                Path(row["workspace"]): row["token"] for row in _claim_rows(coordinator)
+            }
             assert rows == {
-                str(root): recovered_root.token,
-                str(child): child_lease.token,
+                root: recovered_root.token,
+                child: child_lease.token,
             }
             assert recovered_root.token != old_root.token
 
@@ -450,10 +456,10 @@ def test_root_recovery_retains_operation_claim_for_matching_replay(
             recovery=True,
             operation_id="provider:a",
         ) as recovered_provider:
-            rows = {row["workspace"]: row for row in _claim_rows(coordinator)}
-            assert rows[str(target)]["token"] == recovered_provider.token
+            rows = {Path(row["workspace"]): row for row in _claim_rows(coordinator)}
+            assert rows[target]["token"] == recovered_provider.token
             assert recovered_provider.token != old_provider.token
-            assert rows[str(target)]["operation_id"] == "provider:a"
+            assert rows[target]["operation_id"] == "provider:a"
 
 
 def test_broader_operation_claim_survives_narrow_root_recovery(
@@ -478,9 +484,9 @@ def test_broader_operation_claim_survives_narrow_root_recovery(
     with coordinator.claim(
         root, journal, "run", "write", recovery=True
     ) as root_lease:
-        rows = {row["workspace"]: row for row in _claim_rows(coordinator)}
-        assert rows[str(target)]["token"] == old_provider.token
-        assert rows[str(root)]["operation_id"] is None
+        rows = {Path(row["workspace"]): row for row in _claim_rows(coordinator)}
+        assert rows[target]["token"] == old_provider.token
+        assert rows[root]["operation_id"] is None
         with coordinator.claim(
             target,
             journal,
@@ -490,8 +496,8 @@ def test_broader_operation_claim_survives_narrow_root_recovery(
             recovery=True,
             operation_id="provider",
         ) as recovered:
-            rows = {row["workspace"]: row for row in _claim_rows(coordinator)}
-            assert rows[str(target)]["token"] == recovered.token
+            rows = {Path(row["workspace"]): row for row in _claim_rows(coordinator)}
+            assert rows[target]["token"] == recovered.token
             assert recovered.token != old_provider.token
 
 
