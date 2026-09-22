@@ -11,6 +11,7 @@ import json
 import os
 import shlex
 import threading
+import tomllib
 from dataclasses import replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -364,6 +365,15 @@ def test_current_codex_provider_retries_interrupted_acknowledged_turn(
     assert "process_quiescent" in first_receipt
     retained_thread = first_receipt["thread_binding"]["thread_id"]
     assert isinstance(provider.recover(request), Stopped)
+    native_config = tomllib.loads(
+        (bridge.codex_home / "config.toml").read_text(encoding="utf-8")
+    )
+    assert set(native_config) == {"projects"}
+    assert native_config["projects"]
+    assert all(
+        settings == {"trust_level": "trusted"}
+        for settings in native_config["projects"].values()
+    )
 
     retry = replace(request, attempt=2)
     response = provider.run(retry)

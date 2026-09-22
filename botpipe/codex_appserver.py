@@ -8,10 +8,12 @@ import math
 import os
 import queue
 import re
+import stat
 import subprocess
 import tempfile
 import threading
 import time
+import tomllib
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
@@ -58,6 +60,7 @@ _REVIEWED_MEDIATED_RELEASES = MappingProxyType(
 )
 TOOL_CALL_LIMIT = 16
 TOOL_OUTPUT_BYTES = 32_000
+_MAX_NATIVE_CONFIG_BYTES = 1_000_000
 _BOTPIPE_ROLE_PREFIX = (
     "Botpipe role update: earlier Botpipe role instructions are no longer active. "
     "Follow these role instructions until another Botpipe role update:\n\n"
@@ -236,6 +239,35 @@ def tool_fingerprint(tools: Sequence[DynamicTool]) -> str:
         ensure_ascii=True,
     ).encode()
     return hashlib.sha256(encoded).hexdigest()
+
+
+def _is_native_project_trust_state(path: Path) -> bool:
+    """Accept only Codex's bounded project-trust bookkeeping."""
+    try:
+        metadata = path.lstat()
+        if (
+            path.is_symlink()
+            or not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_size > _MAX_NATIVE_CONFIG_BYTES
+        ):
+            return False
+        with path.open("rb") as handle:
+            encoded = handle.read(_MAX_NATIVE_CONFIG_BYTES + 1)
+        if len(encoded) > _MAX_NATIVE_CONFIG_BYTES:
+            return False
+        document = tomllib.loads(encoded.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return False
+    if set(document) != {"projects"}:
+        return False
+    projects = document["projects"]
+    return isinstance(projects, dict) and all(
+        isinstance(project, str)
+        and bool(project)
+        and isinstance(settings, dict)
+        and settings == {"trust_level": "trusted"}
+        for project, settings in projects.items()
+    )
 
 
 def _turn_fingerprint(
@@ -750,7 +782,6 @@ class CodexAppServerBridge:
                 home_roots.append(Path(value).expanduser())
         unique_home_roots = tuple(dict.fromkeys(path.resolve() for path in home_roots))
         prohibited = (
-            self.codex_home / "config.toml",
             self.codex_home / "hooks.json",
             self.codex_home / "plugins",
             self.codex_home / ".agents" / "skills",
@@ -758,6 +789,11 @@ class CodexAppServerBridge:
             Path("/etc/codex/skills"),
         )
         present = [str(path) for path in prohibited if path.exists()]
+        user_config = self.codex_home / "config.toml"
+        if (user_config.exists() or user_config.is_symlink()) and not (
+            _is_native_project_trust_state(user_config)
+        ):
+            present.append(str(user_config))
         skill_root = self.codex_home / "skills"
         if skill_root.exists():
             present.extend(
@@ -1450,7 +1486,7 @@ class CodexAppServerProvider(_CLIProvider):
             if selected_home is None:
                 raise ValueError(
                     "Codex app-server profile requires an isolated codex_home "
-                    "containing credentials but no config/tool registries"
+                    "containing credentials but no external tool configuration"
                 )
             bridge = CodexAppServerBridge(
                 command=app_server_command,

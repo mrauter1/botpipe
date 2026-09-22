@@ -596,6 +596,35 @@ def test_overridden_home_skills_fail_preflight(tmp_path: Path) -> None:
         adapter.verify_installation()
 
 
+def test_only_native_project_trust_state_is_allowed_in_config(
+    tmp_path: Path,
+) -> None:
+    private_home = tmp_path / "codex-home"
+    private_home.mkdir()
+    config = private_home / "config.toml"
+    config.write_text(
+        f"[projects.{json.dumps(str(tmp_path))}]\ntrust_level = \"trusted\"\n",
+        encoding="utf-8",
+    )
+    adapter = CodexAppServerBridge(
+        command=stub(tmp_path, call_tool=False),
+        codex_home=private_home,
+        version_probe=lambda: f"codex-cli {CURRENT_VERIFIED_CODEX_VERSION}",
+    )
+
+    adapter.verify_installation()
+
+    config.write_text(
+        config.read_text(encoding="utf-8") + "[mcp_servers.hostile]\ncommand = 'bad'\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        CodexAppServerCapabilityError,
+        match="prohibited configuration surfaces exist",
+    ):
+        adapter.verify_installation()
+
+
 def test_unknown_version_fails_before_app_server_dispatch(tmp_path: Path) -> None:
     marker = tmp_path / "started"
     script = tmp_path / "should_not_start.py"

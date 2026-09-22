@@ -1178,7 +1178,6 @@ class _CLIProvider:
         containment = getattr(process, "_botpipe_containment", None)
         if containment is None:
             raise RuntimeError("Cannot terminate a process without verified ownership")
-        containment.terminate(process, grace_seconds=1.0)
         return containment.finish(process, grace_seconds=1.0, forced=True)
 
     @staticmethod

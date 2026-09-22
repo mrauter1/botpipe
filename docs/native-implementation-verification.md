@@ -215,6 +215,9 @@ skill cache files may remain, but their instruction/discovery paths are disabled
 unapproved additional skill/configuration sources are rejected. Native tests
 exercise a hostile cached skill on both an initial and a resumed request while
 checking that preceding model inputs remain an exact prefix.
+Codex's generated project-trust configuration is retained only when its parsed
+contents contain project paths with `trust_level = "trusted"` and no other settings.
+Project configuration files remain prohibited before native dispatch.
 Native RUN preserves the inherited home environment for Git, SSH, and other native
 tools; mediated turns use the private home. Preflight checks include explicit home
 environment overrides so they cannot introduce an unchecked skill source.

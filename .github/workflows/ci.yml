@@ -29,7 +29,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          import hashlib, json, os, pathlib, platform, shutil, stat, tarfile, urllib.request, zipfile
+          import hashlib, json, os, pathlib, platform, shutil, stat, tarfile, time, urllib.error, urllib.request, zipfile
           request = urllib.request.Request(
               "https://api.github.com/repos/openai/codex/releases/latest",
               headers={"Authorization": "Bearer " + os.environ["GITHUB_TOKEN"], "Accept": "application/vnd.github+json"},
@@ -42,8 +42,15 @@ jobs:
           root = pathlib.Path(os.environ["RUNNER_TEMP"]) / "botpipe-native-codex"
           root.mkdir()
           archive = root / asset_name
-          with urllib.request.urlopen(asset["browser_download_url"], timeout=120) as response, archive.open("wb") as destination:
-              shutil.copyfileobj(response, destination)
+          for attempt in range(3):
+              try:
+                  with urllib.request.urlopen(asset["browser_download_url"], timeout=120) as response, archive.open("wb") as destination:
+                      shutil.copyfileobj(response, destination)
+                  break
+              except urllib.error.HTTPError as error:
+                  if error.code not in (429, 500, 502, 503, 504) or attempt == 2:
+                      raise
+                  time.sleep(2 ** attempt)
           with archive.open("rb") as handle:
               actual = "sha256:" + hashlib.file_digest(handle, "sha256").hexdigest()
           if actual != asset["digest"]:
