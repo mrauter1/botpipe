@@ -10,9 +10,11 @@ import gzip
 import json
 import os
 import shlex
-import tempfile
+import shutil
+import subprocess
 import threading
 import tomllib
+import uuid
 from dataclasses import replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -158,17 +160,19 @@ def native_bridge(tmp_path):
     thread.start()
     home = tmp_path / "codex-home"
     home.mkdir()
-    workspace_context = None
+    remove_workspace = False
     if os.name == "nt":
         # Match upstream windows-sandbox-rs process tests, whose sandbox_cwd
-        # stays outside USERPROFILE\AppData. The restricted LUA token cannot
-        # rely on pytest's private temporary-directory ancestry even when the
-        # leaf workspace has a capability ACE.
-        workspace_context = tempfile.TemporaryDirectory(
-            prefix=".botpipe-native-",
-            dir=Path(__file__).resolve().parents[1],
+        # stays outside USERPROFILE\AppData. Python 3.12.4+ also gives
+        # tempfile.TemporaryDirectory a private 0o700 Windows ACL, unlike the
+        # inherited ACL on the Rust TempDir used upstream. Create atomically
+        # with the ordinary Windows-inherited ACL instead.
+        workspace = (
+            Path(__file__).resolve().parents[1]
+            / f".botpipe-native-{uuid.uuid4().hex}"
         )
-        workspace = Path(workspace_context.name)
+        workspace.mkdir()
+        remove_workspace = True
     else:
         workspace = tmp_path / "workspace"
         workspace.mkdir()
@@ -193,8 +197,8 @@ def native_bridge(tmp_path):
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)
-        if workspace_context is not None:
-            workspace_context.cleanup()
+        if remove_workspace:
+            shutil.rmtree(workspace)
 
 
 OUTPUT_SCHEMA = {
@@ -214,6 +218,14 @@ def _bounded_json(value, limit=8_000):
     if len(rendered) <= limit:
         return rendered
     return rendered[:limit] + f"... <{len(rendered) - limit} bytes omitted>"
+
+
+def _windows_acl(path):
+    result = subprocess.run(
+        ["icacls", str(path)], capture_output=True, text=True, timeout=10,
+        check=False,
+    )
+    return (result.stdout + result.stderr)[:8_000]
 
 
 def _function_output(request, call_id):
@@ -502,6 +514,7 @@ def test_current_codex_native_exec_obeys_turn_sandbox(
     call_id = f"native-{sandbox_mode}"
     target = workspace / f"{sandbox_mode}.txt"
     marker = f"botpipe-{sandbox_mode}"
+    initial_acl = _windows_acl(workspace) if os.name == "nt" else ""
     if os.name == "nt":
         windows_target = str(target).replace("'", "''")
         command = f"Set-Content -LiteralPath '{windows_target}' -Value '{marker}'"
@@ -572,6 +585,11 @@ def test_current_codex_native_exec_obeys_turn_sandbox(
 
     if write_succeeds:
         assert has_write_entry, environment
+        if exit_code != 0 and os.name == "nt":
+            pytest.fail(
+                f"{output[:8_000]}\nWorkspace ACL before: {initial_acl}\n"
+                f"Workspace ACL after: {_windows_acl(workspace)}"
+            )
         assert exit_code == 0, output[:8_000]
         assert target.read_text() == f"{marker}\n", output[:8_000]
     else:
