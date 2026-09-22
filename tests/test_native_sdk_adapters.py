@@ -130,3 +130,14 @@ def test_native_interface_selection_is_explicit_and_versioned() -> None:
     )
     with pytest.raises(ValueError, match="interface"):
         get_provider("pi", {"interface": "unknown"})
+
+
+def test_claude_native_event_normalization_is_bounded() -> None:
+    assert claude_sdk._plain({"event": ["ok", 1]}) == {"event": ["ok", 1]}
+    with pytest.raises(claude_sdk.ProviderError, match="text limit"):
+        claude_sdk._plain("x" * (claude_sdk.NATIVE_EVENT_BYTES + 1))
+    nested: object = "leaf"
+    for _ in range(claude_sdk.NATIVE_EVENT_DEPTH + 1):
+        nested = [nested]
+    with pytest.raises(claude_sdk.ProviderError, match="nesting limit"):
+        claude_sdk._plain(nested)

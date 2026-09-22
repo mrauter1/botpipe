@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import json
 import sys
+import threading
+import time
+from contextlib import nullcontext
 from pathlib import Path
 
 import pytest
@@ -19,7 +22,13 @@ from botpipe.codex_appserver import (
 )
 from botpipe.native_tools import ToolObservation
 from botpipe.policy import OperationKind, Policy
-from botpipe.providers import CapabilityError, ProviderRequest, receipt_path
+from botpipe.providers import (
+    CapabilityError,
+    ProviderInterruptedError,
+    ProviderRequest,
+    get_provider,
+    receipt_path,
+)
 from botpipe.recovery import Completed, Unknown
 
 
@@ -47,7 +56,7 @@ def stub(
 ) -> tuple[str, ...]:
     transcript = tmp_path / "transcript.jsonl"
     script = tmp_path / "app_server.py"
-    arguments = arguments or {"path": "README.md"}
+    arguments = {"path": "README.md"} if arguments is None else arguments
     script.write_text(
         f"""import json, pathlib, sys
 out = pathlib.Path({str(transcript)!r})
@@ -298,6 +307,34 @@ def test_workspace_codex_config_fails_before_dispatch(tmp_path: Path) -> None:
     assert not marker.exists()
 
 
+def test_overlong_protocol_line_is_rejected_before_materialization(tmp_path: Path) -> None:
+    script = tmp_path / "overlong.py"
+    script.write_text(
+        "import sys\n"
+        "sys.stdin.buffer.readline()\n"
+        "sys.stdout.buffer.write(b'{\"x\":\"' + b'x' * 512 + b'\"}\\n')\n"
+        "sys.stdout.buffer.flush()\n",
+        encoding="utf-8",
+    )
+    home = tmp_path / "home"
+    home.mkdir()
+    adapter = CodexAppServerBridge(
+        command=(sys.executable, str(script)),
+        codex_home=home,
+        version_probe=lambda: "codex-cli 0.131.0",
+        max_event_bytes=128,
+        max_events=2,
+    )
+    with pytest.raises(CodexAppServerProtocolError, match="line exceeds"):
+        adapter.execute(
+            prompt="hello",
+            workspace=tmp_path,
+            tools=[tool()],
+            mediator=lambda _name, _args: "unused",
+            timeout=2,
+        )
+
+
 def provider_request(tmp_path: Path, **changes: object) -> ProviderRequest:
     values = {
         "operation_id": "scope/codex:1",
@@ -314,6 +351,15 @@ def provider_request(tmp_path: Path, **changes: object) -> ProviderRequest:
     }
     values.update(changes)
     return ProviderRequest(**values)  # type: ignore[arg-type]
+
+
+def test_provider_registry_selects_explicit_app_server_interface(tmp_path: Path) -> None:
+    command = (sys.executable, str(tmp_path / "unused.py"))
+    adapter = get_provider(
+        "codex",
+        {"interface": "app_server", "bridge": bridge(tmp_path, command)},
+    )
+    assert isinstance(adapter, CodexAppServerProvider)
 
 
 def test_provider_adapter_commits_receipt_tool_evidence_and_session_binding(
@@ -424,28 +470,213 @@ def test_provider_empty_generate_fails_before_probe_and_receipt(tmp_path: Path) 
     assert not receipt_path(request).exists()
 
 
-def test_provider_query_exposes_bounded_read_surface(
+@pytest.mark.parametrize(
+    "policy",
+    [
+        Policy(allow_read=("docs",)),
+        Policy(allow_read=(".",), deny_read=("private",)),
+    ],
+)
+def test_provider_exact_grants_cannot_override_read_scope(
+    tmp_path: Path, policy: Policy
+) -> None:
+    probes: list[str] = []
+    home = tmp_path / "home"
+    home.mkdir()
+    native = CodexAppServerBridge(
+        command=(sys.executable, "unused.py"),
+        codex_home=home,
+        version_probe=lambda: probes.append("called") or "codex-cli 0.131.0",
+    )
+    adapter = CodexAppServerProvider(bridge=native)
+    request = provider_request(tmp_path, policy=policy)
+    with pytest.raises(CapabilityError, match="workspace-wide"):
+        adapter.run(request)
+    assert probes == []
+    assert not receipt_path(request).exists()
+
+
+def test_evidence_prepare_failure_precedes_dispatch_and_receipt(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    marker = tmp_path / "started"
+    script = tmp_path / "should_not_start.py"
+    script.write_text(
+        f"from pathlib import Path\nPath({str(marker)!r}).write_text('started')\n",
+        encoding="utf-8",
+    )
+
     class Envelope:
         def to_record(self):
-            return {"grant_id": "grant_1", "recipe": "git-status", "network": "none"}
+            return {"grant_id": "grant_1", "public_argv": ["git", "status"]}
 
     class Commands:
-        def __init__(self, _workspace, grants, **_options):
-            assert tuple(grants) == (("git", "status", "--short"),)
+        def __init__(self, *_args, **_kwargs):
             self.envelopes = {"grant_1": Envelope()}
-
-        def execute(self, _grant_id):
-            return ToolObservation("exec_grant", {}, "clean", exit_code=0)
 
         def close(self):
             return None
 
+    class FailingEvidence:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def prepare(self, _envelopes=()):
+            raise OSError("manifest unavailable")
+
+    monkeypatch.setattr("botpipe.codex_appserver.ExactCommandTools", Commands)
+    monkeypatch.setattr("botpipe.codex_appserver.ToolEvidence", FailingEvidence)
+    adapter = CodexAppServerProvider(
+        bridge=bridge(tmp_path, (sys.executable, str(script)))
+    )
+    request = provider_request(tmp_path)
+
+    with pytest.raises(OSError, match="manifest unavailable"):
+        adapter.run(request)
+
+    assert not marker.exists()
+    assert not receipt_path(request).exists()
+
+
+def test_evidence_record_failure_aborts_native_turn_and_marks_uncertain(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class Envelope:
+        def to_record(self):
+            return {"grant_id": "grant_1", "public_argv": ["git", "status"]}
+
+    class Commands:
+        def __init__(self, *_args, **_kwargs):
+            self.envelopes = {"grant_1": Envelope()}
+
+        def execute(self, grant_id):
+            return ToolObservation("exec_grant", {"grant_id": grant_id}, "ok")
+
+        def close(self):
+            return None
+
+    class FailingEvidence:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def prepare(self, _envelopes=()):
+            return tmp_path / "manifest.json"
+
+        def record(self, _observation):
+            raise OSError("observation unavailable")
+
+    monkeypatch.setattr("botpipe.codex_appserver.ExactCommandTools", Commands)
+    monkeypatch.setattr("botpipe.codex_appserver.ToolEvidence", FailingEvidence)
+    command = stub(
+        tmp_path,
+        tool_name="exec_grant",
+        namespace="botpipe",
+        arguments={"grant_id": "grant_1"},
+    )
+    adapter = CodexAppServerProvider(bridge=bridge(tmp_path, command))
+    request = provider_request(tmp_path)
+
+    with pytest.raises(ProviderInterruptedError, match="observation unavailable"):
+        adapter.run(request)
+
+    receipt = json.loads(receipt_path(request).read_text(encoding="utf-8"))
+    assert receipt["status"] == "uncertain"
+    assert not any(message.get("id") == 77 for message in read_transcript(tmp_path))
+
+
+def test_cancel_requests_native_interrupt_before_returning_unknown(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ready = tmp_path / "ready"
+    transcript = tmp_path / "transcript.jsonl"
+    script = tmp_path / "interrupt_server.py"
+    script.write_text(
+        f"""import json, pathlib, sys
+out = pathlib.Path({str(transcript)!r})
+ready = pathlib.Path({str(ready)!r})
+def receive():
+    value = json.loads(sys.stdin.readline())
+    with out.open('a', encoding='utf-8') as handle:
+        handle.write(json.dumps(value, sort_keys=True) + '\\n')
+    return value
+def send(value):
+    print(json.dumps(value), flush=True)
+request = receive()
+send({{'id': request['id'], 'result': {{'userAgent': 'stub'}}}})
+assert receive()['method'] == 'initialized'
+request = receive()
+send({{'id': request['id'], 'result': {{'config': {{}}, 'layers': []}}}})
+request = receive()
+send({{'id': request['id'], 'result': {{'requirements': None}}}})
+request = receive()
+send({{'id': request['id'], 'result': {{'thread': {{'id': 'thread-1'}}}}}})
+request = receive()
+send({{'id': request['id'], 'result': {{'turn': {{'id': 'turn-1'}}}}}})
+ready.write_text('ready')
+request = receive()
+assert request['method'] == 'turn/interrupt'
+send({{'id': request['id'], 'result': {{}}}})
+send({{'method': 'turn/completed', 'params': {{'turn': {{'id': 'turn-1', 'status': 'interrupted'}}}}}})
+""",
+        encoding="utf-8",
+    )
+
+    class Envelope:
+        def to_record(self):
+            return {"grant_id": "grant_1", "public_argv": ["git", "status"]}
+
+    class Commands:
+        def __init__(self, *_args, **_kwargs):
+            self.envelopes = {"grant_1": Envelope()}
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr("botpipe.codex_appserver.ExactCommandTools", Commands)
+    adapter = CodexAppServerProvider(
+        bridge=bridge(tmp_path, (sys.executable, str(script)))
+    )
+    request = provider_request(tmp_path)
+    failures: list[BaseException] = []
+
+    def invoke() -> None:
+        try:
+            adapter.run(request)
+        except BaseException as exc:
+            failures.append(exc)
+
+    worker = threading.Thread(target=invoke)
+    worker.start()
+    deadline = time.monotonic() + 3
+    while not ready.exists() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert ready.exists()
+
+    outcome = adapter.cancel(request.operation_id)
+    worker.join(timeout=3)
+
+    assert isinstance(outcome, Unknown)
+    assert "turn/interrupt was requested" in outcome.detail
+    assert not worker.is_alive()
+    assert len(failures) == 1
+    assert isinstance(failures[0], ProviderInterruptedError)
+    assert any(
+        message.get("method") == "turn/interrupt"
+        for message in read_transcript(tmp_path)
+    )
+
+
+def test_provider_query_exposes_bounded_read_surface(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fence = lambda _path: nullcontext()  # noqa: E731
     class Reads:
+        command_envelopes = {}
+
         def __init__(self, roots, *, exclusions, **_options):
             assert tuple(roots) == (tmp_path / "docs",)
             assert tuple(exclusions) == (tmp_path / "docs" / "private",)
+            assert _options["read_fence"] is fence
 
         def read(self, path):
             assert path == "guide.md"
@@ -460,7 +691,6 @@ def test_provider_query_exposes_bounded_read_surface(
         def close(self):
             return None
 
-    monkeypatch.setattr("botpipe.codex_appserver.ExactCommandTools", Commands)
     monkeypatch.setattr("botpipe.codex_appserver.ReadOnlyTools", Reads)
     command = stub(
         tmp_path,
@@ -476,6 +706,7 @@ def test_provider_query_exposes_bounded_read_surface(
         allow_commands=(),
         output_schema=None,
         policy=Policy(allow_read=("docs",), deny_read=("docs/private",)),
+        read_fence=fence,
     )
 
     response = adapter.run(request)
@@ -491,3 +722,59 @@ def test_provider_query_exposes_bounded_read_surface(
             "identity": None,
         }
     ]
+    thread_start = next(
+        message for message in read_transcript(tmp_path)
+        if message.get("method") == "thread/start"
+    )
+    assert "count_lines" in {
+        item["name"] for item in thread_start["params"]["dynamicTools"]
+    }
+
+
+def test_provider_query_includes_scope_safe_finite_line_count_command(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class Envelope:
+        def to_record(self):
+            return {"tool": "count_lines", "argv": ["/usr/bin/wc", "-l"]}
+
+    class Reads:
+        command_envelopes = {"count_lines": Envelope()}
+
+        def __init__(self, roots, *, exclusions, **_options):
+            assert tuple(roots) == (tmp_path,)
+            assert tuple(exclusions) == ()
+
+        def count_lines(self, path):
+            assert path == "README.md"
+            return ToolObservation("count_lines", {"path": path}, "42")
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr("botpipe.codex_appserver.ReadOnlyTools", Reads)
+    command = stub(
+        tmp_path,
+        tool_name="count_lines",
+        namespace="botpipe",
+        arguments={"path": "README.md"},
+    )
+    adapter = CodexAppServerProvider(bridge=bridge(tmp_path, command))
+    request = provider_request(
+        tmp_path,
+        operation_id="scope/codex-query-default:1",
+        operation=OperationKind.QUERY,
+        allow_commands=(),
+        output_schema=None,
+    )
+
+    response = adapter.run(request)
+
+    assert response.metadata["tool_observations"][0]["output"] == "42"
+    thread_start = next(
+        message for message in read_transcript(tmp_path)
+        if message.get("method") == "thread/start"
+    )
+    assert "count_lines" in {
+        item["name"] for item in thread_start["params"]["dynamicTools"]
+    }

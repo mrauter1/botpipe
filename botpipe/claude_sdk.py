@@ -12,12 +12,18 @@ import dataclasses
 import importlib
 import importlib.metadata
 import json
+import math
 import threading
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Mapping
 
-from .native_tools import ExactCommandTools, ReadOnlyTools, ToolObservation
+from .native_tools import (
+    ExactCommandTools,
+    ReadOnlyTools,
+    ToolObservation,
+    command_scope_is_workspace_wide,
+)
 from .policy import OperationKind
 from .providers import (
     CapabilityError,
@@ -43,6 +49,9 @@ SDK_DISTRIBUTION = "claude-agent-sdk"
 SDK_VERSION = "0.2.155"
 TOOL_CALL_LIMIT = 16
 TOOL_OUTPUT_BYTES = 32_000
+NATIVE_EVENT_BYTES = 512_000
+NATIVE_EVENT_ITEMS = 1_024
+NATIVE_EVENT_DEPTH = 12
 
 
 class _TerminalFailure(ProviderError):
@@ -60,23 +69,72 @@ def _sdk_version() -> str:
 
 def _plain(value: Any) -> Any:
     """Produce bounded, plain JSON event evidence from SDK message objects."""
-    if dataclasses.is_dataclass(value) and not isinstance(value, type):
-        value = dataclasses.asdict(value)
-    elif hasattr(value, "model_dump") and callable(value.model_dump):
-        value = value.model_dump()
-    elif not isinstance(value, (str, int, float, bool, type(None), list, dict)):
-        value = {
-            key: item
-            for key, item in vars(value).items()
-            if not key.startswith("_")
-        }
-    if isinstance(value, Mapping):
-        return {str(key): _plain(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_plain(item) for item in value]
-    if isinstance(value, (str, int, float, bool)) or value is None:
-        return value
-    return repr(value)
+    items = 0
+    scalar_chars = 0
+    active: set[int] = set()
+
+    def visit(item: Any, depth: int) -> Any:
+        nonlocal items, scalar_chars
+        if depth > NATIVE_EVENT_DEPTH:
+            raise ProviderError("Claude native event exceeds the nesting limit")
+        items += 1
+        if items > NATIVE_EVENT_ITEMS:
+            raise ProviderError("Claude native event exceeds the item limit")
+        if item is None or type(item) in (bool, int):
+            return item
+        if type(item) is float:
+            if not math.isfinite(item):
+                raise ProviderError("Claude native event contains a non-finite number")
+            return item
+        if type(item) is str:
+            scalar_chars += len(item)
+            if scalar_chars > NATIVE_EVENT_BYTES:
+                raise ProviderError("Claude native event exceeds the text limit")
+            return item
+
+        identity = id(item)
+        if identity in active:
+            raise ProviderError("Claude native event contains a reference cycle")
+        active.add(identity)
+        try:
+            if isinstance(item, Mapping):
+                return {
+                    str(key): visit(child, depth + 1)
+                    for key, child in item.items()
+                }
+            if isinstance(item, (list, tuple)):
+                return [visit(child, depth + 1) for child in item]
+            if dataclasses.is_dataclass(item) and not isinstance(item, type):
+                return {
+                    field.name: visit(getattr(item, field.name), depth + 1)
+                    for field in dataclasses.fields(item)
+                }
+            try:
+                values = vars(item)
+            except TypeError:
+                text = repr(item)
+                scalar_chars += len(text)
+                if scalar_chars > NATIVE_EVENT_BYTES:
+                    raise ProviderError("Claude native event exceeds the text limit")
+                return text
+            return {
+                str(key): visit(child, depth + 1)
+                for key, child in values.items()
+                if not str(key).startswith("_")
+            }
+        finally:
+            active.remove(identity)
+
+    result = visit(value, 0)
+    try:
+        encoded = json.dumps(
+            result, ensure_ascii=False, separators=(",", ":"), allow_nan=False
+        ).encode()
+    except (TypeError, ValueError, RecursionError) as exc:
+        raise ProviderError("Claude native event is not bounded JSON") from exc
+    if len(encoded) > NATIVE_EVENT_BYTES:
+        raise ProviderError("Claude native event exceeds the serialized byte limit")
+    return result
 
 
 def _observation_result(observation: ToolObservation) -> dict[str, Any]:
@@ -404,11 +462,11 @@ class ClaudeSDKProvider(_CLIProvider):
                 tool_control["client"] = client
                 await client.query(request.prompt)
                 async for message in client.receive_response():
-                    event = {
-                        "type": type(message).__name__,
-                        "message": _plain(message),
-                    }
                     if sink is not None:
+                        event = {
+                            "type": type(message).__name__,
+                            "message": _plain(message),
+                        }
                         sink(MappingProxyType(event))
                     if type(message).__name__ == "ResultMessage":
                         terminal = message
@@ -507,12 +565,25 @@ class ClaudeSDKProvider(_CLIProvider):
                     evidence_failures,
                     tool_control,
                 )
+            policy = request.policy.effective()
+            if not command_scope_is_workspace_wide(
+                request.workspace, policy.allow_read, policy.deny_read
+            ):
+                raise CapabilityError(
+                    "exact command grants require workspace-wide allow_read and no deny_read paths"
+                )
             commands = ExactCommandTools(
                 request.workspace,
                 request.allow_commands,
                 max_output_bytes=TOOL_OUTPUT_BYTES,
             )
-            evidence.prepare(commands.envelopes)
+            cleanups.append(commands.close)
+            try:
+                evidence.prepare(commands.envelopes)
+            except BaseException:
+                commands.close()
+                cleanups.clear()
+                raise
 
             schema = {
                 "type": "object",
@@ -606,28 +677,23 @@ class ClaudeSDKProvider(_CLIProvider):
             search,
         )
         try:
-            commands = ExactCommandTools(
-                request.workspace,
-                (("git", "status", "--short"),),
-                max_output_bytes=TOOL_OUTPUT_BYTES,
-            )
-            evidence.prepare(commands.envelopes)
+            evidence.prepare(reads.command_envelopes)
         except BaseException:
-            reads.close()
+            for cleanup in cleanups:
+                cleanup()
+            cleanups.clear()
             raise
-
-        @sdk.tool(
-            "git_status",
-            "Inspect the workspace using the fixed read-only git status recipe.",
-            {"type": "object", "properties": {}, "additionalProperties": False},
-        )
-        async def git_status(args: dict[str, Any]) -> dict[str, Any]:
-            del args
+        async def count_lines(args: dict[str, Any]) -> dict[str, Any]:
             ensure_capacity()
-            observation = commands.execute("grant_1")
+            observation = reads.count_lines(args.get("path"))
             return await record(observation)
 
-        result.append(git_status)
+        register(
+            "count_lines",
+            "Count lines in one authorized file using a fixed native command.",
+            path_schema,
+            count_lines,
+        )
         return result, observations, cleanups, evidence_failures, tool_control
 
 

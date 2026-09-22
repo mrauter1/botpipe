@@ -13,6 +13,92 @@ from labs.workflows.release_candidate_to_go_no_go import (
 )
 
 
+# Independent acceptance inventory pinned to PRD section 11.3.1. These names
+# intentionally do not derive from workflow declarations, so dropping a
+# declaration and its consumer cannot make the test silently pass.
+EXPECTED_LAB_ARTIFACTS = {
+    "candidate_workflow_to_adapted_execution_plan": set("""
+        adaptation_request_brief adaptation_success_criteria
+        workflow_fit_assessment step_adaptation_matrix adapted_execution_plan
+        proposed_workflow_parameters adapted_execution_summary
+        adapted_execution_next_action
+    """.split()),
+    "company_operation_to_recursive_improvement_cycle": set("""
+        company_operation_brief recursive_improvement_criteria
+        company_pressure_map recursive_improvement_priority_matrix
+        recursive_improvement_candidates recursive_improvement_cycle
+        recursive_improvement_summary recursive_improvement_next_actions
+    """.split()),
+    "incident_to_hardening_program": set("""
+        incident_scope_brief response_objectives evidence_intake_register
+        incident_timeline affected_surface blast_radius observability_gaps
+        evidence_gap_register cause_hypothesis_ranking
+        immediate_mitigation_plan validation_plan incident_summary
+        hardening_program hardening_backlog follow_up_owners
+        stakeholder_communications_draft incident_resolution_package
+    """.split()),
+    "investigation_request_to_evidence_pack": set("""
+        investigation_scope_brief evidence_intake_plan evidence_pack
+        source_register evidence_gaps investigation_summary
+    """.split()),
+    "release_candidate_to_go_no_go": set("""
+        release_scope_brief decision_criteria evidence_intake_register
+        release_inventory test_evidence_pack operational_readiness
+        rollback_readiness blocking_issues go_no_go_assessment risk_register
+        decision_summary release_decision_package release_communications_draft
+    """.split()),
+    "security_finding_to_verified_remediation": set("""
+        security_assessment threat_scenario remediation_acceptance_criteria
+        remediation_plan verification_evidence residual_risk
+        security_remediation_package security_remediation_summary
+        security_next_action
+    """.split()),
+    "task_to_candidate_workflow_set": set("""
+        candidate_request_brief workflow_fit_criteria
+        workflow_comparison_matrix fit_gap_analysis candidate_workflow_set
+        candidate_workflow_set_summary candidate_workflow_next_action
+    """.split()),
+    "task_to_workflow_strategy": set("""
+        task_strategy_brief workflow_selection_criteria strategy_decision
+        workflow_strategy_package strategy_summary strategy_next_action
+    """.split()),
+    "workflow_and_eval_to_refined_workflow_package": set("""
+        refinement_request_brief refinement_success_criteria
+        workflow_refinement_plan candidate_change_manifest
+        candidate_workflow_manifest candidate_implementation_notes
+        candidate_verification_report refinement_summary refinement_next_action
+    """.split()),
+    "workflow_idea_to_workflow_package": set("""
+        workflow_idea_brief candidate_selection_criteria workflow_design
+        workflow_contract workflow_evaluation workflow_package_summary
+        workflow_next_action workflow_package_manifest implementation_notes
+    """.split()),
+    "workflow_package_to_composable_building_blocks": set("""
+        decomposition_request_brief decomposition_success_criteria
+        decomposition_plan building_block_contracts
+        candidate_decomposition_manifest candidate_decomposition_notes
+        decomposition_verification_report decomposition_summary
+        decomposition_next_action
+    """.split()),
+    "workflow_portfolio_to_operating_system": set("""
+        portfolio_governance_brief lifecycle_criteria
+        portfolio_health_analysis lifecycle_recommendations
+        portfolio_change_candidates workflow_portfolio_operating_system
+        portfolio_operating_summary portfolio_next_actions
+    """.split()),
+    "workflow_run_history_to_failure_modes": set("""
+        diagnostic_scope_brief run_history_scope failure_mode_map
+        failure_mode_manifest recurring_weak_points improvement_opportunities
+        improvement_opportunities_summary diagnostic_next_actions
+    """.split()),
+    "workflow_to_eval_suite": set("""
+        evaluation_request_brief evaluation_dimensions benchmark_case_matrix
+        edge_case_matrix adversarial_case_matrix eval_case_manifest eval_rubric
+        workflow_eval_suite workflow_eval_suite_summary workflow_eval_next_action
+    """.split()),
+}
+
+
 def _successful_provider(request):
     phase_input = json.JSONDecoder().raw_decode(
         request.prompt.split("\n\nInput:\n", 1)[1]
@@ -508,3 +594,6 @@ def test_all_labs_workflows_complete_staged_fake_provider_runs(tmp_path):
         else:
             assert result.value.phases
             assert all(phase.outcome == "accepted" for phase in result.value.phases)
+            assert set(result.value.artifact_names) == EXPECTED_LAB_ARTIFACTS[
+                entry.name
+            ]

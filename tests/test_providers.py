@@ -517,3 +517,15 @@ def test_request_rejects_shell_strings_and_freezes_settings(tmp_path: Path) -> N
     req = request(tmp_path, settings={"profile": "x"})
     with pytest.raises(TypeError):
         req.settings["profile"] = "y"  # type: ignore[index]
+
+
+def test_request_rejects_nonfinite_or_oversized_output_schema_before_dispatch(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(TypeError, match="finite plain JSON"):
+        request(tmp_path, output_schema={"minimum": float("nan")})
+    with pytest.raises(TypeError, match="finite plain JSON"):
+        request(tmp_path, output_schema={"type": object()})
+    with pytest.raises(ValueError, match="1 MB"):
+        request(tmp_path, output_schema={"description": "x" * 1_000_001})
+    assert not (tmp_path / "receipts").exists()

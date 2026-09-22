@@ -1,6 +1,6 @@
 # Native provider capability evidence
 
-Observed 2026-09-21 for the provider-first rewrite. This file records the
+Updated 2026-09-22 for the provider-first rewrite. This file records the
 implementation profile separately from the completed-release gate. A profile
 is advertised by code only when the adapter can configure the documented
 native surface and reject unsupported requests before dispatch. Native support
@@ -13,9 +13,9 @@ still requires pinned-version integration receipts on each supported platform.
 | `codex-exec-v1` | rejected | rejected | rejected | implemented | yes | no |
 | `codex-app-server-0.131.0` | rejected: unavoidable internal tools | implemented in code; native receipt pending | implemented in code; native receipt pending | delegated to `codex-exec-v1` | fingerprint-bound | no |
 | `claude-code-cli-v1` | implemented for Claude Code 2.1.259+; native receipt pending | rejected | rejected | implemented | yes | no |
-| `claude-agent-sdk-0.2.155` | implemented; native receipt pending | implemented mediator; host proof pending | implemented mediator; host proof pending | delegated to CLI profile | planning only | no |
+| `claude-agent-sdk-0.2.155` | implemented; native receipt pending | implemented mediator; host proof pending | implemented mediator; native receipt pending | delegated to CLI profile | yes; transitions unproven | no |
 | `pi-json-v1` | implemented; native receipt pending | rejected | rejected | unrestricted explicit policy only | yes | no |
-| `pi-agent-sdk-0.73.1` | implemented; native receipt pending | implemented mediator; host proof pending | implemented mediator; host proof pending | delegated to CLI profile | no | no |
+| `pi-agent-sdk-0.73.1` | implemented; native receipt pending | implemented mediator; host proof pending | implemented mediator; native receipt pending | same SDK; explicitly unrestricted policy | persistent v3 JSONL | no |
 | `typesafe-systemone-v1` | n/a | n/a | n/a | n/a | no | implemented; native receipt pending |
 | `deterministic-v1` | test-only | test-only | test-only | test-only | yes | no |
 
@@ -55,11 +55,10 @@ filesystem writes; it does not prove the PRD's external non-mutation boundary
 or an exact argv command envelope. Therefore this adapter advertises `run`
 only.
 
-An app-server bridge could expose one dynamic tool per persisted command
-recipe while generic shell tools remain disabled. Dynamic tools and app-server
-schemas are experimental/version-coupled, and the documented controls still
-do not close the complete tool inventory without a pinned native conformance
-probe. That path is not guessed in the Python adapter.
+The implemented app-server profile exposes structured mediated tools while
+generic shell tools remain disabled. Its pinned source audit and limitations
+are recorded below. The native inventory still contains two unavoidable
+internal tools, so this profile rejects empty-grant generation.
 
 ### Claude Code
 
@@ -82,16 +81,19 @@ checks the audited `ClaudeAgentOptions` dataclass fields at runtime, supplies
 `plugins=[]`, and registers only the in-process `botpipe` MCP tools. Empty-grant
 generate registers no tools. Exact-grant generate registers only an opaque
 grant-ID tool. Query registers bounded descriptor-confined read/list/search
-tools and the fixed read-only git-status recipe. `dontAsk` denies any
+tools and the scoped `count_lines` command. `dontAsk` denies any
 unapproved tool. The bridge delegates `run` to the separately validated CLI
 profile. Install the optional Python profile with `pip install
 'botpipe[claude-sdk]'`.
 
 The tool handlers run in Botpipe's process, outside Claude's built-in Bash
 sandbox. File reads therefore use held directory descriptors with no-follow
-component traversal, and commands use the finite bubblewrap mediator described
-below. The SDK package and option closure are covered by protocol tests; native
-credentials and a pinned hostile-config conformance receipt are still missing.
+component traversal. Exact generation grants use the finite bubblewrap
+mediator; query's fixed line-count command consumes only an authorized frozen
+snapshot. SDK package/options checks and protocol tests pass, but credentialed
+hostile-config conformance receipts are still missing. Cancellation requests
+the active native client's interrupt and waits within a bounded control time;
+it returns `Unknown` when full process-tree quiescence cannot be established.
 
 ### Pi
 
@@ -118,15 +120,24 @@ explicit custom-tool allowlist, an empty ResourceLoader for extensions, skills,
 prompts, themes and context files, an isolated temporary agent directory, and
 disabled prompt-template expansion. Tool calls cross the JSONL boundary as
 structured read/list/search or opaque grant IDs and are executed only by the
-same Botpipe mediator used by Claude. The bridge is one-shot and does not claim
-resumable SDK sessions. A deployment installs
+same Botpipe mediator used by Claude. All three operations use the same pinned
+SDK and persistent v3 JSONL session manager. Run enables the reviewed native
+read/bash/edit/write/grep/find/ls inventory only under an explicitly
+unrestricted policy. Generation and query close those built-ins and register
+their own permitted tools on each turn. This avoids crossing SDK/CLI versions
+to continue one conversation. A deployment installs
 `@mariozechner/pi-coding-agent@0.73.1` and may point
-`BOTPIPE_PI_SDK_ROOT` at that exact package root.
+`BOTPIPE_PI_SDK_ROOT` at that exact package root and configures an explicit
+model. Typed requests add the schema to the supplied prompt; completed raw
+text reaches the common coordinator for JSON/schema validation and bounded
+repair. Malformed output remains a completed native response, preserving
+session advancement before the repair turn.
 
 ### Botpipe mediator
 
-The shared local mediator accepts no shell text. Its command recipe inventory
-currently contains only `("git", "status", "--short")`. It resolves and hashes
+The shared local mediator accepts no shell text. Exact generation grants
+currently support only `("git", "status", "--short")` and require an effective
+workspace-wide read scope with no explicit read exclusions. It resolves and hashes
 root-owned, non-group/world-writable system `git` and `bubblewrap` executables,
 rechecks their identities and the workspace identity immediately before each
 call, clears both the outer and sandbox environments, supplies empty stdin,
@@ -134,11 +145,39 @@ unshares the network namespace, mounts the workspace read-only, bounds retained
 output, and owns the full process tree through Botpipe process containment.
 The adapter probes that exact sandbox profile before exposing any command tool.
 
+Query uses a separate `count_lines(path)` recipe. Descriptor-confined reading
+first freezes a complete authorized regular-file snapshot; oversized sources
+are rejected rather than reported as full-file counts. The command receives
+only those bytes on stdin, using pinned trusted system `wc -l`, fixed arguments,
+a minimal environment, process-tree containment, bounded output, and a finite
+timeout. No model-selected filename or argument reaches the executable. Its
+receipt includes the source identity and digest. This preserves narrower roots
+and private-path exclusions without exposing repository-wide git status.
+
 Read tools hold authorized root directory descriptors, traverse components
 with `O_NOFOLLOW`, reject private and configured excluded paths, require regular
 files, and bound file bytes, traversal depth, visited nodes, matches, entries,
 and returned output. Truncated reads label their digest as a captured-prefix
 digest rather than claiming a full-file hash.
+
+The excluded names are `.aws`, `.azure`, `.botpipe`, `.botpipe-v2`, `.claude`,
+`.codex`, `.config`, `.env` and `.env.*`, `.git`, `.gnupg`, `.pi`, `.ssh`,
+`.botpipe-workspace.lock`, `credential`, `credentials`, and `credentials.json`.
+Explicit policy exclusions apply as well. Existing workspace fences are held
+through the read turn and bound to directory device/inode identities. Root or
+nested path replacement fails closed. This does not establish a global
+hierarchical lock protocol: a new writer marker created after an absent-marker
+check remains an unclosed concurrency case for A48. Overlapping ancestors also
+matter: a reader holding `root/child` cannot stop a new writer at `root` using
+independent exact-directory locks. Checking writer ancestors alone does not
+solve that reverse direction.
+
+Every mediated attempt saves an immutable resolved-envelope manifest before
+dispatch. Each tool observation is atomically published and synced before its
+result returns to the native loop. Count/byte limits and persistence failures
+stop delivery; an observed attempt cannot be silently restarted. Native
+protocol queues, individual records, accumulated event evidence, and public
+stream buffers have separate bounds. Accepted native payloads are preserved.
 
 The workspace mount uses bubblewrap's `--ro-bind-fd` with a held no-follow
 directory descriptor, preserving the checked directory identity across host
@@ -176,7 +215,21 @@ on this host. Package installation was not treated as proof:
 it would not supply credentials, pinned provider responses, hostile-config
 fixtures, platform sandboxes, or cancellation/recovery receipts.
 
-Consequently no claim here proves A07, A07b, A08, A08b, A20, or A30 against a
+Two actual-package checks subsequently passed without prompt or inference:
+
+- Claude Agent SDK 0.2.155 installed in an isolated environment and accepted
+  the real empty-tool options, strict MCP configuration, and empty settings,
+  skills, and plugin sources.
+- Pi 0.73.1 imported from the actual installed npm package. Isolated
+  `AuthStorage`, `ModelRegistry`, `SettingsManager`, `SessionManager`, a closed
+  resource loader, and `createAgentSession` worked. Startup inventories were
+  empty for generation, a representative custom read tool for query, and the
+  seven reviewed built-ins for unrestricted run. Persistent session IDs/files
+  were created, with no extensions or extension errors. No prompt, credential
+  resolution, or model request was executed in this check.
+
+These checks establish dependency/API compatibility, not native-turn proof.
+No claim here proves A07, A07b, A08, A08b, A20, or A30 against a
 native backend. The focused tests prove request validation, emitted profile
 arguments, parsers, typed JEV preservation, local receipt fencing, and
 fail-closed behavior. The complete-release baseline remains blocked until
@@ -184,6 +237,12 @@ native conformance runs on pinned Linux and Windows profiles. The bridge code,
 inventory closure, protocol validation, durable recovery fencing, and local
 mediator contracts are implemented; native authentication and supported-host
 receipts remain a separate release gate.
+
+The common session fingerprint records provider configuration, profile,
+adapter version, model, and workspace. Real adapters do not currently establish
+a verified non-secret native account identity. Account changes behind an
+environment credential and native default-model drift therefore remain A10
+gaps; credential values or hashes are not used as substitutes for identity.
 
 ## Codex app-server source audit and mediated bridge
 
@@ -231,6 +290,9 @@ rejects empty-grant generate before version probing, receipt creation, or
 process dispatch. `CodexAppServerProvider` is a real ProviderAdapter surface
 for read-only query, non-empty exact generation, durable recovery, and
 fingerprint-bound session resume; its `run` delegates to `codex-exec-v1`.
+The query profile exposes read/list/search and `count_lines` within the resolved
+policy roots. Exact-generation grants fail before probing when a narrower or
+denied read policy would let the fixed git-status command bypass path semantics.
 This conditional profile must not be presented as complete Codex support.
 Codex cannot be marked complete until a pinned native interface can hide those
 two tools and a credentialed hostile-config conformance run supplies receipts.
@@ -242,8 +304,21 @@ usage and terminal events, fail-closed version and session fingerprints, and
 denial of a non-mediated server request. Provider-level tests also cover exact
 generation, autonomous bounded query, completed receipt recovery, durable tool
 evidence, empty-grant preflight rejection, and fingerprint-bound native resume.
-Passing `evidence=ToolEvidence(...)`
-and the resolved `envelopes` to `execute()` publishes the manifest immediately
-before native launch. When the mediator returns a `ToolObservation`, the bridge
+The wrapper publishes the resolved envelope manifest before reserving dispatch
+budget or creating a receipt; the bridge repeats that idempotent check before
+native launch. When the mediator returns a `ToolObservation`, the bridge
 publishes it through `ToolEvidence.record()` before sending any result to
-Codex. A structured observation without an evidence recorder fails closed.
+Codex. Evidence-record failure terminates the owned process and leaves the
+already-dispatched receipt uncertain. A structured observation without an
+evidence recorder fails closed.
+
+The JSONL reader bounds each binary line before UTF-8 decoding or JSON parsing,
+uses a bounded backpressure queue, and retains a byte-bounded stderr suffix.
+Cancellation sends the pinned native `turn/interrupt` request to an owned
+active turn, waits for a bounded terminal notification, and then contains the
+process; it still returns `Unknown` because this wrapper has no independent
+native quiescence receipt. Local version/config/workspace checks run before
+budget dispatch. The effective `config/read` and managed-requirements audit
+requires a live initialized app-server, so an audit rejection occurs after the
+wrapper marks dispatch, but before `thread/start`, and remains uncertain in the
+durable receipt.

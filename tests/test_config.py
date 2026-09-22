@@ -81,6 +81,38 @@ environment = { SAFE = "1" }
     assert selection.query_read_roots == ()
 
 
+def test_profile_instructions_reach_provider_and_per_call_overrides_do_not_mutate(tmp_path):
+    from botpipe import Provider
+    from botpipe.providers import FakeProvider
+
+    (tmp_path / "botpipe.toml").write_text(
+        'default_provider = "claude"\ndefault_profile = "review"\n'
+        '[providers.claude]\ninstructions = "Base role"\n'
+        '[providers.claude.profiles.review]\ninstructions = "Review role"\n'
+    )
+    selected = load_config(tmp_path).require_provider()
+    assert selected.instructions == "Review role"
+    assert "instructions" not in selected.provider_config()
+    native = FakeProvider(["first", "second", "third", "fourth"])
+    with Botpipe(tmp_path, provider=native, provider_defaults=selected.provider_defaults()) as runtime:
+        provider = Provider(runtime=runtime)
+        provider.generate("first")
+        provider.generate("second", instructions=None)
+        provider.with_config(instructions="Derived role").generate("third")
+        provider.generate("fourth")
+    assert [call.instructions for call in native.calls] == [
+        "Review role", None, "Derived role", "Review role",
+    ]
+
+
+def test_non_text_profile_instructions_are_rejected(tmp_path):
+    (tmp_path / "botpipe.toml").write_text(
+        'default_provider = "claude"\n[providers.claude]\ninstructions = ["wrong"]\n'
+    )
+    with pytest.raises(ConfigurationError, match="instructions must be a string"):
+        load_config(tmp_path)
+
+
 def test_config_source_precedence_and_relative_environment_path(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

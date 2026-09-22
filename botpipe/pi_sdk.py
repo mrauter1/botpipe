@@ -11,12 +11,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
-from .native_tools import ExactCommandTools, ReadOnlyTools, ToolObservation
+from .native_tools import (
+    ExactCommandTools,
+    ReadOnlyTools,
+    ToolObservation,
+    command_scope_is_workspace_wide,
+)
 from .policy import OperationKind
 from .providers import (
     PI_SDK_CAPABILITIES,
     CapabilityError,
-    PiProvider,
     ProviderError,
     ProviderInterruptedError,
     ProviderRequest,
@@ -24,8 +28,9 @@ from .providers import (
     _CLIProvider,
     _NATIVE_EVENT_SINK,
     _ProviderTimedOut,
+    _validate_pi_unrestricted_policy,
 )
-from .recovery import RecoveryOutcome, Unknown
+from .recovery import RecoveryOutcome
 from .tool_evidence import ToolEvidence, ToolEvidenceError
 
 
@@ -48,10 +53,12 @@ class _Mediation:
     def close(self) -> None:
         if self.reads is not None:
             self.reads.close()
+        if self.commands is not None:
+            self.commands.close()
 
 
 class PiSDKProvider(_CLIProvider):
-    """Composite Pi profile: mediated SDK planning plus stock CLI run."""
+    """Pinned Pi SDK profile for mediated planning and unrestricted run."""
 
     name = "pi"
     capabilities = PI_SDK_CAPABILITIES
@@ -63,7 +70,6 @@ class PiSDKProvider(_CLIProvider):
         bridge_path: str | Path | None = None,
         sdk_root: str | Path | None = None,
         model_provider: str = "anthropic",
-        run_command: str | tuple[str, ...] = ("pi",),
         env: Mapping[str, str] | None = None,
     ) -> None:
         node = (node_command,) if isinstance(node_command, str) else tuple(node_command)
@@ -81,24 +87,18 @@ class PiSDKProvider(_CLIProvider):
         if type(model_provider) is not str or not model_provider:
             raise ValueError("model_provider must be a non-empty string")
         self.model_provider = model_provider
-        self._run_adapter = PiProvider(run_command, env=env)
         self._mediations_lock = threading.Lock()
         self._mediations: dict[tuple[str, int], _Mediation] = {}
 
     def validate_request(self, request: ProviderRequest) -> None:
         super().validate_request(request)
         if request.operation is OperationKind.RUN:
-            self._run_adapter.validate_request(request)
-            return
-        if request.output_schema is not None:
-            raise CapabilityError("pinned Pi SDK bridge has no native output schema")
+            _validate_pi_unrestricted_policy(request.policy.effective())
         if request.policy.effective().model is None:
             raise CapabilityError("Pi SDK profile requires an explicit policy model")
 
     def run(self, request: ProviderRequest) -> ProviderResponse:
         self.validate_request(request)
-        if request.operation is OperationKind.RUN:
-            return self._run_adapter.run(request)
         key = (request.operation_id, request.attempt)
         try:
             return super().run(request)
@@ -109,11 +109,7 @@ class PiSDKProvider(_CLIProvider):
                 mediation.close()
 
     def cancel(self, operation_id: str) -> RecoveryOutcome:
-        mediated = super().cancel(operation_id)
-        if not isinstance(mediated, Unknown):
-            return mediated
-        delegated = self._run_adapter.cancel(operation_id)
-        return delegated if not isinstance(delegated, Unknown) else mediated
+        return super().cancel(operation_id)
 
     def _build(self, request: ProviderRequest, policy):
         roots = tuple(
@@ -133,12 +129,13 @@ class PiSDKProvider(_CLIProvider):
                 max_output_bytes=TOOL_OUTPUT_BYTES,
                 read_fence=request.read_fence,
             )
-            commands = ExactCommandTools(
-                request.workspace,
-                (("git", "status", "--short"),),
-                max_output_bytes=TOOL_OUTPUT_BYTES,
-            )
         elif request.allow_commands:
+            if not command_scope_is_workspace_wide(
+                request.workspace, policy.allow_read, policy.deny_read
+            ):
+                raise CapabilityError(
+                    "exact command grants require workspace-wide allow_read and no deny_read paths"
+                )
             commands = ExactCommandTools(
                 request.workspace,
                 request.allow_commands,
@@ -157,6 +154,10 @@ class PiSDKProvider(_CLIProvider):
             "thinking_level": effort,
             "grant_ids": list(commands.envelopes) if commands is not None else [],
         }
+        if request.operation is OperationKind.RUN:
+            start["run_profile"] = "danger-full-access-network-full-unrestricted"
+        if request.output_schema is not None:
+            start["output_schema"] = request.output_schema
         if request.session_id is None:
             start["session_dir"] = str(
                 (request.receipt_dir / "pi-sessions").resolve()
@@ -179,10 +180,17 @@ class PiSDKProvider(_CLIProvider):
             max_bytes=1_000_000,
         )
         try:
-            evidence.prepare(commands.envelopes if commands is not None else ())
+            envelopes = []
+            if reads is not None:
+                envelopes.extend(reads.command_envelopes.values())
+            if commands is not None:
+                envelopes.extend(commands.envelopes.values())
+            evidence.prepare(envelopes)
         except BaseException:
             if reads is not None:
                 reads.close()
+            if commands is not None:
+                commands.close()
             raise
         mediation = _Mediation(start, reads, commands, [], evidence)
         key = (request.operation_id, request.attempt)
@@ -202,7 +210,9 @@ class PiSDKProvider(_CLIProvider):
                 if request.operation is OperationKind.GENERATE and commands is None
                 else ["run_exact_command"]
                 if request.operation is OperationKind.GENERATE
-                else ["read_file", "list_files", "search_text", "run_exact_command"]
+                else ["read", "bash", "edit", "write", "grep", "find", "ls"]
+                if request.operation is OperationKind.RUN
+                else ["read_file", "list_files", "search_text", "count_lines"]
             ),
         }
 
@@ -224,21 +234,39 @@ class PiSDKProvider(_CLIProvider):
             mediation = self._mediations.get(key)
         if mediation is None:
             raise ProviderError("Pi SDK mediation state is missing")
-        lines: queue.Queue[bytes | None] = queue.Queue()
+        lines: queue.Queue[bytes | None] = queue.Queue(maxsize=4)
         stderr_parts: list[bytes] = []
         reader_errors: list[BaseException] = []
         captured = bytearray()
         sink = _NATIVE_EVENT_SINK.get()
+        stop_readers = threading.Event()
+
+        def put_line(value: bytes | None) -> bool:
+            while not stop_readers.is_set():
+                try:
+                    lines.put(value, timeout=0.1)
+                    return True
+                except queue.Full:
+                    continue
+            return False
 
         def stdout_reader() -> None:
             try:
                 assert process.stdout is not None
-                for line in iter(process.stdout.readline, b""):
-                    lines.put(line)
+                while not stop_readers.is_set():
+                    line = process.stdout.readline(RAW_CAPTURE_BYTES + 1)
+                    if not line:
+                        break
+                    if len(line) > RAW_CAPTURE_BYTES or not line.endswith(b"\n"):
+                        raise ProviderError(
+                            "Pi SDK bridge emitted an overlong protocol line"
+                        )
+                    if not put_line(line):
+                        return
             except BaseException as exc:
                 reader_errors.append(exc)
             finally:
-                lines.put(None)
+                put_line(None)
 
         def stderr_reader() -> None:
             try:
@@ -317,6 +345,7 @@ class PiSDKProvider(_CLIProvider):
             process.wait(timeout=max(0.1, deadline - time.monotonic()))
             return bytes(captured), b"".join(stderr_parts)
         finally:
+            stop_readers.set()
             if process.stdin is not None and not process.stdin.closed:
                 process.stdin.close()
 
@@ -355,6 +384,9 @@ class PiSDKProvider(_CLIProvider):
                 observation = mediation.reads.search(
                     arguments.get("query"), arguments.get("path", ".")
                 )
+            elif tool == "count_lines" and mediation.reads is not None:
+                self._exact_keys(arguments, {"path"})
+                observation = mediation.reads.count_lines(arguments.get("path"))
             elif tool == "run_exact_command" and mediation.commands is not None:
                 self._exact_keys(arguments, {"grant_id"})
                 observation = mediation.commands.execute(arguments.get("grant_id"))

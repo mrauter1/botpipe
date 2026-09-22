@@ -9,12 +9,13 @@ from __future__ import annotations
 
 import asyncio
 import contextvars
+import math
 import threading
 import time
 from collections import deque
 from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, Self, TypeVar
 
 from .models import Result
 
@@ -94,15 +95,34 @@ class Stream(Generic[T]):
         *,
         cancel: Callable[[str, str], Any] | None = None,
         max_events: int = 256,
+        max_event_bytes: int = 1_000_000,
+        max_buffer_bytes: int = 4 * 1024 * 1024,
         close_timeout: float = 5.0,
     ) -> None:
         if isinstance(max_events, bool) or not isinstance(max_events, int) or max_events < 1:
             raise ValueError("max_events must be a positive integer")
-        if isinstance(close_timeout, bool) or not isinstance(close_timeout, (int, float)) or close_timeout <= 0:
-            raise ValueError("close_timeout must be positive")
+        for name, value in (
+            ("max_event_bytes", max_event_bytes),
+            ("max_buffer_bytes", max_buffer_bytes),
+        ):
+            if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+                raise ValueError(f"{name} must be a positive integer")
+        if max_event_bytes > max_buffer_bytes:
+            raise ValueError("max_event_bytes cannot exceed max_buffer_bytes")
+        if (
+            isinstance(close_timeout, bool)
+            or not isinstance(close_timeout, (int, float))
+            or not math.isfinite(close_timeout)
+            or close_timeout <= 0
+        ):
+            raise ValueError("close_timeout must be finite and positive")
         self._invoke = invoke
         self._cancel = cancel
         self._max_events = max_events
+        self._max_event_bytes = max_event_bytes
+        self._max_buffer_bytes = max_buffer_bytes
+        self._event_sizes: deque[int] = deque()
+        self._buffered_bytes = 0
         self._close_timeout = float(close_timeout)
         self._events: deque[StreamEvent] = deque()
         self._condition = threading.Condition()
@@ -171,10 +191,38 @@ class Stream(Generic[T]):
         with self._condition:
             if self._closed or self._overflow:
                 return
+            try:
+                event_bytes = self._measure_native(native, self._max_event_bytes)
+            except Exception as exc:
+                self._overflow = True
+                self._error = StreamBufferOverflow(
+                    f"Native event could not be bounded safely: {exc}; cancellation requested"
+                )
+                self._condition.notify_all()
+                self._request_cancel_locked()
+                return
+            if event_bytes > self._max_event_bytes:
+                self._overflow = True
+                self._error = StreamBufferOverflow(
+                    f"Native event exceeded {self._max_event_bytes} bytes; cancellation requested"
+                )
+                self._condition.notify_all()
+                self._request_cancel_locked()
+                return
             if len(self._events) >= self._max_events:
                 self._overflow = True
                 self._error = StreamBufferOverflow(
-                    f"Live event buffer exceeded {self._max_events} events; cancellation requested"
+                    f"Live event buffer exceeded {self._max_events} events; "
+                    "cancellation requested"
+                )
+                self._condition.notify_all()
+                self._request_cancel_locked()
+                return
+            if self._buffered_bytes + event_bytes > self._max_buffer_bytes:
+                self._overflow = True
+                self._error = StreamBufferOverflow(
+                    f"Live event buffer exceeded {self._max_buffer_bytes} bytes; "
+                    "cancellation requested"
                 )
                 self._condition.notify_all()
                 self._request_cancel_locked()
@@ -191,8 +239,76 @@ class Stream(Generic[T]):
                     operation_id=self._operation_id,
                 )
             )
+            self._event_sizes.append(event_bytes)
+            self._buffered_bytes += event_bytes
             self._sequence += 1
             self._condition.notify_all()
+
+    @staticmethod
+    def _measure_native(value: Any, limit: int) -> int:
+        """Conservatively bound a JSON-like event without copying its payload."""
+        active: set[int] = set()
+
+        def string_size(item: str, remaining: int) -> int:
+            total = 2
+            for character in item:
+                codepoint = ord(character)
+                if character in {'"', "\\"} or codepoint in (8, 9, 10, 12, 13):
+                    total += 2
+                elif codepoint < 32:
+                    total += 6
+                elif codepoint < 128:
+                    total += 1
+                elif codepoint < 2048:
+                    total += 2
+                elif codepoint < 65536:
+                    total += 3
+                else:
+                    total += 4
+                if total > remaining:
+                    break
+            return total
+
+        def measure(item: Any, depth: int, remaining: int) -> int:
+            if depth > 64:
+                raise ValueError("native event nesting exceeds 64 levels")
+            if item is None or type(item) is bool:
+                return 5
+            if type(item) in (int, float):
+                if type(item) is float and not math.isfinite(item):
+                    raise ValueError("native event contains a non-finite number")
+                return len(str(item))
+            if type(item) is str:
+                return string_size(item, remaining)
+            identity = id(item)
+            if identity in active:
+                raise ValueError("native event contains a cycle")
+            active.add(identity)
+            try:
+                total = 2
+                if isinstance(item, Mapping):
+                    values = item.items()
+                    for key, child in values:
+                        if type(key) is not str:
+                            raise TypeError("native event keys must be strings")
+                        total += 3 + string_size(key, remaining - total)
+                        total += measure(child, depth + 1, remaining - total)
+                        if total > remaining:
+                            return total
+                    return total
+                if isinstance(item, (list, tuple)):
+                    for child in item:
+                        total += 1 + measure(child, depth + 1, remaining - total)
+                        if total > remaining:
+                            return total
+                    return total
+                raise TypeError(
+                    f"native event contains unsupported {type(item).__name__}"
+                )
+            finally:
+                active.remove(identity)
+
+        return measure(value, 0, limit)
 
     def _work(self) -> None:
         # Import lazily so provider adapters remain usable without this module's
@@ -271,7 +387,9 @@ class Stream(Generic[T]):
             while not self._events and not self._done and self._error is None:
                 self._condition.wait()
             if self._events:
-                return self._events.popleft()
+                event = self._events.popleft()
+                self._buffered_bytes -= self._event_sizes.popleft()
+                return event
             if self._error is not None:
                 raise self._error
             raise StopIteration
@@ -293,6 +411,13 @@ class Stream(Generic[T]):
 
     def result(self, timeout: float | None = None) -> Result[T]:
         """Wait for and return the invocation's result without redispatching."""
+        if timeout is not None and (
+            isinstance(timeout, bool)
+            or not isinstance(timeout, (int, float))
+            or not math.isfinite(timeout)
+            or timeout < 0
+        ):
+            raise ValueError("timeout must be finite and nonnegative or None")
         deadline = None if timeout is None else time.monotonic() + timeout
         with self._condition:
             while not self._done:
@@ -319,12 +444,12 @@ class Stream(Generic[T]):
                 self._request_cancel_locked()
             cancel_thread = self._cancel_thread
         thread = self._thread
-        if not unfinished:
+        if not unfinished and cancel_thread is None:
             return
         deadline = time.monotonic() + self._close_timeout
         if cancel_thread is not None:
             cancel_thread.join(max(0.0, deadline - time.monotonic()))
-        if thread is not None:
+        if unfinished and thread is not None:
             thread.join(max(0.0, deadline - time.monotonic()))
         if (cancel_thread is not None and cancel_thread.is_alive()) or (
             thread is not None and thread.is_alive()
@@ -345,13 +470,13 @@ class Stream(Generic[T]):
     async def aclose(self) -> None:
         await asyncio.to_thread(self.close)
 
-    def __enter__(self):
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *_):
         self.close()
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> Self:
         return self
 
     async def __aexit__(self, *_):
@@ -366,6 +491,8 @@ def start_stream(
     options: Mapping[str, Any] | None = None,
     cancel: Callable[[str, str], Any] | None = None,
     max_events: int = 256,
+    max_event_bytes: int = 1_000_000,
+    max_buffer_bytes: int = 4 * 1024 * 1024,
     close_timeout: float = 5.0,
 ) -> Stream[Any]:
     """Observe exactly one public provider call in a copied context.
@@ -382,6 +509,8 @@ def start_stream(
         lambda: invoke(prompt, **call_options),
         cancel=cancel,
         max_events=max_events,
+        max_event_bytes=max_event_bytes,
+        max_buffer_bytes=max_buffer_bytes,
         close_timeout=close_timeout,
     )
 

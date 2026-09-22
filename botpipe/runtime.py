@@ -18,7 +18,7 @@ from contextlib import contextmanager
 from enum import Enum
 from pathlib import Path
 from types import MemberDescriptorType
-from typing import get_type_hints
+from typing import TYPE_CHECKING, Self, get_type_hints
 
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
@@ -50,6 +50,9 @@ from .provider_checkpoints import (
 )
 from .recovery import Completed, Running, Stopped, Unknown, recover_outcome
 
+if TYPE_CHECKING:
+    from .provider import Provider
+
 _CURRENT = contextvars.ContextVar("botpipe_run", default=None)
 _OPERATION = contextvars.ContextVar("botpipe_operation", default=None)
 _ACTIVITY = contextvars.ContextVar("botpipe_activity", default=False)
@@ -59,7 +62,7 @@ _ASYNC_CANCELLATION = contextvars.ContextVar(
 _UNSET = object()
 
 
-def current_run():
+def current_run() -> RunContext:
     ctx = _CURRENT.get()
     if ctx is None:
         raise BotpipeError("This operation requires an active Botpipe workflow")
@@ -1039,7 +1042,7 @@ class RunContext:
         self._default_provider = None
 
     @property
-    def provider(self):
+    def provider(self) -> Provider:
         """One memoized configured provider for this workflow scope."""
 
         if self._default_provider is None:
@@ -1097,9 +1100,10 @@ class RunContext:
                 recover=recover,
                 name=name,
             )
-        except ReplayMismatch as exc:
+        except (ReplayMismatch, UncertainOperation) as exc:
             # A caught application exception cannot make divergent history
-            # valid or authorize additional effects in another scope.
+            # valid or authorize additional effects/observations in this run.
+            # Child contexts share this fence with their root context.
             self._replay_state["error"] = exc
             raise
         finally:
@@ -2492,7 +2496,7 @@ class Botpipe:
         finally:
             self.journal.close()
 
-    def __enter__(self):
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *args):

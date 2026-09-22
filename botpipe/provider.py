@@ -6,7 +6,7 @@ import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Mapping, TypeVar, overload
+from typing import TYPE_CHECKING, Any, Literal, Mapping, Self, TypeVar, overload
 
 from .errors import BotpipeError
 from .models import Result
@@ -14,6 +14,10 @@ from .policy import Policy
 from .prompts import Prompt
 from .runtime import Botpipe, _CURRENT, _async_call, current_run, workflow
 from .sessions import Session
+
+if TYPE_CHECKING:
+    from .decisions import DecisionAnswer, DecisionQuestion
+    from .streaming import Stream
 
 _INHERIT = object()
 _DEFAULT = object()
@@ -100,7 +104,7 @@ class Provider:
     """
     _backend: str | None = None
 
-    def __init__(self, *, runtime=None, session=_INHERIT, **config):
+    def __init__(self, *, runtime: Botpipe | None = None, session=_INHERIT, **config: Any) -> None:
         if runtime is not None and not isinstance(runtime, Botpipe):
             raise TypeError("runtime must be a Botpipe instance")
         if session is not _INHERIT and session is not None and not isinstance(session, Session):
@@ -112,19 +116,19 @@ class Provider:
         self._config = _configuration(config)
 
     @property
-    def config(self):
+    def config(self) -> Mapping[str, Any]:
         return self._config
 
     @property
-    def session(self):
+    def session(self) -> Session | None:
         value = self._conversation.value
         return None if value is _DEFAULT else value
 
     @property
-    def backend(self):
+    def backend(self) -> str | None:
         return self._family.selected["name"] if self._family.selected else self._family.backend
 
-    def with_config(self, *, session=_INHERIT, **changes):
+    def with_config(self, *, session=_INHERIT, **changes: Any) -> Self:
         normalized = _configuration(changes)
         values = {**_plain(self._config), **_plain(normalized)}
         # Policy derivation must retain every enclosing restriction.
@@ -215,7 +219,7 @@ class Provider:
             selected_session = self._session_for_call(adapter, session)
         call_config = {key: options.pop(key) for key in tuple(options) if key in _CONFIG_FIELDS}
         defaults = selection.get("defaults", {})
-        profile = {key: defaults[key] for key in ("model", "effort") if defaults.get(key) is not None}
+        profile = {key: defaults[key] for key in ("model", "effort", "instructions") if defaults.get(key) is not None}
         if operation == "generate":
             profile["allow_commands"] = defaults.get("generate_allow_commands", ())
         profile_policy = {}
@@ -282,7 +286,7 @@ class Provider:
             raise TypeError("run() uses its execution policy, not generation command grants")
         return self._invoke("run", prompt, input=input, reads=reads, writes=writes, returns=returns, session=session, **options)
 
-    def decide(self, *, state, questions, **options):
+    def decide(self, *, state: Any, questions: Mapping[str, DecisionQuestion], **options: Any) -> Result[dict[str, DecisionAnswer]]:
         return self._invoke("decide", state=state, questions=questions, **options)
 
     @overload
@@ -312,8 +316,14 @@ class Provider:
     async def arun(self, prompt, **options):
         return await _async_call(self.run, prompt, **options)
 
-    async def adecide(self, **options):
-        return await _async_call(self.decide, **options)
+    async def adecide(self, *, state: Any, questions: Mapping[str, DecisionQuestion], **options: Any) -> Result[dict[str, DecisionAnswer]]:
+        return await _async_call(self.decide, state=state, questions=questions, **options)
+
+    @overload
+    def stream(self, prompt: str | Prompt, *, operation: Literal["generate", "query", "run"], returns: type[T], **options: Any) -> Stream[T]: ...
+
+    @overload
+    def stream(self, prompt: str | Prompt, *, operation: Literal["generate", "query", "run"], returns: type[str] = str, **options: Any) -> Stream[str]: ...
 
     def stream(self, prompt, *, operation, **options):
         if operation not in ("generate", "query", "run"):
@@ -326,10 +336,16 @@ class Provider:
             cancel=lambda run_id, operation_id: runtime.cancel(run_id, operation_id),
         )
 
+    @overload
+    def astream(self, prompt: str | Prompt, *, operation: Literal["generate", "query", "run"], returns: type[T], **options: Any) -> Stream[T]: ...
+
+    @overload
+    def astream(self, prompt: str | Prompt, *, operation: Literal["generate", "query", "run"], returns: type[str] = str, **options: Any) -> Stream[str]: ...
+
     def astream(self, prompt, *, operation, **options):
         return self.stream(prompt, operation=operation, **options)
 
-    def close(self):
+    def close(self) -> None:
         """Release this family's owned runtime, retaining its durable evidence.
 
         Derived configurations share ownership. An explicitly supplied runtime
@@ -341,10 +357,10 @@ class Provider:
                 runtime.close()
                 self._family.runtime = None
 
-    def __enter__(self):
+    def __enter__(self) -> Self:
         return self
 
-    def __exit__(self, *_):
+    def __exit__(self, *_) -> None:
         self.close()
 
 

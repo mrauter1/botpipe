@@ -51,6 +51,36 @@ audited command recipe surface is the initial implementation target. The public
 `generate`, `query`, and `run` contracts remain unchanged. Missing native or
 platform proof remains a release gate, even when local mediator tests pass.
 
+Query command execution uses a different recipe from exact generation grants.
+Repository-wide git status cannot honor query's private-path exclusions and
+narrower read roots. The query command instead counts lines in a bounded,
+descriptor-confined snapshot with fixed trusted `wc -l`; only snapshot bytes
+reach stdin. The existing exact git-status generation grant remains available
+under its separately enforced workspace-wide envelope.
+
+Pi's generate, query, and run operations use one pinned SDK and persistent
+session manager. Delegating run to a different CLI release would introduce a
+second native session-format and permission-transition contract. The SDK's
+native built-in tool loop handles explicitly unrestricted run; generation and
+query replace those built-ins with the mediated inventory. Output schemas guide
+the prompt, while raw terminal text reaches the common validation/repair path.
+This preserves completed-turn session advancement even for malformed output.
+
+## Remaining workspace coordination design
+
+Existing workspace markers and descriptor identity checks protect known owned
+directories. They do not implement arbitrary hierarchical reader/writer
+ownership. A final review rejected two incomplete shortcuts: creating a marker
+in every traversed directory requires write access throughout read-only inputs,
+and checking only a writer's ancestor markers misses an active reader below a
+new ancestor writer. Neither was retained as a claimed fix.
+
+Complete A48 coverage requires a common path-prefix coordination protocol used
+by both readers and writers, including overlapping external read roots and
+durable unresolved writers. That remains implementation work; source identity
+checks, existing-marker protection, and successful deterministic tests do not
+remove this release blocker.
+
 ## Authoring comparison (A44)
 
 | Job | Previous execution model | Provider-first form | Simplest credible alternative and remaining cost |

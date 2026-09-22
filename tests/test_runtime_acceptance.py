@@ -15,6 +15,7 @@ from botpipe import (
     RunBusy,
     Provider,
     Session,
+    UncertainOperation,
     activity,
     aparallel,
     ask_human,
@@ -898,3 +899,59 @@ def test_parallel_replay_mismatch_cannot_be_committed_as_branch_error(
             assert group["status"] == "started"
 
     assert sorted(effects) == ["failure", "original"]
+
+
+@pytest.mark.parametrize("through_parallel_child", [False, True])
+def test_caught_uncertain_writer_fences_later_same_run_reads(
+    tmp_path, through_parallel_child
+):
+    target = tmp_path / "branch" if through_parallel_child else tmp_path
+    target.mkdir(exist_ok=True)
+    destination = target / "state.txt"
+
+    def uncertain_write(request):
+        request.artifacts["state"].write_text("uncertain mutation")
+        raise RuntimeError("provider outcome is unknown")
+
+    def forbidden_observation(request):
+        raise AssertionError("same-run read provider must not dispatch")
+
+    provider = FakeProvider([uncertain_write, forbidden_observation])
+
+    def write():
+        return Provider(session=None).run(
+            "edit state",
+            workspace=target,
+            writes=(Artifact.text(destination, required=True),),
+        )
+
+    @workflow
+    def writer():
+        return write()
+
+    @workflow
+    def job():
+        try:
+            if through_parallel_child:
+                parallel(lambda: writer())
+            else:
+                write()
+        except UncertainOperation:
+            pass
+        try:
+            Provider(session=None).query(
+                "observe state", workspace=target, reads=(destination,)
+            )
+        except UncertainOperation:
+            pass
+        return "application tried to suppress the fence"
+
+    with Botpipe(tmp_path, provider=provider) as client:
+        result = client.run(job)
+        assert result.status == "interrupted", result.error
+        assert "provider outcome is unknown" in result.error
+        assert len(provider.calls) == 1
+        assert destination.read_text() == "uncertain mutation"
+        operations = client.journal.operations(result.run_id)
+        assert len([row for row in operations if row["kind"] == "provider"]) == 1
+        assert not [row for row in operations if row["kind"] == "read"]

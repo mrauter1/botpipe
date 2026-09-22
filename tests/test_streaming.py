@@ -163,6 +163,96 @@ def test_bounded_buffer_overflow_is_explicit_and_requests_cancel():
         stream.result()
 
 
+def test_single_native_event_byte_limit_fails_closed_without_mutating_payload():
+    cancelled = threading.Event()
+    payload = {"type": "delta", "text": "x" * 80}
+
+    def invoke():
+        bind_stream_identity("large-run", "large-operation")
+        _NATIVE_EVENT_SINK.get()(payload)
+        return result("terminal", "large-run", "large-operation")
+
+    stream = Stream(
+        invoke,
+        cancel=lambda *_: cancelled.set(),
+        max_event_bytes=64,
+        max_buffer_bytes=128,
+    )
+
+    with pytest.raises(StreamBufferOverflow, match="exceeded 64 bytes"):
+        next(stream)
+    assert cancelled.wait(1)
+    assert payload == {"type": "delta", "text": "x" * 80}
+
+
+def test_aggregate_native_event_byte_limit_is_bounded_and_explicit():
+    first_emitted = threading.Event()
+    emit_second = threading.Event()
+    cancelled = threading.Event()
+
+    def invoke():
+        bind_stream_identity("aggregate-run", "aggregate-operation")
+        sink = _NATIVE_EVENT_SINK.get()
+        sink({"type": "delta", "text": "1234567890"})
+        first_emitted.set()
+        assert emit_second.wait(1)
+        sink({"type": "delta", "text": "abcdefghij"})
+        return result("terminal", "aggregate-run", "aggregate-operation")
+
+    stream = Stream(
+        invoke,
+        cancel=lambda *_: cancelled.set(),
+        max_event_bytes=50,
+        max_buffer_bytes=60,
+    )
+    assert first_emitted.wait(1)
+    emit_second.set()
+    assert cancelled.wait(1)
+
+    assert next(stream).native["text"] == "1234567890"
+    with pytest.raises(StreamBufferOverflow, match="exceeded 60 bytes"):
+        next(stream)
+
+
+def test_consuming_an_event_releases_its_byte_budget_and_keeps_payload_intact():
+    first_emitted = threading.Event()
+    emit_second = threading.Event()
+    first = {"type": "delta", "text": "1234567890"}
+    second = {"type": "delta", "text": "abcdefghij"}
+
+    def invoke():
+        bind_stream_identity("paced-run", "paced-operation")
+        sink = _NATIVE_EVENT_SINK.get()
+        sink(first)
+        first_emitted.set()
+        assert emit_second.wait(1)
+        sink(second)
+        return result("terminal", "paced-run", "paced-operation")
+
+    stream = Stream(invoke, max_event_bytes=50, max_buffer_bytes=60)
+    assert first_emitted.wait(1)
+    assert next(stream).native is first
+    emit_second.set()
+    assert next(stream).native is second
+    with pytest.raises(StopIteration):
+        next(stream)
+    assert stream.result().value == "terminal"
+
+
+@pytest.mark.parametrize("timeout", [float("nan"), float("inf"), -1, True])
+def test_result_rejects_nonfinite_negative_and_boolean_timeouts(timeout):
+    stream = Stream(lambda: result())
+    with pytest.raises(ValueError, match="finite and nonnegative"):
+        stream.result(timeout)
+    assert stream.result().value == "done"
+
+
+@pytest.mark.parametrize("timeout", [float("nan"), float("inf"), 0, -1, True])
+def test_stream_rejects_nonfinite_nonpositive_and_boolean_control_timeouts(timeout):
+    with pytest.raises(ValueError, match="finite and positive"):
+        Stream(lambda: result(), close_timeout=timeout)
+
+
 def test_async_iteration_and_context_manager_use_the_same_terminal_result():
     release = threading.Event()
 
@@ -292,3 +382,33 @@ def test_close_raises_when_worker_cannot_be_confirmed_stopped():
             stream.close()
     finally:
         release.set()
+
+
+def test_close_settles_an_outstanding_cancel_after_worker_finishes():
+    worker_started = threading.Event()
+    release_worker = threading.Event()
+    cancel_started = threading.Event()
+    release_cancel = threading.Event()
+
+    def invoke():
+        bind_stream_identity("settle-run", "settle-operation")
+        worker_started.set()
+        assert release_worker.wait(1)
+        return result("terminal", "settle-run", "settle-operation")
+
+    def cancel(*_):
+        cancel_started.set()
+        assert release_cancel.wait(1)
+
+    stream = Stream(invoke, cancel=cancel, close_timeout=0.02)
+    assert worker_started.wait(1)
+    stream.cancel()
+    assert cancel_started.wait(1)
+    release_worker.set()
+    assert stream.result().value == "terminal"
+
+    try:
+        with pytest.raises(StreamCancellationUnconfirmed):
+            stream.close()
+    finally:
+        release_cancel.set()

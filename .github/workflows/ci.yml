@@ -46,6 +46,14 @@ jobs:
           /tmp/botpipe-wheel/bin/python -c "from botpipe import Provider; Provider()"
           /tmp/botpipe-wheel/bin/python -c "import tempfile; from botpipe import Botpipe, Provider; from botpipe.providers import FakeProvider; runtime=Botpipe(tempfile.mkdtemp(), provider=FakeProvider(['ok'])); assert Provider(runtime=runtime).generate('hello').value == 'ok'; runtime.close()"
 
+      - name: Check installed public type information
+        if: matrix.python-version == '3.12'
+        run: |
+          /tmp/botpipe-wheel/bin/pip install 'mypy>=1.15,<3'
+          cp tests/typecheck_provider.py /tmp/botpipe-typecheck-provider.py
+          cd /tmp
+          /tmp/botpipe-wheel/bin/python -m mypy --strict --follow-imports=silent /tmp/botpipe-typecheck-provider.py
+
   optimizer-windows:
     runs-on: windows-latest
     steps:

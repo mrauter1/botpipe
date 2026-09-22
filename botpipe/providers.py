@@ -103,6 +103,25 @@ class ProviderRequest:
     def __post_init__(self) -> None:
         object.__setattr__(self, "workspace", Path(self.workspace))
         object.__setattr__(self, "receipt_dir", Path(self.receipt_dir))
+        if self.output_schema is not None:
+            if not isinstance(self.output_schema, Mapping):
+                raise TypeError("output_schema must be a plain JSON object or None")
+            try:
+                encoded_schema = json.dumps(
+                    dict(self.output_schema),
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                    allow_nan=False,
+                ).encode()
+            except (TypeError, ValueError, RecursionError) as exc:
+                raise TypeError("output_schema must be a finite plain JSON object") from exc
+            if len(encoded_schema) > 1_000_000:
+                raise ValueError("output_schema exceeds the 1 MB request limit")
+            # Detach nested caller-owned containers after validating that only
+            # ordinary JSON values cross the native adapter boundary.
+            object.__setattr__(
+                self, "output_schema", json.loads(encoded_schema.decode())
+            )
         object.__setattr__(
             self, "artifacts", {str(k): Path(v) for k, v in self.artifacts.items()}
         )
@@ -242,6 +261,28 @@ JEV_CAPABILITIES = ProviderCapabilities(
 )
 
 
+CODEX_APPSERVER_CAPABILITIES = ProviderCapabilities(
+    version="codex-app-server-0.131.0",
+    operations=frozenset(
+        {OperationKind.GENERATE, OperationKind.QUERY, OperationKind.RUN}
+    ),
+    sessions=True,
+    structured_output=True,
+    multiple_artifacts=True,
+    recovery=True,
+    cancellation=False,
+    exact_command_grants=True,
+    autonomous_read_only_query=True,
+    live_streaming=True,
+    limitations=(
+        "generate requires at least one exact command grant because the pinned native inventory cannot implement strict tool-free generation",
+        "query and exact generation require the pinned app-server and isolated config",
+        "run delegates to the separately validated Codex CLI profile",
+        "native credentials and pinned integration receipts are deployment gates",
+    ),
+)
+
+
 CLAUDE_SDK_CAPABILITIES = ProviderCapabilities(
     version="claude-agent-sdk-0.2.155",
     operations=frozenset(
@@ -269,7 +310,7 @@ PI_SDK_CAPABILITIES = ProviderCapabilities(
         {OperationKind.GENERATE, OperationKind.QUERY, OperationKind.RUN}
     ),
     sessions=True,
-    structured_output=False,
+    structured_output=True,
     multiple_artifacts=True,
     recovery=True,
     cancellation=True,
@@ -278,8 +319,8 @@ PI_SDK_CAPABILITIES = ProviderCapabilities(
     live_streaming=True,
     limitations=(
         "generate/query persist the pinned Pi v3 JSONL session format",
-        "cross-interface continuation requires the separately installed Pi CLI to be exactly 0.73.1",
-        "run delegates to the separately validated unrestricted Pi CLI profile",
+        "typed outputs use schema-guided prompting and Botpipe client validation",
+        "run uses the same pinned SDK only for an explicitly unrestricted policy",
         "native credentials and pinned integration receipts are deployment gates",
     ),
 )
@@ -1627,6 +1668,32 @@ class ClaudeProvider(_CLIProvider):
         )
 
 
+def _validate_pi_unrestricted_policy(policy: Policy) -> None:
+    unsupported = []
+    if policy.sandbox_mode != SandboxMode.DANGER_FULL_ACCESS:
+        unsupported.append(f"sandbox_mode={policy.sandbox_mode.value}")
+    if policy.network != NetworkMode.FULL:
+        unsupported.append(f"network={policy.network.value}")
+    for name in (
+        "allow_read",
+        "deny_read",
+        "allow_write",
+        "deny_write",
+        "network_domains",
+        "deny_network_domains",
+        "allow_permissions",
+        "ask_permissions",
+        "deny_permissions",
+    ):
+        if getattr(policy, name):
+            unsupported.append(name)
+    if unsupported:
+        raise CapabilityError(
+            "Pi unrestricted run cannot enforce policy restrictions: "
+            + ", ".join(unsupported)
+        )
+
+
 class PiProvider(_CLIProvider):
     """Pi CLI adapter using its documented JSON event mode.
 
@@ -1664,29 +1731,7 @@ class PiProvider(_CLIProvider):
         super().validate_request(request)
         policy = request.policy.effective()
         if request.operation == OperationKind.RUN:
-            unsupported = []
-            if policy.sandbox_mode != SandboxMode.DANGER_FULL_ACCESS:
-                unsupported.append(f"sandbox_mode={policy.sandbox_mode.value}")
-            if policy.network != NetworkMode.FULL:
-                unsupported.append(f"network={policy.network.value}")
-            for name in (
-                "allow_read",
-                "deny_read",
-                "allow_write",
-                "deny_write",
-                "network_domains",
-                "deny_network_domains",
-                "allow_permissions",
-                "ask_permissions",
-                "deny_permissions",
-            ):
-                if getattr(policy, name):
-                    unsupported.append(name)
-            if unsupported:
-                raise CapabilityError(
-                    "Pi stock CLI has no OS containment for run policy: "
-                    + ", ".join(unsupported)
-                )
+            _validate_pi_unrestricted_policy(policy)
 
     def _stdin(self, request: ProviderRequest) -> bytes:
         # The prompt is supplied through a private @file so it is neither
@@ -1959,9 +2004,7 @@ def get_provider(
 NATIVE_CAPABILITY_MATRIX = MappingProxyType(
     {
         "codex": CodexProvider.capabilities,
-        "codex-app-server": __import__(
-            "botpipe.codex_appserver", fromlist=["CODEX_APPSERVER_CAPABILITIES"]
-        ).CODEX_APPSERVER_CAPABILITIES,
+        "codex-app-server": CODEX_APPSERVER_CAPABILITIES,
         "claude": ClaudeProvider.capabilities,
         "claude-agent-sdk": CLAUDE_SDK_CAPABILITIES,
         "pi": PiProvider.capabilities,
@@ -1989,6 +2032,7 @@ __all__ = [
     "OperationKind",
     "NATIVE_CAPABILITY_MATRIX",
     "JEV_CAPABILITIES",
+    "CODEX_APPSERVER_CAPABILITIES",
     "CLAUDE_SDK_CAPABILITIES",
     "PI_SDK_CAPABILITIES",
     "get_provider",

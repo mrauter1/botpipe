@@ -100,6 +100,7 @@ class ProviderSelection:
     profile: str | None = None
     model: str | None = None
     effort: str | None = None
+    instructions: str | None = None
     generate_allow_commands: tuple[tuple[str, ...], ...] = ()
     # None means the operation default (the workspace); () explicitly disables
     # local discovery.
@@ -127,6 +128,8 @@ class ProviderSelection:
             values["model"] = self.model
         if self.effort is not None:
             values["effort"] = self.effort
+        if self.instructions is not None:
+            values["instructions"] = self.instructions
         if self.profile is not None:
             values["profile"] = self.profile
         return values
@@ -330,6 +333,7 @@ def _selection(
     allowed = {
         "model",
         "effort",
+        "instructions",
         "generate_allow_commands",
         "query_read_roots",
         "options",
@@ -355,6 +359,9 @@ def _selection(
     selected_effort = _optional_name(
         overrides["effort"] if overrides["effort"] is not None else data.get("effort"), "effort"
     )
+    instructions = data.get("instructions")
+    if instructions is not None and not isinstance(instructions, str):
+        raise ConfigurationError("provider instructions must be a string or null")
     commands = _commands(
         overrides["generate_allow_commands"]
         if overrides["generate_allow_commands"] is not None
@@ -372,6 +379,7 @@ def _selection(
         profile=profile,
         model=selected_model,
         effort=selected_effort,
+        instructions=instructions,
         generate_allow_commands=commands,
         query_read_roots=roots,
         options=options,

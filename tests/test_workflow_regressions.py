@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -328,6 +329,95 @@ def test_ralph_item_rework_receives_feedback_and_retains_only_its_own_session(tm
         ]
         assert client.resume(result.run_id, workflow=ralph_loop).ok
         assert len(provider.calls) == 8
+
+
+def test_ralph_interruption_resumes_without_repeating_completed_item(tmp_path):
+    from botpipe.recovery import Stopped
+
+    work = {
+        "goal": "complete both durable items",
+        "items": [
+            {
+                "id": item_id,
+                "title": f"Deliver {item_id}",
+                "status": "planned",
+                "goal": f"Complete {item_id}",
+                "acceptance_checks": [f"{item_id} is complete"],
+            }
+            for item_id in ("one", "two")
+        ],
+    }
+    implementations = Counter()
+    reviews = Counter()
+
+    def plan(request):
+        _write(request, "work", work)
+        return ProviderResponse("planned", "planner")
+
+    def plan_review(request):
+        _write(request, "plan_review", "Accepted")
+        return ProviderResponse('{"verdict":"accepted"}', "plan-reviewer")
+
+    def implement(request):
+        item_id = _input(request)["id"]
+        implementations[item_id] += 1
+        return ProviderResponse("implemented", f"item-{item_id}")
+
+    def item_review(request):
+        item_id = _input(request)["id"]
+        reviews[item_id] += 1
+        _write(request, "implementation_review", "Accepted")
+        return ProviderResponse('{"verdict":"accepted"}', f"item-{item_id}")
+
+    def interrupt_second_item(request):
+        assert _input(request)["id"] == "two"
+        implementations["two"] += 1
+        raise SystemExit("lost process during second item")
+
+    provider = FakeProvider(
+        [
+            plan,
+            plan_review,
+            implement,
+            item_review,
+            interrupt_second_item,
+            implement,
+            item_review,
+        ]
+    )
+    with Botpipe(tmp_path, provider=provider) as client:
+        with pytest.raises(SystemExit, match="second item"):
+            client.run(
+                ralph_loop,
+                "deliver both items",
+                task_id="ralph-interrupted",
+                run_id="run",
+            )
+
+        interrupted = [
+            row
+            for row in client.inspect("run")["operations"]
+            if row["kind"] == "provider" and row["status"] not in {"completed", "failed"}
+        ]
+        assert len(interrupted) == 1
+        provider.recover = lambda request: Stopped(
+            "the interrupted second-item process is confirmed stopped"
+        )
+        client.resolve("run", interrupted[0]["id"], retry=True)
+        completed = client.resume("run", workflow=ralph_loop)
+
+        assert completed.ok, completed.error
+        assert [item["status"] for item in completed.value.read_json()["items"]] == [
+            "completed",
+            "completed",
+        ]
+        assert implementations == {"one": 1, "two": 2}
+        assert reviews == {"one": 1, "two": 1}
+        assert len(provider.calls) == 7
+
+        replayed = client.resume("run", workflow=ralph_loop)
+        assert replayed.value == completed.value
+        assert len(provider.calls) == 7
 
 
 def test_devloop_followup_preserves_parent_audit_and_plan_result_paths(tmp_path):

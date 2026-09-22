@@ -167,6 +167,7 @@ generate_allow_commands = [["git", "status", "--short"]]
 interface = "agent_sdk"
 
 [providers.claude.profiles.project]
+instructions = "Explain findings clearly and cite the inspected files."
 generate_allow_commands = []
 ```
 

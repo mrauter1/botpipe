@@ -821,7 +821,10 @@ def test_v2_file_reference_uses_canonical_name_and_exact_task_run_refs(tmp_path)
     assert "run reference task does not match journal" in mismatch.error
 
 
-def test_v2_eligible_evidence_uses_one_producer_and_independent_verifier(tmp_path):
+@pytest.mark.parametrize("review_mode", ["accepted", "reject_then_accept", "invalid"])
+def test_v2_eligible_evidence_review_loop_and_terminal_failure(
+    tmp_path, review_mode
+):
     from botpipe_optimizer.recommendations import (
         finalize_candidate_review_payload,
         finalize_candidate_set_payload,
@@ -831,8 +834,11 @@ def test_v2_eligible_evidence_uses_one_producer_and_independent_verifier(tmp_pat
         body = request.prompt.rsplit("\n\nInput:\n", 1)[1]
         return json.JSONDecoder().raw_decode(body)[0]
 
+    proposal_inputs = []
+
     def propose(request):
         value = prompt_input(request)
+        proposal_inputs.append(value)
         evidence = value["evidence_snapshot"]
         observation_id = next(
             item["observation_id"]
@@ -873,8 +879,18 @@ def test_v2_eligible_evidence_uses_one_producer_and_independent_verifier(tmp_pat
         )
         return result.model_dump(mode="json", by_alias=True)
 
+    review_calls = 0
+
     def review(request):
+        nonlocal review_calls
+        review_calls += 1
+        if review_mode == "invalid":
+            return {}
         candidate_set = prompt_input(request)["candidate_set"]
+        accepted = not (review_mode == "reject_then_accept" and review_calls == 1)
+        candidate_ids = [
+            item["candidate_id"] for item in candidate_set["candidates"]
+        ]
         result = finalize_candidate_review_payload(
             {
                 "schema": "botpipe.workflow_optimization.candidate_review/v2",
@@ -883,11 +899,17 @@ def test_v2_eligible_evidence_uses_one_producer_and_independent_verifier(tmp_pat
                 "baseline_surface_manifest_id": candidate_set[
                     "baseline_surface_manifest_id"
                 ],
-                "accepted": True,
-                "reviewed_candidate_ids": [
-                    item["candidate_id"] for item in candidate_set["candidates"]
+                "accepted": accepted,
+                "reviewed_candidate_ids": candidate_ids,
+                "findings": []
+                if accepted
+                else [
+                    {
+                        "candidate_id": candidate_ids[0],
+                        "severity": "error",
+                        "message": "Revise the candidate before publication.",
+                    }
                 ],
-                "findings": [],
             }
         )
         return result.model_dump(mode="json", by_alias=True)
@@ -906,7 +928,14 @@ def test_v2_eligible_evidence_uses_one_producer_and_independent_verifier(tmp_pat
         "        'activity', {'case': 'observed-failure'}, explode,\n"
         "        retry_safe=True, name='explode')\n"
     )
-    provider = TimedFakeProvider([propose, review])
+    actions = (
+        [propose, review]
+        if review_mode == "accepted"
+        else [propose, review, propose, review]
+        if review_mode == "reject_then_accept"
+        else [propose, review, review, review]
+    )
+    provider = TimedFakeProvider(actions)
     with Botpipe(tmp_path, provider=provider) as client:
         failed = client.run(
             f"{source}:failing_release",
@@ -928,14 +957,25 @@ def test_v2_eligible_evidence_uses_one_producer_and_independent_verifier(tmp_pat
         )
         inspection = client.inspect(result.run_id)
 
+    if review_mode == "invalid":
+        assert result.status == "failed"
+        assert result.value is None
+        assert not list(result.folder.rglob("optimization_publication_receipt.json"))
+        assert review_calls == 3
+        return
+
     assert result.ok, result.error
     assert result.value.review is not None and result.value.review.accepted
     assert result.value.candidate_set.candidates[0].cited_observation_ids
-    assert result.value.provider_budget["used_turns"] == 2
+    expected_turns = 4 if review_mode == "reject_then_accept" else 2
+    assert result.value.provider_budget["used_turns"] == expected_turns
     providers = [
         item for item in inspection["operations"] if item["kind"] == "provider"
     ]
     assert [item["name"] for item in providers] == [
         "propose evidence-bound candidates",
         "independently review candidate set",
-    ]
+    ] * (2 if review_mode == "reject_then_accept" else 1)
+    if review_mode == "reject_then_accept":
+        assert proposal_inputs[1]["review_feedback"]["accepted"] is False
+        assert review_calls == 2

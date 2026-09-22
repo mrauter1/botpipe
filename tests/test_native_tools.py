@@ -1,4 +1,5 @@
 import io
+import hashlib
 import os
 import subprocess
 from contextlib import contextmanager
@@ -7,9 +8,25 @@ from types import SimpleNamespace
 
 import pytest
 
-from botpipe.native_tools import ExactCommandTools, ReadOnlyTools
+from botpipe.native_tools import (
+    ExactCommandTools,
+    ReadOnlyTools,
+    command_scope_is_workspace_wide,
+)
 from botpipe import RunBusy
 from botpipe.providers import CapabilityError
+
+
+def test_workspace_wide_command_scope_uses_resolved_exact_roots(tmp_path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    assert command_scope_is_workspace_wide(workspace, (".",), ())
+    assert command_scope_is_workspace_wide(workspace, (workspace,), None)
+    assert not command_scope_is_workspace_wide(workspace, None, ())
+    assert not command_scope_is_workspace_wide(workspace, (), ())
+    assert not command_scope_is_workspace_wide(workspace, (".", "src"), ())
+    assert not command_scope_is_workspace_wide(workspace, (".",), ("private",))
 
 
 def test_reads_are_descriptor_confined_and_symlinks_and_traversal_fail(tmp_path):
@@ -26,6 +43,128 @@ def test_reads_are_descriptor_confined_and_symlinks_and_traversal_fail(tmp_path)
         for path in ("../outside.txt", "link.txt", "linked-dir/outside.txt"):
             with pytest.raises(CapabilityError):
                 tools.read(path)
+            with pytest.raises(CapabilityError):
+                tools.count_lines(path)
+
+
+def test_count_lines_uses_bounded_snapshot_and_records_source_identity(tmp_path):
+    root = tmp_path / "root"
+    root.mkdir()
+    source = b"first\nsecond\nunterminated"
+    (root / "lines.txt").write_bytes(source)
+
+    with ReadOnlyTools((root,)) as tools:
+        assert tuple(tools.command_envelopes) == ("count_lines",)
+        envelope = tools.command_envelopes["count_lines"].to_record()
+        assert envelope["native_argv"][-1] == "-l"
+        assert envelope["stdin"] == "bounded authorized regular-file snapshot"
+        observation = tools.count_lines("lines.txt")
+
+    assert observation.output == "2"
+    assert observation.exit_code == 0
+    assert observation.input["path"] == str(root / "lines.txt")
+    source_identity = observation.input["source"]
+    assert source_identity["sha256"] == hashlib.sha256(source).hexdigest()
+    assert source_identity["digest_scope"] == "full"
+    assert source_identity["captured_bytes"] == len(source)
+    assert source_identity["device"] == (root / "lines.txt").stat().st_dev
+    assert source_identity["inode"] == (root / "lines.txt").stat().st_ino
+
+
+def test_count_lines_rejects_oversized_source_before_command_spawn(
+    tmp_path, monkeypatch
+):
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / "large.txt").write_bytes(b"a\n" * 10)
+    with ReadOnlyTools((root,), max_read_bytes=8) as tools:
+        monkeypatch.setattr(
+            "botpipe.native_tools.subprocess.Popen",
+            lambda *a, **k: pytest.fail("count command must not start"),
+        )
+        with pytest.raises(CapabilityError, match="snapshot byte limit"):
+            tools.count_lines("large.txt")
+        assert tools.observations == []
+
+
+def test_count_lines_rechecks_executable_identity_before_spawn(tmp_path, monkeypatch):
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / "lines.txt").write_text("one\n")
+    with ReadOnlyTools((root,)) as tools:
+        changed = dict(tools.count_lines_envelope.executable_identity)
+        changed["sha256"] = "0" * 64
+        monkeypatch.setattr("botpipe.native_tools._path_identity", lambda *a, **k: changed)
+        monkeypatch.setattr(
+            "botpipe.native_tools.subprocess.Popen",
+            lambda *a, **k: pytest.fail("count command must not start"),
+        )
+        with pytest.raises(CapabilityError, match="identity changed"):
+            tools.count_lines("lines.txt")
+
+
+def test_count_lines_drains_but_rejects_overlimit_output(tmp_path, monkeypatch):
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / "lines.txt").write_text("one\n")
+
+    class Input:
+        def write(self, value):
+            return len(value)
+
+        def close(self):
+            pass
+
+    class Process:
+        pid = 1234
+        returncode = 0
+
+        def __init__(self):
+            self.stdin = Input()
+            self.stdout = io.BytesIO(b"123456789\n")
+            self.stderr = io.BytesIO(b"")
+
+        def wait(self, timeout=None):
+            return 0
+
+        def poll(self):
+            return 0
+
+    class Containment:
+        creation_kwargs = {"start_new_session": True}
+
+        def attach_and_start(self, process):
+            pass
+
+        def ensure_tree_exited(self, process, grace_seconds):
+            pass
+
+        def terminate(self, process, grace_seconds):
+            pass
+
+        def close(self):
+            pass
+
+    spawned = []
+    monkeypatch.setattr(
+        "botpipe.native_tools.ProcessContainment.create", lambda: Containment()
+    )
+    monkeypatch.setattr(
+        "botpipe.native_tools.subprocess.Popen",
+        lambda command, **kwargs: spawned.append((command, kwargs)) or Process(),
+    )
+
+    with ReadOnlyTools((root,), max_output_bytes=4) as tools:
+        with pytest.raises(CapabilityError, match="output exceeded"):
+            tools.count_lines("lines.txt")
+        assert tools.observations == []
+    assert spawned[0][1]["stdin"] is subprocess.PIPE
+    assert spawned[0][1]["cwd"] == "/"
+    assert spawned[0][1]["env"] == {
+        "PATH": "/usr/bin:/bin",
+        "LANG": "C.UTF-8",
+        "LC_ALL": "C.UTF-8",
+    }
 
 
 def test_private_and_configured_exclusions_apply_to_read_list_and_search(tmp_path):
@@ -51,7 +190,11 @@ def test_private_and_configured_exclusions_apply_to_read_list_and_search(tmp_pat
         with pytest.raises(CapabilityError):
             tools.read(".git/secret.txt")
         with pytest.raises(CapabilityError):
+            tools.count_lines(".git/secret.txt")
+        with pytest.raises(CapabilityError):
             tools.read("excluded/secret.txt")
+        with pytest.raises(CapabilityError):
+            tools.count_lines("excluded/secret.txt")
 
 
 def test_read_is_bounded_and_labels_digest_as_captured_prefix(tmp_path):
@@ -135,6 +278,46 @@ def test_native_read_root_is_fenced_before_its_descriptor_is_opened(tmp_path):
     with pytest.raises(RunBusy, match="unresolved"):
         ReadOnlyTools((root,), read_fence=fence)
     assert checked == [root]
+
+
+def test_read_root_replacement_during_fence_acquisition_fails_closed(tmp_path):
+    root = tmp_path / "workspace"
+    moved = tmp_path / "moved-workspace"
+    root.mkdir()
+    (root / "original.txt").write_text("original")
+
+    @contextmanager
+    def replacing_fence(directory):
+        assert Path(directory) == root
+        root.rename(moved)
+        root.mkdir()
+        (root / "replacement.txt").write_text("replacement")
+        yield
+
+    with pytest.raises(CapabilityError, match="changed while"):
+        ReadOnlyTools((root,), read_fence=replacing_fence)
+
+
+def test_cached_nested_fence_rejects_replaced_directory_identity(tmp_path):
+    root = tmp_path / "root"
+    child = root / "child"
+    moved = root / "old-child"
+    child.mkdir(parents=True)
+    (child / "original.txt").write_text("original")
+
+    @contextmanager
+    def fence(_directory):
+        yield
+
+    with ReadOnlyTools((root,), read_fence=fence) as tools:
+        assert tools.read("child/original.txt").output == "original"
+        child.rename(moved)
+        child.mkdir()
+        (child / "replacement.txt").write_text("replacement")
+
+        with pytest.raises(CapabilityError, match="changed after"):
+            tools.read("child/replacement.txt")
+        assert len(tools.observations) == 1
 
 
 def _exact_tool(tmp_path, monkeypatch):

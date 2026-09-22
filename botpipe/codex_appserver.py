@@ -25,12 +25,17 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Protocol
 
-from .native_tools import ExactCommandTools, ReadOnlyTools, ToolObservation
+from .native_tools import (
+    ExactCommandTools,
+    ReadOnlyTools,
+    ToolObservation,
+    command_scope_is_workspace_wide,
+)
 from .policy import OperationKind
 from .providers import (
     CapabilityError,
+    CODEX_APPSERVER_CAPABILITIES,
     CodexProvider,
-    ProviderCapabilities,
     ProviderError,
     ProviderInterruptedError,
     ProviderRequest,
@@ -52,28 +57,6 @@ PINNED_CODEX_TAG = "rust-v0.131.0"
 PINNED_CODEX_COMMIT = "05eb8678451435cbc8d79c6d8254276289f2bdf1"
 TOOL_CALL_LIMIT = 16
 TOOL_OUTPUT_BYTES = 32_000
-
-CODEX_APPSERVER_CAPABILITIES = ProviderCapabilities(
-    version=f"codex-app-server-{PINNED_CODEX_VERSION}",
-    operations=frozenset(
-        {OperationKind.GENERATE, OperationKind.QUERY, OperationKind.RUN}
-    ),
-    sessions=True,
-    structured_output=True,
-    multiple_artifacts=True,
-    recovery=True,
-    cancellation=False,
-    exact_command_grants=True,
-    autonomous_read_only_query=True,
-    live_streaming=True,
-    limitations=(
-        "generate requires at least one exact command grant because the pinned native "
-        "inventory cannot implement strict tool-free generation",
-        "query and exact generation require the pinned app-server and isolated config",
-        "run delegates to the separately validated Codex CLI profile",
-        "native credentials and pinned integration receipts are deployment gates",
-    ),
-)
 
 # This list is derived from codex-rs/core/src/tools/spec_plan.rs and
 # codex-rs/tools/src/tool_config.rs at PINNED_CODEX_COMMIT.  Empty environments
@@ -259,6 +242,9 @@ class _JsonlProcess:
         *,
         cwd: Path,
         env: Mapping[str, str],
+        max_message_bytes: int,
+        max_messages: int,
+        max_stderr_bytes: int = 65_536,
     ) -> None:
         self.process = subprocess.Popen(
             tuple(command),
@@ -267,90 +253,140 @@ class _JsonlProcess:
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            bufsize=1,
+            text=False,
+            bufsize=0,
             start_new_session=os.name != "nt",
         )
-        self.messages: queue.Queue[Mapping[str, Any] | BaseException | None] = queue.Queue()
-        self.stderr: list[str] = []
+        self.max_message_bytes = max_message_bytes
+        self.messages: queue.Queue[Mapping[str, Any] | BaseException | None] = (
+            queue.Queue(maxsize=max(1, min(max_messages, 64)))
+        )
+        self.max_stderr_bytes = max_stderr_bytes
+        self.stderr = bytearray()
+        self.stderr_lock = threading.Lock()
         self.write_lock = threading.Lock()
+        self.close_lock = threading.Lock()
+        self.stopping = threading.Event()
         threading.Thread(target=self._read_stdout, daemon=True).start()
         threading.Thread(target=self._read_stderr, daemon=True).start()
+
+    def _enqueue(self, message: Mapping[str, Any] | BaseException | None) -> None:
+        while not self.stopping.is_set():
+            try:
+                self.messages.put(message, timeout=0.1)
+                return
+            except queue.Full:
+                continue
 
     def _read_stdout(self) -> None:
         assert self.process.stdout is not None
         try:
-            for line in self.process.stdout:
+            while True:
+                line = self.process.stdout.readline(self.max_message_bytes + 1)
+                if not line:
+                    break
+                if len(line) > self.max_message_bytes:
+                    raise CodexAppServerProtocolError(
+                        "app-server JSONL line exceeds protocol byte limit"
+                    )
                 if not line.strip():
                     continue
-                value = json.loads(line)
+                try:
+                    decoded = line.decode("utf-8", errors="strict")
+                except UnicodeDecodeError as exc:
+                    raise CodexAppServerProtocolError(
+                        "app-server JSONL was not valid UTF-8"
+                    ) from exc
+                value = json.loads(decoded)
                 if not isinstance(value, Mapping):
                     raise CodexAppServerProtocolError(
                         "app-server JSONL messages must be objects"
                     )
-                self.messages.put(dict(value))
+                self._enqueue(dict(value))
         except BaseException as exc:
-            self.messages.put(exc)
+            self._enqueue(exc)
         finally:
-            self.messages.put(None)
+            self._enqueue(None)
 
     def _read_stderr(self) -> None:
         assert self.process.stderr is not None
-        for line in self.process.stderr:
-            self.stderr.append(line.rstrip())
-            if len(self.stderr) > 100:
-                del self.stderr[: len(self.stderr) - 100]
+        while not self.stopping.is_set():
+            chunk = self.process.stderr.read(4096)
+            if not chunk:
+                return
+            with self.stderr_lock:
+                self.stderr.extend(chunk)
+                excess = len(self.stderr) - self.max_stderr_bytes
+                if excess > 0:
+                    del self.stderr[:excess]
+
+    def _stderr_text(self) -> str:
+        with self.stderr_lock:
+            captured = bytes(self.stderr)
+        return captured.decode("utf-8", errors="replace").strip()
 
     def send(self, message: Mapping[str, Any]) -> None:
         assert self.process.stdin is not None
-        encoded = json.dumps(message, separators=(",", ":"), allow_nan=False)
+        encoded = json.dumps(
+            message, separators=(",", ":"), allow_nan=False
+        ).encode("utf-8")
         with self.write_lock:
-            self.process.stdin.write(encoded + "\n")
+            self.process.stdin.write(encoded + b"\n")
             self.process.stdin.flush()
 
     def receive(self, deadline: float) -> Mapping[str, Any]:
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             raise TimeoutError("Codex app-server deadline expired")
-        try:
-            message = self.messages.get(timeout=remaining)
-        except queue.Empty as exc:
-            raise TimeoutError("Codex app-server deadline expired") from exc
+        while True:
+            try:
+                message = self.messages.get(timeout=min(remaining, 0.1))
+                break
+            except queue.Empty as exc:
+                if self.process.poll() is not None or self.stopping.is_set():
+                    detail = self._stderr_text()
+                    raise CodexAppServerProtocolError(
+                        "app-server closed before terminal result"
+                        + (f": {detail}" if detail else "")
+                    ) from exc
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError("Codex app-server deadline expired") from exc
         if isinstance(message, BaseException):
             raise CodexAppServerProtocolError(
                 f"invalid app-server JSONL: {message}"
             ) from message
         if message is None:
-            detail = "\n".join(self.stderr[-20:])
+            detail = self._stderr_text()
             raise CodexAppServerProtocolError(
                 f"app-server closed before terminal result{': ' + detail if detail else ''}"
             )
         return message
 
     def close(self) -> None:
-        if self.process.poll() is None:
-            try:
-                if os.name != "nt":
-                    os.killpg(self.process.pid, signal.SIGTERM)
-                else:
-                    self.process.terminate()
-                self.process.wait(timeout=2)
-            except (OSError, subprocess.TimeoutExpired):
+        with self.close_lock:
+            self.stopping.set()
+            if self.process.poll() is None:
                 try:
                     if os.name != "nt":
-                        os.killpg(self.process.pid, signal.SIGKILL)
+                        os.killpg(self.process.pid, signal.SIGTERM)
                     else:
-                        self.process.kill()
-                except OSError:
-                    pass
-        for stream in (self.process.stdin, self.process.stdout, self.process.stderr):
-            if stream is not None:
-                try:
-                    stream.close()
-                except OSError:
-                    pass
+                        self.process.terminate()
+                    self.process.wait(timeout=2)
+                except (OSError, subprocess.TimeoutExpired):
+                    try:
+                        if os.name != "nt":
+                            os.killpg(self.process.pid, signal.SIGKILL)
+                        else:
+                            self.process.kill()
+                    except OSError:
+                        pass
+            for stream in (self.process.stdin, self.process.stdout, self.process.stderr):
+                if stream is not None:
+                    try:
+                        stream.close()
+                    except OSError:
+                        pass
 
 
 class CodexAppServerBridge:
@@ -365,6 +401,7 @@ class CodexAppServerBridge:
         env: Mapping[str, str] | None = None,
         version_probe: Callable[[], str] | None = None,
         max_event_bytes: int = 1_000_000,
+        max_total_event_bytes: int = 8_000_000,
         max_events: int = 10_000,
     ) -> None:
         if (
@@ -374,7 +411,7 @@ class CodexAppServerBridge:
             or isinstance(version_command, (str, bytes))
         ):
             raise ValueError("Codex commands must be non-empty argv sequences")
-        if max_event_bytes < 1 or max_events < 1:
+        if max_event_bytes < 1 or max_total_event_bytes < 1 or max_events < 1:
             raise ValueError("Codex evidence limits must be positive")
         self.command = tuple(command)
         self.version_command = tuple(version_command)
@@ -382,7 +419,35 @@ class CodexAppServerBridge:
         self.env = dict(env or {})
         self.version_probe = version_probe
         self.max_event_bytes = max_event_bytes
+        self.max_total_event_bytes = max_total_event_bytes
         self.max_events = max_events
+        self._active_lock = threading.Lock()
+        self._active: dict[str, _Conversation] = {}
+
+    def preflight(self, workspace: Path) -> None:
+        """Validate all locally knowable constraints before budget dispatch."""
+        self.verify_installation()
+        self._verify_project_config(Path(workspace).resolve(strict=True))
+
+    def interrupt(self, owner_id: str, *, timeout: float = 2.0) -> str | None:
+        """Attempt native interruption for an active turn, then contain it."""
+        with self._active_lock:
+            state = self._active.get(owner_id)
+        if state is None:
+            return None
+        requested = False
+        if state.thread_id is not None and state.turn_id is not None:
+            try:
+                state.send_rpc_no_wait(
+                    "turn/interrupt",
+                    {"threadId": state.thread_id, "turnId": state.turn_id},
+                )
+                requested = True
+            except (OSError, ValueError):
+                pass
+            state.terminal_event.wait(max(0.0, float(timeout)))
+        state.process.close()
+        return "turn-interrupt" if requested else "contained"
 
     def verify_installation(self) -> None:
         """Fail before app-server dispatch on version or config-surface drift."""
@@ -441,6 +506,7 @@ class CodexAppServerBridge:
         evidence: EvidenceRecorder | None = None,
         envelopes: Any = (),
         registry_fingerprint: str | None = None,
+        owner_id: str | None = None,
     ) -> CodexAppServerResult:
         """Run one constrained turn, servicing only registered dynamic tools.
 
@@ -451,9 +517,10 @@ class CodexAppServerBridge:
         self._validate_execute(
             prompt, workspace, tools, mediator, timeout, output_schema, session
         )
-        self.verify_installation()
+        if owner_id is not None and not owner_id:
+            raise ValueError("owner_id must be non-empty when provided")
         root = Path(workspace).resolve(strict=True)
-        self._verify_project_config(root)
+        self.preflight(root)
         fingerprint = registry_fingerprint or tool_fingerprint(tools)
         if not re.fullmatch(r"[0-9a-f]{64}", fingerprint):
             raise ValueError("registry fingerprint must be a lowercase SHA-256 digest")
@@ -473,7 +540,13 @@ class CodexAppServerBridge:
             "RUST_LOG": "error",
             "LOG_FORMAT": "json",
         }
-        process = _JsonlProcess(self.command, cwd=root, env=environment)
+        process = _JsonlProcess(
+            self.command,
+            cwd=root,
+            env=environment,
+            max_message_bytes=self.max_event_bytes,
+            max_messages=self.max_events,
+        )
         deadline = time.monotonic() + float(timeout)
         state = _Conversation(
             process=process,
@@ -482,9 +555,18 @@ class CodexAppServerBridge:
             mediator=mediator,
             event_sink=event_sink,
             max_event_bytes=self.max_event_bytes,
+            max_total_event_bytes=self.max_total_event_bytes,
             max_events=self.max_events,
             evidence=evidence,
         )
+        if owner_id is not None:
+            with self._active_lock:
+                if owner_id in self._active:
+                    process.close()
+                    raise CodexAppServerCapabilityError(
+                        f"Codex app-server owner {owner_id!r} is already active"
+                    )
+                self._active[owner_id] = state
         try:
             state.rpc(
                 "initialize",
@@ -578,6 +660,11 @@ class CodexAppServerBridge:
                     pass
             raise
         finally:
+            state.terminal_event.set()
+            if owner_id is not None:
+                with self._active_lock:
+                    if self._active.get(owner_id) is state:
+                        del self._active[owner_id]
             process.close()
 
     def _validate_execute(
@@ -672,6 +759,7 @@ class _Conversation:
     mediator: Mediator
     event_sink: EventSink | None
     max_event_bytes: int
+    max_total_event_bytes: int
     max_events: int
     evidence: EvidenceRecorder | None = None
     next_id: int = 1
@@ -682,12 +770,20 @@ class _Conversation:
     usage: dict[str, Any] = field(default_factory=dict)
     rejected_request: str | None = None
     seen_call_ids: set[str] = field(default_factory=set)
+    id_lock: threading.Lock = field(default_factory=threading.Lock)
+    terminal_event: threading.Event = field(default_factory=threading.Event)
+    retained_event_bytes: int = 0
+
+    def _next_request_id(self) -> int:
+        with self.id_lock:
+            request_id = self.next_id
+            self.next_id += 1
+        return request_id
 
     def rpc(
         self, method: str, params: Mapping[str, Any] | None
     ) -> Mapping[str, Any]:
-        request_id = self.next_id
-        self.next_id += 1
+        request_id = self._next_request_id()
         request: dict[str, Any] = {"method": method, "id": request_id}
         if params is not None:
             request["params"] = dict(params)
@@ -708,18 +804,22 @@ class _Conversation:
             self.handle(message)
 
     def send_rpc_no_wait(self, method: str, params: Mapping[str, Any]) -> None:
-        request_id = self.next_id
-        self.next_id += 1
+        request_id = self._next_request_id()
         self.process.send({"method": method, "id": request_id, "params": dict(params)})
 
     def handle(self, message: Mapping[str, Any]) -> None:
         encoded = json.dumps(message, allow_nan=False, separators=(",", ":")).encode()
         if len(encoded) > self.max_event_bytes:
             raise CodexAppServerProtocolError("app-server event exceeds evidence limit")
+        if self.retained_event_bytes + len(encoded) > self.max_total_event_bytes:
+            raise CodexAppServerProtocolError(
+                "app-server cumulative event evidence exceeds byte limit"
+            )
         if len(self.events) >= self.max_events:
             raise CodexAppServerProtocolError("app-server event count exceeds evidence limit")
         event = dict(message)
         self.events.append(event)
+        self.retained_event_bytes += len(encoded)
         if self.event_sink is not None:
             self.event_sink(MappingProxyType(event))
         method = message.get("method")
@@ -746,6 +846,10 @@ class _Conversation:
             token_usage = params.get("tokenUsage")
             if isinstance(token_usage, Mapping):
                 self.usage = _plain_json(token_usage, label="token usage")
+        elif method == "turn/completed":
+            turn = params.get("turn")
+            if isinstance(turn, Mapping) and turn.get("id") == self.turn_id:
+                self.terminal_event.set()
 
     def _reject_effectful_item(self, item_type: Any) -> None:
         allowed = {
@@ -952,18 +1056,38 @@ class CodexAppServerProvider(_CLIProvider):
                 "pinned Codex app-server cannot enforce strict tool-free generate; "
                 "provide an exact command grant or select another provider"
             )
+        if request.operation is OperationKind.GENERATE:
+            policy = request.policy.effective()
+            if not command_scope_is_workspace_wide(
+                request.workspace, policy.allow_read, policy.deny_read
+            ):
+                raise CapabilityError(
+                    "Codex exact-command generation requires one workspace-wide "
+                    "read root and no deny_read entries"
+                )
         # Version and ambient home checks occur before any receipt or native
         # planning process. Effective config layers are audited by the protocol
         # bridge before thread/start.
-        self.bridge.verify_installation()
+        self.bridge.preflight(request.workspace)
 
     def cancel(self, operation_id: str) -> RecoveryOutcome:
+        attempted = self.bridge.interrupt(operation_id, timeout=2.0)
+        if attempted is not None:
+            detail = (
+                "native turn/interrupt was requested and the owned process was bounded"
+                if attempted == "turn-interrupt"
+                else "the owned pre-turn app-server process was bounded"
+            )
+            return Unknown(
+                f"Codex app-server attempt {operation_id!r}: {detail}; terminal "
+                "quiescence was not independently acknowledged"
+            )
         delegated = self._run_adapter.cancel(operation_id)
         if not isinstance(delegated, Unknown):
             return delegated
         return Unknown(
-            f"Codex app-server attempt {operation_id!r} has no independently "
-            "acknowledged process-tree quiescence"
+            f"Codex app-server attempt {operation_id!r}: no owned active app-server "
+            "process was found; terminal quiescence was not independently acknowledged"
         )
 
     def run(self, request: ProviderRequest) -> ProviderResponse:
@@ -997,6 +1121,7 @@ class CodexAppServerProvider(_CLIProvider):
                 read_exclusions=exclusions,
             )
             session = self._load_session(request, fingerprint)
+            evidence.prepare(envelopes)
         except BaseException:
             for cleanup in cleanups:
                 cleanup()
@@ -1045,6 +1170,7 @@ class CodexAppServerProvider(_CLIProvider):
                 evidence=evidence,
                 envelopes=envelopes,
                 registry_fingerprint=fingerprint,
+                owner_id=request.operation_id,
             )
             usage = self._usage(result.usage)
             response = ProviderResponse(
@@ -1115,24 +1241,16 @@ class CodexAppServerProvider(_CLIProvider):
             for path in map(Path, policy.deny_read or ())
         )
         reads: ReadOnlyTools | None = None
-        commands: ExactCommandTools
         if request.operation is OperationKind.QUERY:
             reads = ReadOnlyTools(
                 roots,
                 exclusions=exclusions,
                 max_output_bytes=TOOL_OUTPUT_BYTES,
+                read_fence=request.read_fence,
             )
             cleanups.append(reads.close)
-            try:
-                commands = ExactCommandTools(
-                    request.workspace,
-                    (("git", "status", "--short"),),
-                    max_output_bytes=TOOL_OUTPUT_BYTES,
-                )
-            except BaseException:
-                reads.close()
-                cleanups.clear()
-                raise
+            commands = None
+            envelopes = reads.command_envelopes
             tools = self._query_tools()
         else:
             commands = ExactCommandTools(
@@ -1158,7 +1276,8 @@ class CodexAppServerProvider(_CLIProvider):
                     namespace="botpipe",
                 )
             ]
-        cleanups.append(commands.close)
+            envelopes = commands.envelopes
+            cleanups.append(commands.close)
 
         def mediate(name: str, arguments: Mapping[str, Any]) -> ToolObservation:
             if len(observations) >= TOOL_CALL_LIMIT:
@@ -1179,19 +1298,19 @@ class CodexAppServerProvider(_CLIProvider):
                 observation = reads.search(
                     arguments.get("query"), arguments.get("path", ".")
                 )
-            elif name == "git_status" and reads is not None:
-                self._exact_keys(arguments, set())
-                observation = commands.execute("grant_1")
+            elif name == "count_lines" and reads is not None:
+                self._exact_keys(arguments, {"path"})
+                observation = reads.count_lines(arguments.get("path"))
             else:
                 raise CapabilityError(f"Codex requested unavailable tool {name!r}")
             observations.append(observation)
             return observation
 
-        return tools, mediate, commands.envelopes, roots, exclusions
+        return tools, mediate, envelopes, roots, exclusions
 
     @staticmethod
     def _query_tools() -> list[DynamicTool]:
-        return [
+        tools = [
             DynamicTool(
                 "read",
                 "Read an authorized non-private file.",
@@ -1227,13 +1346,21 @@ class CodexAppServerProvider(_CLIProvider):
                 },
                 namespace="botpipe",
             ),
-            DynamicTool(
-                "git_status",
-                "Inspect the workspace using the fixed read-only git status recipe.",
-                {"type": "object", "properties": {}, "additionalProperties": False},
-                namespace="botpipe",
-            ),
         ]
+        tools.append(
+            DynamicTool(
+                "count_lines",
+                "Count lines in one authorized file using a fixed native command.",
+                {
+                    "type": "object",
+                    "properties": {"path": {"type": "string"}},
+                    "required": ["path"],
+                    "additionalProperties": False,
+                },
+                namespace="botpipe",
+            )
+        )
+        return tools
 
     @staticmethod
     def _exact_keys(value: Mapping[str, Any], allowed: set[str]) -> None:
