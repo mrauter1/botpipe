@@ -536,9 +536,11 @@ class _JsonlProcess:
             try:
                 # The leader may already have exited after reporting a terminal
                 # turn.  Containment still has to prove that its descendants
-                # cannot outlive the successful response.
+                # cannot outlive the successful response.  Allow the same
+                # bounded kernel teardown interval used by other core callers;
+                # Windows Job accounting can lag termination by over 100 ms.
                 self.containment.finish(
-                    self.process, grace_seconds=0.1, forced=True
+                    self.process, grace_seconds=1.0, forced=True
                 )
             except BaseException as exc:
                 cleanup_error = exc

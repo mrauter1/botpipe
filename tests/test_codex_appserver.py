@@ -428,7 +428,7 @@ def test_uncertain_process_tree_cleanup_prevents_successful_result(
             return subprocess.Popen(argv, **kwargs)
 
         def finish(self, _process, *, grace_seconds, forced):
-            assert grace_seconds == 0.1
+            assert grace_seconds == 1.0
             assert forced is True
             raise RuntimeError("tree cleanup uncertain")
 

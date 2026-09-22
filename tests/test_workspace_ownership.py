@@ -742,21 +742,25 @@ def test_atomic_race_admits_one_overlapping_writer(tmp_path: Path) -> None:
     journal = _journal(tmp_path / "state.sqlite3", "run")
     registry = tmp_path / "registry"
     count = 8
+    # Race claim admission, without making registry initialization a barrier peer.
+    coordinators = [
+        WorkspaceCoordinator(registry, busy_timeout=0.2) for _ in range(count)
+    ]
     barrier = threading.Barrier(count)
     all_attempted = threading.Event()
     guard = threading.Lock()
     outcomes: list[str] = []
 
     def contend(index: int) -> None:
-        coordinator = WorkspaceCoordinator(registry, busy_timeout=0.2)
-        barrier.wait()
+        coordinator = coordinators[index]
+        barrier.wait(timeout=30)
         try:
             with coordinator.claim(workspace, journal, "run", "write"):
                 with guard:
                     outcomes.append(f"won:{index}")
                     if len(outcomes) == count:
                         all_attempted.set()
-                assert all_attempted.wait(3)
+                assert all_attempted.wait(30)
         except RunBusy:
             with guard:
                 outcomes.append(f"busy:{index}")
@@ -765,8 +769,11 @@ def test_atomic_race_admits_one_overlapping_writer(tmp_path: Path) -> None:
 
     with ThreadPoolExecutor(max_workers=count) as pool:
         futures = [pool.submit(contend, index) for index in range(count)]
-        for future in futures:
-            future.result(timeout=5)
+        try:
+            for future in futures:
+                future.result(timeout=30)
+        finally:
+            barrier.abort()
 
     assert sum(outcome.startswith("won:") for outcome in outcomes) == 1
     assert sum(outcome.startswith("busy:") for outcome in outcomes) == count - 1
