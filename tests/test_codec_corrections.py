@@ -5,6 +5,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone, tzinfo
+from pathlib import Path
 from typing import Annotated
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -13,6 +14,26 @@ from pydantic import BaseModel, TypeAdapter
 from pydantic_core import core_schema
 
 from botpipe import codec
+
+
+def test_public_concrete_path_type_uses_the_stable_path_wire_format(tmp_path):
+    value = Path(tmp_path, "report.json")
+
+    encoded = codec.encode(value)
+
+    assert encoded == {"$botpipe": "path", "value": str(value)}
+    assert codec.decode(encoded) == value
+
+
+def test_stateful_concrete_path_subclass_is_not_durable():
+    class StatefulPath(type(Path())):
+        pass
+
+    value = StatefulPath("report.json")
+    value.cache = {"mutable": True}
+
+    with pytest.raises(TypeError, match="unsupported durable value StatefulPath"):
+        codec.encode(value)
 
 
 class CoreSchemaRedacted(str):

@@ -176,6 +176,96 @@ class ProviderRequest:
             raise ValueError("timeout must be greater than zero")
 
 
+def provider_request_snapshot(
+    request: ProviderRequest, *, provider: str
+) -> dict[str, Any]:
+    """Return the durable, effect-defining part of a provider request.
+
+    Runtime callbacks and execution ceilings are deliberately excluded. A
+    resumed recovery call gets the request that defined the original effect,
+    while a genuinely new dispatch receives current ceilings before its own
+    snapshot is committed.
+    """
+
+    if type(provider) is not str or not provider:
+        raise ValueError("provider name must be a non-empty string")
+    record = {
+        "session_id": request.session_id,
+        "operation": request.operation.value,
+        "provider": provider,
+        "instructions": request.instructions,
+        "settings": dict(request.settings),
+        "allow_commands": [list(argv) for argv in request.allow_commands],
+        "policy": request.policy.to_dict(),
+        "receipt_dir": str(request.receipt_dir),
+        "prompt": request.prompt,
+        "artifacts": {
+            name: str(path) for name, path in request.artifacts.items()
+        },
+        "reads": [str(path) for path in request.reads],
+    }
+    try:
+        return json.loads(json.dumps(record, allow_nan=False))
+    except (TypeError, ValueError, RecursionError) as exc:
+        raise TypeError("provider request snapshot must be finite JSON") from exc
+
+
+def provider_request_from_snapshot(
+    snapshot: Mapping[str, Any],
+    *,
+    operation_id: str,
+    workspace: Path,
+    output_schema: dict[str, Any] | None,
+    timeout: float,
+    attempt: int,
+    provider: str | None = None,
+    read_fence: Callable[[Path], Any] | None = None,
+) -> ProviderRequest:
+    """Hydrate one request without consulting mutable provider configuration."""
+
+    required = {
+        "session_id",
+        "operation",
+        "provider",
+        "instructions",
+        "settings",
+        "allow_commands",
+        "policy",
+        "receipt_dir",
+        "prompt",
+        "artifacts",
+        "reads",
+    }
+    missing = required - set(snapshot)
+    if missing:
+        raise ValueError(
+            "provider request snapshot is incomplete: "
+            + ", ".join(sorted(missing))
+        )
+    if provider is not None and snapshot["provider"] != provider:
+        raise ValueError("provider request snapshot backend changed")
+    return ProviderRequest(
+        operation_id=operation_id,
+        prompt=snapshot["prompt"],
+        workspace=workspace,
+        session_id=snapshot["session_id"],
+        output_schema=output_schema,
+        policy=Policy.from_dict(snapshot["policy"]),
+        artifacts={
+            name: Path(path) for name, path in snapshot["artifacts"].items()
+        },
+        receipt_dir=Path(snapshot["receipt_dir"]),
+        timeout=timeout,
+        attempt=attempt,
+        reads=tuple(Path(path) for path in snapshot["reads"]),
+        operation=snapshot["operation"],
+        instructions=snapshot["instructions"],
+        settings=snapshot["settings"],
+        allow_commands=tuple(tuple(argv) for argv in snapshot["allow_commands"]),
+        read_fence=read_fence,
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class ProviderResponse:
     text: str
@@ -2027,6 +2117,8 @@ __all__ = [
     "ProviderInterruptedError",
     "ProviderPolicyError",
     "ProviderRequest",
+    "provider_request_from_snapshot",
+    "provider_request_snapshot",
     "ProviderResponse",
     "ProviderTimeoutError",
     "OperationKind",

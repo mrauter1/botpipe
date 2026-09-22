@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
+import botpipe.native_tools as native_tools
 from botpipe.native_tools import (
     ExactCommandTools,
     ReadOnlyTools,
@@ -321,6 +322,7 @@ def test_cached_nested_fence_rejects_replaced_directory_identity(tmp_path):
 
 
 def _exact_tool(tmp_path, monkeypatch):
+    _trust_fake_system_tools(monkeypatch)
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     bwrap = tmp_path / "bwrap"
@@ -341,7 +343,38 @@ def _exact_tool(tmp_path, monkeypatch):
     return ExactCommandTools(workspace, (("git", "status", "--short"),)), bwrap, git
 
 
+def _trust_fake_system_tools(monkeypatch):
+    """Keep real file identities while supplying fixture-controlled trust metadata."""
+    path_identity = native_tools._path_identity
+
+    def fixture_identity(path, *, trusted=False):
+        return path_identity(path, trusted=False)
+
+    monkeypatch.setattr(native_tools, "_path_identity", fixture_identity)
+
+
+def test_trusted_executable_rejects_non_root_ownership(tmp_path, monkeypatch):
+    executable = tmp_path / "bwrap"
+    executable.write_bytes(b"bwrap")
+    executable.chmod(0o755)
+    real_stat = Path.stat
+
+    def non_root_stat(path, *args, **kwargs):
+        info = real_stat(path, *args, **kwargs)
+        if path == executable:
+            values = list(info)
+            values[4] = 12345
+            return os.stat_result(values)
+        return info
+
+    monkeypatch.setattr(Path, "stat", non_root_stat)
+
+    with pytest.raises(CapabilityError, match="sandbox executable is not root-owned"):
+        native_tools._path_identity(executable, trusted=True)
+
+
 def test_bwrap_probe_and_command_order_support_tmp_workspace(tmp_path, monkeypatch):
+    _trust_fake_system_tools(monkeypatch)
     probes = []
 
     def run(command, **kwargs):
@@ -391,6 +424,7 @@ def test_unknown_grant_and_identity_change_fail_before_spawn(tmp_path, monkeypat
 def test_repository_attributes_and_external_gitdir_are_rejected_predispatch(
     tmp_path, monkeypatch
 ):
+    _trust_fake_system_tools(monkeypatch)
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     (workspace / ".gitattributes").write_text("*.txt filter=external\n")

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import signal
 import sys
 import threading
 import time
@@ -80,7 +82,7 @@ assert request['method'] == 'configRequirements/read'
 send({{'id': request['id'], 'result': {{'requirements': None}}}})
 request = receive()
 assert request['method'] == {'thread/resume' if resume else 'thread/start'!r}
-send({{'id': request['id'], 'result': {{'thread': {{'id': 'thread-1'}}}}}})
+send({{'id': request['id'], 'result': {{'thread': {{'id': 'thread-1'}}, 'model': 'gpt-test', 'reasoningEffort': 'medium'}}}})
 request = receive()
 assert request['method'] == 'turn/start'
 send({{'id': request['id'], 'result': {{'turn': {{'id': 'turn-1', 'status': 'inProgress', 'items': []}}}}}})
@@ -181,15 +183,255 @@ def test_bridge_closes_effectful_inventory_and_services_dynamic_tool(
     assert params["config"]["features.plugins"] is False
     assert params["config"]["web_search"] == "disabled"
     assert params["dynamicTools"] == [tool().to_wire()]
+    assert "developerInstructions" not in params
+    assert "baseInstructions" not in params
     assert messages[5]["method"] == "turn/start"
     assert messages[5]["params"]["environments"] == []
     assert messages[5]["params"]["sandboxPolicy"] == {
         "type": "readOnly",
         "networkAccess": False,
     }
+    collaboration = messages[5]["params"]["collaborationMode"]
+    assert collaboration["mode"] == "default"
+    assert collaboration["settings"]["model"] == "gpt-test"
+    assert collaboration["settings"]["reasoning_effort"] == "medium"
+    assert collaboration["settings"]["developer_instructions"].endswith(
+        "Use only the mediated evidence."
+    )
     assert messages[6]["result"]["success"] is True
     evidence = json.loads(messages[6]["result"]["contentItems"][0]["text"])
     assert evidence == {"path": "README.md", "text": "bounded evidence"}
+
+
+def test_role_instructions_replace_and_clear_on_same_native_thread(
+    tmp_path: Path,
+) -> None:
+    native = bridge(tmp_path, stub(tmp_path))
+
+    first = native.execute(
+        prompt="first",
+        workspace=tmp_path,
+        tools=[tool()],
+        mediator=lambda _name, _args: "ok",
+        timeout=5,
+        instructions="role A",
+    )
+    native.command = stub(tmp_path, resume=True)
+    native.execute(
+        prompt="second",
+        workspace=tmp_path,
+        tools=[tool()],
+        mediator=lambda _name, _args: "ok",
+        timeout=5,
+        instructions="role A",
+        session=first.session,
+    )
+    native.execute(
+        prompt="third",
+        workspace=tmp_path,
+        tools=[tool()],
+        mediator=lambda _name, _args: "ok",
+        timeout=5,
+        instructions="role B",
+        session=first.session,
+    )
+    native.execute(
+        prompt="fourth",
+        workspace=tmp_path,
+        tools=[tool()],
+        mediator=lambda _name, _args: "ok",
+        timeout=5,
+        instructions=None,
+        session=first.session,
+    )
+    native.execute(
+        prompt="fifth",
+        workspace=tmp_path,
+        tools=[tool()],
+        mediator=lambda _name, _args: "ok",
+        timeout=5,
+        instructions="",
+        session=first.session,
+    )
+
+    messages = read_transcript(tmp_path)
+    thread_requests = [
+        message
+        for message in messages
+        if message.get("method") in {"thread/start", "thread/resume"}
+    ]
+    assert all(
+        "developerInstructions" not in request["params"]
+        and "baseInstructions" not in request["params"]
+        for request in thread_requests
+    )
+    turn_requests = [
+        message for message in messages if message.get("method") == "turn/start"
+    ]
+    collaborations = [
+        request["params"]["collaborationMode"] for request in turn_requests
+    ]
+    assert all(item["mode"] == "default" for item in collaborations)
+    assert all(item["settings"]["model"] == "gpt-test" for item in collaborations)
+    assert all(
+        item["settings"]["reasoning_effort"] == "medium"
+        for item in collaborations
+    )
+    role_updates = [
+        item["settings"]["developer_instructions"] for item in collaborations
+    ]
+    assert role_updates[0].endswith("role A")
+    assert collaborations[0] == collaborations[1]
+    assert role_updates[2].endswith("role B")
+    assert role_updates[0].split("\n\n", 1)[0] == role_updates[2].split("\n\n", 1)[0]
+    assert role_updates[3] == role_updates[4]
+    assert "No additional Botpipe role instructions apply" in role_updates[3]
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX process groups")
+def test_completed_app_server_turn_cannot_leave_stubborn_descendant(
+    tmp_path: Path,
+) -> None:
+    child_pid = tmp_path / "child.pid"
+    child_ready = tmp_path / "child.ready"
+    escaped = tmp_path / "escaped"
+    child = tmp_path / "child.py"
+    child.write_text(
+        "import signal,sys,time\n"
+        "from pathlib import Path\n"
+        "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+        "Path(sys.argv[1]).write_text('ready')\n"
+        "time.sleep(1)\n"
+        "Path(sys.argv[2]).write_text('escaped')\n"
+        "while True: time.sleep(.1)\n",
+        encoding="utf-8",
+    )
+    server = tmp_path / "tree_server.py"
+    server.write_text(
+        "import json,subprocess,sys,time\n"
+        "from pathlib import Path\n"
+        "child=subprocess.Popen([sys.executable,sys.argv[1],sys.argv[2],sys.argv[3]])\n"
+        "Path(sys.argv[4]).write_text(str(child.pid))\n"
+        "while not Path(sys.argv[2]).exists(): time.sleep(.01)\n"
+        "def receive(): return json.loads(sys.stdin.readline())\n"
+        "def send(value): print(json.dumps(value),flush=True)\n"
+        "request=receive();send({'id':request['id'],'result':{'userAgent':'stub'}});receive()\n"
+        "for method,result in [('config/read',{'config':{},'layers':[]}),('configRequirements/read',{'requirements':None}),('thread/start',{'thread':{'id':'thread-1'},'model':'gpt-test','reasoningEffort':'medium'}),('turn/start',{'turn':{'id':'turn-1'}})]:\n"
+        " request=receive();assert request['method']==method;send({'id':request['id'],'result':result})\n"
+        "send({'method':'item/completed','params':{'item':{'type':'agentMessage','text':'ok'}}})\n"
+        "send({'method':'turn/completed','params':{'turn':{'id':'turn-1','status':'completed'}}})\n"
+        "while True: time.sleep(.1)\n",
+        encoding="utf-8",
+    )
+    command = (
+        sys.executable,
+        str(server),
+        str(child),
+        str(child_ready),
+        str(escaped),
+        str(child_pid),
+    )
+
+    try:
+        result = bridge(tmp_path, command).execute(
+            prompt="hello",
+            workspace=tmp_path,
+            tools=[tool()],
+            mediator=lambda _name, _args: "unused",
+            timeout=5,
+        )
+
+        assert result.text == "ok"
+        pid = int(child_pid.read_text(encoding="utf-8"))
+        time.sleep(1.1)
+        assert not escaped.exists()
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            pass
+        else:
+            stat = Path(f"/proc/{pid}/stat")
+            assert stat.exists() and stat.read_text().split(") ", 1)[1].startswith("Z ")
+    finally:
+        if child_pid.exists():
+            try:
+                os.kill(int(child_pid.read_text(encoding="utf-8")), signal.SIGKILL)
+            except (ProcessLookupError, ValueError):
+                pass
+
+
+def test_uncertain_process_tree_cleanup_prevents_successful_result(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class UncertainContainment:
+        creation_kwargs = {"start_new_session": True}
+
+        def attach_and_start(self, _process):
+            return None
+
+        def ensure_tree_exited(self, _process, *, grace_seconds):
+            assert grace_seconds == 0.1
+            raise RuntimeError("tree cleanup uncertain")
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(
+        "botpipe.codex_appserver.ProcessContainment.create",
+        lambda: UncertainContainment(),
+    )
+
+    with pytest.raises(RuntimeError, match="tree cleanup uncertain"):
+        bridge(tmp_path, stub(tmp_path)).execute(
+            prompt="hello",
+            workspace=tmp_path,
+            tools=[tool()],
+            mediator=lambda _name, _args: "ok",
+            timeout=5,
+        )
+
+
+def test_app_server_attach_failure_kills_unregistered_leader(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import botpipe.codex_appserver as appserver
+
+    calls: list[object] = []
+
+    class FailedContainment:
+        creation_kwargs: dict[str, object] = {}
+
+        def attach_and_start(self, process):
+            calls.append(("attach", process.pid))
+            raise RuntimeError("job assignment failed")
+
+        def close(self):
+            calls.append("close")
+
+    process = type(
+        "Process",
+        (),
+        {
+            "pid": 123,
+            "kill": lambda self: calls.append("kill"),
+            "wait": lambda self, timeout: calls.append(("wait", timeout)),
+        },
+    )()
+    monkeypatch.setattr(
+        appserver.ProcessContainment, "create", lambda: FailedContainment()
+    )
+    monkeypatch.setattr(appserver.subprocess, "Popen", lambda *_args, **_kwargs: process)
+
+    with pytest.raises(RuntimeError, match="job assignment failed"):
+        appserver._JsonlProcess(
+            ("stub",),
+            cwd=tmp_path,
+            env={},
+            max_message_bytes=1,
+            max_messages=1,
+        )
+
+    assert calls == [("attach", 123), "kill", ("wait", 2), "close"]
 
 
 def test_tool_free_profile_fails_before_version_probe_or_dispatch(tmp_path: Path) -> None:
@@ -428,6 +670,7 @@ def test_provider_adapter_commits_receipt_tool_evidence_and_session_binding(
     binding = json.loads(bindings[0].read_text())
     assert binding["thread_id"] == "thread-1"
     assert binding["tool_fingerprint"] == response.metadata["tool_fingerprint"]
+    assert binding["instruction_mode"] == "collaboration-mode-v1"
     recovered = adapter.recover(request)
     assert isinstance(recovered, Completed)
     assert recovered.response.to_record() == response.to_record()
@@ -451,6 +694,18 @@ def test_provider_adapter_commits_receipt_tool_evidence_and_session_binding(
         message.get("method") == "thread/resume"
         for message in read_transcript(tmp_path)
     )
+
+    legacy_binding = json.loads(bindings[0].read_text())
+    legacy_binding.pop("instruction_mode")
+    bindings[0].write_text(json.dumps(legacy_binding), encoding="utf-8")
+    with pytest.raises(CapabilityError, match="role-instruction mode"):
+        adapter.run(
+            provider_request(
+                tmp_path,
+                operation_id="scope/codex:3",
+                session_id="thread-1",
+            )
+        )
 
 
 def test_provider_empty_generate_fails_before_probe_and_receipt(tmp_path: Path) -> None:
@@ -609,7 +864,7 @@ send({{'id': request['id'], 'result': {{'config': {{}}, 'layers': []}}}})
 request = receive()
 send({{'id': request['id'], 'result': {{'requirements': None}}}})
 request = receive()
-send({{'id': request['id'], 'result': {{'thread': {{'id': 'thread-1'}}}}}})
+send({{'id': request['id'], 'result': {{'thread': {{'id': 'thread-1'}}, 'model': 'gpt-test', 'reasoningEffort': 'medium'}}}})
 request = receive()
 send({{'id': request['id'], 'result': {{'turn': {{'id': 'turn-1'}}}}}})
 ready.write_text('ready')
@@ -722,10 +977,16 @@ def test_provider_query_exposes_bounded_read_surface(
             "identity": None,
         }
     ]
+    transcript = read_transcript(tmp_path)
     thread_start = next(
-        message for message in read_transcript(tmp_path)
+        message for message in transcript
         if message.get("method") == "thread/start"
     )
+    assert "developerInstructions" not in thread_start["params"]
+    turn_start = next(
+        message for message in transcript if message.get("method") == "turn/start"
+    )
+    assert "collaborationMode" not in turn_start["params"]
     assert "count_lines" in {
         item["name"] for item in thread_start["params"]["dynamicTools"]
     }

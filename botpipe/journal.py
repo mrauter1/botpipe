@@ -138,6 +138,22 @@ class Journal:
                 "INSERT INTO runs VALUES (?,?)", (data["run_id"], json.dumps(data))
             )
 
+    def discard_created_run(self, run_id):
+        """Remove an admission placeholder only if execution never began."""
+        with self.transaction() as db:
+            row = db.execute(
+                "SELECT metadata FROM runs WHERE id=?", (run_id,)
+            ).fetchone()
+            if row is None or json.loads(row[0]).get("status") != "created":
+                return
+            if db.execute(
+                "SELECT 1 FROM operations WHERE run_id=? LIMIT 1", (run_id,)
+            ).fetchone() or db.execute(
+                "SELECT 1 FROM events WHERE run_id=? LIMIT 1", (run_id,)
+            ).fetchone():
+                return
+            db.execute("DELETE FROM runs WHERE id=?", (run_id,))
+
     def run(self, run_id):
         with self.lock:
             row = self.db.execute(
@@ -316,12 +332,21 @@ class Journal:
             return snapshot
 
     @classmethod
-    def foreign_has_unresolved_effects(cls, path, run_id):
-        """Conservatively decide whether a foreign run may still own effects."""
+    def foreign_has_unresolved_effects(cls, path, run_id, operation_id=None):
+        """Conservatively decide whether a foreign claim may still own effects."""
 
         try:
             snapshot = cls.read_only_snapshot(path, run_id)
-            return cls._has_unresolved_effects(snapshot.operations)
+            operations = snapshot.operations
+            if operation_id is not None:
+                operations = tuple(
+                    record
+                    for record in operations
+                    if record.get("id") == operation_id
+                )
+                if len(operations) != 1:
+                    return True
+            return cls._has_unresolved_effects(operations)
         except (OSError, sqlite3.Error, KeyError, TypeError, ValueError, UnicodeError):
             return True
 

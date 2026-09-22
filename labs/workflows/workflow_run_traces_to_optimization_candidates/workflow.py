@@ -8,6 +8,7 @@ from botpipe import (
     Artifact,
     Prompt,
     Provider,
+    Session,
     activity,
     current_run,
     provider_budget,
@@ -184,7 +185,7 @@ def WorkflowRunTracesToOptimizationCandidates(
     ) as budget:
         if snapshot.next_action == "propose_changes" and snapshot.shortlist:
             producer = Provider()
-            verifier = producer.with_config(session=None)
+            verifier = producer.with_config(session=Session())
             feedback = None
             while True:
                 proposal = producer.run(

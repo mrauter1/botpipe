@@ -3,9 +3,9 @@
 This candidate-only workflow captures bounded run evidence and the selected workflow's exact baseline surface, runs one producer turn plus one independent verifier turn, and deterministically publishes recommendations. It never executes, refines, evaluates, or promotes the selected workflow. If no objective-eligible evidence exists it makes zero provider calls and publishes a `collect_evidence` or `no_change` result.
 
 ```bash
-botpipe run labs/workflows/workflow_run_traces_to_optimization_candidates "Diagnose devloop" --task review-1 \
-  -wf selected_workflow devloop -wf task_title "Diagnose devloop" \
-  -wf objective reliability
+botpipe run workflow_run_traces_to_optimization_candidates \
+  --input '[{"selected_workflow":"release_candidate_to_go_no_go","task_title":"Diagnose release workflow","objective":"reliability"},"Diagnose recent runs and recommend the next useful action."]' \
+  --task-id review-1 --workspace .
 ```
 
 The default limits are 25 runs, one shortlisted step, three total candidates, six provider dispatches, 600 seconds per provider turn, 1800 seconds overall, 50 MiB of evidence, and 10 MiB of recommendation output. `objective` is `reliability`, `token_usage`, or `latency`. Empty `route_tags` means no route filter. Kind flags restrict the single CandidateSet; they do not add passes.

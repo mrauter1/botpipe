@@ -7,8 +7,17 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-from botpipe import Botpipe, Provider, Result, Session, ask_human, workflow
-from botpipe.providers import FakeProvider, ProviderResponse
+from botpipe import (
+    Botpipe,
+    BudgetExceeded,
+    Provider,
+    Result,
+    Session,
+    UncertainOperation,
+    ask_human,
+    workflow,
+)
+from botpipe.providers import FakeProvider, ProviderError, ProviderResponse
 
 
 def test_direct_continuity_derivation_and_independent_override(tmp_path):
@@ -153,6 +162,40 @@ def test_async_direct_call_uses_same_typed_validation(tmp_path):
         assert answer.run_id and answer.operation_id
 
 
+@pytest.mark.parametrize("asynchronous", [False, True])
+def test_direct_provider_preserves_uncertain_error_type_and_ids(
+    tmp_path, asynchronous
+):
+    with Botpipe(
+        tmp_path, provider=FakeProvider([ProviderError("transport lost")])
+    ) as runtime:
+        provider = Provider(runtime=runtime, session=None)
+        with pytest.raises(UncertainOperation, match="transport lost") as raised:
+            if asynchronous:
+                asyncio.run(provider.arun("effect"))
+            else:
+                provider.run("effect")
+
+    assert raised.value.run_id
+    assert raised.value.operation_id.startswith(raised.value.run_id + ":")
+
+
+@pytest.mark.parametrize("asynchronous", [False, True])
+def test_direct_provider_preserves_budget_error_type_and_ids(tmp_path, asynchronous):
+    with Botpipe(
+        tmp_path, provider=FakeProvider(["must not dispatch"]), max_operations=1
+    ) as runtime:
+        provider = Provider(runtime=runtime)
+        with pytest.raises(BudgetExceeded) as raised:
+            if asynchronous:
+                asyncio.run(provider.arun("effect"))
+            else:
+                provider.run("effect")
+
+    assert raised.value.run_id
+    assert raised.value.operation_id.startswith(raised.value.run_id + ":")
+
+
 def test_independent_calls_do_not_create_reusable_native_binding(tmp_path):
     native = FakeProvider([ProviderResponse("one", "ignored-one"), ProviderResponse("two", "ignored-two")])
     with Botpipe(tmp_path, provider=native) as runtime:
@@ -196,7 +239,7 @@ def test_interrupted_decision_accepts_typed_stopped_reconciliation(tmp_path):
             return Stopped("decision transport is quiescent")
 
     with Botpipe(tmp_path, provider=InterruptedDecision(api_key="unused")) as runtime:
-        with pytest.raises(Exception):
+        with pytest.raises(UncertainOperation):
             Provider(runtime=runtime).decide(
                 state={"evidence": "passed"},
                 questions={"ready": Noul("Ready?")},

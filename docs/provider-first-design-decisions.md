@@ -66,20 +66,26 @@ query replace those built-ins with the mediated inventory. Output schemas guide
 the prompt, while raw terminal text reaches the common validation/repair path.
 This preserves completed-turn session advancement even for malformed output.
 
-## Remaining workspace coordination design
+## Workspace coordination
 
-Existing workspace markers and descriptor identity checks protect known owned
-directories. They do not implement arbitrary hierarchical reader/writer
-ownership. A final review rejected two incomplete shortcuts: creating a marker
-in every traversed directory requires write access throughout read-only inputs,
-and checking only a writer's ancestor markers misses an active reader below a
-new ancestor writer. Neither was retained as a claimed fix.
+Readers and writers use one local SQLite coordinator outside the workspace and
+independent of run state directories. Claims compare canonical path ancestry:
+reads may overlap, while writes exclude overlapping claims. Admission is atomic;
+the coordinator transaction is not held during execution. Explicit parent leases
+allow nested ownership without exempting conflicting parallel branches. Provider
+claims carry their operation identity: restarting root orchestration cannot
+release another operation's unresolved fence. Completion retires that operation's
+claim independently of unrelated unfinished operations.
 
-Complete A48 coverage requires a common path-prefix coordination protocol used
-by both readers and writers, including overlapping external read roots and
-durable unresolved writers. That remains implementation work; source identity
-checks, existing-marker protection, and successful deterministic tests do not
-remove this release blocker.
+This replaces exact-directory marker probing. Ancestor markers cannot discover
+all descendant readers, while creating markers throughout the tree requires
+write access to read-only roots. A single execution lock would also serialize
+unrelated sibling workspaces. Durable path claims solve those cases using the
+same journal evidence that already governs unresolved effects. Native process
+death alone does not retire a claim. The supported coordination boundary is one
+host/account with a shared coordinator; mixed older marker runtimes and separate
+host/container coordinators are outside that boundary. Native end-to-end A48
+receipts remain a separate release requirement.
 
 ## Authoring comparison (A44)
 
@@ -91,7 +97,9 @@ remove this release blocker.
 | Typed decision | A generic model call and output schema could encode a verdict. | `Jev().decide(state=..., questions={"ready": Noul(...)})` returns the native typed answer and probability. | Calling TypeSafe directly is compact; the runtime adds recording, typed restoration, and conservative recovery. Question descriptors stay in one small module. |
 
 Configuration selects a default explicitly; constructing a provider performs no
-I/O and does not silently choose Codex. The new default `.botpipe-v2` store starts
-with empty history. Earlier journals are neither read nor converted. These two
-setup choices are intentional costs of explicit backend selection and the major
-version boundary.
+I/O and does not silently choose Codex. The selected `.botpipe-v2` schema adds
+session ownership, affinity, and revision checks to the existing transactional
+journal. The implementation rejects incompatible stores and provides no migration.
+This is the current supported contract, not a prohibition on reusing older designs
+or admitting compatible records in a future implementation. Explicit backend
+selection and the schema boundary are documented setup choices.

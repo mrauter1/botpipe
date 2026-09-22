@@ -7,7 +7,7 @@ import json
 import os
 import re
 import threading
-from contextlib import ExitStack, nullcontext
+from contextlib import ExitStack
 from dataclasses import replace
 from pathlib import Path
 from typing import Any, Mapping, TypeVar, overload
@@ -31,6 +31,8 @@ from .providers import (
     ProviderRequest,
     ProviderResponse,
     ProviderTimeoutError,
+    provider_request_from_snapshot,
+    provider_request_snapshot,
 )
 from .provider_checkpoints import (
     EmptyCheckpoint,
@@ -44,9 +46,10 @@ from .provider_checkpoints import (
     RetryAuthorizedCheckpoint,
     ValidatedCheckpoint,
     ValidationFailedCheckpoint,
+    provider_attempt_identity,
 )
 from .runtime import current_run
-from .recovery import recover_outcome
+from .recovery import Completed, Unknown, cancellation_evidence, recover_outcome
 
 T = TypeVar("T")
 
@@ -67,6 +70,7 @@ def execute_provider(
 ):
     """Prepare, journal, dispatch, validate and capture one provider invocation."""
     ctx = current_run()
+    ctx.check_replay_fence()
     if operation not in {"generate", "query", "run"}:
         raise ValueError(f"Unknown provider operation: {operation}")
     if operation != "run" and writes:
@@ -76,7 +80,7 @@ def execute_provider(
     authored_policy = Policy.resolve(ctx.policy, policy)
     effective = authored_policy.effective()
     if operation != "run":
-        effective = replace(effective, sandbox_mode=SandboxMode.READ_ONLY, allow_write=(), read_only=True)
+        effective = effective.restrict_read_only()
     target = Path(workspace).resolve() if workspace is not None else ctx.workspace
     if not target.is_dir():
         raise ValueError(f"Provider workspace is not a directory: {target}")
@@ -161,8 +165,8 @@ def execute_provider(
         )
     acquired_workspace = False
     target_ownership = ExitStack()
-    owns_target = False
-    reads_target = False
+    target_lease = None
+    provider_operation_id = None
     try:
         if ctx.parallel_branch and effective.sandbox_mode != SandboxMode.READ_ONLY:
             acquired_workspace = workspace_lock.acquire(blocking=False)
@@ -171,28 +175,30 @@ def execute_provider(
                     "Concurrent editing branches cannot share a workspace"
                 )
         def ensure_target_fence():
-            nonlocal owns_target, reads_target
-            if target == ctx.workspace or owns_target or reads_target:
+            nonlocal target_lease
+            if target_lease is not None:
+                target_lease.validate()
                 return
             if effective.sandbox_mode == SandboxMode.READ_ONLY:
-                target_ownership.enter_context(
-                    ctx.client._read_ownership(ctx.run_id, workspace=target)
+                context = ctx.client._read_ownership(
+                    ctx.run_id, workspace=target, parent=ctx.workspace_leases,
+                    operation_id=provider_operation_id,
                 )
-                reads_target = True
             else:
-                target_ownership.enter_context(
-                    ctx.client._ownership(ctx.run_id, workspace=target)
+                context = ctx.client._ownership(
+                    ctx.run_id, workspace=target, parent=ctx.workspace_leases,
+                    recovery=True, operation_id=provider_operation_id,
                 )
-                owns_target = True
+            target_lease = target_ownership.enter_context(context)
 
         def dynamic_read_fence(directory):
-            directory = Path(directory).resolve()
-            if directory in (target, ctx.workspace):
-                return nullcontext()
-            marker = directory / ".botpipe-workspace.lock"
-            if not marker.exists():
-                return nullcontext()
-            return ctx.client._read_ownership(ctx.run_id, workspace=directory)
+            parents = ctx.workspace_leases
+            if target_lease is not None:
+                parents = (*parents, target_lease)
+            return ctx.client._read_ownership(
+                ctx.run_id, workspace=directory, parent=parents,
+                operation_id=provider_operation_id or ctx.operation_id,
+            )
 
         def scope_root(value):
             root = Path(value)
@@ -248,7 +254,6 @@ def execute_provider(
                 recovered = source_store.published(ctx.operation_id)
                 if recovered is not None:
                     return recovered
-                ensure_target_fence()
                 observed = path.resolve()
                 authorize_live_read(observed, absolute_read=absolute_read)
                 if (
@@ -264,11 +269,14 @@ def execute_provider(
                     raise ArtifactError(
                         f"Read path must be a file in the workspace: {path}"
                     )
-                return source_store.publish(
-                    Artifact.raw(observed, name=path.stem),
-                    observed.read_bytes(),
-                    ctx.operation_id,
-                )
+                with dynamic_read_fence(observed.parent) as lease:
+                    content = observed.read_bytes()
+                    lease.validate()
+                    return source_store.publish(
+                        Artifact.raw(observed, name=path.stem),
+                        content,
+                        ctx.operation_id,
+                    )
 
             handles.append(
                 ctx.operation(
@@ -297,7 +305,11 @@ def execute_provider(
         }
 
         def execute_attempt(recover=False):
-            operation_id = ctx.operation_id
+            nonlocal provider_operation_id
+            operation_id = provider_operation_id = ctx.operation_id
+            # The operation is durable before admission. Its claim can then be
+            # recovered without releasing another operation's unresolved fence.
+            ensure_target_fence()
             fresh_response = False
             row = ctx.journal.get(operation_id)
             checkpoint = ProviderCheckpoint.from_record(row.get("response"))
@@ -457,49 +469,90 @@ def execute_provider(
                     + feedback
                 )
             binding = ctx.journal.session(session_key) or {}
-            request_data = checkpoint.request_data or {
-                "session_id": binding.get("native_session_id"),
-                "operation": operation,
-                "provider": adapter.name,
-                "instructions": instructions,
-                "settings": dict(settings or {}),
-                "allow_commands": [list(argv) for argv in allow_commands],
-                "policy": effective.to_dict(),
-                "receipt_dir": str(ctx.folder / "receipts"),
-                "prompt": complete_prompt,
-                "artifacts": {
-                    name: str(path) for name, path in destinations.items()
-                },
-                "reads": [str(handle.path) for handle in handles],
-            }
-            request_policy = Policy.from_dict(
-                request_data.get("policy", effective.to_dict())
+            request_timeout = (
+                min(ctx.limits.timeout, timeout)
+                if timeout is not None
+                else ctx.limits.timeout
             )
-            request = ProviderRequest(
-                operation=operation,
-                instructions=instructions,
-                settings=dict(settings or {}),
-                allow_commands=allow_commands,
+            request_data = checkpoint.request_data
+            if request_data is None:
+                request = ProviderRequest(
+                    operation=operation,
+                    instructions=instructions,
+                    settings=dict(settings or {}),
+                    allow_commands=allow_commands,
+                    operation_id=operation_id,
+                    prompt=complete_prompt,
+                    workspace=target,
+                    session_id=binding.get("native_session_id"),
+                    output_schema=schema,
+                    policy=effective,
+                    artifacts=destinations,
+                    receipt_dir=ctx.folder / "receipts",
+                    timeout=request_timeout,
+                    attempt=prepared_generation + 1,
+                    reads=tuple(handle.path for handle in handles),
+                    read_fence=dynamic_read_fence,
+                )
+                request_data = provider_request_snapshot(
+                    request, provider=adapter.name
+                )
+                request = provider_request_from_snapshot(
+                    request_data,
+                    operation_id=operation_id,
+                    workspace=target,
+                    output_schema=schema,
+                    timeout=request_timeout,
+                    attempt=prepared_generation + 1,
+                    provider=adapter.name,
+                    read_fence=dynamic_read_fence,
+                )
+            else:
+                request = provider_request_from_snapshot(
+                    request_data,
+                    operation_id=operation_id,
+                    workspace=target,
+                    output_schema=schema,
+                    timeout=request_timeout,
+                    attempt=prepared_generation + 1,
+                    provider=adapter.name,
+                    read_fence=dynamic_read_fence,
+                )
+
+            def recorded_recovery():
+                evidence = cancellation_evidence(
+                    ctx.journal.events(ctx.run_id),
+                    operation_id=operation_id,
+                    identity=provider_attempt_identity(checkpoint),
+                )
+                return evidence if evidence is not None else recover_outcome(adapter, request)
+
+            evidence = cancellation_evidence(
+                ctx.journal.events(ctx.run_id),
                 operation_id=operation_id,
-                prompt=complete_prompt,
-                workspace=target,
-                session_id=request_data.get("session_id"),
-                output_schema=schema,
-                policy=request_policy,
-                artifacts=destinations,
-                receipt_dir=ctx.folder / "receipts",
-                timeout=min(ctx.limits.timeout, timeout) if timeout is not None else ctx.limits.timeout,
-                attempt=prepared_generation + 1,
-                reads=tuple(handle.path for handle in handles),
-                read_fence=dynamic_read_fence,
+                identity=provider_attempt_identity(checkpoint),
             )
+            if isinstance(evidence, Unknown):
+                raise UncertainOperation(evidence.detail, operation_id)
+            if (
+                isinstance(evidence, Completed)
+                and isinstance(checkpoint, RespondedCheckpoint)
+                and evidence.response.to_record() != checkpoint.response.to_record()
+            ):
+                raise UncertainOperation(
+                    "Cancellation evidence conflicts with the provider checkpoint",
+                    operation_id,
+                )
 
             def preflight_new_dispatch(request):
+                nonlocal request_data
                 from .streaming import require_live_capability
 
                 dispatch_policy = effective.intersect(ctx.current_policy_ceiling)
-                request_data["policy"] = dispatch_policy.to_dict()
                 request = replace(request, policy=dispatch_policy)
+                request_data = provider_request_snapshot(
+                    request, provider=adapter.name
+                )
                 require_live_capability(adapter)
                 adapter.validate_request(request)
                 return request
@@ -534,7 +587,9 @@ def execute_provider(
                 lease = session.claim(ctx, operation_id)
                 if not checkpoint.request_data:
                     request = replace(request, session_id=lease.native_session_id)
-                    request_data["session_id"] = lease.native_session_id
+                    request_data = provider_request_snapshot(
+                        request, provider=adapter.name
+                    )
             if isinstance(checkpoint, EmptyCheckpoint):
                 # Validate paths before any destination can move. This
                 # marker proves a resumed preparation has not dispatched.
@@ -558,7 +613,7 @@ def execute_provider(
                 # Reconcile before touching destinations: the previous
                 # process may still be writing them, or its completed
                 # response may already be recoverable from a receipt.
-                outcome = recover_outcome(adapter, request)
+                outcome = recorded_recovery()
                 action = ProviderLifecycle.recovery_action(checkpoint, outcome)
                 if action is RecoveryAction.USE_RESPONSE:
                     generation = prepared_generation
@@ -598,6 +653,9 @@ def execute_provider(
                     request = replace(
                         request, artifacts=destinations, attempt=generation + 1
                     )
+                    request_data = provider_request_snapshot(
+                        request, provider=adapter.name
+                    )
                 else:
                     raise UncertainOperation(
                         outcome.detail
@@ -620,7 +678,7 @@ def execute_provider(
                 dispatched = False
                 try:
                     if recover and not authorized and not preparing:
-                        outcome = recover_outcome(adapter, request)
+                        outcome = recorded_recovery()
                         action = ProviderLifecycle.recovery_action(
                             checkpoint, outcome
                         )
@@ -837,20 +895,6 @@ def execute_provider(
                     ctx.save_response(operation_id, checkpoint.to_record())
                     recover = False
 
-        # Alternate writable workspaces need the same cross-process
-        # ownership fence as the client's primary workspace. Completed
-        # replay consumes only the journal and does not claim a target.
-        if (
-            target != ctx.workspace
-            and not owns_target
-            and not reads_target
-        ):
-            pending = ctx.journal.get(f"{ctx.run_id}:{ctx.scope}:{ctx.ordinal}")
-            if pending is None or pending["status"] not in (
-                "completed",
-                "failed",
-            ):
-                ensure_target_fence()
         result = ctx.operation(
             "provider",
             inputs,

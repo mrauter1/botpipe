@@ -35,8 +35,9 @@ from .errors import (
     Suspension,
     UncertainOperation,
 )
-from .journal import Journal, now, workspace_lock
+from .journal import Journal, now
 from .limits import RunLimits
+from .workspace_ownership import WorkspaceCoordinator
 from .models import RunResult
 from .policy import Policy
 from .provenance import SourceContext, capture_workflow_provenance, source_context
@@ -47,8 +48,16 @@ from .provider_checkpoints import (
     RecoveryAction,
     RespondedCheckpoint,
     RetryAuthorizedCheckpoint,
+    provider_attempt_identity,
 )
-from .recovery import Completed, Running, Stopped, Unknown, recover_outcome
+from .recovery import (
+    Completed,
+    Running,
+    Stopped,
+    Unknown,
+    cancellation_evidence,
+    recover_outcome,
+)
 
 if TYPE_CHECKING:
     from .provider import Provider
@@ -985,6 +994,7 @@ class RunContext:
         parent=None,
         parallel_branch=False,
         input_candidate=None,
+        workspace_leases=(),
     ):
         self.client, self.journal, self.definition = client, client.journal, definition
         self.run_id, self.task_id = metadata["run_id"], metadata["task_id"]
@@ -992,6 +1002,9 @@ class RunContext:
             parent.limits if parent is not None else RunLimits.from_record(metadata)
         )
         self.workspace = client.workspace
+        self.workspace_leases = (
+            parent.workspace_leases if parent else workspace_leases
+        )
         self.task_folder = client.state_dir / "tasks" / self.task_id
         self.scope, self.ordinal = scope, 0
         self.folder = Path(metadata["folder"])
@@ -1073,6 +1086,10 @@ class RunContext:
                 self.operation_id,
             )
 
+    def check_replay_fence(self):
+        if self._replay_state["error"] is not None:
+            raise self._replay_state["error"]
+
     def operation(
         self,
         kind,
@@ -1084,8 +1101,7 @@ class RunContext:
         recover=None,
         name=None,
     ):
-        if self._replay_state["error"] is not None:
-            raise self._replay_state["error"]
+        self.check_replay_fence()
         if not self._execution_lock.acquire(blocking=False):
             raise BotpipeError(
                 "Concurrent operations require parallel() with independent branch scopes"
@@ -1297,8 +1313,7 @@ class RunContext:
             )
 
     def assert_consumed(self):
-        if self._replay_state["error"] is not None:
-            raise self._replay_state["error"]
+        self.check_replay_fence()
         extra = [
             r
             for r in self.journal.operations(self.run_id)
@@ -1523,6 +1538,7 @@ class Botpipe:
                 self._owned_adapters.add(id(self.provider))
         self.limits = RunLimits(max_operations, timeout)
         self.journal = Journal(self.state_dir / "state.sqlite3")
+        self._workspace_coordinator = WorkspaceCoordinator()
 
     @property
     def max_operations(self):
@@ -1587,86 +1603,26 @@ class Botpipe:
                 raise ReplayMismatch(f"Recorded run {field} is malformed")
 
     @contextmanager
-    def _ownership(self, run_id, *, workspace=None):
-        # The workspace fence survives process death and is shared even when
-        # clients use different state directories. A released OS lock does not
-        # prove that an external provider process has stopped editing files.
-        target = self.workspace if workspace is None else Path(workspace).resolve()
-        with workspace_lock(target / ".botpipe-workspace.lock") as handle:
-            handle.seek(0)
-            raw = handle.read().strip()
-            if raw:
-                try:
-                    owner = json.loads(raw)
-                except (ValueError, UnicodeError) as exc:
-                    raise RunBusy(
-                        "Workspace ownership record is unreadable; restore it before continuing"
-                    ) from exc
-                if owner == {"journal": str(self.journal.path), "run_id": run_id}:
-                    # Do not rewrite the only fence while resuming uncertain
-                    # effects. A crash during truncation could erase ownership.
-                    yield
-                    return
-                if owner != {"journal": str(self.journal.path), "run_id": run_id}:
-                    if (
-                        not isinstance(owner, dict)
-                        or not isinstance(owner.get("journal"), str)
-                        or not isinstance(owner.get("run_id"), str)
-                    ):
-                        raise RunBusy(
-                            "Workspace ownership record is unreadable; restore it before continuing"
-                        )
-                    if Journal.foreign_has_unresolved_effects(
-                        owner["journal"], owner["run_id"]
-                    ):
-                        raise RunBusy(
-                            f"Run {owner['run_id']} has unresolved effects; resume or reconcile it first"
-                        )
-            record = json.dumps(
-                {"journal": str(self.journal.path), "run_id": run_id}
-            ).encode()
-            handle.seek(0)
-            handle.truncate()
-            handle.write(record)
-            handle.flush()
-            os.fsync(handle.fileno())
-            yield
+    def _ownership(
+        self, run_id, *, workspace=None, parent=(), recovery=False, operation_id=None
+    ):
+        target = self.workspace if workspace is None else workspace
+        with self._workspace_coordinator.claim(
+            target, self.journal, run_id, "write", parent=parent, recovery=recovery,
+            operation_id=operation_id
+        ) as lease:
+            yield lease
 
     @contextmanager
-    def _read_ownership(self, run_id, *, workspace=None):
-        """Fence a workspace read without replacing its durable writer owner."""
-
-        target = self.workspace if workspace is None else Path(workspace).resolve()
-        with workspace_lock(target / ".botpipe-workspace.lock") as handle:
-            handle.seek(0)
-            raw = handle.read().strip()
-            if raw:
-                try:
-                    owner = json.loads(raw)
-                except (ValueError, UnicodeError) as exc:
-                    raise RunBusy(
-                        "Workspace ownership record is unreadable; restore it before continuing"
-                    ) from exc
-                if (
-                    not isinstance(owner, dict)
-                    or not isinstance(owner.get("journal"), str)
-                    or not isinstance(owner.get("run_id"), str)
-                ):
-                    raise RunBusy(
-                        "Workspace ownership record is unreadable; restore it before continuing"
-                    )
-                if (
-                    owner != {"journal": str(self.journal.path), "run_id": run_id}
-                    and Journal.foreign_has_unresolved_effects(
-                        owner["journal"], owner["run_id"]
-                    )
-                ):
-                    raise RunBusy(
-                        f"Run {owner['run_id']} has unresolved effects; resume or reconcile it first"
-                    )
-            # Keep the OS fence for the complete reader turn. Unlike a writer,
-            # a reader must not replace the durable owner marker.
-            yield
+    def _read_ownership(
+        self, run_id, *, workspace=None, parent=(), operation_id=None
+    ):
+        target = self.workspace if workspace is None else workspace
+        with self._workspace_coordinator.claim(
+            target, self.journal, run_id, "read", parent=parent,
+            operation_id=operation_id
+        ) as lease:
+            yield lease
 
     def run(self, definition, *args, task_id=None, run_id=None, **kwargs):
         with codec.use_contract_registry(self.contract_registry):
@@ -1717,18 +1673,29 @@ class Botpipe:
             "created_at": now(),
             "error": None,
         }
-        with self._ownership(run_id):
-            data["provenance_start"] = capture_workflow_provenance(
-                definition, self.workspace
-            )
-            self.journal.create_run(data)
-            return self._execute(
-                definition,
-                data,
-                args,
-                kwargs,
-                provenance_start=data["provenance_start"],
-            )
+        # A claim left by a crash must always refer to an existing run, even
+        # when the crash precedes the first operation. Failed admission removes
+        # only the untouched placeholder created by this call.
+        self.journal.create_run(data)
+        try:
+            with self._ownership(run_id) as lease:
+                data["provenance_start"] = capture_workflow_provenance(
+                    definition, self.workspace
+                )
+                self.journal.update_run(
+                    run_id, provenance_start=data["provenance_start"]
+                )
+                return self._execute(
+                    definition,
+                    data,
+                    args,
+                    kwargs,
+                    provenance_start=data["provenance_start"],
+                    workspace_leases=(lease,),
+                )
+        except RunBusy:
+            self.journal.discard_created_run(run_id)
+            raise
 
     async def arun(self, definition, *args, **kwargs):
         # One runtime and one provider boundary. Cancellation joins the worker;
@@ -1762,7 +1729,10 @@ class Botpipe:
         max_operations=None,
         timeout=None,
     ):
-        with self._ownership(run_id):
+        # An invalid identifier must not create an orphan claim that can never
+        # be reconciled. Re-read after admission for the current committed state.
+        self.journal.run(run_id)
+        with self._ownership(run_id, recovery=True) as lease:
             data = self.journal.run(run_id)
             self._check_run_configuration(data)
             operations = self.journal.operations(run_id)
@@ -1889,6 +1859,7 @@ class Botpipe:
                 decoded_args,
                 decoded_kwargs,
                 input_candidate=input_candidate,
+                workspace_leases=(lease,),
             )
 
     async def aresume(self, run_id, **kwargs):
@@ -1903,9 +1874,13 @@ class Botpipe:
         *,
         input_candidate=None,
         provenance_start=None,
+        workspace_leases=(),
     ):
         _bind_async_cancellation(self, data["run_id"])
-        ctx = RunContext(self, data, definition, input_candidate=input_candidate)
+        ctx = RunContext(
+            self, data, definition, input_candidate=input_candidate,
+            workspace_leases=workspace_leases,
+        )
         status = "completed"
         value = None
         error = None
@@ -1939,11 +1914,19 @@ class Botpipe:
                 pending["diagnostic"] = exc.diagnostic
             encoded = None
         except BudgetExceeded as exc:
+            exc.run_id = ctx.run_id
+            if not getattr(exc, "operation_id", None):
+                exc.operation_id = ctx.operation_id
+            failure = exc
             status = "budget_exceeded"
             error = str(exc)
             pending = None
             encoded = None
         except UncertainOperation as exc:
+            exc.run_id = ctx.run_id
+            if not getattr(exc, "operation_id", None):
+                exc.operation_id = ctx.operation_id
+            failure = exc
             status = "interrupted"
             error = str(exc)
             if pending is not None:
@@ -2087,24 +2070,65 @@ class Botpipe:
         )
         unresolved = []
         for record in unfinished:
+            # The cancellation flag was committed before this read. Workers
+            # cannot begin a later dispatch after observing that fence, so this
+            # checkpoint identifies the attempt targeted by cancel().
+            current = self.journal.get(record["id"])
+            if current is None or current["status"] in {"completed", "failed"}:
+                continue
+            record = current
             inputs = codec.decode(record["inputs"])
             name = inputs.get("provider")
             config = inputs.get("provider_config", {})
             adapter = self.resolve_adapter(name, config)
-            cancel = getattr(adapter, "cancel", None)
-            if not callable(cancel):
-                outcome = Unknown(
-                    f"{name} does not implement synchronous cancellation"
+            attempt_identity = None
+            provider_checkpoint = None
+            if record["kind"] == "provider":
+                provider_checkpoint = ProviderCheckpoint.from_record(
+                    record.get("response")
                 )
+                attempt_identity = provider_attempt_identity(provider_checkpoint)
+            if isinstance(provider_checkpoint, RespondedCheckpoint):
+                outcome = Completed(provider_checkpoint.response)
             else:
-                try:
-                    outcome = cancel(record["id"])
-                except BaseException as exc:
-                    outcome = Unknown(f"provider cancellation failed: {exc}")
+                cancel = getattr(adapter, "cancel", None)
+                if not callable(cancel):
+                    outcome = Unknown(
+                        f"{name} does not implement synchronous cancellation"
+                    )
+                else:
+                    try:
+                        outcome = cancel(record["id"])
+                    except BaseException as exc:
+                        outcome = Unknown(f"provider cancellation failed: {exc}")
             if not isinstance(outcome, (Completed, Stopped, Running, Unknown)):
                 outcome = Unknown(
                     "provider returned an invalid cancellation outcome"
                 )
+            if record["kind"] == "provider":
+                settled = self.journal.get(record["id"])
+                settled_checkpoint = ProviderCheckpoint.from_record(
+                    settled.get("response") if settled is not None else None
+                )
+                settled_identity = provider_attempt_identity(settled_checkpoint)
+                if attempt_identity is None:
+                    # The worker may have crossed its intent checkpoint while
+                    # cancel() was entering the adapter. The post-call intent
+                    # is then the only possible dispatched attempt.
+                    attempt_identity = settled_identity
+                elif (
+                    settled_identity is not None
+                    and settled_identity != attempt_identity
+                ):
+                    outcome = Unknown(
+                        "Provider attempt changed while cancellation was in progress"
+                    )
+                if (
+                    isinstance(settled_checkpoint, RespondedCheckpoint)
+                    and settled_identity == attempt_identity
+                    and not isinstance(outcome, Completed)
+                ):
+                    outcome = Completed(settled_checkpoint.response)
             response_record = None
             if isinstance(outcome, Completed):
                 try:
@@ -2126,6 +2150,11 @@ class Botpipe:
             outcome_data = {
                 "outcome": type(outcome).__name__.lower(),
                 "detail": getattr(outcome, "detail", None),
+                **(
+                    {"attempt": attempt_identity}
+                    if attempt_identity is not None
+                    else {}
+                ),
             }
             if isinstance(outcome, Completed):
                 # Keep the authoritative terminal record in durable evidence.
@@ -2202,7 +2231,10 @@ class Botpipe:
             raise ValueError("Choose retry=True or a response/artifact reconciliation")
         if not retry and response is _UNSET and artifact_digests is None:
             raise ValueError("Choose retry=True, a response, or artifact_digests")
-        with self._ownership(run_id):
+        # An invalid identifier must not create an orphan claim that can never
+        # be reconciled. Re-read after admission for the current committed state.
+        self.journal.run(run_id)
+        with self._ownership(run_id, recovery=True) as lease:
             data = self.journal.run(run_id)
             self._check_run_configuration(data)
             operations = self.journal.operations(run_id)
@@ -2221,7 +2253,10 @@ class Botpipe:
             old = dict(record.get("response") or {})
             source = "operator"
             if record["kind"] == "provider":
-                from .providers import ProviderRequest, ProviderResponse
+                from .providers import (
+                    ProviderResponse,
+                    provider_request_from_snapshot,
+                )
 
                 checkpoint = ProviderCheckpoint.from_record(old)
                 if isinstance(checkpoint, NotDispatchedCheckpoint):
@@ -2238,25 +2273,14 @@ class Botpipe:
                 # A retry marker names the *next* generation; reconcile the
                 # attempt whose effects are still awaiting resolution.
                 previous = checkpoint.attempt_generation
-                request = ProviderRequest(
+                request = provider_request_from_snapshot(
+                    request_data,
                     operation_id=operation_id,
-                    prompt=request_data.get("prompt", inputs["prompt"]),
                     workspace=Path(inputs["workspace"]),
-                    session_id=request_data.get("session_id"),
                     output_schema=inputs.get("schema"),
-                    policy=Policy.from_dict(inputs["policy"]),
-                    artifacts={
-                        name: Path(path)
-                        for name, path in request_data.get("artifacts", {}).items()
-                    },
-                    receipt_dir=Path(
-                        request_data.get(
-                            "receipt_dir", Path(data["folder"]) / "receipts"
-                        )
-                    ),
                     timeout=RunLimits.from_record(data).timeout,
                     attempt=previous + 1,
-                    reads=tuple(Path(path) for path in request_data.get("reads", ())),
+                    provider=adapter.name,
                 )
 
                 def reconcile_provider():
@@ -2266,7 +2290,27 @@ class Botpipe:
                         # boundary; it is as authoritative as a recovered receipt.
                         outcome = Completed(checkpoint.response)
                     else:
-                        outcome = recover_outcome(adapter, request)
+                        outcome = cancellation_evidence(
+                            self.journal.events(run_id),
+                            operation_id=operation_id,
+                            identity=provider_attempt_identity(checkpoint),
+                        )
+                        if outcome is None:
+                            outcome = recover_outcome(adapter, request)
+                    evidence = cancellation_evidence(
+                        self.journal.events(run_id),
+                        operation_id=operation_id,
+                        identity=provider_attempt_identity(checkpoint),
+                    )
+                    if (
+                        isinstance(evidence, Completed)
+                        and isinstance(checkpoint, RespondedCheckpoint)
+                        and evidence.response.to_record()
+                        != checkpoint.response.to_record()
+                    ):
+                        raise BotpipeError(
+                            "Cancellation evidence conflicts with the provider checkpoint"
+                        )
                     action = ProviderLifecycle.reconciliation_action(outcome)
                     if action is RecoveryAction.USE_RESPONSE:
                         checkpoint = ProviderLifecycle.completed(
@@ -2329,10 +2373,10 @@ class Botpipe:
                             )
 
                 target = request.workspace.resolve()
-                if target != self.workspace:
-                    with self._ownership(run_id, workspace=target):
-                        reconcile_provider()
-                else:
+                with self._ownership(
+                    run_id, workspace=target, parent=(lease,),
+                    recovery=True, operation_id=operation_id,
+                ):
                     reconcile_provider()
 
                 if response is not _UNSET:

@@ -1,6 +1,6 @@
 # Provider-first rewrite acceptance
 
-Snapshot: 2026-09-22 UTC, PRD revision 1.2, branch
+Snapshot: 2026-09-22 UTC, PRD revision 1.3, branch
 `rewrite/provider-first-sdk`. This is an acceptance audit, not a release claim.
 
 **Pass** means the complete scenario has passing deterministic evidence in the
@@ -25,9 +25,10 @@ release baseline in section 7.5 is not met:
 - Real adapters do not establish a verified non-secret native account identity.
   Common provider/configuration/profile/version/model/workspace affinity is
   enforced, but account and native default-model drift remain A10 gaps.
-- Hierarchical workspace coordination remains incomplete for absent markers and
-  overlapping ancestor/descendant workspaces. Existing-marker fencing and
-  descriptor identity checks do not close A48.
+- A shared host/account registry now coordinates overlapping workspace roots,
+  dynamic read claims, and unresolved effects. Deterministic admission,
+  reader/writer, crash-recovery, and identity checks pass; mandatory native
+  end-to-end evidence for A48 is still required.
 - No credentialed pinned-native receipts were produced for Codex, Claude, Pi,
   or JEV. The Codex/Claude/Pi bridge tests use fakes or stub transcripts. Native
   Linux and Windows containment, cancellation, resumed-session, hostile-config,
@@ -36,8 +37,9 @@ release baseline in section 7.5 is not met:
 - Actual Claude Agent SDK 0.2.155 and Pi 0.73.1 package startup checks passed
   without inference. They establish dependency/API compatibility, not native
   conformance. See `native-capability-evidence.md` for the exact checks.
-- Remote CI has not run: automatic approval review blocked pushing the new
-  source to `github.com/mrauter1/botpipe` pending explicit destination approval.
+- The earlier remote CI run exposed Python 3.13 path serialization and nonroot
+  test-fixture failures. Both have focused fixes. Current branch CI is tracked
+  separately from credentialed native conformance.
 
 ## Core and provider acceptance
 
@@ -62,7 +64,7 @@ release baseline in section 7.5 is not met:
 | A45 | Pass | Construction/derivation are I/O-free; lazy default pinning, explicit vendor precedence, missing-default errors, and new-family config changes are tested. |
 | A46 | Pass | Saved adapter/config replay, cross-run family binding, unresolved-attempt routing, and saved-policy/current-ceiling intersection are covered, including tighter ceilings that do not invalidate committed replay. Secret-bearing durable settings are rejected. |
 | A47 | Pass | Scoped `current_run().provider`, independent constructions/roots/children, and intentional stored-session sharing are tested. |
-| A48 | Blocked | Supplied-read authorization/replay, descriptor identity, and bounded immutable tool evidence have focused tests. All three mediated profiles record observations before delivery. Exact-root and existing-marker fencing do not cover a new marker after an absence check or a new ancestor writer above a locked child read root. Complete hierarchical ownership and native end-to-end receipts remain required. |
+| A48 | Partial | Supplied-read authorization/replay, descriptor identity, and bounded immutable tool evidence have focused tests. All three mediated profiles record observations before delivery. The shared ownership registry atomically coordinates overlapping roots, including newly claimed ancestors, dynamic reads, independent state directories, and unresolved effects. Credentialed native end-to-end receipts remain required. |
 
 ## Durability and resource acceptance
 
@@ -103,27 +105,30 @@ release baseline in section 7.5 is not met:
 | A40 | Pass | Authority preservation, isolated bounded validation, four comparison outcomes, and interrupted/saved/tampered pair recovery are covered. |
 | A41 | Pass | CLI/SDK workflow inputs, config precedence, typed answers, reconciliation, JSON output, exits, and non-importing discovery have subprocess tests. |
 | A42 | Pass | Built the final sdist and built its wheel in isolation; installed that wheel into a fresh environment. Verified base/adapter imports without extras, assets and `py.typed`, all 20 workflow catalog entries, durable sync/async fake-provider calls and replay. Strict mypy consumer checks preserve typed values through derivation, scoped defaults, sync/async operations, decisions, streams, and context managers. The documented Claude extra installed and passed actual-package empty-tool preflight; the separately pinned Pi npm package passed actual startup checks. Native turns and remote CI remain separate gates. |
-| A43 | Pass | New application/user versions are checked before mutation, incompatible stores are rejected untouched, legacy APIs/readers/converters are absent, and old data cannot enter optimizer/labs history. New-format manual response usage remains supported. |
+| A43 | Pass | The chosen journal application/user versions are checked before mutation and unsupported stores are rejected untouched. Existing journal mechanisms are retained where useful; compatibility-only readers/converters are unnecessary for the selected format. Historical implementations are permitted on engineering merit, with no legacy compatibility obligation. Manual response reconciliation remains supported. |
 | A44 | Pass | `provider-first-design-decisions.md` compares all four representative authoring jobs with the baseline and a credible simpler alternative, and records the remaining ergonomic costs. |
 
 ## Test evidence snapshot
 
-The final complete suite passed **1,064 tests**, with **two Windows-only skips**
-on Linux, in 131.39 seconds. This run includes the final schema preflight, Pi
-policy cleanup, public API typing annotations, and packaged Ralph interruption
-regression. The skipped cases are the native Windows Job Object acceptance and
-smoke tests; they remain in Windows CI.
+The integrated fix suite passed **1,151 tests**, with **two Windows-only skips**
+on Linux, in 144.62 seconds. This receipt includes request recovery, cancellation
+response adoption, typed direct errors, ownership coordination, policy narrowing,
+portable path serialization and fixtures, and the optimizer's separate continuing
+review session. It also covers Codex incremental role updates, dynamic and
+ancestor reads, operation-specific recovery ownership, and unknown-run rejection.
+A subsequent focused ownership check covers removal of settled dynamic-reader
+claims so normal queries do not accumulate orphan metadata.
 
-The final sdist/wheel build, clean installed-wheel smoke, strict installed-API
-type check, actual Claude extra preflight, Python compilation, JavaScript syntax
-check, and `git diff --check` all passed. The wheel contains the Pi bridge and
-type marker, and discovers all five packaged workflows plus fifteen labs.
+The two skipped cases are native Windows Job Object acceptance and smoke tests.
+Windows CI also includes the new app-server and workspace coordination suites.
+Credentialed adapter conformance remains a separate gate.
 
-Review found and corrected two runtime defects: provider-family bindings now
-retain strong object keys rather than recyclable object IDs, and a caught
-uncertain operation fences the shared run so later root or child effects cannot
-proceed. Subprocess tests run with an absolute worktree `PYTHONPATH` to avoid
-accidentally importing the baseline editable checkout.
+Subprocess tests run with an absolute worktree `PYTHONPATH` to avoid accidentally
+importing the baseline editable checkout. The isolated sdist/wheel build, clean
+installed-wheel imports/assets/catalog and sync/async/replay smoke, strict public
+API type check, Python compilation, JavaScript syntax check, and diff whitespace
+check passed. The package discovers all 20 workflows. Supported-platform CI is
+verified separately on the published commit.
 
 The following evidence must still be attached before this document can record a
 release pass:
@@ -134,5 +139,5 @@ release pass:
    all mandatory provider/capability combinations, fresh and resumed sessions,
    hostile ambient configuration, cancellation, recovery, and transitions.
 3. A compliant Codex command-free interface, verified native account affinity,
-   and closure of the no-marker live-read race, or an explicit approved PRD
-   scope change. No scope reduction has been assumed.
+   or an explicit approved PRD scope change. The former no-marker race is
+   covered by shared hierarchical claims. No scope reduction has been assumed.

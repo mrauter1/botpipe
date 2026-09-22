@@ -7,7 +7,7 @@ Adapters cross this boundary with one of the variants below.  Historical
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Iterable, Mapping, Protocol
 
 if TYPE_CHECKING:
     from .providers import ProviderRequest
@@ -111,6 +111,54 @@ def recover_outcome(provider: Any, request: ProviderRequest) -> RecoveryOutcome:
     )
 
 
+def cancellation_evidence(
+    events: Iterable[Mapping[str, Any]],
+    *,
+    operation_id: str,
+    identity: Mapping[str, Any] | None,
+) -> RecoveryOutcome | None:
+    """Return authoritative cancellation evidence for one exact attempt."""
+
+    if identity is None:
+        return None
+    records: list[dict[str, Any]] = []
+    for event in events:
+        if (
+            event.get("event") != "cancellation_outcome"
+            or event.get("operation_id") != operation_id
+        ):
+            continue
+        data = event.get("data")
+        if not isinstance(data, Mapping) or data.get("attempt") != dict(identity):
+            continue
+        if data.get("outcome") != "completed":
+            continue
+        response = data.get("response")
+        if type(response) is not dict:
+            return Unknown("matching cancellation evidence is malformed")
+        records.append(response)
+    if not records:
+        return None
+    first = records[0]
+    if any(record != first for record in records[1:]):
+        return Unknown("conflicting completed cancellation evidence")
+    try:
+        from .providers import ProviderResponse
+
+        response = ProviderResponse(
+            **{
+                key: first[key]
+                for key in ("text", "session_id", "usage", "metadata")
+                if key in first
+            }
+        )
+        if response.to_record() != first:
+            raise ValueError("response has unknown fields")
+    except (TypeError, ValueError, RecursionError) as exc:
+        return Unknown(f"matching cancellation evidence is invalid: {exc}")
+    return Completed(response, "completed response recorded during cancellation")
+
+
 __all__ = [
     "Completed",
     "DurableResponse",
@@ -118,5 +166,6 @@ __all__ = [
     "Running",
     "Stopped",
     "Unknown",
+    "cancellation_evidence",
     "recover_outcome",
 ]

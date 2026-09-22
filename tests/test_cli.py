@@ -8,9 +8,40 @@ from pathlib import Path
 
 import pytest
 
+from botpipe.cli import _invocation, build_parser
 from botpipe.config import ConfigurationError, discover_config, load_config
+from botpipe.discovery import resolve_workflow, validate_workflow_inputs
+from labs.workflows.workflow_run_traces_to_optimization_candidates import (
+    Params as OptimizerParams,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_optimizer_readme_command_parses_and_binds_without_dispatch() -> None:
+    args = build_parser().parse_args(
+        [
+            "run",
+            "workflow_run_traces_to_optimization_candidates",
+            "--input",
+            '[{"selected_workflow":"release_candidate_to_go_no_go",'
+            '"task_title":"Diagnose release workflow","objective":"reliability"},'
+            '"Diagnose recent runs and recommend the next useful action."]',
+            "--task-id",
+            "review-1",
+            "--workspace",
+            str(REPO_ROOT),
+        ]
+    )
+    positional, keyword = _invocation(args)
+    workflow = resolve_workflow(args.workflow, args.workspace)
+
+    bound = validate_workflow_inputs(workflow, positional, keyword)
+
+    assert isinstance(bound.args[0], OptimizerParams)
+    assert bound.args[0].selected_workflow == "release_candidate_to_go_no_go"
+    assert bound.args[1] == "Diagnose recent runs and recommend the next useful action."
+    assert args.task_id == "review-1"
 
 
 def _workflow_file(tmp_path: Path) -> Path:

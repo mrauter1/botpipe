@@ -15,7 +15,7 @@ from contextlib import contextmanager
 from datetime import date, datetime, timedelta, timezone
 from enum import CONFORM, EJECT, KEEP, STRICT, Enum, EnumType, Flag
 from inspect import get_annotations, getattr_static
-from pathlib import Path
+from pathlib import Path, PosixPath, WindowsPath
 from types import (
     MappingProxyType,
     MemberDescriptorType,
@@ -46,6 +46,7 @@ _STATE_VERSION = 1
 _MAX_DEPTH = 100
 _MAX_VALUES = 100_000
 _TYPE_NAME = re.compile(r"^[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*:[^:\x00\r\n]{1,1000}$")
+_STANDARD_PATH_TYPES = frozenset((Path, PosixPath, WindowsPath))
 
 
 def type_name(cls):
@@ -1121,7 +1122,7 @@ def _encode(value, path, depth, traversal, contracts):
             if not math.isfinite(value):
                 raise TypeError(f"{path}: non-finite floats are not durable")
             return value
-        if isinstance(value, Path) and type(value).__module__ == "pathlib":
+        if type(value) in _STANDARD_PATH_TYPES:
             return {"$botpipe": "path", "value": str(value)}
         if type(value) is datetime:
             tz = value.tzinfo

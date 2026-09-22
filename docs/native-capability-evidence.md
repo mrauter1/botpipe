@@ -163,14 +163,13 @@ digest rather than claiming a full-file hash.
 The excluded names are `.aws`, `.azure`, `.botpipe`, `.botpipe-v2`, `.claude`,
 `.codex`, `.config`, `.env` and `.env.*`, `.git`, `.gnupg`, `.pi`, `.ssh`,
 `.botpipe-workspace.lock`, `credential`, `credentials`, and `credentials.json`.
-Explicit policy exclusions apply as well. Existing workspace fences are held
-through the read turn and bound to directory device/inode identities. Root or
-nested path replacement fails closed. This does not establish a global
-hierarchical lock protocol: a new writer marker created after an absent-marker
-check remains an unclosed concurrency case for A48. Overlapping ancestors also
-matter: a reader holding `root/child` cannot stop a new writer at `root` using
-independent exact-directory locks. Checking writer ancestors alone does not
-solve that reverse direction.
+Explicit policy exclusions apply as well. Shared read claims are held through
+the read turn and bound to directory device/inode identities. Root or nested
+path replacement fails closed. Both readers and writers now use the same local
+path-overlap coordinator, so a reader at `root/child` conflicts with a writer at
+`root` in either acquisition order, without probing for existing markers.
+This coordination covers cooperating runtimes on one host/account; native
+end-to-end conformance remains a separate proof requirement.
 
 Every mediated attempt saves an immutable resolved-envelope manifest before
 dispatch. Each tool observation is atomically published and synced before its
@@ -280,6 +279,21 @@ Those sources establish this closure:
   and cancellation. Dynamic-tool definitions are persisted with threads in
   the pinned core, and the bridge binds a resumed thread ID to a deterministic
   tool-registry fingerprint.
+- Continued role updates use the supported per-turn `collaborationMode`
+  instruction delta. Thread-level `developerInstructions` is unsuitable in this
+  pinned build: it is persisted, but changes are omitted from the resumed
+  settings-diff builder. The per-turn path appends changed guidance and leaves
+  unchanged guidance unduplicated; clearing uses an explicit nonempty reset.
+  Native model/base instructions, ordinary developer instructions, and prior
+  conversation messages remain intact. Botpipe owns the collaboration instruction
+  block; the public preset-list response does not expose the built-in Default
+  template text, so the reset clears Botpipe guidance without claiming to restore
+  that separate native template.
+  Pinned `core/tests/suite/collaboration_instructions.rs` verifies the request
+  history for changed and unchanged roles; `context_manager/updates.rs` and
+  `session/rollout_reconstruction.rs` establish incremental resume behavior.
+  This is source and transcript evidence for preserving cacheable prefixes,
+  not a credentialed receipt showing a provider cache hit.
 
 The same source audit found an upstream blocker for strict command-free
 generation: `update_plan` and `request_user_input` are registered

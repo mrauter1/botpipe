@@ -1,8 +1,8 @@
 # Botpipe: provider-first SDK and durable workflow runtime
 
-**Product requirements and implementation specification — revision 1.2**
+**Product requirements and implementation specification — revision 1.3**
 
-**Date:** 2026-09-21
+**Date:** 2026-09-22
 
 **Target:** next incompatible major release (baseline package version: 1.0.0)
 
@@ -23,7 +23,7 @@ The conversational operations form a clear progression: **`generate` answers fro
 
 The rewrite preserves required product behavior, not the existing API or implementation structure. There will be one new SDK, one execution path, and one set of documentation. No compatibility wrappers, deprecated aliases, dual runtimes, legacy request shapes, or old workflow-language interpreters are required.
 
-**Revision 1.2 makes the execution-history break explicit:** journals and persisted execution state produced by Botpipe versions preceding this rewrite are outside the preservation scope. The new product will not read, import, migrate, replay, resume, or analyze those journals. Workflow migration preserves functionality; it does not migrate historical executions. This exclusion concerns pre-rewrite formats, not journals created by the new runtime or its required support for compatible source edits on resume.
+**Revision 1.3 corrects the execution-history constraint in revision 1.2:** backward compatibility with earlier journals and persisted execution state is not required, but neither reuse nor compatibility is prohibited. Choose journal implementations, schemas, and record formats on their merits for the new product. Retain or adapt an existing design when it is the simplest correct solution; do not replace it or break compatibility merely because it predates the rewrite. Supporting historical executions, including migration, is optional and must not weaken the selected durability, recovery, or evidence contracts. Required replay and compatible source-edit behavior remain unchanged.
 
 ### 1.1 Intended users and jobs
 
@@ -64,8 +64,8 @@ The rewrite preserves required product behavior, not the existing API or impleme
 ### 2.2 Explicit exclusions
 
 - Source compatibility with `Session.run`, `ask`, previous provider request/response protocols, graph/node APIs, historical autoloop projects, or old constructor shapes.
-- Preservation or support of journals and persisted execution state from pre-rewrite Botpipe versions, including reading, inspection, import, migration, conversion, replay, resumption, reconciliation, or optimizer/history analysis. Do not ship compatibility readers, converters, migration commands, or fixtures/tests whose purpose is to preserve old-format support.
-- Conversion or restoration of native session bindings from pre-rewrite execution state.
+- An obligation to preserve earlier journals or persisted execution state solely for backward compatibility. Reading, inspection, import, migration, conversion, replay, resumption, reconciliation, and optimizer/history analysis of earlier records are optional, subject to section 2.3.
+- An obligation to convert or restore native session bindings from earlier execution state; any supported restoration must satisfy the current identity, affinity, ownership, and revision contracts.
 - A universal prompt-to-text interface for every backend.
 - A mandatory Agent, Worker, Task, Factory, or Manager class just to hold a prompt and configuration.
 - A second autonomous tool loop inside Botpipe when an execution provider already owns that loop.
@@ -75,11 +75,11 @@ The rewrite preserves required product behavior, not the existing API or impleme
 
 ### 2.3 Compatibility boundary
 
-The new major version starts with a new state store and supports only the new runtime's journal contract. When explicitly pointed at an incompatible or unrecognized existing store, it must reject that store before mutation and direct the caller to a fresh state directory. Minimal format/version detection for this rejection is required; it is not a legacy journal reader and need not decode historical records. It must not import, convert, reinterpret, or overwrite them.
+Select one coherent journal contract for the new runtime. Reuse existing storage mechanisms and formats where they best satisfy the requirements; schema changes, version changes, and a fresh state directory must follow from concrete contract or implementation needs, not from a requirement to discard older designs. No parallel legacy runtime or compatibility layer is required. Compatibility that follows naturally from the chosen contract may be retained; readers or migrations may also be included when their product value justifies their total maintenance burden.
 
-All run inspection, replay, resume, reconciliation, history-based labs, and optimizer evidence operate on new-runtime records only. Optimizer history therefore starts with executions recorded after the rewrite; an installation with only old journals has no eligible new-runtime history. Existing empty-evidence behavior still applies, including zero provider calls for empty optimizer evidence. No history backfill or old-to-new execution mapping is required.
+Run inspection, replay, resume, reconciliation, history-based labs, and optimizer evidence must validate records against the contracts required by the requested operation. A record's age alone neither qualifies nor disqualifies it. Read-only inspection or evidence use does not establish that a record can safely resume execution. Do not invent missing attempt identity, authority, session ownership, provenance, or measurements to make an earlier record appear compatible. No history backfill or old-to-new execution mapping is required. When no eligible evidence exists, retain the existing empty-evidence behavior, including zero optimizer provider calls.
 
-Previously created journal files may remain untouched outside the new store; removing compatibility does not require deleting them. Keeping an old environment to inspect its own runs is an optional operator choice, not a deliverable or dependency of this rewrite. Recovery and compatible source-edit guarantees elsewhere in this PRD continue to apply in full to new-runtime runs.
+An unsupported or unrecognized store must be rejected before mutation, with an actionable explanation and a fresh-state-directory option. Format/version validation remains necessary even when no historical compatibility is implemented. Do not silently reinterpret, overwrite, or delete unsupported state. The implemented format boundary and any supported conversion must be documented and tested. Recovery and compatible source-edit guarantees elsewhere in this PRD continue to apply in full to all executions admitted for replay or resume.
 
 Existing names or algorithms may be retained where they are already good. A clean rewrite is a change in model and ownership, not a requirement to discard correct code. Remove redundant layers and compatibility branches; retain or adapt well-tested mechanisms when they satisfy the new contracts directly.
 
@@ -96,7 +96,7 @@ The following requirements are fixed by this specification. A pivot must preserv
 - Provider-created multiple artifacts remain first-class.
 - Activity `retry_safe=True` remains the default; exception retries and uncertain-effect recovery remain distinct.
 - Unsupported capabilities are explicit; adapters cannot silently drop controls or substitute another provider/model.
-- There is no legacy API or pre-rewrite journal compatibility obligation; historical execution data is excluded as specified in section 2.3.
+- There is no legacy API or historical-journal compatibility obligation. Existing journal designs and formats remain candidates on their merits; support for earlier records follows the validated contracts in section 2.3.
 
 Internal module names, storage organization, adapter implementation techniques, helper names not fixed above, and the exact arrangement of configuration objects are provisional. They may change when a concrete alternative reduces total burden while passing the same behavioral scenarios.
 
@@ -321,6 +321,8 @@ A session binds to an enforceable backend identity and compatible native continu
 Only one invocation may extend a mutable session at a time. Overlapping attempts fail with a session-busy error before dispatch. The runtime must not silently choose a scheduling-dependent conversation order. Concurrent branches use separate sessions and independently appropriate workspaces.
 
 Changing role instructions affects the current invocation; it does not erase prior messages or create independent judgment. A derived reviewer inherits history unless its session is explicitly changed. Generation grants and query restrictions are recomputed per invocation regardless of earlier effectful turns. Moving between `generate`, `query`, and `run` preserves conversation continuity while replacing tool permissions for that invocation; inability to enforce the new boundary is a capability error, not permission to reset history or retain broader native tools.
+
+Continuing sessions should preserve the existing native message prefix and append new turns or supported instruction deltas, so providers can reuse their context cache. Repeating an unchanged role must not needlessly rebuild the history or append duplicate role messages. Role changes and explicit clearing must take effect through a supported incremental update where available; clearing must explicitly supersede earlier role guidance without deleting the conversation. Cache reuse never overrides current permissions or correctness, and retaining history alone is not proof of a cache hit. Native compaction and cache eviction remain provider-controlled.
 
 Continuity is not available merely because a backend is called a provider. Session-free decision capabilities reject session arguments. Session inspection must expose logical ID, scope, affinity, and native binding status without leaking credentials.
 
@@ -598,7 +600,7 @@ All fifteen labs workflows remain in scope. Shared helper code may be simplified
 | L03 | `task_to_workflow_strategy` | Explicit run-existing/compose/adapt/create-new strategy and next-action package |
 | L04 | `workflow_idea_to_workflow_package` | Frame/design/build/evaluate; discoverable candidate package; validation without substituting authoritative files |
 | L05 | `workflow_package_to_composable_building_blocks` | Candidate decomposition, contracts, isolated validation, verification summary; no authoritative-source mutation |
-| L06 | `workflow_run_history_to_failure_modes` | Bounded new-runtime journal-history evidence, failure manifest, recurring weaknesses, ranked opportunities; pre-rewrite journals are excluded under section 2.3 |
+| L06 | `workflow_run_history_to_failure_modes` | Bounded journal-history evidence admitted under section 2.3, failure manifest, recurring weaknesses, ranked opportunities; support for earlier records is optional |
 | L07 | `workflow_to_eval_suite` | Benchmark/edge/adversarial cases, rubric, manifest validation, optional accepted evaluation-case handoff, content-derived source/suite identities; no unperformed evaluation claim |
 | L08 | `workflow_and_eval_to_refined_workflow_package` | Selected candidate, frozen authority, candidate overlay, isolated checks, verification/refinement package, optional paired comparison; no automatic promotion |
 | L09 | `workflow_portfolio_to_operating_system` | Catalog/health evidence, lifecycle decisions, change candidates, governance package; deterministic cross-artifact publication checks |
@@ -642,7 +644,7 @@ The authoritative baseline includes `botpipe_optimizer`, the optimization-candid
 
 | ID | Required contract |
 | --- | --- |
-| O01 — Evidence | Capture bounded inspected new-runtime journal/physical-dispatch evidence; group exact source surfaces and revisions; preserve unknown/mixed identities and provider/model/effort strata. Pre-rewrite journals are excluded under section 2.3 and are not imported or analyzed. Reliability, token, and dispatch-time metrics are deterministic measured values, not provider prose. |
+| O01 — Evidence | Capture bounded inspected journal/physical-dispatch evidence admitted under section 2.3; group exact source surfaces and revisions; preserve unknown/mixed identities and provider/model/effort strata. Support for earlier records is optional and must satisfy the same evidence requirements. Reliability, token, and dispatch-time metrics are deterministic measured values, not provider prose. |
 | O02 — Candidates | Preserve producer-prompt, verifier-rubric, token, workflow, and evaluation-case candidate kinds; strict content-derived candidate/review/handoff identities; normal proposal plus independent review; bounded history/bytes/turns/deadlines. Empty evidence makes zero provider calls. |
 | O03 — Publication | Publish immutable content-addressed generations with an atomic root receipt. Validate the full hash/size/identity chain when loading. An unevaluated recommendation remains explicitly `not_evaluated`. Never mix files from different generations. |
 | O04 — Refinement | Freeze the editable surface and execution tree before provider edits. Permit bounded changes/additions/removals only inside the candidate boundary. Validate in isolated arms with argv execution, no shell interpolation, bounded diagnostics, and unchanged authoritative source. |
@@ -655,7 +657,7 @@ The baseline's complete accepted optimizer generation includes `workflow_optimiz
 
 ### 11.5 Removal and simplification checklist
 
-- Remove `Session.run/arun`, `ask`, old provider-protocol compatibility branches, old request/response adaptation, and all pre-rewrite journal readers, converters, migration commands, and compatibility-only fixtures/tests. Retain minimal unsupported-store rejection coverage; translate useful recovery scenarios to journals created by the new runtime.
+- Remove `Session.run/arun`, `ask`, old provider-protocol compatibility branches, and old request/response adaptation. Assess existing journal mechanisms, readers, converters, and tests on their usefulness to the chosen contracts, rather than their age. Remove compatibility-only machinery when it has no justified role; do not discard a superior journal design or useful recovery test merely to force a format break. Cover unsupported-store rejection and the supported format boundary, and exercise required recovery scenarios through the new API.
 - Rewrite current workflows, optimizer consumers, tests, examples, manifests, authoring guidance, and generated-workflow templates together.
 - Remove stale CLI examples such as unsupported `--task`/`-wf` spellings; document actual new commands.
 - Consolidate duplicate request normalization, policy resolution, dispatch accounting, response validation, and artifact publication into the common path.
@@ -793,7 +795,7 @@ These are behavioral acceptance scenarios, not instructions to mirror individual
 | A40 | Candidate refinement leaves authority byte-identical; validation is isolated and bounded; paired evaluation covers all four outcomes. After an attempted pair is interrupted, repeated resume and generic retry authorization launch neither arm; valid saved evidence recovers it, missing evidence stays interrupted, and tampered evidence fails | O04, O05 |
 | A41 | CLI and SDK invoke equivalent workflows/inputs; config precedence, typed answers, reconciliation, JSON output, exit states, and non-importing discovery are consistent | C15 |
 | A42 | Install a built wheel in a clean environment; discover packaged workflows and assets, run fake-provider examples, validate type information, and import optional adapters only with their documented extras | Packaging |
-| A43 | Old execution API/compatibility shims and pre-rewrite journal readers/converters/migration commands are absent. Explicit access to an incompatible or unrecognized store is rejected before mutation and directs the caller to a fresh state directory. Old journals remain untouched and cannot be imported, resumed, reconciled, or consumed as optimizer/labs history. A fresh store with only old journals elsewhere has empty eligible history, and the optimizer makes zero provider calls. New-runtime replay/recovery scenarios still pass; all shipping examples and generated templates use the new model | Clean break; section 2.3 |
+| A43 | Old execution API/compatibility shims are absent. Journal design and format decisions are justified by the new requirements; historical compatibility is neither mandatory nor categorically forbidden. The supported format boundary is documented and tested. Unsupported or unrecognized stores are rejected before mutation with an actionable fresh-state-directory option. Any admitted historical records satisfy the contracts of the requested inspection, evidence, or recovery operation without fabricated facts. Empty eligible history makes zero optimizer provider calls. Required replay/recovery scenarios pass; all shipping examples and generated templates use the new model | API clean break; journal reuse on merit; section 2.3 |
 | A44 | Compare direct conversation, shared-role workflow, parallel work items, and typed decision examples against the baseline and simplest credible alternative; document any remaining ergonomic cost | Product simplicity |
 
 ### 15.4 Release gates

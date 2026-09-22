@@ -22,6 +22,7 @@ from botpipe.recovery import (
     Running,
     Stopped,
     Unknown,
+    cancellation_evidence,
     recover_outcome,
 )
 
@@ -79,6 +80,41 @@ def test_untyped_completed_response_is_rejected(tmp_path: Path) -> None:
 
     assert isinstance(outcome, Unknown)
     assert "unsupported recovery result ProviderResponse" in (outcome.detail or "")
+
+
+def test_cancellation_evidence_is_attempt_scoped_and_duplicate_safe() -> None:
+    identity = {"generation": 2, "request_digest": "current"}
+    response = ProviderResponse("done").to_record()
+    events = [
+        {
+            "event": "cancellation_outcome",
+            "operation_id": "op",
+            "data": {
+                "outcome": "completed",
+                "attempt": {"generation": 1, "request_digest": "stale"},
+                "response": ProviderResponse("stale").to_record(),
+            },
+        },
+        *[
+            {
+                "event": "cancellation_outcome",
+                "operation_id": "op",
+                "data": {
+                    "outcome": "completed",
+                    "attempt": identity,
+                    "response": response,
+                },
+            }
+            for _ in range(2)
+        ],
+    ]
+
+    outcome = cancellation_evidence(
+        events, operation_id="op", identity=identity
+    )
+
+    assert isinstance(outcome, Completed)
+    assert outcome.response.to_record() == response
 
 
 @pytest.mark.parametrize(

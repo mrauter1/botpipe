@@ -5,7 +5,16 @@ from copy import deepcopy
 
 import pytest
 
-from botpipe import Artifact, Botpipe, BotpipeError, ReplayMismatch, Provider, workflow
+from botpipe import codec
+from botpipe import (
+    Artifact,
+    Botpipe,
+    BotpipeError,
+    Provider,
+    ReplayMismatch,
+    UncertainOperation,
+    workflow,
+)
 from botpipe.providers import (
     FakeProvider,
     ProviderError,
@@ -123,6 +132,156 @@ def test_manual_recovery_uses_timeout_recorded_for_run(tmp_path):
             client.resolve("recorded-timeout", operation["id"], retry=True)
 
         assert provider.recovery_requests[-1].timeout == 7.5
+
+
+def test_manual_recovery_hydrates_the_complete_recorded_request(tmp_path):
+    class InspectingProvider(FakeProvider):
+        def __init__(self):
+            super().__init__([SystemExit("provider interrupted")])
+            self.recovery_requests = []
+
+        def recover(self, request):
+            self.recovery_requests.append(request)
+            return Stopped("query stopped")
+
+    @workflow
+    def work():
+        return Provider(
+            instructions="recorded instructions",
+            settings={"temperature": 0.25},
+            allow_commands=(("git", "status"),),
+        ).query("inspect").value
+
+    provider = InspectingProvider()
+    with Botpipe(tmp_path, provider=provider) as client:
+        with pytest.raises(SystemExit):
+            client.run(work, run_id="full-request")
+        operation = _provider_operation(client, "full-request")
+        recorded = operation["response"]["request"]
+
+        client.resolve("full-request", operation["id"], retry=True)
+
+    [request] = provider.recovery_requests
+    assert request.operation.value == recorded["operation"] == "query"
+    assert request.instructions == recorded["instructions"]
+    assert dict(request.settings) == recorded["settings"]
+    assert request.allow_commands == tuple(
+        tuple(argv) for argv in recorded["allow_commands"]
+    )
+    assert request.policy.to_dict() == recorded["policy"]
+
+
+def test_completed_cancellation_evidence_resumes_and_advances_session_once(
+    tmp_path, monkeypatch
+):
+    class CancelCompleted(FakeProvider):
+        def cancel(self, operation_id):
+            return Completed(ProviderResponse("late result", "native-session"))
+
+        def recover(self, request):
+            raise AssertionError("durable cancellation evidence must win")
+
+    @workflow
+    def work():
+        return Provider().run("effect").value
+
+    provider = CancelCompleted([KeyboardInterrupt()])
+    with Botpipe(tmp_path, provider=provider) as client:
+        paused = client.run(work, run_id="cancel-completed")
+        assert paused.status == "interrupted"
+        operation = _provider_operation(client, paused.run_id)
+        session_id = codec.decode(operation["inputs"])["session"]
+        cancelled = client.cancel(paused.run_id)
+        assert cancelled["run"]["status"] == "interrupted"
+
+        original_response = client.journal.response
+        acknowledgement_lost = True
+
+        def commit_then_fail(*args, **kwargs):
+            nonlocal acknowledgement_lost
+            original_response(*args, **kwargs)
+            if acknowledgement_lost:
+                acknowledgement_lost = False
+                raise OSError("response acknowledgement lost")
+
+        monkeypatch.setattr(client.journal, "response", commit_then_fail)
+        resumed = client.resume(paused.run_id, workflow=work)
+
+        assert resumed.ok, resumed.error
+        assert resumed.value == "late result"
+        assert client.journal.session(session_id)["revision"] == 1
+        assert len(provider.calls) == 1
+
+
+def test_resolve_consumes_completed_cancellation_evidence_without_recovery(tmp_path):
+    class CancelCompleted(FakeProvider):
+        def cancel(self, operation_id):
+            return Completed(ProviderResponse("resolved result"))
+
+        def recover(self, request):
+            raise AssertionError("resolve must consume cancellation evidence")
+
+    @workflow
+    def work():
+        return Provider(session=None).run("effect").value
+
+    provider = CancelCompleted([KeyboardInterrupt()])
+    with Botpipe(tmp_path, provider=provider) as client:
+        paused = client.run(work, run_id="resolve-cancel-evidence")
+        operation = _provider_operation(client, paused.run_id)
+        client.cancel(paused.run_id)
+
+        client.resolve(paused.run_id, operation["id"], retry=True)
+
+        checkpoint = client.journal.get(operation["id"])["response"]
+        assert checkpoint["text"] == "resolved result"
+        assert "retry_authorized" not in checkpoint
+        resumed = client.resume(paused.run_id, workflow=work)
+        assert resumed.ok, resumed.error
+        assert resumed.value == "resolved result"
+        assert len(provider.calls) == 1
+
+
+def test_conflicting_completed_cancellation_evidence_blocks_resume(tmp_path):
+    class CancelCompleted(FakeProvider):
+        def cancel(self, operation_id):
+            return Completed(ProviderResponse("first result"))
+
+        def recover(self, request):
+            raise AssertionError("conflicting evidence must block recovery")
+
+    @workflow
+    def work():
+        return Provider(session=None).run("effect").value
+
+    provider = CancelCompleted([KeyboardInterrupt()])
+    with Botpipe(tmp_path, provider=provider) as client:
+        paused = client.run(work, run_id="conflicting-cancel-evidence")
+        operation = _provider_operation(client, paused.run_id)
+        client.cancel(paused.run_id)
+        [event] = [
+            event
+            for event in client.journal.events(paused.run_id)
+            if event["event"] == "cancellation_outcome"
+        ]
+        client.journal.event(
+            paused.run_id,
+            "cancellation_outcome",
+            {
+                "outcome": "completed",
+                "detail": None,
+                "attempt": event["data"]["attempt"],
+                "response": ProviderResponse("different result").to_record(),
+            },
+            operation_id=operation["id"],
+        )
+
+        resumed = client.resume(paused.run_id, workflow=work)
+
+        assert resumed.status == "interrupted"
+        assert isinstance(resumed.exception, UncertainOperation)
+        assert "conflicting" in resumed.error
+        assert len(provider.calls) == 1
 
 
 def test_known_stopped_attempt_only_reexecutes_after_retry_authorization(tmp_path):

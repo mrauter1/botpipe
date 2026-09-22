@@ -6,6 +6,7 @@ callers operate on variants and serialize a complete legal state.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import dataclass, field, replace
 from enum import Enum
@@ -548,6 +549,25 @@ class ProviderLifecycle:
         ).strip()
 
 
+def provider_attempt_identity(checkpoint: ProviderCheckpoint) -> dict[str, Any] | None:
+    """Name the exact dispatched attempt represented by a checkpoint."""
+
+    request = checkpoint.request_data
+    if request is None:
+        return None
+    canonical = json.dumps(
+        request,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode()
+    return {
+        "generation": checkpoint.attempt_generation,
+        "request_digest": hashlib.sha256(canonical).hexdigest(),
+    }
+
+
 __all__ = [
     "EmptyCheckpoint",
     "IntentCheckpoint",
@@ -556,6 +576,7 @@ __all__ = [
     "ProviderCheckpoint",
     "ProviderCheckpointError",
     "ProviderLifecycle",
+    "provider_attempt_identity",
     "RecoveryAction",
     "RespondedCheckpoint",
     "RetryAuthorizedCheckpoint",

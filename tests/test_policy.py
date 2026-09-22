@@ -212,3 +212,159 @@ def test_empty_current_policy_is_identity_for_effective_authority() -> None:
     ).effective()
 
     assert saved.intersect(Policy()) == saved
+
+
+@pytest.mark.parametrize("permission_mode", list(PermissionMode))
+def test_restrict_read_only_preserves_limits_for_every_permission_mode(
+    permission_mode: PermissionMode,
+) -> None:
+    sandbox_mode = (
+        SandboxMode.DANGER_FULL_ACCESS
+        if permission_mode is PermissionMode.FULL_AUTO_UNSANDBOXED
+        else SandboxMode.WORKSPACE_WRITE
+    )
+    policy = Policy(
+        sandbox_mode=sandbox_mode,
+        permission_mode=permission_mode,
+        network=NetworkMode.LIMITED,
+        network_domains=("api.example",),
+        allow_read=("src",),
+        allow_write=("generated",),
+        deny_read=("src/private",),
+        deny_write=("generated/protected",),
+        deny_network_domains=("blocked.example",),
+        deny_permissions=("Shell",),
+        allow_local_binding=False,
+        timeout=8,
+    )
+    before = policy.to_dict(exclude_none=False)
+
+    restricted = policy.restrict_read_only()
+
+    assert policy.to_dict(exclude_none=False) == before
+    assert restricted.sandbox_mode is SandboxMode.READ_ONLY
+    assert restricted.read_only is True
+    assert restricted.allow_write == ()
+    assert restricted.permission_mode is (
+        PermissionMode.FULL_AUTO_SANDBOXED
+        if permission_mode is PermissionMode.FULL_AUTO_UNSANDBOXED
+        else permission_mode
+    )
+    for field in (
+        "network",
+        "network_domains",
+        "allow_read",
+        "deny_read",
+        "deny_write",
+        "deny_network_domains",
+        "deny_permissions",
+        "allow_local_binding",
+        "timeout",
+    ):
+        assert getattr(restricted, field) == getattr(policy, field)
+
+
+@pytest.mark.parametrize("permission_mode", list(PermissionMode))
+@pytest.mark.parametrize("ceiling_sandbox", list(SandboxMode))
+def test_intersection_normalizes_permissions_only_when_sandbox_is_narrowed(
+    permission_mode: PermissionMode, ceiling_sandbox: SandboxMode
+) -> None:
+    saved_sandbox = (
+        SandboxMode.DANGER_FULL_ACCESS
+        if permission_mode is PermissionMode.FULL_AUTO_UNSANDBOXED
+        else SandboxMode.WORKSPACE_WRITE
+    )
+    saved = Policy(
+        sandbox_mode=saved_sandbox,
+        permission_mode=permission_mode,
+        network=NetworkMode.NONE,
+        deny_read=("secret",),
+        deny_permissions=("Shell",),
+        timeout=9,
+    ).effective()
+    ceiling = Policy(
+        sandbox_mode=ceiling_sandbox,
+        deny_read=("deployment-secret",),
+        timeout=4,
+    )
+    saved_before = saved.to_dict(exclude_none=False)
+    ceiling_before = ceiling.to_dict(exclude_none=False)
+
+    intersected = saved.intersect(ceiling)
+
+    assert saved.to_dict(exclude_none=False) == saved_before
+    assert ceiling.to_dict(exclude_none=False) == ceiling_before
+    assert intersected.sandbox_mode is min(
+        (saved_sandbox, ceiling_sandbox), key=list(SandboxMode).index
+    )
+    expected_permission = permission_mode
+    if (
+        permission_mode is PermissionMode.FULL_AUTO_UNSANDBOXED
+        and ceiling_sandbox is not SandboxMode.DANGER_FULL_ACCESS
+    ):
+        expected_permission = PermissionMode.FULL_AUTO_SANDBOXED
+    assert intersected.permission_mode is expected_permission
+    assert intersected.deny_read == ("secret", "deployment-secret")
+    assert intersected.deny_permissions == ("Shell",)
+    assert intersected.network is NetworkMode.NONE
+    assert intersected.timeout == 4
+    if intersected.sandbox_mode is SandboxMode.READ_ONLY:
+        assert intersected.allow_write == ()
+
+
+@pytest.mark.parametrize("ceiling_permission", list(PermissionMode))
+def test_intersection_keeps_stricter_permission_ceiling_during_normalization(
+    ceiling_permission: PermissionMode,
+) -> None:
+    ceiling_sandbox = (
+        SandboxMode.DANGER_FULL_ACCESS
+        if ceiling_permission is PermissionMode.FULL_AUTO_UNSANDBOXED
+        else SandboxMode.READ_ONLY
+    )
+    saved = Policy(
+        sandbox_mode=SandboxMode.DANGER_FULL_ACCESS,
+        permission_mode=PermissionMode.FULL_AUTO_UNSANDBOXED,
+        deny_permissions=("Shell",),
+    )
+    ceiling = Policy(
+        sandbox_mode=ceiling_sandbox,
+        permission_mode=ceiling_permission,
+        deny_permissions=("Edit",),
+    )
+
+    intersected = saved.intersect(ceiling)
+
+    assert intersected.permission_mode is ceiling_permission
+    assert intersected.deny_permissions == ("Shell", "Edit")
+
+
+@pytest.mark.parametrize(
+    ("ceiling_sandbox", "expected_permission"),
+    [
+        (SandboxMode.READ_ONLY, PermissionMode.FULL_AUTO_SANDBOXED),
+        (SandboxMode.WORKSPACE_WRITE, PermissionMode.FULL_AUTO_SANDBOXED),
+        (SandboxMode.DANGER_FULL_ACCESS, PermissionMode.FULL_AUTO_UNSANDBOXED),
+    ],
+)
+def test_serialized_replay_intersection_handles_unsandboxed_saved_policy(
+    ceiling_sandbox: SandboxMode, expected_permission: PermissionMode
+) -> None:
+    saved_record = Policy(
+        sandbox_mode=SandboxMode.DANGER_FULL_ACCESS,
+        permission_mode=PermissionMode.FULL_AUTO_UNSANDBOXED,
+        network=NetworkMode.LIMITED,
+        network_domains=("api.example",),
+        deny_network_domains=("blocked.example",),
+    ).effective().to_dict()
+    current_record = Policy(
+        sandbox_mode=ceiling_sandbox,
+        network=NetworkMode.NONE,
+    ).to_dict()
+
+    replay_policy = Policy.from_dict(saved_record).intersect(
+        Policy.from_dict(current_record)
+    )
+
+    assert replay_policy.permission_mode is expected_permission
+    assert replay_policy.network is NetworkMode.NONE
+    assert replay_policy.deny_network_domains == ("blocked.example",)

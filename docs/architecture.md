@@ -16,14 +16,16 @@ replays committed results from a SQLite ledger.
 
 Each run records metadata, source fingerprints, operation intent and outcomes,
 provider sessions, human-input events, usage, and immutable artifact references.
-Files become durable before the ledger refers to them. A workspace lock protects
-one active run from another process.
+Files become durable before the ledger refers to them. Shared workspace claims
+protect overlapping live reads and writes across processes and state directories.
 
 The 2.0 ledger defaults to `workspace/.botpipe-v2`. Before opening an existing
 database in write mode, Botpipe checks its application and format versions
-through a read-only connection. An unrecognized or pre-2.0 store is rejected
-without schema changes and the operator is directed to a fresh state directory.
-No old record is decoded, imported, converted, or used as optimizer evidence.
+through a read-only connection. This implementation supports the version-2
+schema; incompatible stores are rejected without schema changes and the operator
+is directed to a fresh state directory. The existing SQLite/checkpoint design is
+retained on its merits. Backward compatibility is optional under the PRD, and a
+different format boundary requires its own validated implementation.
 
 Run records own root execution facts; operation records own their checkpoints.
 The journal commits an operation checkpoint, its native session update, and the
@@ -195,9 +197,31 @@ exceptions after dispatch remain uncertain; they cannot silently coerce durable
 values or establish that external effects stopped.
 
 While a workspace has an unresolved uncertain effect, its durable workspace
-fence blocks a different run from starting there, even when clients choose
-different state directories. Resolve the recorded effect before continuing work
-in that workspace.
+claim blocks conflicting work in that directory, its ancestors, and its
+descendants, even when clients choose different state directories. Read claims
+can coexist; a write conflicts with overlapping reads or writes. Resolve the
+recorded effect before continuing conflicting work.
+
+The local coordinator stores claims in the account's Botpipe state directory,
+outside the workspaces themselves. A short SQLite transaction checks and admits
+claims atomically; OS locks identify live claim holders. Process death releases
+the OS lock but does not establish that an orphaned native attempt stopped.
+Unresolved reader and writer claims therefore survive until journal evidence
+permits their release. Writer claims cover output validation and finalization,
+not merely native response arrival. Nested operations delegate an explicit
+parent lease; sharing a run ID does not exempt parallel branches from conflicts.
+Provider claims also identify their owning operation. Root recovery preserves
+those claims, and replay may recover only the matching operation's ownership.
+A completed operation releases its own claim independently of unfinished work
+elsewhere in the run. Broader ancestor claims remain in place when a child-root
+workflow re-enters for recovery.
+
+All cooperating processes must use the same coordinator and filesystem namespace
+on one host/account. Shared workspaces across accounts, isolated containers, or
+hosts need a separately supported coordination mechanism. Before switching from
+the earlier per-directory-marker runtime, stop its native processes and reconcile
+its unresolved runs using that runtime; mixed ownership protocols cannot
+coordinate safely. The new protocol does not create lock files in read roots.
 
 ## Declared output transactions
 

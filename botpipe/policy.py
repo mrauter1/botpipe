@@ -201,6 +201,28 @@ def _set_intersection(
     return tuple(value for value in left if value in allowed)
 
 
+def _normalize_narrowed_sandbox(
+    payload: Mapping[str, Any], sandbox_mode: SandboxMode, *, read_only: bool = False
+) -> dict[str, Any]:
+    """Return a policy payload made valid after explicitly narrowing its sandbox."""
+    narrowed = dict(payload)
+    narrowed["sandbox_mode"] = sandbox_mode
+    if sandbox_mode is SandboxMode.READ_ONLY:
+        narrowed["allow_write"] = ()
+    if (
+        narrowed.get("permission_mode")
+        in (
+            PermissionMode.FULL_AUTO_UNSANDBOXED,
+            PermissionMode.FULL_AUTO_UNSANDBOXED.value,
+        )
+        and sandbox_mode is not SandboxMode.DANGER_FULL_ACCESS
+    ):
+        narrowed["permission_mode"] = PermissionMode.FULL_AUTO_SANDBOXED
+    if read_only:
+        narrowed["read_only"] = True
+    return narrowed
+
+
 @dataclass(frozen=True, slots=True)
 class Policy:
     """Immutable policy layer. ``None`` means inherit."""
@@ -466,7 +488,7 @@ class Policy:
         }
 
         payload = saved.to_dict(exclude_none=False)
-        payload["sandbox_mode"] = (
+        narrowed_sandbox = (
             min(
                 (saved.sandbox_mode, other.sandbox_mode),
                 key=sandbox_rank.__getitem__,
@@ -514,8 +536,7 @@ class Policy:
         payload["allow_write"] = _path_intersection(
             saved.allow_write, other.allow_write
         )
-        if payload["sandbox_mode"] is SandboxMode.READ_ONLY:
-            payload["allow_write"] = ()
+        payload = _normalize_narrowed_sandbox(payload, narrowed_sandbox)
         for name in ("allow_permissions", "ask_permissions"):
             payload[name] = _set_intersection(
                 getattr(saved, name), getattr(other, name)
@@ -545,6 +566,20 @@ class Policy:
         else:
             payload["timeout"] = min(saved.timeout, other.timeout)
         payload["read_only"] = saved.read_only
+        return Policy(**payload)
+
+    def restrict_read_only(self) -> "Policy":
+        """Return this policy narrowed to a read-only sandbox.
+
+        Unattended execution remains unattended, but loses the unsandboxed
+        grant that is incompatible with a read-only sandbox. All other limits
+        are retained verbatim.
+        """
+        payload = _normalize_narrowed_sandbox(
+            self.to_dict(exclude_none=False),
+            SandboxMode.READ_ONLY,
+            read_only=True,
+        )
         return Policy(**payload)
 
     @staticmethod

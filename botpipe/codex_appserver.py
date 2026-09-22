@@ -15,7 +15,6 @@ import math
 import os
 import queue
 import re
-import signal
 import subprocess
 import threading
 import time
@@ -32,6 +31,7 @@ from .native_tools import (
     command_scope_is_workspace_wide,
 )
 from .policy import OperationKind
+from .processes import ProcessContainment
 from .providers import (
     CapabilityError,
     CODEX_APPSERVER_CAPABILITIES,
@@ -57,6 +57,15 @@ PINNED_CODEX_TAG = "rust-v0.131.0"
 PINNED_CODEX_COMMIT = "05eb8678451435cbc8d79c6d8254276289f2bdf1"
 TOOL_CALL_LIMIT = 16
 TOOL_OUTPUT_BYTES = 32_000
+_BOTPIPE_ROLE_PREFIX = (
+    "Botpipe role update: earlier Botpipe role instructions are no longer active. "
+    "Follow these role instructions until another Botpipe role update:\n\n"
+)
+_BOTPIPE_ROLE_RESET = (
+    "Botpipe role update: earlier Botpipe role instructions are no longer active. "
+    "No additional Botpipe role instructions apply; continue under the provider's "
+    "base and developer instructions."
+)
 
 # This list is derived from codex-rs/core/src/tools/spec_plan.rs and
 # codex-rs/tools/src/tool_config.rs at PINNED_CODEX_COMMIT.  Empty environments
@@ -178,6 +187,37 @@ def tool_fingerprint(tools: Sequence[DynamicTool]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _role_collaboration_mode(
+    thread_response: Mapping[str, Any], instructions: str | None
+) -> dict[str, Any]:
+    model = thread_response.get("model")
+    reasoning_effort = thread_response.get("reasoningEffort")
+    if not isinstance(model, str) or not model:
+        raise CodexAppServerProtocolError(
+            "thread response contained no effective model"
+        )
+    if reasoning_effort is not None and not isinstance(reasoning_effort, str):
+        raise CodexAppServerProtocolError(
+            "thread response contained an invalid reasoning effort"
+        )
+    role_instructions = (
+        _BOTPIPE_ROLE_PREFIX + instructions
+        if instructions
+        else _BOTPIPE_ROLE_RESET
+    )
+    # Pinned core tests prove that changed collaboration instructions append a
+    # developer delta while identical settings append nothing:
+    # core/tests/suite/collaboration_instructions.rs (update + noop tests).
+    return {
+        "mode": "default",
+        "settings": {
+            "model": model,
+            "reasoning_effort": reasoning_effort,
+            "developer_instructions": role_instructions,
+        },
+    }
+
+
 def _plain_json(value: Any, *, label: str) -> Any:
     if type(value) is float and not math.isfinite(value):
         raise ValueError(f"{label} contains a non-finite number")
@@ -246,17 +286,34 @@ class _JsonlProcess:
         max_messages: int,
         max_stderr_bytes: int = 65_536,
     ) -> None:
-        self.process = subprocess.Popen(
-            tuple(command),
-            cwd=cwd,
-            env=dict(env),
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=False,
-            bufsize=0,
-            start_new_session=os.name != "nt",
-        )
+        self.containment = ProcessContainment.create()
+        try:
+            self.process = subprocess.Popen(
+                tuple(command),
+                cwd=cwd,
+                env=dict(env),
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=False,
+                bufsize=0,
+                **self.containment.creation_kwargs,
+            )
+        except BaseException:
+            self.containment.close()
+            raise
+        try:
+            self.containment.attach_and_start(self.process)
+        except BaseException:
+            # Assignment failure leaves a Windows child suspended and POSIX
+            # registration failure leaves no verified group safe to signal.
+            # Killing the known leader is the only safe fallback in either case.
+            try:
+                self.process.kill()
+                self.process.wait(timeout=2)
+            finally:
+                self.containment.close()
+            raise
         self.max_message_bytes = max_message_bytes
         self.messages: queue.Queue[Mapping[str, Any] | BaseException | None] = (
             queue.Queue(maxsize=max(1, min(max_messages, 64)))
@@ -266,6 +323,8 @@ class _JsonlProcess:
         self.stderr_lock = threading.Lock()
         self.write_lock = threading.Lock()
         self.close_lock = threading.Lock()
+        self.close_error: BaseException | None = None
+        self.closed = False
         self.stopping = threading.Event()
         threading.Thread(target=self._read_stdout, daemon=True).start()
         threading.Thread(target=self._read_stderr, daemon=True).start()
@@ -365,28 +424,43 @@ class _JsonlProcess:
 
     def close(self) -> None:
         with self.close_lock:
+            if self.closed:
+                if self.close_error is not None:
+                    raise RuntimeError(
+                        "app-server process-tree cleanup was not confirmed"
+                    ) from self.close_error
+                return
             self.stopping.set()
-            if self.process.poll() is None:
+            cleanup_error: BaseException | None = None
+            try:
+                # The leader may already have exited after reporting a terminal
+                # turn.  Containment still has to prove that its descendants
+                # cannot outlive the successful response.
+                self.containment.ensure_tree_exited(
+                    self.process, grace_seconds=0.1
+                )
+            except BaseException as exc:
+                cleanup_error = exc
+            finally:
+                for stream in (
+                    self.process.stdin,
+                    self.process.stdout,
+                    self.process.stderr,
+                ):
+                    if stream is not None:
+                        try:
+                            stream.close()
+                        except OSError:
+                            pass
                 try:
-                    if os.name != "nt":
-                        os.killpg(self.process.pid, signal.SIGTERM)
-                    else:
-                        self.process.terminate()
-                    self.process.wait(timeout=2)
-                except (OSError, subprocess.TimeoutExpired):
-                    try:
-                        if os.name != "nt":
-                            os.killpg(self.process.pid, signal.SIGKILL)
-                        else:
-                            self.process.kill()
-                    except OSError:
-                        pass
-            for stream in (self.process.stdin, self.process.stdout, self.process.stderr):
-                if stream is not None:
-                    try:
-                        stream.close()
-                    except OSError:
-                        pass
+                    self.containment.close()
+                except BaseException as exc:
+                    if cleanup_error is None:
+                        cleanup_error = exc
+                self.closed = True
+                self.close_error = cleanup_error
+            if cleanup_error is not None:
+                raise cleanup_error
 
 
 class CodexAppServerBridge:
@@ -596,12 +670,12 @@ class CodexAppServerBridge:
                     "environments": [],
                     "dynamicTools": [tool.to_wire() for tool in tools],
                     "config": dict(AUDITED_CONFIG_OVERRIDES),
-                    "baseInstructions": instructions,
                 }
                 started = state.rpc(
                     "thread/start",
                     {key: value for key, value in params.items() if value is not None},
                 )
+                thread_response = started
                 thread = started.get("thread")
                 thread_id = thread.get("id") if isinstance(thread, Mapping) else None
             else:
@@ -615,16 +689,23 @@ class CodexAppServerBridge:
                         "config": dict(AUDITED_CONFIG_OVERRIDES),
                     },
                 )
+                thread_response = resumed
                 thread = resumed.get("thread")
                 thread_id = thread.get("id") if isinstance(thread, Mapping) else None
             if not isinstance(thread_id, str) or not thread_id:
                 raise CodexAppServerProtocolError("thread response contained no thread id")
+            collaboration_mode = (
+                _role_collaboration_mode(thread_response, instructions)
+                if session is not None or instructions
+                else None
+            )
             turn_params: dict[str, Any] = {
                 "threadId": thread_id,
                 "input": [{"type": "text", "text": prompt}],
                 "environments": [],
                 "approvalPolicy": "never",
                 "sandboxPolicy": {"type": "readOnly", "networkAccess": False},
+                "collaborationMode": collaboration_mode,
                 "outputSchema": (
                     _plain_json(output_schema, label="output schema")
                     if output_schema is not None
@@ -1408,10 +1489,11 @@ class CodexAppServerProvider(_CLIProvider):
             or value.get("thread_id") != request.session_id
             or value.get("tool_fingerprint") != fingerprint
             or value.get("adapter_version") != self.capabilities.version
+            or value.get("instruction_mode") != "collaboration-mode-v1"
         ):
             raise CapabilityError(
                 "Codex app-server session tool-registry binding does not match "
-                "the requested authority"
+                "the requested authority or role-instruction mode"
             )
         return CodexAppServerSession(request.session_id, fingerprint)
 
@@ -1425,6 +1507,7 @@ class CodexAppServerProvider(_CLIProvider):
                 "provider": self.name,
                 "adapter_version": self.capabilities.version,
                 "source_commit": PINNED_CODEX_COMMIT,
+                "instruction_mode": "collaboration-mode-v1",
                 "thread_id": session.thread_id,
                 "tool_fingerprint": session.tool_fingerprint,
                 "updated_at": _now(),

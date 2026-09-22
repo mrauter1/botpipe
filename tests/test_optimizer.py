@@ -835,8 +835,11 @@ def test_v2_eligible_evidence_review_loop_and_terminal_failure(
         return json.JSONDecoder().raw_decode(body)[0]
 
     proposal_inputs = []
+    proposal_sessions = []
+    review_sessions = []
 
     def propose(request):
+        proposal_sessions.append(request.session_id)
         value = prompt_input(request)
         proposal_inputs.append(value)
         evidence = value["evidence_snapshot"]
@@ -877,13 +880,17 @@ def test_v2_eligible_evidence_review_loop_and_terminal_failure(
                 "no_candidate_reason": None,
             }
         )
-        return result.model_dump(mode="json", by_alias=True)
+        return ProviderResponse(
+            json.dumps(result.model_dump(mode="json", by_alias=True)),
+            request.session_id or "producer-native-session",
+        )
 
     review_calls = 0
 
     def review(request):
         nonlocal review_calls
         review_calls += 1
+        review_sessions.append(request.session_id)
         if review_mode == "invalid":
             return {}
         candidate_set = prompt_input(request)["candidate_set"]
@@ -912,7 +919,10 @@ def test_v2_eligible_evidence_review_loop_and_terminal_failure(
                 ],
             }
         )
-        return result.model_dump(mode="json", by_alias=True)
+        return ProviderResponse(
+            json.dumps(result.model_dump(mode="json", by_alias=True)),
+            request.session_id or "verifier-native-session",
+        )
 
     class TimedFakeProvider(FakeProvider):
         supports_timeout = True
@@ -979,3 +989,5 @@ def test_v2_eligible_evidence_review_loop_and_terminal_failure(
     if review_mode == "reject_then_accept":
         assert proposal_inputs[1]["review_feedback"]["accepted"] is False
         assert review_calls == 2
+        assert proposal_sessions == [None, "producer-native-session"]
+        assert review_sessions == [None, "verifier-native-session"]

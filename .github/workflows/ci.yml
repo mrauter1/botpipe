@@ -110,6 +110,9 @@ jobs:
           tests/test_budgets.py
           tests/test_dispatches.py
           tests/test_processes.py
+          tests/test_codex_appserver.py
+          tests/test_workspace_ownership.py
+          tests/test_workspace_fencing.py
           tests/test_candidate_v2.py
           tests/test_execution_isolation.py
           tests/test_paired_evaluation.py
