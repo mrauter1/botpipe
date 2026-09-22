@@ -20,6 +20,11 @@ from botpipe.providers import FakeProvider, ProviderResponse
 from botpipe.recovery import Completed, Stopped
 
 
+# Admission includes provenance capture and durable writes on shared CI runners.
+# Bound synchronization without treating startup latency as an ownership failure.
+_SYNC_TIMEOUT = 30
+
+
 @pytest.fixture(autouse=True)
 def coordinator_directory(tmp_path, monkeypatch):
     monkeypatch.setattr(
@@ -37,7 +42,7 @@ def test_parent_writer_and_child_reader_exclude_each_other(tmp_path, reader_firs
 
     def held(request):
         entered.set()
-        assert release.wait(5)
+        assert release.wait(_SYNC_TIMEOUT)
         return "finished"
 
     @workflow
@@ -58,13 +63,13 @@ def test_parent_writer_and_child_reader_exclude_each_other(tmp_path, reader_firs
     ):
         running = pool.submit(first.run, first_work)
         try:
-            assert entered.wait(5)
+            assert entered.wait(_SYNC_TIMEOUT)
             with pytest.raises(RunBusy):
                 second.run(second_work)
             assert not blocked.calls
         finally:
             release.set()
-            assert running.result(timeout=5).ok
+        assert running.result(timeout=_SYNC_TIMEOUT).ok
 
 
 def test_unresolved_parent_output_is_not_observable_by_child_query(tmp_path):
@@ -112,7 +117,7 @@ def test_independent_queries_can_share_an_alternate_read_root(tmp_path):
     both = threading.Barrier(2)
 
     def read(request):
-        both.wait(timeout=5)
+        both.wait(timeout=_SYNC_TIMEOUT)
         return "read"
 
     @workflow
@@ -126,7 +131,7 @@ def test_independent_queries_can_share_an_alternate_read_root(tmp_path):
     ):
         results = [pool.submit(client.run, query) for client in (first, second)]
         for future in results:
-            result = future.result(timeout=8)
+            result = future.result(timeout=_SYNC_TIMEOUT)
             assert result.ok, result.error
 
 
@@ -136,7 +141,7 @@ def test_standalone_queries_share_primary_root_and_persist_read_mode(tmp_path):
     both = threading.Barrier(2)
 
     def read(_request):
-        both.wait(timeout=5)
+        both.wait(timeout=_SYNC_TIMEOUT)
         return "read"
 
     with (
@@ -156,7 +161,7 @@ def test_standalone_queries_share_primary_root_and_persist_read_mode(tmp_path):
             pool.submit(Provider(runtime=client, session=None).query, "inspect")
             for client in (first, second)
         ]
-        assert [future.result(timeout=8).value for future in futures] == [
+        assert [future.result(timeout=_SYNC_TIMEOUT).value for future in futures] == [
             "read",
             "read",
         ]
@@ -205,7 +210,7 @@ def test_standalone_query_resolution_reuses_recorded_read_fences(tmp_path):
 
         def recover(_request):
             recovering.set()
-            assert release.wait(5)
+            assert release.wait(_SYNC_TIMEOUT)
             return Stopped("stopped")
 
         owner_adapter.recover = recover
@@ -216,11 +221,13 @@ def test_standalone_query_resolution_reuses_recorded_read_fences(tmp_path):
                 operation["id"],
                 response=ProviderResponse("manual"),
             )
-            assert recovering.wait(5)
-            observed = Provider(runtime=observer, session=None).query("inspect")
-            assert observed.value == "observed"
-            release.set()
-            resolution.result(timeout=5)
+            try:
+                assert recovering.wait(_SYNC_TIMEOUT)
+                observed = Provider(runtime=observer, session=None).query("inspect")
+                assert observed.value == "observed"
+            finally:
+                release.set()
+            resolution.result(timeout=_SYNC_TIMEOUT)
 
         assert owner.journal.run(run_id)["workspace_mode"] == "read"
 
@@ -269,7 +276,7 @@ def test_missing_workspace_mode_recovers_with_conservative_writer_fence(
 
         def recover(_request):
             recovering.set()
-            assert release.wait(5)
+            assert release.wait(_SYNC_TIMEOUT)
             if action == "resume":
                 return Completed(ProviderResponse("recovered"))
             return Stopped("stopped")
@@ -285,12 +292,14 @@ def test_missing_workspace_mode_recovers_with_conservative_writer_fence(
                     operation["id"],
                     response=ProviderResponse("manual"),
                 )
-            assert recovering.wait(5)
-            with pytest.raises(RunBusy):
-                Provider(runtime=observer, session=None).query("inspect")
-            assert not observer_adapter.calls
-            release.set()
-            recovered = recovery.result(timeout=5)
+            try:
+                assert recovering.wait(_SYNC_TIMEOUT)
+                with pytest.raises(RunBusy):
+                    Provider(runtime=observer, session=None).query("inspect")
+                assert not observer_adapter.calls
+            finally:
+                release.set()
+            recovered = recovery.result(timeout=_SYNC_TIMEOUT)
 
         if action == "resume":
             assert recovered.ok, recovered.error
@@ -343,7 +352,7 @@ def test_parallel_writer_cannot_overlap_sibling_target(tmp_path, primary_target)
     def edit(request):
         assert request.workspace == target
         entered.set()
-        assert attempted.wait(5)
+        assert attempted.wait(_SYNC_TIMEOUT)
         return "edited"
 
     @workflow
@@ -354,8 +363,8 @@ def test_parallel_writer_cannot_overlap_sibling_target(tmp_path, primary_target)
             return call("parent", workspace=target).value
 
         def child_branch():
-            assert entered.wait(5)
             try:
+                assert entered.wait(_SYNC_TIMEOUT)
                 return Provider().run("child", workspace=child).value
             finally:
                 attempted.set()
@@ -400,7 +409,7 @@ def test_dynamic_read_claim_blocks_new_ancestor_writer_without_markers(tmp_path)
     def inspect(request):
         with request.read_fence(child):
             entered.set()
-            assert release.wait(5)
+            assert release.wait(_SYNC_TIMEOUT)
             return "read"
 
     @workflow
@@ -419,14 +428,14 @@ def test_dynamic_read_claim_blocks_new_ancestor_writer_without_markers(tmp_path)
     ):
         running = pool.submit(reader.run, read)
         try:
-            assert entered.wait(5)
+            assert entered.wait(_SYNC_TIMEOUT)
             with pytest.raises(RunBusy):
                 writer.run(write)
             assert not blocked.calls
             assert writer.journal.runs() == []
         finally:
             release.set()
-            assert running.result(timeout=5).ok
+        assert running.result(timeout=_SYNC_TIMEOUT).ok
 
 
 @pytest.mark.parametrize("action", ["resume", "resolve"])

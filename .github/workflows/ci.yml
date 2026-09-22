@@ -156,6 +156,7 @@ jobs:
 
   optimizer-windows:
     runs-on: windows-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -166,6 +167,8 @@ jobs:
       - name: Check native containment and portable optimizer contracts
         run: >-
           python -m pytest -q
+          -o faulthandler_timeout=120 -o faulthandler_exit_on_timeout=true
+          --durations=15
           tests/test_artifacts.py
           tests/test_artifact_integration.py
           tests/test_artifact_reconciliation.py
