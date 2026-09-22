@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from .errors import BotpipeError
+from .providers import ProviderContinuation
 
 
 class SessionError(BotpipeError):
@@ -39,7 +40,7 @@ class SessionHistoryConflict(SessionError):
 class SessionLease:
     session_id: str
     revision: int
-    native_session_id: str | None
+    continuation: ProviderContinuation | None
 
 
 def _safe_key(value: str, label: str = "Session key") -> str:
@@ -261,10 +262,12 @@ class Session:
             return SessionLease(
                 self._canonical_id,
                 record["revision"],
-                record.get("native_session_id"),
+                record.get("continuation"),
             )
 
-    def advancement(self, native_session_id: str | None = None) -> dict[str, Any]:
+    def advancement(
+        self, continuation: ProviderContinuation | None = None
+    ) -> dict[str, Any]:
         """Describe an atomic response/session advancement for Journal.response."""
 
         with self._guard:
@@ -273,7 +276,7 @@ class Session:
             return {
                 "session_id": self._canonical_id,
                 "expected_revision": self._revision,
-                "native_session_id": native_session_id,
+                "continuation": continuation,
             }
 
     def advanced(self, revision: int) -> None:

@@ -12,7 +12,7 @@ from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping, Protocol
 
 from .processes import ProcessContainment, ProcessContainmentUnavailable
 from .providers import CapabilityError
@@ -23,6 +23,17 @@ _PRIVATE_NAMES = frozenset({
     "credentials", "credentials.json",
 })
 _OPEN_BASE = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+
+
+class AttemptProcessOwner(Protocol):
+    """The process-lifecycle surface supplied by a native adapter."""
+
+    def register_process(
+        self, process: object, stop: Callable[[], None]
+    ) -> bool:
+        """Register a process and report whether stop was already requested."""
+
+    def unregister_process(self, process: object) -> None: ...
 
 
 class _DirectoryIdentityChanged(CapabilityError):
@@ -167,7 +178,8 @@ class ReadOnlyTools:
     def __init__(self, roots, *, exclusions=(), max_output_bytes=256_000,
                  max_read_bytes=1_000_000, max_entries=2_000,
                  max_files=5_000, max_depth=32, max_matches=2_000,
-                 command_timeout=5.0, read_fence=None):
+                 command_timeout=5.0, read_fence=None,
+                 attempt_owner: AttemptProcessOwner | None = None):
         if (not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_DIRECTORY")
                 or os.open not in os.supports_dir_fd
                 or os.scandir not in os.supports_fd):
@@ -185,6 +197,7 @@ class ReadOnlyTools:
         if read_fence is not None and not callable(read_fence):
             raise TypeError("read_fence must be callable or None")
         self._read_fence = read_fence
+        self._attempt_owner = attempt_owner
         self._fenced_directories = {}
         self._fences = ExitStack()
         self.roots = tuple(Path(root).resolve(strict=True) for root in roots)
@@ -454,6 +467,8 @@ class ReadOnlyTools:
                 reader_errors.append(exc)
 
         threads = []
+        registered = False
+        registered_threads = []
         try:
             # The fixed, pinned system wc binary is the complete command: it
             # does not load project code or create descendant processes.
@@ -465,6 +480,16 @@ class ReadOnlyTools:
                 cwd="/",
                 env=dict(envelope.environment),
             )
+            if self._attempt_owner is not None:
+                def stop_process() -> None:
+                    if process.poll() is None:
+                        process.kill()
+                    process.wait()
+
+                registered = True
+                if self._attempt_owner.register_process(process, stop_process):
+                    stop_process()
+                    raise CapabilityError("count_lines command was cancelled")
             threads = [
                 threading.Thread(
                     target=write_snapshot,
@@ -484,6 +509,17 @@ class ReadOnlyTools:
                     daemon=True,
                 ),
             ]
+            if self._attempt_owner is not None:
+                def join_thread(thread) -> None:
+                    thread.join(1.0)
+                    if thread.is_alive():
+                        raise RuntimeError("count_lines I/O thread did not stop")
+
+                for thread in threads:
+                    self._attempt_owner.register_process(
+                        thread, lambda thread=thread: join_thread(thread)
+                    )
+                    registered_threads.append(thread)
             for thread in threads:
                 thread.start()
             try:
@@ -498,10 +534,18 @@ class ReadOnlyTools:
                 thread.join(1.0)
             if any(thread.is_alive() for thread in threads):
                 raise CapabilityError("count_lines command I/O did not terminate")
+            for thread in registered_threads:
+                self._attempt_owner.unregister_process(thread)
+            registered_threads.clear()
         finally:
             if process is not None and process.poll() is None:
                 process.kill()
                 process.wait()
+            if registered:
+                self._attempt_owner.unregister_process(process)
+            for thread in registered_threads:
+                if not thread.is_alive():
+                    self._attempt_owner.unregister_process(thread)
 
         if writer_errors:
             raise CapabilityError("count_lines snapshot input could not be delivered") from writer_errors[0]
@@ -672,11 +716,13 @@ class ReadOnlyTools:
 class ExactCommandTools:
     """Closed read-only recipes executed by trusted bubblewrap without a shell."""
 
-    def __init__(self, workspace, grants, *, timeout=30, max_output_bytes=256_000):
+    def __init__(self, workspace, grants, *, timeout=30, max_output_bytes=256_000,
+                 attempt_owner: AttemptProcessOwner | None = None):
         if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or timeout <= 0:
             raise ValueError("timeout must be finite and positive")
         self.max_output_bytes = _positive_int("max_output_bytes", max_output_bytes)
         self.timeout = float(timeout)
+        self._attempt_owner = attempt_owner
         self.workspace = Path(workspace).resolve(strict=True)
         try:
             self._workspace_fd = os.open(
@@ -832,6 +878,9 @@ class ExactCommandTools:
             raise CapabilityError(str(exc)) from exc
         retained, truncated = bytearray(), False
         process = None
+        registered = False
+        reader = None
+        reader_registered = False
 
         def drain():
             nonlocal truncated
@@ -847,7 +896,23 @@ class ExactCommandTools:
                 stderr=subprocess.STDOUT,
                 env={"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"},
                 pass_fds=(self._workspace_fd,))
+            if self._attempt_owner is not None:
+                def stop_process() -> None:
+                    containment.finish(process, grace_seconds=1.0, forced=True)
+
+                registered = True
+                if self._attempt_owner.register_process(process, stop_process):
+                    stop_process()
+                    raise CapabilityError(f"command grant was cancelled: {grant_id}")
             reader = threading.Thread(target=drain, name="botpipe-command-output", daemon=True)
+            if self._attempt_owner is not None:
+                def join_reader() -> None:
+                    reader.join(1.0)
+                    if reader.is_alive():
+                        raise RuntimeError("command output drain did not stop")
+
+                self._attempt_owner.register_process(reader, join_reader)
+                reader_registered = True
             reader.start()
             try:
                 process.wait(timeout=self.timeout)
@@ -859,9 +924,16 @@ class ExactCommandTools:
             reader.join(1.0)
             if reader.is_alive():
                 raise CapabilityError("command output drain did not terminate")
+            if reader_registered:
+                self._attempt_owner.unregister_process(reader)
+                reader_registered = False
         finally:
             if process is not None and process.poll() is None:
                 containment.finish(process, grace_seconds=1.0, forced=True)
+            if registered:
+                self._attempt_owner.unregister_process(process)
+            if reader_registered and not reader.is_alive():
+                self._attempt_owner.unregister_process(reader)
             containment.close()
         observation = ToolObservation(
             "exec_grant", {"grant_id": grant_id, "argv": list(envelope.public_argv)},

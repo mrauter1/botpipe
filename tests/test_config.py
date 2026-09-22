@@ -45,7 +45,7 @@ effort = "high"
     assert selection.profile == "review"
     assert selection.generate_allow_commands == (("git", "status", "--short"),)
     assert selection.query_read_roots is None
-    assert config.policy == {"model": "base-model", "effort": "high"}
+    assert config.policy is None
     assert selection.provider_config() == {"command": ["codex", "exec"]}
     assert selection.provider_defaults() == {
         "profile": "review",
@@ -55,6 +55,47 @@ effort = "high"
     }
     with pytest.raises(TypeError):
         selection.options["command"] = []  # type: ignore[index]
+
+
+def test_catalog_keeps_unselected_provider_at_base_profile(tmp_path: Path) -> None:
+    (tmp_path / "botpipe.toml").write_text(
+        '''default_provider = "claude"
+default_profile = "review"
+[providers.claude]
+model = "claude-base"
+[providers.claude.profiles.review]
+model = "claude-review"
+[providers.codex]
+model = "codex-base"
+[providers.codex.options]
+command = ["codex", "exec"]
+[providers.codex.profiles.review]
+model = "codex-review"
+''',
+        encoding="utf-8",
+    )
+    config = load_config(tmp_path, model="cli-selected")
+    assert config.require_provider().model == "cli-selected"
+    assert config.catalog["codex"].model == "codex-base"
+    assert config.catalog["codex"].profile is None
+    with pytest.raises(TypeError):
+        config.catalog["new"] = config.catalog["codex"]  # type: ignore[index]
+
+
+def test_model_and_effort_overrides_do_not_become_global_policy(tmp_path: Path) -> None:
+    (tmp_path / "botpipe.toml").write_text(
+        '[policy]\nnetwork = "none"\n[providers.codex]\nmodel = "base"\n',
+        encoding="utf-8",
+    )
+    config = load_config(
+        tmp_path, provider="codex", model="selected", effort="high"
+    )
+    assert config.policy == {"network": "none"}
+    assert config.require_provider().provider_defaults() == {
+        "model": "selected",
+        "effort": "high",
+        "generate_allow_commands": [],
+    }
 
 
 def test_explicit_collections_and_maps_replace_profile_values(tmp_path: Path) -> None:

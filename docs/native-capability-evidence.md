@@ -11,7 +11,7 @@ still requires pinned-version integration receipts on each supported platform.
 | Adapter profile | Generate, empty grants | Exact generate grants | Read-only query | Run | Sessions | Decision |
 | --- | --- | --- | --- | --- | --- | --- |
 | `codex-exec-v1` | rejected | rejected | rejected | implemented | yes | no |
-| `codex-app-server-v2` (reviewed against Codex 0.155.1) | implemented in code; native receipt pending | implemented in code; native receipt pending | implemented in code; native receipt pending | implemented for current compatible protocol; native receipt pending | fingerprint-bound | no |
+| `codex-app-server-v2` (source-reviewed against Codex 0.156.0) | implemented in code; current native CI pending | implemented in code; current native CI pending | implemented in code; current native CI pending | implemented for current compatible protocol; native receipt pending | fingerprint-bound | no |
 | `claude-code-cli-v1` | implemented for Claude Code 2.1.259+; native receipt pending | rejected | rejected | implemented | yes | no |
 | `claude-agent-sdk-0.2.155` | implemented; native receipt pending | implemented mediator; host proof pending | implemented mediator; native receipt pending | delegated to CLI profile | yes; transitions unproven | no |
 | `pi-json-v1` | implemented; native receipt pending | rejected | rejected | unrestricted explicit policy only | yes | no |
@@ -56,8 +56,8 @@ or an exact argv command envelope. Therefore this adapter advertises `run`
 only.
 
 The implemented app-server profile exposes structured mediated tools while
-generic shell tools remain disabled. Its current Codex 0.155.1 source audit,
-local binary checks, and remaining limitations are recorded below. Empty-grant
+generic shell tools remain disabled. Its current Codex 0.156.0 source audit,
+provisional native CI checks, and remaining limitations are recorded below. Empty-grant
 generation uses the reviewed per-turn environment/tool configuration; native
 credentialed receipts and hostile-configuration conformance remain release
 gates.
@@ -247,20 +247,24 @@ gaps; credential values or hashes are not used as substitutes for identity.
 
 ## Codex app-server source audit and mediated bridge
 
-`botpipe.codex_appserver` currently verifies Codex 0.155.1, peeled commit
-`be2951ea34f0d295ed0becf97079f92fa5f6950e`, for the reviewed mediated profile.
+`botpipe.codex_appserver` currently verifies Codex 0.156.0, peeled commit
+`fe74a774532af67b5a4a3dec03ce9469e17f89af`, for the reviewed mediated profile.
 The app-server accepts newer protocol-compatible versions for native RUN after
 the protocol capability checks; strict mediated generate/query profiles require
-an explicitly reviewed release. This is code and local native-binary evidence,
-not a credentialed conformance receipt or proof of model cache hits.
+an explicitly reviewed release. This is code and source evidence. Current
+native-binary conformance remains
+pending and does not prove credentialed behavior or model cache hits.
 
-The reviewed release has already refactored the older
+The [0.156.0 release](https://github.com/openai/codex/releases/tag/rust-v0.156.0)
+was published on 2026-09-22. Its source audit is complete, but its Linux and
+Windows native CI results are provisional until this revision runs on both
+hosted platforms. The reviewed release has already refactored the older
 `codex-rs/core/src/tools/spec.rs` path. The complete registry construction is
-in [`spec_plan.rs`](https://github.com/openai/codex/blob/be2951ea34f0d295ed0becf97079f92fa5f6950e/codex-rs/core/src/tools/spec_plan.rs),
+in [`spec_plan.rs`](https://github.com/openai/codex/blob/fe74a774532af67b5a4a3dec03ce9469e17f89af/codex-rs/core/src/tools/spec_plan.rs),
 with configuration derivation in
-[`tool_config.rs`](https://github.com/openai/codex/blob/be2951ea34f0d295ed0becf97079f92fa5f6950e/codex-rs/tools/src/tool_config.rs)
+[`tool_config.rs`](https://github.com/openai/codex/blob/fe74a774532af67b5a4a3dec03ce9469e17f89af/codex-rs/tools/src/tool_config.rs)
 and feature defaults in
-[`features/src/lib.rs`](https://github.com/openai/codex/blob/be2951ea34f0d295ed0becf97079f92fa5f6950e/codex-rs/features/src/lib.rs).
+[`features/src/lib.rs`](https://github.com/openai/codex/blob/fe74a774532af67b5a4a3dec03ce9469e17f89af/codex-rs/features/src/lib.rs).
 Those sources establish this closure:
 
 - `thread/start.environments: []` selects no execution environment. The tool
@@ -268,16 +272,21 @@ Those sources establish this closure:
 - The per-thread override set disables hooks, code mode, permission tools,
   collaboration and fanout, apps, plugins, tool search and suggestions, image
   generation, skill installers, goals, memories, artifacts, and web search.
+- 0.156.0 adds `send_message_to_user_async` as a feature-controlled route to a
+  root-thread tool. The audited overrides explicitly disable that feature. The
+  older model-catalog route remains, so strict mediation still requires the
+  reviewed `gpt-5.4` effective-model check and native request-inventory tests;
+  the generated protocol schema alone is not treated as whole-inventory proof.
 - An isolated `CODEX_HOME`, workspace-config rejection, `config/read` layer
   inspection, and rejection of all managed requirements close ambient MCP,
   plugin, and hook registration before `thread/start`.
-- [`thread/start.dynamicTools`](https://github.com/openai/codex/blob/be2951ea34f0d295ed0becf97079f92fa5f6950e/codex-rs/app-server-protocol/src/protocol/v2/thread.rs)
+- [`thread/start.dynamicTools`](https://github.com/openai/codex/blob/fe74a774532af67b5a4a3dec03ce9469e17f89af/codex-rs/app-server-protocol/src/protocol/v2/thread.rs)
   supplies schema-validated structured tools. Calls arrive as the bidirectional
-  [`item/tool/call`](https://github.com/openai/codex/blob/be2951ea34f0d295ed0becf97079f92fa5f6950e/codex-rs/app-server-protocol/src/protocol/v2/item.rs)
+  [`item/tool/call`](https://github.com/openai/codex/blob/fe74a774532af67b5a4a3dec03ce9469e17f89af/codex-rs/app-server-protocol/src/protocol/v2/item.rs)
   server request. The bridge services only an exact registered name and rejects
   every other server-initiated request.
 - The
-  [`turn/start` and `turn/interrupt` protocol](https://github.com/openai/codex/blob/be2951ea34f0d295ed0becf97079f92fa5f6950e/codex-rs/app-server-protocol/src/protocol/v2/turn.rs)
+  [`turn/start` and `turn/interrupt` protocol](https://github.com/openai/codex/blob/fe74a774532af67b5a4a3dec03ce9469e17f89af/codex-rs/app-server-protocol/src/protocol/v2/turn.rs)
   provides native output schemas, streaming notifications, terminal status,
   and cancellation. Dynamic-tool definitions are persisted with threads in
   the pinned core, and the bridge binds a resumed thread ID to a deterministic
@@ -298,9 +307,19 @@ Those sources establish this closure:
   This is source and transcript evidence for preserving cacheable prefixes,
   not a credentialed receipt showing a provider cache hit.
 
-The current 0.155.1 source and local endpoint checks establish the reviewed
-per-turn environment/tool configuration for command-free generation and the
-finite mediator inventory for exact grants. `CodexAppServerProvider` is a real
+The official 0.156.0
+[`rust-release-windows.yml`](https://github.com/openai/codex/blob/fe74a774532af67b5a4a3dec03ce9469e17f89af/.github/workflows/rust-release-windows.yml)
+creates the compatibility ZIP from the complete canonical package, and
+[`build_winget_package.py`](https://github.com/openai/codex/blob/fe74a774532af67b5a4a3dec03ce9469e17f89af/scripts/build_winget_package.py)
+retains nested resources and package metadata while publishing compatibility
+executables at the root. Native CI verifies the GitHub release digest, safely
+extracts every regular package member without renaming it, and requires the
+declared entrypoint plus both root and resource sandbox helpers.
+
+The current 0.156.0 source audit defines the provisional per-turn
+environment/tool configuration for command-free generation and the finite
+mediator inventory for exact grants. Native CI must confirm its effective
+request inventories. `CodexAppServerProvider` is a real
 ProviderAdapter surface for generate, read-only query, exact generation,
 durable recovery, native RUN on a compatible protocol, and fingerprint-bound
 session resume. Its RUN path uses the app-server bridge directly; it does not

@@ -7,7 +7,12 @@ import pytest
 from pydantic import BaseModel
 
 from botpipe import Artifact, Botpipe, BotpipeError, Provider, Session, activity, workflow
-from botpipe.providers import FakeProvider, ProviderInterruptedError, ProviderResponse
+from botpipe.providers import (
+    FakeProvider,
+    ProviderContinuation,
+    ProviderInterruptedError,
+    ProviderResponse,
+)
 from botpipe.recovery import Completed
 
 
@@ -32,6 +37,32 @@ def test_old_journal_is_rejected_before_schema_mutation(tmp_path):
         }
         assert tables == {"legacy"}
         assert check.execute("PRAGMA user_version").fetchone()[0] == 1
+    finally:
+        check.close()
+
+
+def test_version_two_journal_is_rejected_without_implicit_migration(tmp_path):
+    from botpipe.journal import JOURNAL_APPLICATION_ID, Journal
+
+    path = tmp_path / "state.sqlite3"
+    db = sqlite3.connect(path)
+    db.executescript(
+        "CREATE TABLE sessions(native_session_id TEXT);"
+        f"PRAGMA application_id={JOURNAL_APPLICATION_ID};"
+        "PRAGMA user_version=2;"
+    )
+    db.close()
+
+    with pytest.raises(ValueError, match="fresh state directory"):
+        Journal(path)
+
+    check = sqlite3.connect(path)
+    try:
+        columns = [
+            row[1] for row in check.execute("PRAGMA table_info(sessions)")
+        ]
+        assert columns == ["native_session_id"]
+        assert check.execute("PRAGMA user_version").fetchone()[0] == 2
     finally:
         check.close()
 
@@ -80,6 +111,49 @@ def test_session_revision_rejects_a_stale_loaded_handle(tmp_path):
         )
         assert result.status == "failed"
         assert "SessionHistoryConflict" in result.error
+
+
+def test_completed_continuation_survives_a_new_standalone_run(tmp_path):
+    continuation = ProviderContinuation(
+        "native-thread", "fake", {"adapter_version": "test-v1"}
+    )
+    native = FakeProvider(
+        [
+            ProviderResponse("first", "native-thread", continuation=continuation),
+            ProviderResponse("second", "native-thread", continuation=continuation),
+        ]
+    )
+    with Botpipe(tmp_path, provider=native) as client:
+        provider = Provider(runtime=client)
+        assert provider.generate("first").value == "first"
+        assert provider.generate("second").value == "second"
+
+    assert native.calls[0].continuation is None
+    assert native.calls[1].continuation == continuation
+    assert native.calls[1].session_id == "native-thread"
+    assert native.calls[0].receipt_dir != native.calls[1].receipt_dir
+
+
+def test_raw_same_session_response_preserves_typed_continuation(tmp_path):
+    continuation = ProviderContinuation(
+        "native-thread", "fake", {"authority": {"tools": ["read"]}}
+    )
+    native = FakeProvider(
+        [
+            ProviderResponse("first", continuation=continuation),
+            "legacy response",
+            "next",
+        ]
+    )
+
+    with Botpipe(tmp_path, provider=native) as client:
+        provider = Provider(runtime=client)
+        provider.generate("first")
+        provider.generate("second")
+        provider.generate("third")
+
+    assert native.calls[1].continuation == continuation
+    assert native.calls[2].continuation == continuation
 
 
 def test_replay_detects_changed_session_alias_sharing(tmp_path):

@@ -13,7 +13,7 @@ from enum import Enum
 from typing import Any, Mapping
 
 from .errors import ReplayMismatch
-from .providers import ProviderResponse
+from .providers import ProviderContinuation, ProviderResponse
 from .recovery import Completed, RecoveryOutcome, Running, Stopped, Unknown
 
 
@@ -44,9 +44,11 @@ def _request(record: Mapping[str, Any]) -> dict[str, Any]:
         raise ProviderCheckpointError("Provider checkpoint request is missing")
     if type(value) is not dict:
         raise ProviderCheckpointError("Provider checkpoint request is invalid")
-    allowed = {"session_id", "receipt_dir", "prompt", "artifacts", "reads",
-               "operation", "provider", "instructions", "settings", "allow_commands",
-               "policy"}
+    allowed = {
+        "session_id", "continuation", "receipt_dir", "prompt", "artifacts",
+        "reads", "operation", "provider", "instructions", "settings",
+        "allow_commands", "policy",
+    }
     unknown = set(value) - allowed
     if unknown:
         raise ProviderCheckpointError(
@@ -58,6 +60,18 @@ def _request(record: Mapping[str, Any]) -> dict[str, Any]:
         raise ProviderCheckpointError(
             "Provider checkpoint request session_id is invalid"
         )
+    continuation = value.get("continuation")
+    if continuation is not None:
+        try:
+            parsed = ProviderContinuation.from_record(continuation)
+        except (TypeError, ValueError) as exc:
+            raise ProviderCheckpointError(
+                "Provider checkpoint request continuation is invalid"
+            ) from exc
+        if session_id is not None and parsed.native_id != session_id:
+            raise ProviderCheckpointError(
+                "Provider checkpoint request continuation differs from session_id"
+            )
     for name in ("receipt_dir", "prompt"):
         if name in value and type(value[name]) is not str:
             raise ProviderCheckpointError(
@@ -124,12 +138,22 @@ def canonical_provider_response(
 
     try:
         if allow_mapping and type(value) is dict:
-            value = ProviderResponse(**value)
+            mapped = dict(value)
+            continuation = mapped.get("continuation")
+            if continuation is not None:
+                mapped["continuation"] = ProviderContinuation.from_record(
+                    continuation
+                )
+            value = ProviderResponse(**mapped)
         if not isinstance(value, ProviderResponse):
             raise TypeError("expected ProviderResponse")
         record = value.to_record()
         record = json.loads(json.dumps(record, allow_nan=False))
-        response = ProviderResponse(**record)
+        values = dict(record)
+        continuation = record.get("continuation")
+        if continuation is not None:
+            values["continuation"] = ProviderContinuation.from_record(continuation)
+        response = ProviderResponse(**values)
         if response.to_record() != record:
             raise ValueError("response record is not canonical")
     except (TypeError, ValueError, RecursionError) as exc:
@@ -156,7 +180,9 @@ def _response(record: Mapping[str, Any]) -> ProviderResponse:
         return canonical_provider_response(
             {
                 key: record[key]
-                for key in ("text", "session_id", "usage", "metadata")
+                for key in (
+                    "text", "session_id", "usage", "metadata", "continuation"
+                )
                 if key in record
             },
             allow_mapping=True,
@@ -308,6 +334,7 @@ class ProviderCheckpoint:
             "session_id",
             "usage",
             "metadata",
+            "continuation",
             "artifact_resolution",
         } | history_field
         if "output_error" in raw:

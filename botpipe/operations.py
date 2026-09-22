@@ -32,6 +32,7 @@ from .providers import (
     ProviderTimeoutError,
     provider_request_from_snapshot,
     provider_request_snapshot,
+    response_continuation,
 )
 from .provider_checkpoints import (
     EmptyCheckpoint,
@@ -333,11 +334,19 @@ def execute_provider(
                 saved_checkpoint = ProviderCheckpoint.from_record(
                     saved.get("response")
                 )
+                try:
+                    continuation = response_continuation(
+                        terminal_checkpoint.response,
+                        provider=adapter.name,
+                        previous=request.continuation,
+                    )
+                except ValueError as exc:
+                    raise ProviderCheckpointError(str(exc)) from exc
                 update = None
                 if session is not None and not isinstance(
                     saved_checkpoint, RespondedCheckpoint
                 ):
-                    update = session.advancement(terminal_checkpoint.response.session_id)
+                    update = session.advancement(continuation)
                 ctx.save_response(operation_id, terminal_checkpoint.to_record(), session_update=update)
                 if session is not None:
                     session.advanced(ctx.journal.get(operation_id)["session_revision"])
@@ -481,6 +490,7 @@ def execute_provider(
                     + feedback
                 )
             binding = ctx.journal.session(session_key) or {}
+            continuation = binding.get("continuation")
             request_timeout = (
                 min(ctx.limits.timeout, timeout)
                 if timeout is not None
@@ -496,7 +506,8 @@ def execute_provider(
                     operation_id=operation_id,
                     prompt=complete_prompt,
                     workspace=target,
-                    session_id=binding.get("native_session_id"),
+                    session_id=(continuation.native_id if continuation else None),
+                    continuation=continuation,
                     output_schema=schema,
                     policy=effective,
                     artifacts=destinations,
@@ -632,7 +643,14 @@ def execute_provider(
             if session is not None and not terminal:
                 lease = session.claim(ctx, operation_id)
                 if not checkpoint.request_data:
-                    request = replace(request, session_id=lease.native_session_id)
+                    request = replace(
+                        request,
+                        session_id=(
+                            lease.continuation.native_id
+                            if lease.continuation else None
+                        ),
+                        continuation=lease.continuation,
+                    )
                     request_data = provider_request_snapshot(
                         request, provider=adapter.name
                     )

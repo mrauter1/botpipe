@@ -21,7 +21,7 @@ protect overlapping live reads and writes across processes and state directories
 
 The 2.0 ledger defaults to `workspace/.botpipe-v2`. Before opening an existing
 database in write mode, Botpipe checks its application and format versions
-through a read-only connection. This implementation supports the version-2
+through a read-only connection. This implementation supports the version-3
 schema; incompatible stores are rejected without schema changes and the operator
 is directed to a fresh state directory. The existing SQLite/checkpoint design is
 retained on its merits. Backward compatibility is optional under the PRD, and a
@@ -32,6 +32,14 @@ The journal commits an operation checkpoint, its native session update, and the
 associated event together. Physical-dispatch events retain separate evidence
 about each actual provider attempt and its usage. An operation response cannot
 retroactively establish the usage of an earlier unknown dispatch.
+
+Session continuation includes the native conversation identity and the adapter's
+validated compatibility metadata. Both advance in the same transaction as the
+response and logical session revision. A thread created by an interrupted
+attempt remains in that attempt's receipt until a completed response advances
+the session. A new run can therefore continue the same conversation without
+depending on the previous run's receipt directory. The adapter checks the saved
+metadata against the requested authority before resuming the native thread.
 
 Atomic publication flushes file contents before replacement. On POSIX it also
 flushes directory entries and propagates flush failures. Windows retains the
@@ -168,6 +176,13 @@ Running and unknown attempts remain blocked; a recovery hook returning
 `None` establishes no knowledge of termination. A native launch interrupted
 before its process identity was recorded therefore remains uncertain.
 
+An attempt owns both its native process tree and any Botpipe-mediated tool work.
+Cancellation closes admission before stopping those resources. A stopped receipt
+requires all admitted calls and owned processes to have exited; stopping only
+the app-server is insufficient. Cleanup uncertainty retains the recovery fence.
+Async cancellation remains pending through worker startup and joins the worker
+before returning `CancelledError` to its caller.
+
 One provider checkpoint model interprets saved state for normal execution,
 recovery, manual reconciliation, and workspace ownership checks. The provider
 lifecycle owns the corresponding decisions; the operation coordinator retains
@@ -190,8 +205,8 @@ contradictory checkpoint state blocks continuation and does not establish that
 effects stopped. Retry generations remain within the existing operation record;
 validation repair calls and physical dispatches retain their existing identities.
 
-Adapters return `ProviderResponse` with string text, an optional string session
-ID, and plain JSON objects for usage and metadata. Botpipe validates this
+Adapters return `ProviderResponse` with string text, optional session continuation,
+and plain JSON objects for usage and metadata. Botpipe validates this
 protocol before recording the response. Malformed responses and unexpected
 exceptions after dispatch remain uncertain; they cannot silently coerce durable
 values or establish that external effects stopped.

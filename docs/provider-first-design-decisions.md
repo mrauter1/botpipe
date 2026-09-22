@@ -13,10 +13,18 @@ reused family keep its selected backend without retaining another runtime's
 client, credentials, or transport. Explicitly attaching a provider to a runtime
 requires using that same runtime inside a workflow.
 
+Each root run records a catalog of the configured backend selections. A family
+selects its own backend's settings from that snapshot, including when its first
+use occurs after resume. Profiles and provider-specific defaults remain scoped
+to their backend. Live adapters are created only when selected; an unused
+default backend does not need to be installed or configured for execution.
+
 The runtime owns adapters it constructs. Injected adapters remain caller-owned.
 Closing an automatically configured provider closes its family's owned runtime;
 closing a configuration with an explicitly supplied runtime leaves ownership
 with that caller. Session identity and journal evidence outlive these resources.
+Runtime closure attempts every owned adapter and closes the journal last,
+reporting cleanup failures after the remaining resources have been attempted.
 
 ## One operation, multiple attempts
 

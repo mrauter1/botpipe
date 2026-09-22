@@ -144,12 +144,16 @@ class ClientConfig:
     default_provider: str | None = None
     default_profile: str | None = None
     selection: ProviderSelection | None = None
+    catalog: Mapping[str, ProviderSelection] = field(
+        default_factory=lambda: MappingProxyType({})
+    )
     policy: Mapping[str, Any] | None = None
     max_operations: int = 1000
     timeout: float = 3600.0
     source: Path | None = None
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "catalog", MappingProxyType(dict(self.catalog)))
         if self.policy is not None:
             object.__setattr__(self, "policy", _freeze_mapping(self.policy))
 
@@ -173,6 +177,14 @@ class ClientConfig:
             "provider": None,
             "provider_config": {},
             "provider_defaults": {},
+            "provider_catalog": {
+                name: {
+                    "name": selection.name,
+                    "config": selection.provider_config(),
+                    "defaults": selection.provider_defaults(),
+                }
+                for name, selection in self.catalog.items()
+            },
         }
         if self.selection is not None:
             values["provider"] = self.selection.name
@@ -247,9 +259,9 @@ def load_config(
     }
     _reject_unknown(payload, allowed, "configuration")
 
-    file_provider = _optional_name(payload.get("default_provider"), "default_provider")
+    file_provider = _provider_name(payload.get("default_provider"), "default_provider")
     file_profile = _optional_name(payload.get("default_profile"), "default_profile")
-    selected_name = _optional_name(provider, "provider") if provider is not None else file_provider
+    selected_name = _provider_name(provider, "provider") if provider is not None else file_provider
     selected_profile = (
         _optional_name(profile, "profile")
         if profile is not None
@@ -258,7 +270,13 @@ def load_config(
     if selected_name is None and selected_profile is not None:
         raise ConfigurationError("default_profile requires default_provider")
 
-    providers = _mapping(payload.get("providers"), "providers")
+    raw_providers = _mapping(payload.get("providers"), "providers")
+    providers = {}
+    for raw_name, value in raw_providers.items():
+        name = _provider_name(raw_name, "provider name")
+        if name in providers:
+            raise ConfigurationError(f"duplicate provider configuration for {name!r}")
+        providers[name] = value
     selection = None
     if selected_name is not None:
         selection = _selection(
@@ -284,19 +302,35 @@ def load_config(
     ):
         raise ConfigurationError("provider settings require a configured provider")
 
+    catalog = {
+        name: _selection(
+            root,
+            name,
+            None,
+            providers,
+            provider_config=None,
+            model=None,
+            effort=None,
+            generate_allow_commands=None,
+            query_read_roots=None,
+        )
+        for name in providers
+        if name != selected_name
+    }
+    if selection is not None:
+        catalog[selected_name] = selection
+
     resolved_policy = (
         _mapping(policy, "policy")
         if policy is not None
         else _mapping(payload.get("policy"), "policy")
     )
-    # Model and effort use the same runtime Policy fields as direct SDK calls.
     if selection is not None:
-        resolved_policy = dict(resolved_policy)
-        if selection.model is not None and (model is not None or "model" not in resolved_policy):
-            resolved_policy["model"] = selection.model
-        if selection.effort is not None and (effort is not None or "effort" not in resolved_policy):
-            resolved_policy["effort"] = selection.effort
         validate_non_secret_settings(selection.options, path="provider options")
+    for name, item in catalog.items():
+        validate_non_secret_settings(
+            item.options, path=f"provider {name} options"
+        )
     validate_non_secret_settings(resolved_policy, path="policy")
     resolved_state = _resolve_path(
         root, state_dir if state_dir is not None else payload.get("state_dir"), "state_dir"
@@ -315,6 +349,7 @@ def load_config(
         default_provider=selected_name,
         default_profile=selected_profile,
         selection=selection,
+        catalog=catalog,
         policy=resolved_policy or None,
         max_operations=limits.max_operations,
         timeout=limits.timeout,
@@ -442,6 +477,11 @@ def _optional_name(value: Any, name: str) -> str | None:
     if not isinstance(value, str) or not value.strip():
         raise ConfigurationError(f"{name} must be a non-empty string")
     return value.strip()
+
+
+def _provider_name(value: Any, name: str) -> str | None:
+    selected = _optional_name(value, name)
+    return None if selected is None else selected.lower()
 
 
 def _commands(value: Any, name: str) -> tuple[tuple[str, ...], ...]:

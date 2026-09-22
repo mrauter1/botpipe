@@ -22,12 +22,15 @@ from botpipe.codex_appserver import (
     CodexAppServerSession,
     CodexLifecycleStage,
     DynamicTool,
+    _AttemptLifecycle,
+    _AttemptSealed,
     tool_fingerprint,
 )
 from botpipe.native_tools import ToolObservation
 from botpipe.policy import OperationKind, Policy
 from botpipe.providers import (
     CapabilityError,
+    ProviderContinuation,
     ProviderInterruptedError,
     ProviderRequest,
     get_provider,
@@ -88,6 +91,141 @@ def tool() -> DynamicTool:
             "additionalProperties": False,
         },
     )
+
+
+def test_attempt_stop_waits_for_startup_admission() -> None:
+    owner = _AttemptLifecycle()
+    owner.reserve_start()
+    outcomes: list[bool] = []
+    worker = threading.Thread(target=lambda: outcomes.append(owner.stop(0.5)))
+
+    worker.start()
+    deadline = time.monotonic() + 1
+    while not owner.sealed and time.monotonic() < deadline:
+        time.sleep(0.001)
+    assert owner.sealed
+    assert worker.is_alive()
+
+    owner.finish_start()
+    worker.join(1)
+    assert outcomes == [True]
+
+
+def test_first_stop_cleans_appserver_attached_after_sealing() -> None:
+    owner = _AttemptLifecycle()
+    owner.reserve_start()
+    closed = threading.Event()
+    quiescent = threading.Event()
+
+    class Conversation:
+        thread_id = None
+        turn_id = None
+        terminal_event = threading.Event()
+
+        def close(self):
+            closed.set()
+
+        def record_cleanup_failed(self, _detail):
+            raise AssertionError("late attachment cleanup must be proven")
+
+        def confirm_quiescence(self):
+            assert closed.is_set()
+            quiescent.set()
+
+    outcomes: list[bool] = []
+    stopping = threading.Thread(target=lambda: outcomes.append(owner.stop(0.5)))
+    stopping.start()
+    deadline = time.monotonic() + 1
+    while not owner.sealed and time.monotonic() < deadline:
+        time.sleep(0.001)
+    assert owner.sealed
+
+    with pytest.raises(_AttemptSealed):
+        owner.attach(Conversation())
+    owner.finish_start()
+
+    stopping.join(1)
+    assert outcomes == [True]
+    assert closed.is_set()
+    assert quiescent.is_set()
+
+
+def test_attempt_stop_does_not_record_quiescence_after_resource_stop_failure() -> None:
+    events: list[str] = []
+
+    class Conversation:
+        thread_id = None
+        turn_id = None
+        terminal_event = threading.Event()
+
+        def close(self):
+            return None
+
+        def record_cleanup_failed(self, _detail):
+            events.append("failed")
+
+        def confirm_quiescence(self):
+            events.append("quiescent")
+
+    owner = _AttemptLifecycle()
+    owner.attach(Conversation())
+    resource = object()
+
+    def fail_stop() -> None:
+        raise RuntimeError("helper join failed")
+
+    owner.register_process(resource, fail_stop)
+
+    assert owner.stop(0.02) is False
+    assert events == ["failed"]
+
+
+def test_attempt_stop_reuses_inflight_resource_stopper() -> None:
+    owner = _AttemptLifecycle()
+    resource = object()
+    entered = threading.Event()
+    release = threading.Event()
+    calls = 0
+
+    def stop_resource() -> None:
+        nonlocal calls
+        calls += 1
+        entered.set()
+        assert release.wait(1)
+
+    owner.register_process(resource, stop_resource)
+    assert owner.stop(0.01) is False
+    assert entered.is_set()
+    assert owner.stop(0.01) is False
+    assert calls == 1
+    release.set()
+    assert owner.stop(0.5) is True
+
+
+def test_attempt_stopper_start_failure_retains_resource_for_retry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    owner = _AttemptLifecycle()
+    resource = object()
+    stopped = threading.Event()
+    owner.register_process(resource, stopped.set)
+    real_thread = threading.Thread
+
+    class FailedThread:
+        def __init__(self, **_kwargs):
+            pass
+
+        def start(self):
+            raise RuntimeError("stopper thread did not start")
+
+    monkeypatch.setattr(threading, "Thread", FailedThread)
+    assert owner.stop(0.01) is False
+    assert not stopped.is_set()
+    assert isinstance(owner.cleanup_error, RuntimeError)
+
+    monkeypatch.setattr(threading, "Thread", real_thread)
+    assert owner.stop(0.5) is True
+    assert stopped.is_set()
 
 
 def stub(
@@ -238,6 +376,7 @@ def test_bridge_closes_effectful_inventory_and_services_dynamic_tool(
     assert params["config"]["features.hooks"] is False
     assert params["config"]["features.apps"] is False
     assert params["config"]["features.plugins"] is False
+    assert params["config"]["features.send_message_to_user_async"] is False
     assert params["config"]["web_search"] == "disabled"
     assert params["dynamicTools"] == [tool().to_wire()]
     assert "model" not in params
@@ -513,6 +652,194 @@ def test_app_server_spawn_failure_closes_containment(
     assert calls == ["spawn", "close"]
 
 
+@pytest.mark.parametrize("failed_reader", [1, 2])
+def test_app_server_reader_start_failure_stops_spawned_process(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failed_reader: int
+) -> None:
+    import botpipe.codex_appserver as appserver
+
+    calls: list[str] = []
+
+    class Stream:
+        def __init__(self, name):
+            self.name = name
+
+        def close(self):
+            calls.append(f"close-{self.name}")
+
+    class Process:
+        stdin = Stream("stdin")
+        stdout = Stream("stdout")
+        stderr = Stream("stderr")
+
+    class Containment:
+        def spawn(self, _argv, **_kwargs):
+            calls.append("spawn")
+            return Process()
+
+        def finish(self, _process, *, grace_seconds, forced):
+            assert grace_seconds == 1.0 and forced is True
+            calls.append("finish")
+
+        def close(self):
+            calls.append("containment-close")
+
+    created = 0
+
+    class Reader:
+        def __init__(self, **_kwargs):
+            nonlocal created
+            created += 1
+            self.number = created
+
+        def start(self):
+            calls.append(f"start-{self.number}")
+            if self.number == failed_reader:
+                raise RuntimeError(f"reader {self.number} did not start")
+
+        def join(self, timeout):
+            assert timeout == 1.0
+            calls.append(f"join-{self.number}")
+
+        def is_alive(self):
+            return False
+
+    monkeypatch.setattr(appserver.ProcessContainment, "create", lambda: Containment())
+    monkeypatch.setattr(appserver.threading, "Thread", Reader)
+
+    transport = appserver._JsonlProcess(
+        ("stub",),
+        cwd=tmp_path,
+        env={},
+        max_message_bytes=1,
+        max_messages=1,
+    )
+    with pytest.raises(RuntimeError, match=f"reader {failed_reader} did not start"):
+        transport.start_readers()
+    transport.close()
+
+    assert calls[: failed_reader + 1] == [
+        "spawn",
+        *(f"start-{number}" for number in range(1, failed_reader + 1)),
+    ]
+    assert calls[failed_reader + 1] == "finish"
+    assert calls[-1] == "containment-close"
+    if failed_reader == 2:
+        assert calls.index("finish") < calls.index("join-1")
+
+
+def test_partial_transport_cleanup_failure_remains_owned_and_retryable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import botpipe.codex_appserver as appserver
+
+    finish_calls = 0
+
+    class Stream:
+        def close(self):
+            return None
+
+    class Process:
+        stdin = Stream()
+        stdout = Stream()
+        stderr = Stream()
+
+    class Containment:
+        def spawn(self, _argv, **_kwargs):
+            return Process()
+
+        def finish(self, _process, **_kwargs):
+            nonlocal finish_calls
+            finish_calls += 1
+            if finish_calls == 1:
+                raise RuntimeError("first cleanup unproven")
+
+        def close(self):
+            return None
+
+    class FailedReader:
+        def __init__(self, **_kwargs):
+            pass
+
+        def start(self):
+            raise RuntimeError("reader did not start")
+
+    real_thread = threading.Thread
+    monkeypatch.setattr(appserver.ProcessContainment, "create", lambda: Containment())
+    monkeypatch.setattr(appserver.threading, "Thread", FailedReader)
+    owner = _AttemptLifecycle()
+    transport = appserver._JsonlProcess(
+        ("stub",),
+        cwd=tmp_path,
+        env={},
+        max_message_bytes=1,
+        max_messages=1,
+        attempt_owner=owner,
+    )
+
+    with pytest.raises(RuntimeError, match="reader did not start"):
+        transport.start_readers()
+    monkeypatch.setattr(threading, "Thread", real_thread)
+    assert owner.stop(0.02) is False
+    assert transport.closed is False
+
+    # The retained raw transport retries the previously unproven teardown.
+    assert owner.stop(0.5) is True
+    assert transport.closed is True
+    assert finish_calls == 2
+
+
+def test_transport_spawn_observes_attempt_sealed_before_reader_start(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import botpipe.codex_appserver as appserver
+
+    finished = threading.Event()
+
+    class Stream:
+        def close(self):
+            return None
+
+    class Process:
+        stdin = Stream()
+        stdout = Stream()
+        stderr = Stream()
+
+    class Containment:
+        def spawn(self, _argv, **_kwargs):
+            return Process()
+
+        def finish(self, _process, **_kwargs):
+            finished.set()
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(appserver.ProcessContainment, "create", lambda: Containment())
+    owner = _AttemptLifecycle()
+    owner.reserve_start()
+    outcomes: list[bool] = []
+    stopping = threading.Thread(target=lambda: outcomes.append(owner.stop(0.5)))
+    stopping.start()
+    deadline = time.monotonic() + 1
+    while not owner.sealed and time.monotonic() < deadline:
+        time.sleep(0.001)
+
+    with pytest.raises(_AttemptSealed):
+        appserver._JsonlProcess(
+            ("stub",),
+            cwd=tmp_path,
+            env={},
+            max_message_bytes=1,
+            max_messages=1,
+            attempt_owner=owner,
+        )
+    owner.finish_start()
+    stopping.join(1)
+    assert outcomes == [True]
+    assert finished.is_set()
+
+
 def test_tool_free_profile_dispatches_with_exact_empty_inventory(tmp_path: Path) -> None:
     adapter = bridge(tmp_path, stub(tmp_path, call_tool=False))
     result = adapter.execute(
@@ -637,7 +964,7 @@ def test_unknown_version_fails_before_app_server_dispatch(tmp_path: Path) -> Non
     adapter = CodexAppServerBridge(
         command=(sys.executable, str(script)),
         codex_home=home,
-        version_probe=lambda: "codex-cli 0.156.0",
+        version_probe=lambda: "codex-cli 0.157.0",
     )
     with pytest.raises(CodexAppServerCapabilityError, match="no conformance evidence"):
         adapter.execute(
@@ -866,12 +1193,15 @@ def test_provider_adapter_commits_receipt_tool_evidence_and_session_binding(
         (evidence_dir / "observation-000001.json").read_text()
     )
     assert observation["observation"]["output"] == " M README.md"
-    bindings = list((tmp_path / "receipts" / "codex-app-server-sessions").glob("*.json"))
-    assert len(bindings) == 1
-    binding = json.loads(bindings[0].read_text())
-    assert binding["thread_id"] == "thread-1"
-    assert binding["tool_fingerprint"] == response.metadata["tool_fingerprint"]
-    assert binding["instruction_mode"] == "collaboration-mode-v1"
+    assert response.continuation is not None
+    assert response.continuation.native_id == "thread-1"
+    assert response.continuation.adapter == "codex"
+    assert response.continuation.metadata == {
+        "adapter_version": adapter.capabilities.version,
+        "instruction_mode": "collaboration-mode-v1",
+        "tool_fingerprint": response.metadata["tool_fingerprint"],
+    }
+    assert not (tmp_path / "receipts" / "codex-app-server-sessions").exists()
     recovered = adapter.recover(request)
     assert isinstance(recovered, Completed)
     assert recovered.response.to_record() == response.to_record()
@@ -888,6 +1218,7 @@ def test_provider_adapter_commits_receipt_tool_evidence_and_session_binding(
         tmp_path,
         operation_id="scope/codex:2",
         session_id="thread-1",
+        continuation=response.continuation,
     )
     continued_response = adapter.run(continued)
     assert continued_response.session_id == "thread-1"
@@ -896,15 +1227,15 @@ def test_provider_adapter_commits_receipt_tool_evidence_and_session_binding(
         for message in read_transcript(tmp_path)
     )
 
-    legacy_binding = json.loads(bindings[0].read_text())
-    legacy_binding.pop("instruction_mode")
-    bindings[0].write_text(json.dumps(legacy_binding), encoding="utf-8")
+    invalid = response.continuation.to_record()
+    invalid["metadata"].pop("instruction_mode")
     with pytest.raises(CapabilityError, match="role-instruction mode"):
         adapter.run(
             provider_request(
                 tmp_path,
                 operation_id="scope/codex:3",
                 session_id="thread-1",
+                continuation=ProviderContinuation.from_record(invalid),
             )
         )
 
@@ -924,6 +1255,53 @@ def test_provider_empty_generate_uses_strict_empty_inventory(tmp_path: Path) -> 
     assert thread_start["params"]["dynamicTools"] == []
 
 
+def test_recovery_rejects_malformed_persisted_continuation(tmp_path: Path) -> None:
+    adapter = CodexAppServerProvider(
+        bridge=bridge(tmp_path, stub(tmp_path, call_tool=False))
+    )
+    request = provider_request(tmp_path, allow_commands=())
+    adapter.run(request)
+    path = receipt_path(request)
+    receipt = json.loads(path.read_text(encoding="utf-8"))
+    del receipt["response"]["continuation"]["adapter"]
+    path.write_text(json.dumps(receipt), encoding="utf-8")
+
+    outcome = adapter.recover(request)
+
+    assert isinstance(outcome, Unknown)
+    assert "invalid response" in outcome.detail
+
+
+@pytest.mark.parametrize(
+    "corrupt",
+    [
+        lambda receipt: receipt["response"].pop("continuation"),
+        lambda receipt: receipt["response"]["continuation"]["metadata"].__setitem__(
+            "tool_fingerprint", "changed"
+        ),
+        lambda receipt: receipt.__setitem__("adapter_version", "changed"),
+    ],
+    ids=["missing", "wrong-fingerprint", "wrong-adapter-version"],
+)
+def test_recovery_rejects_incompatible_continuation_proof(
+    tmp_path: Path, corrupt
+) -> None:
+    adapter = CodexAppServerProvider(
+        bridge=bridge(tmp_path, stub(tmp_path, call_tool=False))
+    )
+    request = provider_request(tmp_path, allow_commands=())
+    adapter.run(request)
+    path = receipt_path(request)
+    receipt = json.loads(path.read_text(encoding="utf-8"))
+    corrupt(receipt)
+    path.write_text(json.dumps(receipt), encoding="utf-8")
+
+    outcome = adapter.recover(request)
+
+    assert isinstance(outcome, Unknown)
+    assert "continuation" in outcome.detail
+
+
 def test_prepared_live_attempt_is_running_and_cannot_be_replaced(tmp_path, monkeypatch):
     adapter = CodexAppServerProvider(
         bridge=bridge(tmp_path, stub(tmp_path, call_tool=False))
@@ -933,7 +1311,9 @@ def test_prepared_live_attempt_is_running_and_cannot_be_replaced(tmp_path, monke
 
     def before_spawn(self, **kwargs):
         before = receipt_path(request).read_bytes()
-        assert not self.is_active(request.operation_id)
+        # Ownership is published with the prepared receipt, before spawn, so
+        # cancellation can seal this startup window.
+        assert self.is_active(request.operation_id)
         assert isinstance(adapter.recover(request), Running)
         with pytest.raises(ProviderInterruptedError, match="active"):
             adapter.run(request)
@@ -1018,12 +1398,6 @@ def test_authorized_retry_cannot_replace_the_retained_thread(tmp_path: Path) -> 
     first = provider_request(tmp_path, allow_commands=())
     with pytest.raises(ProviderInterruptedError):
         adapter.run(first)
-    adapter._save_session(
-        first,
-        CodexAppServerSession(
-            "thread-2", json.loads(receipt_path(first).read_text())["tool_fingerprint"]
-        ),
-    )
     transcript = read_transcript(tmp_path)
 
     with pytest.raises(CapabilityError, match="cannot replace.*thread"):
@@ -1103,7 +1477,7 @@ def test_newer_codex_is_accepted_for_native_run_but_not_unreviewed_strict_invent
     native = CodexAppServerBridge(
         command=stub(tmp_path, call_tool=False),
         codex_home=home,
-        version_probe=lambda: "codex-cli 0.156.0",
+        version_probe=lambda: "codex-cli 0.157.0",
     )
     adapter = CodexAppServerProvider(bridge=native)
 
@@ -1318,6 +1692,87 @@ send({{'method': 'turn/completed', 'params': {{'turn': {{'id': 'turn-1', 'status
         message.get("method") == "turn/interrupt"
         for message in read_transcript(tmp_path)
     )
+
+
+def test_cancel_waits_for_admitted_mediator_before_recording_quiescence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    entered = threading.Event()
+    process_stopped = threading.Event()
+    allow_worker_exit = threading.Event()
+
+    class Envelope:
+        def to_record(self):
+            return {"tool": "count_lines", "argv": ["/usr/bin/wc", "-l"]}
+
+    class Reads:
+        command_envelopes = {"count_lines": Envelope()}
+
+        def __init__(self, _roots, *, attempt_owner, **_options):
+            self.owner = attempt_owner
+
+        def count_lines(self, path):
+            resource = object()
+            assert self.owner.register_process(
+                resource, lambda: process_stopped.set()
+            ) is False
+            entered.set()
+            try:
+                assert allow_worker_exit.wait(2)
+            finally:
+                self.owner.unregister_process(resource)
+            return ToolObservation("count_lines", {"path": path}, "1")
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr("botpipe.codex_appserver.ReadOnlyTools", Reads)
+    adapter = CodexAppServerProvider(
+        bridge=bridge(
+            tmp_path,
+            stub(
+                tmp_path,
+                tool_name="count_lines",
+                namespace="botpipe",
+                arguments={"path": "README.md"},
+            ),
+        )
+    )
+    request = provider_request(
+        tmp_path,
+        operation_id="scope/codex-query-cancel:1",
+        operation=OperationKind.QUERY,
+        allow_commands=(),
+        output_schema=None,
+    )
+    run_errors: list[BaseException] = []
+
+    def invoke() -> None:
+        try:
+            adapter.run(request)
+        except BaseException as exc:
+            run_errors.append(exc)
+
+    running = threading.Thread(target=invoke)
+    running.start()
+    assert entered.wait(2)
+
+    outcomes = []
+    cancelling = threading.Thread(
+        target=lambda: outcomes.append(adapter.cancel(request.operation_id))
+    )
+    cancelling.start()
+    assert process_stopped.wait(2)
+    assert cancelling.is_alive()
+    assert "process_quiescent" not in json.loads(receipt_path(request).read_text())
+
+    allow_worker_exit.set()
+    cancelling.join(3)
+    running.join(3)
+    assert not cancelling.is_alive()
+    assert not running.is_alive()
+    assert len(outcomes) == 1 and isinstance(outcomes[0], Stopped)
+    assert "process_quiescent" in json.loads(receipt_path(request).read_text())
 
 
 def test_provider_query_exposes_bounded_read_surface(

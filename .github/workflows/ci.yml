@@ -29,7 +29,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          import hashlib, json, os, pathlib, platform, shutil, stat, tarfile, time, urllib.error, urllib.request, zipfile
+          import hashlib, json, os, pathlib, platform, runpy, shutil, tarfile, time, urllib.error, urllib.request
+          extract_windows_package = runpy.run_path(
+              "scripts/extract_codex_windows.py"
+          )["extract_windows_package"]
           request = urllib.request.Request(
               "https://api.github.com/repos/openai/codex/releases/latest",
               headers={"Authorization": "Bearer " + os.environ["GITHUB_TOKEN"], "Accept": "application/vnd.github+json"},
@@ -56,31 +59,9 @@ jobs:
           if actual != asset["digest"]:
               raise RuntimeError("Codex release asset digest mismatch")
           if windows:
-              with zipfile.ZipFile(archive) as bundle:
-                  members = bundle.infolist()
-                  main_name = "codex-x86_64-pc-windows-msvc.exe"
-                  names = set()
-                  for member in members:
-                      name = member.filename
-                      file_type = stat.S_IFMT(member.external_attr >> 16)
-                      if (not name or name in {".", ".."}
-                              or any(character in name for character in '/\\:')
-                              or name.endswith((".", " "))
-                              or file_type not in (0, stat.S_IFREG)
-                              or member.is_dir()
-                              or name.casefold() in names
-                              or name.casefold() == "codex.exe"):
-                          raise RuntimeError(f"Unsafe or ambiguous Codex archive entry: {name!r}")
-                      names.add(name.casefold())
-                  if sum(member.filename == main_name for member in members) != 1:
-                      raise RuntimeError(f"Codex archive must contain exactly one {main_name}")
-                  # The native Windows sandbox needs the packaged helper executables
-                  # beside Codex. Keep their names and rename only the main binary.
-                  for member in members:
-                      target = root / ("codex.exe" if member.filename == main_name else member.filename)
-                      with bundle.open(member) as source, target.open("xb") as destination:
-                          shutil.copyfileobj(source, destination)
-                  binary = root / "codex.exe"
+              # Preserve the package tree, metadata identity, and compatibility
+              # helpers exactly as published by the release workflow.
+              binary = extract_windows_package(archive, root)
           else:
               with tarfile.open(archive) as bundle:
                   # Use the complete native distribution, including its matching

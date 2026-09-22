@@ -13,11 +13,12 @@ import os
 import re
 import threading
 import uuid
+from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from enum import Enum
 from pathlib import Path
-from types import MemberDescriptorType
+from types import MappingProxyType, MemberDescriptorType
 from typing import TYPE_CHECKING, Self, get_type_hints
 
 from pydantic import BaseModel, TypeAdapter, ValidationError
@@ -86,6 +87,24 @@ def _hash(value):
             value, sort_keys=True, separators=(",", ":"), allow_nan=False
         ).encode()
     ).hexdigest()
+
+
+def _freeze_runtime_setting(value):
+    if isinstance(value, Mapping):
+        return MappingProxyType(
+            {str(key): _freeze_runtime_setting(item) for key, item in value.items()}
+        )
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze_runtime_setting(item) for item in value)
+    return value
+
+
+def _plain_runtime_setting(value):
+    if isinstance(value, Mapping):
+        return {str(key): _plain_runtime_setting(item) for key, item in value.items()}
+    if isinstance(value, tuple):
+        return [_plain_runtime_setting(item) for item in value]
+    return value
 
 
 def _commit_or_confirm(journal, operation_id, write, projection, message):
@@ -604,31 +623,27 @@ class _AsyncCancellationScope:
     """Join asyncio cancellation to the durable run it created in a worker."""
 
     def __init__(self):
-        self._condition = threading.Condition()
+        self._loop = asyncio.get_running_loop()
+        self._bound = asyncio.Event()
+        self._lock = threading.Lock()
         self._runtime = None
         self._run_id = None
-        self._requested = False
 
     def bind(self, runtime, run_id):
-        with self._condition:
+        with self._lock:
             self._runtime = runtime
             self._run_id = run_id
-            self._condition.notify_all()
+        self._loop.call_soon_threadsafe(self._bound.set)
 
-    def request(self):
-        with self._condition:
-            self._requested = True
-            self._condition.notify_all()
+    async def wait_until_bound(self):
+        await self._bound.wait()
 
-    def cancel_once(self, timeout=0.05):
-        with self._condition:
-            if self._runtime is None:
-                self._condition.wait(timeout)
+    def cancel_once(self):
+        with self._lock:
             runtime, run_id = self._runtime, self._run_id
         if runtime is None:
-            return False
-        runtime.cancel(run_id)
-        return True
+            raise RuntimeError("async cancellation scope was not bound")
+        return runtime.cancel(run_id)
 
 
 def _bind_async_cancellation(runtime, run_id):
@@ -645,57 +660,71 @@ async def _async_call(fn, *args, **kwargs):
     finally:
         _ASYNC_CANCELLATION.reset(token)
     cancelled = False
-    cancellation_settled = False
+    cancellation_driver = None
     while True:
         try:
             result = await asyncio.shield(task)
             break
         except asyncio.CancelledError:
             if task.cancelled():
-                raise
-            if not cancelled:
-                scope.request()
-            cancelled = True
-            # Retry briefly after an Unknown result. This closes the narrow
-            # race where durable intent exists but the native adapter has not
-            # yet registered ownership of its just-starting process.
-            for _ in range(10):
-                if cancellation_settled or task.done():
-                    break
-                attempt = asyncio.create_task(asyncio.to_thread(scope.cancel_once))
-                while True:
-                    try:
-                        cancellation_settled = await asyncio.shield(attempt)
-                        break
-                    except asyncio.CancelledError:
-                        cancelled = True
-                        if attempt.done():
-                            try:
-                                cancellation_settled = attempt.result()
-                            except (BotpipeError, KeyError):
-                                pass
-                            break
-                    except (BotpipeError, KeyError):
-                        # The durable request remains the authority. Retry while
-                        # the worker is alive so a process that wins a start race
-                        # is still asked to stop once the adapter owns it.
-                        break
-                if not cancellation_settled and not task.done():
-                    try:
-                        await asyncio.sleep(0.02)
-                    except asyncio.CancelledError:
-                        cancelled = True
-            if task.done():
-                if not cancelled:
-                    result = task.result()
+                cancelled = True
                 break
+            cancelled = True
+            if cancellation_driver is None:
+                cancellation_driver = asyncio.create_task(
+                    _drive_async_cancellation(scope, task)
+                )
         except BaseException:
             if cancelled:
                 break
             raise
+        if task.done():
+            break
+    if cancelled:
+        try:
+            task.result()
+        except BaseException:
+            # Cancellation has precedence, but retrieving the worker terminal
+            # state prevents a joined failure from becoming an orphan warning.
+            pass
+    if cancellation_driver is not None:
+        while not cancellation_driver.done():
+            try:
+                await asyncio.shield(cancellation_driver)
+            except asyncio.CancelledError:
+                cancelled = True
+        # Only cancellation uncertainty is an expected part of the driver.
+        # Any other failure is reported after the effectful worker is joined.
+        cancellation_driver.result()
     if cancelled:
         raise asyncio.CancelledError
     return result
+
+
+async def _drive_async_cancellation(scope, worker):
+    bound = asyncio.create_task(scope.wait_until_bound())
+    done, _ = await asyncio.wait(
+        (bound, worker), return_when=asyncio.FIRST_COMPLETED
+    )
+    if worker in done and not bound.done():
+        bound.cancel()
+        try:
+            await bound
+        except asyncio.CancelledError:
+            pass
+        return
+    if worker.done():
+        return
+    retry_delay = 0.05
+    while not worker.done():
+        try:
+            await asyncio.to_thread(scope.cancel_once)
+            return
+        except UncertainOperation:
+            if worker.done():
+                return
+            await asyncio.sleep(retry_delay)
+            retry_delay = min(retry_delay * 2, 1.0)
 
 
 def _callable_reference(value):
@@ -1460,10 +1489,9 @@ class Botpipe:
         timeout=_UNSET,
         provider_config=None,
         provider_defaults=None,
+        provider_catalog=None,
         contract_registry=None,
     ):
-        from .providers import get_provider
-
         if provider is _UNSET:
             from .config import load_config
 
@@ -1478,6 +1506,8 @@ class Botpipe:
                 provider_config = configured["provider_config"]
             if provider_defaults is None:
                 provider_defaults = configured["provider_defaults"]
+            if provider_catalog is None:
+                provider_catalog = configured["provider_catalog"]
             if max_operations is _UNSET:
                 max_operations = configured["max_operations"]
             if timeout is _UNSET:
@@ -1514,30 +1544,42 @@ class Botpipe:
         validate_non_secret_settings(
             self.policy.to_dict(), path="runtime policy"
         )
-        constructed_adapter = isinstance(provider, str)
-        self.provider = (
-            get_provider(provider, config=self.provider_config)
+        selected_name = (
+            self._normalize_provider_name(provider)
             if isinstance(provider, str)
-            else provider
+            else None
         )
+        self.provider = None if isinstance(provider, str) else provider
         if provider is not None and not any(
             callable(getattr(self.provider, method, None))
             for method in ("run", "decide")
-        ):
+        ) and not isinstance(provider, str):
             raise TypeError("Provider must implement a supported capability")
-        self.provider_name = (
-            getattr(self.provider, "name", type(self.provider).__name__)
-            if self.provider is not None
-            else None
-        )
+        if selected_name is not None:
+            self.provider_name = selected_name
+        elif self.provider is not None:
+            self.provider_name = self._normalize_provider_name(
+                getattr(self.provider, "name", type(self.provider).__name__)
+            )
+        else:
+            self.provider_name = None
+        catalog = dict(provider_catalog or {})
+        if self.provider_name is not None:
+            catalog[self.provider_name] = {
+                "name": self.provider_name,
+                "config": self.provider_config,
+                "defaults": self.provider_defaults,
+            }
+        self.provider_catalog = self._normalize_provider_catalog(catalog)
         self._adapter_lock = threading.RLock()
+        self._close_lock = threading.Lock()
         self._adapter_cache = {}
         self._owned_adapters = set()
         if self.provider is not None:
             key = self._adapter_key(self.provider_name, self.provider_config)
             self._adapter_cache[key] = self.provider
-            if constructed_adapter:
-                self._owned_adapters.add(id(self.provider))
+        self._closing = False
+        self._journal_closed = False
         self.limits = RunLimits(max_operations, timeout)
         self.journal = Journal(self.state_dir / "state.sqlite3")
         self._workspace_coordinator = WorkspaceCoordinator()
@@ -1567,16 +1609,92 @@ class Botpipe:
             ),
         )
 
+    @staticmethod
+    def _normalize_provider_name(name):
+        if not isinstance(name, str) or not name.strip():
+            raise TypeError("Provider name must be a nonempty string")
+        return name.strip().lower()
+
+    @staticmethod
+    def _normalize_provider_catalog(catalog):
+        from .config import validate_non_secret_settings
+
+        normalized = {}
+        for raw_name, raw_selection in catalog.items():
+            if not isinstance(raw_name, str) or not raw_name.strip():
+                raise TypeError("Provider catalog names must be nonempty strings")
+            name = raw_name.strip().lower()
+            if name in normalized:
+                raise ValueError(f"Duplicate provider catalog entry {name!r}")
+            if not isinstance(raw_selection, Mapping):
+                raise TypeError(f"Provider catalog entry {name!r} must be a mapping")
+            selection = dict(raw_selection)
+            if set(selection) != {"name", "config", "defaults"}:
+                raise ValueError(
+                    f"Provider catalog entry {name!r} must contain name, config, and defaults"
+                )
+            selected_name = selection["name"]
+            if not isinstance(selected_name, str) or selected_name.strip().lower() != name:
+                raise ValueError(f"Provider catalog entry {name!r} has a mismatched name")
+            config = selection["config"]
+            defaults = selection["defaults"]
+            if not isinstance(config, Mapping) or not isinstance(defaults, Mapping):
+                raise TypeError(
+                    f"Provider catalog entry {name!r} config/defaults must be mappings"
+                )
+            config = _plain_runtime_setting(config)
+            defaults = _plain_runtime_setting(defaults)
+            validate_non_secret_settings(
+                config, path=f"provider {name} configuration"
+            )
+            validate_non_secret_settings(
+                defaults, path=f"provider {name} defaults"
+            )
+            try:
+                json.dumps(
+                    {"config": config, "defaults": defaults},
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    allow_nan=False,
+                )
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"Provider catalog entry {name!r} must contain finite JSON data"
+                ) from exc
+            normalized[name] = MappingProxyType({
+                "name": name,
+                "config": _freeze_runtime_setting(config),
+                "defaults": _freeze_runtime_setting(defaults),
+            })
+        return MappingProxyType(normalized)
+
+    def _provider_catalog_record(self):
+        catalog = _plain_runtime_setting(self.provider_catalog)
+        if self.provider_name is not None:
+            catalog[self.provider_name] = {
+                "name": self.provider_name,
+                "config": _plain_runtime_setting(self.provider_config),
+                "defaults": _plain_runtime_setting(self.provider_defaults),
+            }
+        return _plain_runtime_setting(self._normalize_provider_catalog(catalog))
+
+    def _ensure_open(self):
+        if self._closing:
+            raise BotpipeError("Botpipe runtime is closed")
+
     def resolve_adapter(self, name, config=None):
         """Resolve and memoize a runtime-owned adapter resource."""
 
         from .config import validate_non_secret_settings
         from .providers import get_provider
 
-        config = dict(config or {})
+        self._ensure_open()
+        name = name.strip().lower()
+        config = _plain_runtime_setting(config or {})
         validate_non_secret_settings(config, path=f"provider {name} configuration")
         key = self._adapter_key(name, config)
         with self._adapter_lock:
+            self._ensure_open()
             adapter = self._adapter_cache.get(key)
             if adapter is None:
                 adapter = get_provider(name, config=config)
@@ -1600,9 +1718,18 @@ class Botpipe:
         # Provider selection is a run snapshot. A changed project default must
         # not retarget recorded families during recovery. Current policy is
         # applied separately when a future dispatch is prepared.
-        for field in ("provider_config", "provider_defaults", "policy"):
+        for field in (
+            "provider_config",
+            "provider_defaults",
+            "provider_catalog",
+            "policy",
+        ):
             if not isinstance(data.get(field, {}), dict):
                 raise ReplayMismatch(f"Recorded run {field} is malformed")
+        try:
+            self._normalize_provider_catalog(data["provider_catalog"])
+        except (TypeError, ValueError, KeyError) as exc:
+            raise ReplayMismatch("Recorded run provider catalog is malformed") from exc
         self._recorded_workspace_mode(data)
 
     @staticmethod
@@ -1702,6 +1829,7 @@ class Botpipe:
             )
 
     def _run(self, definition, *args, task_id=None, run_id=None, **kwargs):
+        self._ensure_open()
         definition = self._definition(definition)
         args, kwargs = _validate_args(definition.fn, args, kwargs)
         context = definition._source_context
@@ -1746,6 +1874,7 @@ class Botpipe:
             "provider": self.provider_name,
             "provider_config": self.provider_config,
             "provider_defaults": self.provider_defaults,
+            "provider_catalog": self._provider_catalog_record(),
             "policy": self.policy.to_dict(),
             "workspace_mode": self._new_workspace_mode(definition, args),
             "max_operations": limits.max_operations,
@@ -1814,6 +1943,7 @@ class Botpipe:
         max_operations=None,
         timeout=None,
     ):
+        self._ensure_open()
         with self._workspace_coordinator.execution_guard(self.journal, run_id):
             return self._resume_exclusive(
                 run_id,
@@ -2146,6 +2276,7 @@ class Botpipe:
     def cancel(self, run_id, operation_id=None):
         """Request cancellation without claiming that unknown effects stopped."""
 
+        self._ensure_open()
         data = self.journal.run(run_id)
         if data["status"] in {"completed", "failed", "budget_exceeded"}:
             return self.inspect(run_id)
@@ -2161,18 +2292,19 @@ class Botpipe:
         # a worker racing toward its first dispatch observes the cancellation.
         if operation_id is not None and not unfinished:
             raise KeyError(operation_id)
-        requested_at = now()
-        self.journal.update_run(
-            run_id,
-            cancel_requested_at=requested_at,
-            updated_at=requested_at,
-        )
-        self.journal.event(
-            run_id,
-            "cancellation_requested",
-            {"operation_id": operation_id},
-            operation_id=operation_id,
-        )
+        if data.get("cancel_requested_at") is None:
+            requested_at = now()
+            self.journal.update_run(
+                run_id,
+                cancel_requested_at=requested_at,
+                updated_at=requested_at,
+            )
+            self.journal.event(
+                run_id,
+                "cancellation_requested",
+                {"operation_id": operation_id},
+                operation_id=operation_id,
+            )
         unresolved = []
         for record in unfinished:
             # The cancellation flag was committed before this read. Workers
@@ -2333,6 +2465,7 @@ class Botpipe:
         response=_UNSET,
         artifact_digests=None,
     ):
+        self._ensure_open()
         with self._workspace_coordinator.execution_guard(self.journal, run_id):
             return self._resolve_exclusive(
                 run_id,
@@ -2389,7 +2522,10 @@ class Botpipe:
             old = dict(record.get("response") or {})
             source = "operator"
             if record["kind"] == "provider":
-                from .providers import provider_request_from_snapshot
+                from .providers import (
+                    provider_request_from_snapshot,
+                    response_continuation,
+                )
 
                 checkpoint = ProviderCheckpoint.from_record(old)
                 if isinstance(checkpoint, NotDispatchedCheckpoint):
@@ -2520,6 +2656,9 @@ class Botpipe:
 
                 if response is not _UNSET:
                     response = canonical_provider_response(response)
+                    continuation = response_continuation(
+                        response, provider=adapter.name, previous=request.continuation
+                    )
                     checkpoint = ProviderLifecycle.completed(checkpoint, response)
                     session_update = None
                     session_id = inputs.get("session")
@@ -2530,7 +2669,7 @@ class Botpipe:
                         session_update = {
                             "session_id": session_id,
                             "expected_revision": saved_session["revision"],
-                            "native_session_id": response.session_id,
+                            "continuation": continuation,
                         }
                     _persist_response(
                         self.journal,
@@ -2658,21 +2797,48 @@ class Botpipe:
                 )
 
     def close(self):
+        with self._close_lock:
+            self._close_owned_resources()
+
+    def _close_owned_resources(self):
         with self._adapter_lock:
-            adapters = [
-                adapter
-                for adapter in self._adapter_cache.values()
-                if id(adapter) in self._owned_adapters
-            ]
-            self._adapter_cache.clear()
-            self._owned_adapters.clear()
-        try:
-            for adapter in adapters:
-                close = getattr(adapter, "close", None)
-                if callable(close):
-                    close()
-        finally:
-            self.journal.close()
+            self._closing = True
+            adapters = {}
+            for adapter in self._adapter_cache.values():
+                identity = id(adapter)
+                if identity in self._owned_adapters:
+                    adapters.setdefault(identity, adapter)
+        failures = []
+        closed = set()
+        for identity, adapter in adapters.items():
+            close = getattr(adapter, "close", None)
+            if not callable(close):
+                closed.add(identity)
+                continue
+            try:
+                close()
+            except BaseException as exc:
+                failures.append(exc)
+            else:
+                closed.add(identity)
+        with self._adapter_lock:
+            self._owned_adapters.difference_update(closed)
+            self._adapter_cache = {
+                key: adapter
+                for key, adapter in self._adapter_cache.items()
+                if id(adapter) not in closed
+            }
+        if not self._journal_closed:
+            try:
+                self.journal.close()
+            except BaseException as exc:
+                failures.append(exc)
+            else:
+                self._journal_closed = True
+        if len(failures) == 1:
+            raise failures[0]
+        if failures:
+            raise BaseExceptionGroup("Botpipe close failures", failures)
 
     def __enter__(self) -> Self:
         return self

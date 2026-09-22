@@ -549,6 +549,125 @@ def test_repeated_async_cancellation_waits_until_effectful_worker_finishes(tmp_p
         asyncio.run(scenario(client))
 
 
+def test_async_cancellation_remains_pending_until_delayed_run_binding(tmp_path):
+    entered_definition = threading.Event()
+    release_definition = threading.Event()
+
+    @workflow
+    def job():
+        return "late"
+
+    async def scenario(client):
+        original = client._definition
+
+        def delayed(value):
+            entered_definition.set()
+            assert release_definition.wait(5)
+            return original(value)
+
+        client._definition = delayed
+        task = asyncio.create_task(client.arun(job, run_id="delayed-bind"))
+        assert await asyncio.to_thread(entered_definition.wait, 2)
+        task.cancel()
+        await asyncio.sleep(0.35)
+        assert not task.done()
+        release_definition.set()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    with Botpipe(tmp_path, provider=FakeProvider([])) as client:
+        asyncio.run(scenario(client))
+        assert client.journal.run("delayed-bind")["status"] == "interrupted"
+
+
+def test_async_cancellation_retries_unknown_without_escaping_worker(tmp_path):
+    entered = threading.Event()
+    release = threading.Event()
+    exited = threading.Event()
+
+    class InitiallyUnknown(FakeProvider):
+        def __init__(self):
+            super().__init__([self.turn])
+            self.cancel_calls = 0
+
+        def turn(self, request):
+            entered.set()
+            assert release.wait(5)
+            exited.set()
+            return "late"
+
+        def cancel(self, operation_id):
+            from botpipe.recovery import Unknown
+
+            self.cancel_calls += 1
+            if self.cancel_calls == 1:
+                return Unknown("native ownership is still starting")
+            release.set()
+            return Stopped("stopped after ownership appeared")
+
+    @workflow
+    def job():
+        return Provider(session=None).run("work").value
+
+    async def scenario(client):
+        task = asyncio.create_task(client.arun(job, run_id="unknown-cancel"))
+        assert await asyncio.to_thread(entered.wait, 2)
+        task.cancel()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    native = InitiallyUnknown()
+    with Botpipe(tmp_path, provider=native) as client:
+        asyncio.run(scenario(client))
+        assert native.cancel_calls == 2
+        assert exited.is_set()
+
+
+def test_async_cancellation_joins_driver_when_worker_cancels_itself():
+    import asyncio
+    import threading
+
+    from botpipe.runtime import _async_call, _bind_async_cancellation
+
+    bound = threading.Event()
+    cancelling = threading.Event()
+    release_worker = threading.Event()
+    release_cancel = threading.Event()
+    cancel_finished = threading.Event()
+
+    class Runtime:
+        def cancel(self, run_id):
+            cancelling.set()
+            assert release_cancel.wait(5)
+            cancel_finished.set()
+
+    def worker():
+        _bind_async_cancellation(Runtime(), "self-cancelling")
+        bound.set()
+        assert release_worker.wait(5)
+        raise asyncio.CancelledError()
+
+    async def exercise():
+        task = asyncio.create_task(_async_call(worker))
+        try:
+            assert await asyncio.to_thread(bound.wait, 5)
+            task.cancel()
+            assert await asyncio.to_thread(cancelling.wait, 5)
+            release_worker.set()
+            done, _ = await asyncio.wait((task,), timeout=0.1)
+            assert not done, "caller returned before its cancellation driver finished"
+            assert not cancel_finished.is_set()
+        finally:
+            release_worker.set()
+            release_cancel.set()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            assert await asyncio.to_thread(cancel_finished.wait, 5)
+
+    asyncio.run(exercise())
+
+
 def test_durable_cancel_request_prevents_late_success_commit(tmp_path):
     entered = threading.Event()
     released = threading.Event()

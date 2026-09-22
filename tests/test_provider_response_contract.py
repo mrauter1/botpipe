@@ -5,8 +5,79 @@ from copy import deepcopy
 import pytest
 
 from botpipe import Botpipe, BotpipeError, Provider, workflow
-from botpipe.providers import FakeProvider, ProviderRequest, ProviderResponse
+from botpipe.providers import (
+    FakeProvider,
+    ProviderContinuation,
+    ProviderRequest,
+    ProviderResponse,
+    response_continuation,
+)
 from botpipe.recovery import Completed, Stopped
+
+
+def test_provider_continuation_is_strict_detached_json():
+    metadata = {"roles": ["reader"]}
+    continuation = ProviderContinuation("native", "provider", metadata)
+    metadata["roles"].append("writer")
+
+    assert continuation.to_record() == {
+        "native_id": "native",
+        "adapter": "provider",
+        "metadata": {"roles": ["reader"]},
+    }
+    with pytest.raises(TypeError, match="plain JSON"):
+        ProviderContinuation("native", "provider", {1: "invalid"})  # type: ignore[dict-item]
+    with pytest.raises(TypeError, match="plain JSON"):
+        ProviderContinuation("native", "provider", {"roles": ("reader",)})
+
+
+def test_response_continuation_cannot_claim_another_adapter(tmp_path):
+    @workflow
+    def work():
+        return Provider().run("effectful work").value
+
+    response = ProviderResponse(
+        "ok",
+        "native",
+        continuation=ProviderContinuation("native", "codex", {}),
+    )
+    with Botpipe(tmp_path, provider=FakeProvider([response])) as client:
+        result = client.run(work)
+
+    assert result.status == "failed"
+    assert "different adapter" in result.error
+
+
+def test_raw_response_preserves_compatible_typed_continuation():
+    previous = ProviderContinuation(
+        "native", "provider", {"authority": {"tools": ["read"]}}
+    )
+
+    assert response_continuation(
+        ProviderResponse("ok", "native"),
+        provider="provider",
+        previous=previous,
+    ) == previous
+
+
+def test_raw_response_cannot_replace_a_metadata_bound_native_session():
+    previous = ProviderContinuation(
+        "native", "provider", {"authority": {"tools": ["read"]}}
+    )
+
+    with pytest.raises(ValueError, match="changed native session"):
+        response_continuation(
+            ProviderResponse("ok", "replacement"),
+            provider="provider",
+            previous=previous,
+        )
+
+    legacy = ProviderContinuation("native", "provider")
+    assert response_continuation(
+        ProviderResponse("ok", "replacement"),
+        provider="provider",
+        previous=legacy,
+    ) == ProviderContinuation("replacement", "provider")
 
 
 def _provider_operation(client: Botpipe, run_id: str) -> dict:

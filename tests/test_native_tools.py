@@ -2,6 +2,8 @@ import io
 import hashlib
 import os
 import subprocess
+import threading
+import time
 from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
@@ -15,6 +17,7 @@ from botpipe.native_tools import (
     command_scope_is_workspace_wide,
 )
 from botpipe import RunBusy
+from botpipe.codex_appserver import _AttemptLifecycle
 from botpipe.providers import CapabilityError
 
 
@@ -148,6 +151,75 @@ def test_count_lines_drains_but_rejects_overlimit_output(tmp_path, monkeypatch):
         "LANG": "C.UTF-8",
         "LC_ALL": "C.UTF-8",
     }
+
+
+def test_count_lines_owner_does_not_quiesce_before_io_threads_exit(
+    tmp_path, monkeypatch
+):
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / "lines.txt").write_text("one\n")
+    process_stopped = threading.Event()
+    readers_entered = threading.Event()
+    release_readers = threading.Event()
+
+    class Input:
+        def write(self, value):
+            return len(value)
+
+        def close(self):
+            return None
+
+    class BlockingOutput:
+        def read(self, _size=-1):
+            readers_entered.set()
+            release_readers.wait(2)
+            return b""
+
+    class Process:
+        pid = 1234
+        returncode = None
+
+        def __init__(self):
+            self.stdin = Input()
+            self.stdout = BlockingOutput()
+            self.stderr = BlockingOutput()
+
+        def wait(self, timeout=None):
+            if not process_stopped.wait(timeout):
+                raise subprocess.TimeoutExpired("wc", timeout)
+            return self.returncode
+
+        def poll(self):
+            return self.returncode
+
+        def kill(self):
+            self.returncode = -9
+            process_stopped.set()
+
+    monkeypatch.setattr("botpipe.native_tools.subprocess.Popen", lambda *a, **k: Process())
+    owner = _AttemptLifecycle()
+    errors = []
+
+    def invoke() -> None:
+        try:
+            tools.count_lines("lines.txt")
+        except BaseException as exc:
+            errors.append(exc)
+
+    with ReadOnlyTools((root,), attempt_owner=owner) as tools:
+        worker = threading.Thread(target=invoke)
+        worker.start()
+        assert readers_entered.wait(1)
+        started = time.monotonic()
+        assert owner.stop(0.02) is False
+        assert time.monotonic() - started < 0.5
+        assert process_stopped.is_set()
+        release_readers.set()
+        assert owner.stop(1.5) is True
+        worker.join(2)
+        assert not worker.is_alive()
+        assert errors
 
 
 def test_private_and_configured_exclusions_apply_to_read_list_and_search(tmp_path):
@@ -482,3 +554,65 @@ def test_exact_command_bounds_output_controls_env_and_uses_containment(tmp_path,
         "PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"
     }
     assert [call[0] for call in calls] == ["spawn", "wait", "finish", "close"]
+
+
+def test_exact_command_owner_terminates_and_joins_registered_execution(
+    tmp_path, monkeypatch
+):
+    tool, _, _ = _exact_tool(tmp_path, monkeypatch)
+    owner = _AttemptLifecycle()
+    tool._attempt_owner = owner
+    spawned = threading.Event()
+    stopped = threading.Event()
+
+    class Output:
+        def read(self, _size=-1):
+            stopped.wait(2)
+            return b""
+
+    class Process:
+        pid = 1234
+        returncode = None
+        stdout = Output()
+
+        def wait(self, timeout=None):
+            if not stopped.wait(timeout):
+                raise subprocess.TimeoutExpired("git", timeout)
+            return self.returncode
+
+        def poll(self):
+            return self.returncode
+
+    process = Process()
+
+    class Containment:
+        def spawn(self, _command, **_kwargs):
+            spawned.set()
+            return process
+
+        def finish(self, observed, *, grace_seconds, forced=False):
+            assert observed is process
+            assert grace_seconds == 1.0
+            process.returncode = -9 if forced else 0
+            stopped.set()
+            return process.returncode
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr("botpipe.native_tools.ProcessContainment.create", lambda: Containment())
+    errors = []
+
+    def invoke() -> None:
+        try:
+            tool.execute("grant_1")
+        except BaseException as exc:
+            errors.append(exc)
+
+    worker = threading.Thread(target=invoke)
+    worker.start()
+    assert spawned.wait(1)
+    assert owner.stop(1.5) is True
+    worker.join(2)
+    assert stopped.is_set()
+    assert not worker.is_alive()

@@ -72,6 +72,37 @@ _NATIVE_EVENT_SINK: ContextVar[NativeEventSink | None] = ContextVar(
 )
 
 
+def _plain_json(value: Any) -> bool:
+    if type(value) in (str, int, float, bool, type(None)):
+        return not isinstance(value, float) or math.isfinite(value)
+    if type(value) is list:
+        return all(_plain_json(item) for item in value)
+    if type(value) is dict:
+        return all(
+            type(key) is str and _plain_json(item)
+            for key, item in value.items()
+        )
+    return False
+
+
+def _freeze_json(value: Any) -> Any:
+    if type(value) is dict:
+        return MappingProxyType(
+            {key: _freeze_json(item) for key, item in value.items()}
+        )
+    if type(value) is list:
+        return tuple(_freeze_json(item) for item in value)
+    return value
+
+
+def _thaw_json(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {key: _thaw_json(item) for key, item in value.items()}
+    if type(value) is tuple:
+        return [_thaw_json(item) for item in value]
+    return value
+
+
 @contextmanager
 def observe_native_events(callback: NativeEventSink) -> Iterator[None]:
     """Observe parsed native JSON events for the current provider invocation."""
@@ -82,6 +113,55 @@ def observe_native_events(callback: NativeEventSink) -> Iterator[None]:
         yield
     finally:
         _NATIVE_EVENT_SINK.reset(token)
+
+
+@dataclass(frozen=True, slots=True)
+class ProviderContinuation:
+    """A native conversation locator with adapter-validated compatibility facts."""
+
+    native_id: str
+    adapter: str
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if type(self.native_id) is not str or not self.native_id:
+            raise TypeError(
+                "ProviderContinuation.native_id must be a non-empty string"
+            )
+        if type(self.adapter) is not str or not self.adapter:
+            raise TypeError(
+                "ProviderContinuation.adapter must be a non-empty string"
+            )
+        if not isinstance(self.metadata, Mapping):
+            raise TypeError("ProviderContinuation.metadata must be a mapping")
+        metadata = dict(self.metadata)
+        if not _plain_json(metadata):
+            raise TypeError("ProviderContinuation.metadata must be a plain JSON object")
+        try:
+            encoded = json.dumps(
+                metadata,
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            )
+        except (TypeError, ValueError, RecursionError) as exc:
+            raise TypeError("ProviderContinuation.metadata must contain finite JSON") from exc
+        if len(encoded.encode()) > 1_000_000:
+            raise ValueError("ProviderContinuation.metadata exceeds the 1 MB limit")
+        object.__setattr__(self, "metadata", _freeze_json(metadata))
+
+    def to_record(self) -> dict[str, Any]:
+        return {
+            "native_id": self.native_id,
+            "adapter": self.adapter,
+            "metadata": _thaw_json(self.metadata),
+        }
+
+    @classmethod
+    def from_record(cls, value: Mapping[str, Any]) -> ProviderContinuation:
+        if type(value) is not dict or set(value) != {"native_id", "adapter", "metadata"}:
+            raise TypeError("provider continuation record is malformed")
+        return cls(value["native_id"], value["adapter"], value["metadata"])
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,10 +182,18 @@ class ProviderRequest:
     settings: Mapping[str, Any] = field(default_factory=dict)
     allow_commands: tuple[tuple[str, ...], ...] = ()
     read_fence: Callable[[Path], Any] | None = None
+    continuation: ProviderContinuation | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "workspace", Path(self.workspace))
         object.__setattr__(self, "receipt_dir", Path(self.receipt_dir))
+        if self.continuation is not None:
+            if not isinstance(self.continuation, ProviderContinuation):
+                raise TypeError("continuation must be a ProviderContinuation or None")
+            if self.session_id is None:
+                object.__setattr__(self, "session_id", self.continuation.native_id)
+            elif self.session_id != self.continuation.native_id:
+                raise ValueError("session_id and continuation native_id differ")
         if self.output_schema is not None:
             if not isinstance(self.output_schema, Mapping):
                 raise TypeError("output_schema must be a plain JSON object or None")
@@ -192,8 +280,16 @@ def provider_request_snapshot(
 
     if type(provider) is not str or not provider:
         raise ValueError("provider name must be a non-empty string")
+    if (
+        request.continuation is not None
+        and request.continuation.adapter != provider
+    ):
+        raise ValueError("provider continuation adapter differs from request provider")
     record = {
         "session_id": request.session_id,
+        "continuation": (
+            request.continuation.to_record() if request.continuation else None
+        ),
         "operation": request.operation.value,
         "provider": provider,
         "instructions": request.instructions,
@@ -228,6 +324,7 @@ def provider_request_from_snapshot(
 
     required = {
         "session_id",
+        "continuation",
         "operation",
         "provider",
         "instructions",
@@ -247,11 +344,22 @@ def provider_request_from_snapshot(
         )
     if provider is not None and snapshot["provider"] != provider:
         raise ValueError("provider request snapshot backend changed")
+    continuation = snapshot["continuation"]
+    parsed_continuation = (
+        ProviderContinuation.from_record(continuation)
+        if continuation is not None else None
+    )
+    if (
+        parsed_continuation is not None
+        and parsed_continuation.adapter != snapshot["provider"]
+    ):
+        raise ValueError("provider request snapshot continuation adapter changed")
     return ProviderRequest(
         operation_id=operation_id,
         prompt=snapshot["prompt"],
         workspace=workspace,
         session_id=snapshot["session_id"],
+        continuation=parsed_continuation,
         output_schema=output_schema,
         policy=Policy.from_dict(snapshot["policy"]),
         artifacts={
@@ -275,6 +383,7 @@ class ProviderResponse:
     session_id: str | None = None
     usage: dict[str, Any] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
+    continuation: ProviderContinuation | None = None
 
     def to_record(self) -> dict[str, Any]:
         """Validate the provider protocol without silently coercing durable facts."""
@@ -282,6 +391,17 @@ class ProviderResponse:
             raise TypeError("ProviderResponse.text must be a string")
         if self.session_id is not None and type(self.session_id) is not str:
             raise TypeError("ProviderResponse.session_id must be a string or None")
+        if self.continuation is not None:
+            if not isinstance(self.continuation, ProviderContinuation):
+                raise TypeError(
+                    "ProviderResponse.continuation must be a "
+                    "ProviderContinuation or None"
+                )
+            if (
+                self.session_id is not None
+                and self.session_id != self.continuation.native_id
+            ):
+                raise ValueError("ProviderResponse session_id and continuation differ")
 
         def plain_json(value):
             if type(value) in (str, int, float, bool, type(None)):
@@ -303,11 +423,48 @@ class ProviderResponse:
             "usage": self.usage,
             "metadata": self.metadata,
         }
+        if self.continuation is not None:
+            record["continuation"] = self.continuation.to_record()
         encoded = json.dumps(record, allow_nan=False)
         for name in ("usage", "metadata"):
             if len(json.dumps(record[name], allow_nan=False).encode()) > 1_000_000:
                 raise ValueError(f"ProviderResponse.{name} exceeds the 1 MB evidence limit")
         return record
+
+
+def response_continuation(
+    response: ProviderResponse,
+    *,
+    provider: str,
+    previous: ProviderContinuation | None = None,
+) -> ProviderContinuation | None:
+    """Return the validated typed continuation emitted by one adapter."""
+
+    if previous is not None:
+        if not isinstance(previous, ProviderContinuation):
+            raise TypeError("previous continuation must be a ProviderContinuation")
+        if previous.adapter != provider:
+            raise ValueError(
+                "Previous provider continuation belongs to a different adapter"
+            )
+    continuation = response.continuation
+    if continuation is not None:
+        if continuation.adapter != provider:
+            raise ValueError(
+                "Provider response continuation belongs to a different adapter"
+            )
+        return continuation
+    if response.session_id is None:
+        return None
+    if previous is not None:
+        if response.session_id == previous.native_id:
+            return previous
+        if previous.metadata:
+            raise ValueError(
+                "Provider response changed native session without typed "
+                "continuation metadata"
+            )
+    return ProviderContinuation(response.session_id, provider)
 
 
 @dataclass(frozen=True, slots=True)
@@ -490,13 +647,17 @@ def _record_response(value: Any, path: Path) -> ProviderResponse:
         raise ProviderInterruptedError(
             f"completed provider receipt has no valid response: {path}", receipt=path
         )
-    response = ProviderResponse(
-        text=value["text"],
-        session_id=value.get("session_id"),
-        usage=value.get("usage", {}),
-        metadata=value.get("metadata", {}),
-    )
     try:
+        response = ProviderResponse(
+            text=value["text"],
+            session_id=value.get("session_id"),
+            usage=value.get("usage", {}),
+            metadata=value.get("metadata", {}),
+            continuation=(
+                ProviderContinuation.from_record(value["continuation"])
+                if value.get("continuation") is not None else None
+            ),
+        )
         response.to_record()
     except (TypeError, ValueError, RecursionError) as exc:
         raise ProviderInterruptedError(
@@ -2137,8 +2298,10 @@ __all__ = [
     "ProviderInterruptedError",
     "ProviderPolicyError",
     "ProviderRequest",
+    "ProviderContinuation",
     "provider_request_from_snapshot",
     "provider_request_snapshot",
+    "response_continuation",
     "ProviderResponse",
     "ProviderTimeoutError",
     "OperationKind",

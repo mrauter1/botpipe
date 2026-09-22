@@ -26,7 +26,7 @@ from .runtime import Botpipe, Workflow, activity, ask_human, current_run, parall
 from .sessions import Session, SessionError, SessionAffinityError, SessionBusy, SessionHistoryConflict
 from .operations import OutputValidationError
 from .provider import Provider, Codex, ClaudeCode, Pi, Jev
-from .providers import CapabilityError
+from .providers import CapabilityError, ProviderContinuation
 from .config import ConfigurationError
 from .streaming import Stream, StreamEvent
 from .worklists import Selector, WorkItem, Worklist
@@ -40,6 +40,7 @@ __all__ = [
     "Botpipe",
     "BotpipeError",
     "ProviderBudget",
+    "ProviderContinuation",
     "provider_budget",
     "BudgetExceeded",
     "InputRequired",

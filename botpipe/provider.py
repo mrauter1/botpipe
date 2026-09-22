@@ -174,9 +174,21 @@ class Provider:
                 name = family.backend or default_name
                 if not name:
                     raise ConfigurationError("No default provider configured; set default_provider in botpipe.toml or use an explicit provider constructor")
-                config = dict(recorded.get("provider_config", runtime.provider_config)) if name == default_name else {}
-                defaults = dict(recorded.get("provider_defaults", getattr(runtime, "provider_defaults", {}))) if name == default_name else {}
-                return {"name": name, "config": config, "defaults": defaults}
+                catalog = recorded.get("provider_catalog")
+                if catalog is None:
+                    catalog = runtime._provider_catalog_record()
+                selected = catalog.get(name)
+                if selected is None:
+                    if family.backend is None:
+                        raise ConfigurationError(
+                            f"No configuration is available for provider {name!r}"
+                        )
+                    selected = {"name": name, "config": {}, "defaults": {}}
+                return {
+                    "name": selected["name"],
+                    "config": dict(selected["config"]),
+                    "defaults": dict(selected["defaults"]),
+                }
             if ctx is not None:
                 bindings = ctx._provider_family_bindings
                 if family not in bindings:

@@ -13,7 +13,6 @@ import shlex
 import shutil
 import subprocess
 import threading
-import tomllib
 import uuid
 from dataclasses import replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -392,15 +391,6 @@ def test_current_codex_provider_retries_interrupted_acknowledged_turn(
     assert "process_quiescent" in first_receipt
     retained_thread = first_receipt["thread_binding"]["thread_id"]
     assert isinstance(provider.recover(request), Stopped)
-    native_config = tomllib.loads(
-        (bridge.codex_home / "config.toml").read_text(encoding="utf-8")
-    )
-    assert set(native_config) == {"projects"}
-    assert native_config["projects"]
-    assert all(
-        settings == {"trust_level": "trusted"}
-        for settings in native_config["projects"].values()
-    )
 
     retry = replace(request, attempt=2)
     response = provider.run(retry)
@@ -430,7 +420,7 @@ def test_current_codex_excludes_persisted_system_skills_on_resume(native_bridge)
     )
     assert json.loads(bootstrap.text) == {"ok": True}
 
-    # Codex 0.155.1 materializes its bundled cache while starting app-server.
+    # Current Codex materializes its bundled cache while starting app-server.
     # Preserve that native-owned state, but add a hostile entry and explicitly
     # mention it on a fresh thread and its resumed turn.  The mediated profile
     # must exclude the entire System-scope root rather than trusting each

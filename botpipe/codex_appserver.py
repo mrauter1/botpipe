@@ -15,6 +15,7 @@ import threading
 import time
 import tomllib
 from collections.abc import Callable, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -34,6 +35,7 @@ from .providers import (
     CODEX_APPSERVER_CAPABILITIES,
     ProviderError,
     ProviderInterruptedError,
+    ProviderContinuation,
     ProviderRequest,
     ProviderResponse,
     _CLIProvider,
@@ -51,12 +53,15 @@ from .recovery import Completed, RecoveryOutcome, Running, Stopped, Unknown
 from .tool_evidence import ToolEvidence
 
 
-CURRENT_VERIFIED_CODEX_VERSION = "0.155.1"
-CURRENT_VERIFIED_CODEX_COMMIT = "be2951ea34f0d295ed0becf97079f92fa5f6950e"
+CURRENT_VERIFIED_CODEX_VERSION = "0.156.0"
+CURRENT_VERIFIED_CODEX_COMMIT = "fe74a774532af67b5a4a3dec03ce9469e17f89af"
 MINIMUM_NATIVE_CODEX_VERSION = (0, 155, 1)
 VERIFIED_MEDIATED_MODELS = frozenset({"gpt-5.4"})
 _REVIEWED_MEDIATED_RELEASES = MappingProxyType(
-    {CURRENT_VERIFIED_CODEX_VERSION: CURRENT_VERIFIED_CODEX_COMMIT}
+    {
+        "0.155.1": "be2951ea34f0d295ed0becf97079f92fa5f6950e",
+        CURRENT_VERIFIED_CODEX_VERSION: CURRENT_VERIFIED_CODEX_COMMIT,
+    }
 )
 TOOL_CALL_LIMIT = 16
 TOOL_OUTPUT_BYTES = 32_000
@@ -231,6 +236,247 @@ class EvidenceRecorder(Protocol):
     def record(self, observation: Any) -> Path: ...
 
 
+class _AttemptSealed(CodexAppServerError):
+    """The attempt was cancelled before another effect could be admitted."""
+
+
+class _AttemptLifecycle:
+    """Own every effect that can outlive one Codex attempt."""
+
+    def __init__(self) -> None:
+        self._condition = threading.Condition()
+        self._stop_lock = threading.Lock()
+        self._sealed = False
+        self._starting = 0
+        self._active_mediators = 0
+        self._processes: dict[object, Callable[[], None]] = {}
+        self._stop_workers: dict[int, threading.Thread] = {}
+        self._conversation: _Conversation | None = None
+        self._last_conversation: _Conversation | None = None
+        self._quiescent = False
+        self._cleanup_error: BaseException | None = None
+
+    def reserve_start(self) -> None:
+        with self._condition:
+            if self._sealed:
+                raise _AttemptSealed("Codex attempt was cancelled before startup")
+            self._starting += 1
+
+    def finish_start(self) -> None:
+        with self._condition:
+            if self._starting:
+                self._starting -= 1
+            self._condition.notify_all()
+
+    @contextmanager
+    def admit_mediator(self):
+        with self._condition:
+            if self._sealed:
+                raise _AttemptSealed("Codex attempt no longer admits tool calls")
+            self._active_mediators += 1
+        try:
+            yield
+        finally:
+            with self._condition:
+                self._active_mediators -= 1
+                self._condition.notify_all()
+
+    def register_process(
+        self, process: object, stop: Callable[[], None]
+    ) -> bool:
+        with self._condition:
+            if process in self._processes:
+                raise RuntimeError("native tool process is already registered")
+            self._processes[process] = stop
+            self._condition.notify_all()
+            return self._sealed
+
+    def unregister_process(self, process: object) -> None:
+        with self._condition:
+            self._processes.pop(process, None)
+            self._condition.notify_all()
+
+    def attach(self, conversation: _Conversation) -> None:
+        with self._condition:
+            if self._conversation is not None:
+                raise RuntimeError("Codex attempt already owns an app-server")
+            self._conversation = conversation
+            self._last_conversation = conversation
+            sealed = self._sealed
+            self._condition.notify_all()
+        if sealed:
+            raise _AttemptSealed("Codex attempt was cancelled during app-server startup")
+
+    def request_interrupt(self) -> bool:
+        with self._condition:
+            conversation = self._conversation
+        if (
+            conversation is None
+            or conversation.thread_id is None
+            or conversation.turn_id is None
+        ):
+            return False
+        try:
+            conversation.send_rpc_no_wait(
+                "turn/interrupt",
+                {
+                    "threadId": conversation.thread_id,
+                    "turnId": conversation.turn_id,
+                },
+            )
+            return True
+        except (OSError, ValueError):
+            return False
+
+    def stop(self, timeout: float) -> bool:
+        """Seal admission and prove all owned effects stopped within ``timeout``."""
+        deadline = time.monotonic() + max(0.0, float(timeout))
+        if not self._stop_lock.acquire(timeout=max(0.0, deadline - time.monotonic())):
+            return False
+        try:
+            with self._condition:
+                self._sealed = True
+                if self._quiescent:
+                    return True
+            def stop_conversation(conversation: _Conversation) -> None:
+                requested = self.request_interrupt()
+                if requested:
+                    conversation.terminal_event.wait(
+                        max(0.0, deadline - time.monotonic())
+                    )
+                try:
+                    conversation.close()
+                except BaseException as exc:
+                    with self._condition:
+                        self._cleanup_error = exc
+                        self._condition.notify_all()
+                    return
+                with self._condition:
+                    if self._conversation is conversation:
+                        self._conversation = None
+                    self._condition.notify_all()
+
+            def stop_resource(process: object, stop: Callable[[], None]) -> None:
+                try:
+                    stop()
+                except BaseException as exc:
+                    with self._condition:
+                        self._cleanup_error = exc
+                        self._condition.notify_all()
+                    return
+                with self._condition:
+                    self._processes.pop(process, None)
+                    self._condition.notify_all()
+
+            def launch_once(key: object, target: Callable[[], None], name: str) -> None:
+                identity = id(key)
+
+                def run() -> None:
+                    try:
+                        target()
+                    finally:
+                        with self._condition:
+                            self._stop_workers.pop(identity, None)
+                            self._condition.notify_all()
+
+                with self._condition:
+                    existing = self._stop_workers.get(identity)
+                    if existing is not None and existing.is_alive():
+                        return
+                    worker = threading.Thread(target=run, name=name, daemon=True)
+                    self._stop_workers[identity] = worker
+                try:
+                    worker.start()
+                except BaseException as exc:
+                    with self._condition:
+                        if self._stop_workers.get(identity) is worker:
+                            del self._stop_workers[identity]
+                        self._cleanup_error = exc
+                        self._condition.notify_all()
+
+            attempted: set[int] = set()
+            while True:
+                with self._condition:
+                    conversation = self._conversation
+                    processes = tuple(self._processes.items())
+
+                if conversation is not None and id(conversation) not in attempted:
+                    attempted.add(id(conversation))
+                    launch_once(
+                        conversation,
+                        lambda conversation=conversation: stop_conversation(
+                            conversation
+                        ),
+                        "botpipe-codex-appserver-stop",
+                    )
+                for process, stop in processes:
+                    if id(process) in attempted:
+                        continue
+                    attempted.add(id(process))
+                    launch_once(
+                        process,
+                        lambda process=process, stop=stop: stop_resource(process, stop),
+                        "botpipe-codex-tool-stop",
+                    )
+
+                with self._condition:
+                    proved = not (
+                        self._starting
+                        or self._active_mediators
+                        or self._processes
+                        or self._conversation is not None
+                        or self._stop_workers
+                    )
+                    if proved:
+                        break
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        break
+                    self._condition.wait(remaining)
+            with self._condition:
+                proved = not (
+                    self._starting
+                    or self._active_mediators
+                    or self._processes
+                    or self._conversation is not None
+                    or self._stop_workers
+                )
+                terminal = self._last_conversation
+
+            if terminal is None:
+                # No process crossed the contained-spawn boundary.
+                self._quiescent = proved
+                return proved
+            if not proved:
+                terminal.record_cleanup_failed(
+                    str(self._cleanup_error)
+                    if self._cleanup_error is not None
+                    else "Codex attempt cleanup did not reach quiescence before its deadline"
+                )
+                return False
+            try:
+                terminal.confirm_quiescence()
+            except BaseException:
+                terminal.record_cleanup_failed(
+                    "Codex attempt quiescence could not be recorded"
+                )
+                return False
+            self._quiescent = True
+            return True
+        finally:
+            self._stop_lock.release()
+
+    @property
+    def sealed(self) -> bool:
+        with self._condition:
+            return self._sealed
+
+    @property
+    def cleanup_error(self) -> BaseException | None:
+        with self._condition:
+            return self._cleanup_error
+
+
 def tool_fingerprint(tools: Sequence[DynamicTool]) -> str:
     encoded = json.dumps(
         [tool.to_wire() for tool in tools],
@@ -338,7 +584,7 @@ def _plain_json(value: Any, *, label: str) -> Any:
 
 
 def _clean_config_overrides() -> dict[str, Any]:
-    """Return conditional-tool closures verified against Codex 0.155.1."""
+    """Return conditional-tool closures verified through Codex 0.156.0."""
     disabled_features = (
         "shell_tool",
         "hooks",
@@ -368,6 +614,7 @@ def _clean_config_overrides() -> dict[str, Any]:
         "current_time_reminder",
         "sleep_tool",
         "deferred_executor",
+        "send_message_to_user_async",
     )
     result = {f"features.{name}": False for name in disabled_features}
     result.update(
@@ -399,7 +646,23 @@ class _JsonlProcess:
         max_message_bytes: int,
         max_messages: int,
         max_stderr_bytes: int = 65_536,
+        attempt_owner: _AttemptLifecycle | None = None,
     ) -> None:
+        self.max_message_bytes = max_message_bytes
+        self.messages: queue.Queue[Mapping[str, Any] | BaseException | None] = (
+            queue.Queue(maxsize=max(1, min(max_messages, 64)))
+        )
+        self.max_stderr_bytes = max_stderr_bytes
+        self.stderr = bytearray()
+        self.stderr_lock = threading.Lock()
+        self.write_lock = threading.Lock()
+        self.close_lock = threading.Lock()
+        self.close_error: BaseException | None = None
+        self.closed = False
+        self.stopping = threading.Event()
+        self.reader_threads: tuple[threading.Thread, ...] = ()
+        self._attempt_owner = attempt_owner
+        self._attempt_registered = False
         self.containment = ProcessContainment.create()
         try:
             self.process = self.containment.spawn(
@@ -415,20 +678,47 @@ class _JsonlProcess:
         except BaseException:
             self.containment.close()
             raise
-        self.max_message_bytes = max_message_bytes
-        self.messages: queue.Queue[Mapping[str, Any] | BaseException | None] = (
-            queue.Queue(maxsize=max(1, min(max_messages, 64)))
+        if attempt_owner is not None:
+            self._attempt_registered = True
+            if attempt_owner.register_process(self, self.close):
+                self.close()
+                raise _AttemptSealed(
+                    "Codex attempt was cancelled during app-server spawn"
+                )
+
+    def start_readers(self) -> None:
+        """Start transport readers after the spawned process has an owner."""
+        readers = (
+            threading.Thread(
+                target=self._read_stdout,
+                name="botpipe-codex-stdout",
+                daemon=True,
+            ),
+            threading.Thread(
+                target=self._read_stderr,
+                name="botpipe-codex-stderr",
+                daemon=True,
+            ),
         )
-        self.max_stderr_bytes = max_stderr_bytes
-        self.stderr = bytearray()
-        self.stderr_lock = threading.Lock()
-        self.write_lock = threading.Lock()
-        self.close_lock = threading.Lock()
-        self.close_error: BaseException | None = None
-        self.closed = False
-        self.stopping = threading.Event()
-        threading.Thread(target=self._read_stdout, daemon=True).start()
-        threading.Thread(target=self._read_stderr, daemon=True).start()
+        started: list[threading.Thread] = []
+        with self.close_lock:
+            if self.closed or self.stopping.is_set():
+                raise _AttemptSealed(
+                    "Codex attempt was cancelled before transport readers started"
+                )
+            try:
+                for reader in readers:
+                    reader.start()
+                    started.append(reader)
+            except BaseException:
+                self.reader_threads = tuple(started)
+                raise
+            self.reader_threads = readers
+
+    def release_attempt_registration(self) -> None:
+        if self._attempt_registered:
+            self._attempt_owner.unregister_process(self)
+            self._attempt_registered = False
 
     def _enqueue(self, message: Mapping[str, Any] | BaseException | None) -> None:
         while not self.stopping.is_set():
@@ -526,44 +816,58 @@ class _JsonlProcess:
     def close(self) -> None:
         with self.close_lock:
             if self.closed:
-                if self.close_error is not None:
-                    raise RuntimeError(
-                        "app-server process-tree cleanup was not confirmed"
-                    ) from self.close_error
                 return
-            self.stopping.set()
-            cleanup_error: BaseException | None = None
-            try:
-                # The leader may already have exited after reporting a terminal
-                # turn.  Containment still has to prove that its descendants
-                # cannot outlive the successful response.  Allow the same
-                # bounded kernel teardown interval used by other core callers;
-                # Windows Job accounting can lag termination by over 100 ms.
-                self.containment.finish(
-                    self.process, grace_seconds=1.0, forced=True
-                )
-            except BaseException as exc:
-                cleanup_error = exc
-            finally:
-                for stream in (
-                    self.process.stdin,
-                    self.process.stdout,
-                    self.process.stderr,
-                ):
-                    if stream is not None:
-                        try:
-                            stream.close()
-                        except OSError:
-                            pass
+            cleanup_error = self._cleanup_spawned(list(self.reader_threads))
+            if cleanup_error is not None:
+                raise cleanup_error
+            self.release_attempt_registration()
+
+    def _cleanup_spawned(
+        self, readers: list[threading.Thread]
+    ) -> BaseException | None:
+        """Stop the tree before joining readers that may be blocked on its pipes."""
+        self.stopping.set()
+        cleanup_error: BaseException | None = None
+        try:
+            # The leader may already have exited after reporting a terminal
+            # turn. Containment still proves that descendants cannot outlive
+            # the response or a partial constructor.
+            self.containment.finish(
+                self.process, grace_seconds=1.0, forced=True
+            )
+        except BaseException as exc:
+            cleanup_error = exc
+        finally:
+            for stream in (
+                self.process.stdin,
+                self.process.stdout,
+                self.process.stderr,
+            ):
+                if stream is not None:
+                    try:
+                        stream.close()
+                    except (OSError, ValueError):
+                        pass
+            for reader in readers:
+                if reader is threading.current_thread():
+                    if cleanup_error is None:
+                        cleanup_error = RuntimeError(
+                            "cannot prove app-server reader stopped from itself"
+                        )
+                    continue
+                reader.join(1.0)
+                if reader.is_alive() and cleanup_error is None:
+                    cleanup_error = RuntimeError(
+                        "app-server reader did not stop after process cleanup"
+                    )
+            if cleanup_error is None:
                 try:
                     self.containment.close()
                 except BaseException as exc:
-                    if cleanup_error is None:
-                        cleanup_error = exc
-                self.closed = True
-                self.close_error = cleanup_error
-            if cleanup_error is not None:
-                raise cleanup_error
+                    cleanup_error = exc
+            self.closed = cleanup_error is None
+            self.close_error = cleanup_error
+        return cleanup_error
 
 
 class CodexAppServerBridge:
@@ -599,7 +903,7 @@ class CodexAppServerBridge:
         self.max_total_event_bytes = max_total_event_bytes
         self.max_events = max_events
         self._active_lock = threading.Lock()
-        self._active: dict[str, _Conversation] = {}
+        self._active: dict[str, _AttemptLifecycle] = {}
         self._schema_verified_version: str | None = None
         self.installed_version: str | None = None
 
@@ -628,25 +932,26 @@ class CodexAppServerBridge:
     def interrupt(self, owner_id: str, *, timeout: float = 2.0) -> str | None:
         """Attempt native interruption for an active turn, then contain it."""
         with self._active_lock:
-            state = self._active.get(owner_id)
-        if state is None:
+            owner = self._active.get(owner_id)
+        if owner is None:
             return None
-        requested = False
-        if state.thread_id is not None and state.turn_id is not None:
-            try:
-                state.send_rpc_no_wait(
-                    "turn/interrupt",
-                    {"threadId": state.thread_id, "turnId": state.turn_id},
-                )
-                requested = True
-            except (OSError, ValueError):
-                pass
-            state.terminal_event.wait(max(0.0, float(timeout)))
-        try:
-            state.close()
-        except BaseException:
+        if not owner.stop(timeout):
             return "cleanup-failed"
-        return "turn-interrupt" if requested else "contained"
+        self.unregister_attempt(owner_id, owner)
+        return "contained"
+
+    def register_attempt(self, owner_id: str, owner: _AttemptLifecycle) -> None:
+        with self._active_lock:
+            if owner_id in self._active:
+                raise CodexAppServerCapabilityError(
+                    f"Codex app-server owner {owner_id!r} is already active"
+                )
+            self._active[owner_id] = owner
+
+    def unregister_attempt(self, owner_id: str, owner: _AttemptLifecycle) -> None:
+        with self._active_lock:
+            if self._active.get(owner_id) is owner:
+                del self._active[owner_id]
 
     def is_active(self, owner_id: str) -> bool:
         with self._active_lock:
@@ -829,6 +1134,7 @@ class CodexAppServerBridge:
         envelopes: Any = (),
         registry_fingerprint: str | None = None,
         owner_id: str | None = None,
+        attempt_owner: _AttemptLifecycle | None = None,
         profile: CodexTurnProfile | None = None,
         effort: str | None = None,
         lifecycle: LifecycleCallback | None = None,
@@ -839,6 +1145,8 @@ class CodexAppServerBridge:
         )
         if owner_id is not None and not owner_id:
             raise ValueError("owner_id must be non-empty when provided")
+        if attempt_owner is None:
+            attempt_owner = _AttemptLifecycle()
         root = Path(workspace).resolve(strict=True)
         if profile is None:
             profile = CodexTurnProfile(
@@ -887,42 +1195,45 @@ class CodexAppServerBridge:
             # This write precedes process creation.  A prepared receipt without
             # this boundary therefore proves that no native process was spawned.
             lifecycle(CodexLifecycleEvent(CodexLifecycleStage.SPAWN_INTENT))
-        process = _JsonlProcess(
-            self.command,
-            cwd=root,
-            env=environment,
-            max_message_bytes=self.max_event_bytes,
-            max_messages=self.max_events,
-        )
-        deadline = time.monotonic() + float(timeout)
-        state = _Conversation(
-            process=process,
-            deadline=deadline,
-            tools={tool.key: tool for tool in tools},
-            mediator=mediator,
-            event_sink=event_sink,
-            max_event_bytes=self.max_event_bytes,
-            max_total_event_bytes=self.max_total_event_bytes,
-            max_events=self.max_events,
-            evidence=evidence,
-            native_tools=profile.native_tools,
-            lifecycle=lifecycle,
-        )
         try:
+            process = _JsonlProcess(
+                self.command,
+                cwd=root,
+                env=environment,
+                max_message_bytes=self.max_event_bytes,
+                max_messages=self.max_events,
+                attempt_owner=attempt_owner,
+            )
+        except BaseException:
+            attempt_owner.finish_start()
+            attempt_owner.stop(2.0)
+            raise
+        deadline = time.monotonic() + float(timeout)
+        try:
+            state = _Conversation(
+                process=process,
+                deadline=deadline,
+                tools={tool.key: tool for tool in tools},
+                mediator=mediator,
+                event_sink=event_sink,
+                max_event_bytes=self.max_event_bytes,
+                max_total_event_bytes=self.max_total_event_bytes,
+                max_events=self.max_events,
+                evidence=evidence,
+                native_tools=profile.native_tools,
+                lifecycle=lifecycle,
+            )
+            attempt_owner.attach(state)
+            process.release_attempt_registration()
+            process.start_readers()
+            attempt_owner.finish_start()
             state.emit_lifecycle(
                 CodexLifecycleEvent(CodexLifecycleStage.CONTAINED_SPAWN)
             )
         except BaseException:
-            state.close()
+            attempt_owner.finish_start()
+            attempt_owner.stop(2.0)
             raise
-        if owner_id is not None:
-            with self._active_lock:
-                if owner_id in self._active:
-                    state.close()
-                    raise CodexAppServerCapabilityError(
-                        f"Codex app-server owner {owner_id!r} is already active"
-                    )
-                self._active[owner_id] = state
         try:
             state.rpc(
                 "initialize",
@@ -1063,11 +1374,12 @@ class CodexAppServerBridge:
             raise
         finally:
             state.terminal_event.set()
-            if owner_id is not None:
-                with self._active_lock:
-                    if self._active.get(owner_id) is state:
-                        del self._active[owner_id]
-            state.close()
+            if not attempt_owner.stop(2.0):
+                if attempt_owner.cleanup_error is not None:
+                    raise attempt_owner.cleanup_error
+                raise CodexAppServerError(
+                    "Codex attempt cleanup could not prove global quiescence"
+                )
 
     def _validate_execute(
         self,
@@ -1179,6 +1491,7 @@ class _Conversation:
     retained_event_bytes: int = 0
     lifecycle: LifecycleCallback | None = None
     lifecycle_close_lock: threading.RLock = field(default_factory=threading.RLock)
+    process_close_lock: threading.Lock = field(default_factory=threading.Lock)
     quiescence_recorded: bool = False
 
     def emit_lifecycle(self, event: CodexLifecycleEvent) -> None:
@@ -1191,27 +1504,28 @@ class _Conversation:
                 self.lifecycle(event)
 
     def close(self) -> None:
-        """Close the owned tree and durably report exactly what close proved."""
+        """Stop only the app-server tree; the attempt owner proves quiescence."""
+        with self.process_close_lock:
+            self.process.close()
+
+    def record_cleanup_failed(self, detail: str) -> None:
+        try:
+            self.emit_lifecycle(
+                CodexLifecycleEvent(
+                    CodexLifecycleStage.CLEANUP_FAILED,
+                    thread_id=self.thread_id,
+                    turn_id=self.turn_id,
+                    error=detail,
+                )
+            )
+        except BaseException:
+            pass
+
+    def confirm_quiescence(self) -> None:
+        """Record the global boundary after every owned effect has stopped."""
         with self.lifecycle_close_lock:
             if self.quiescence_recorded:
                 return
-            try:
-                self.process.close()
-            except BaseException as exc:
-                try:
-                    self.emit_lifecycle(
-                        CodexLifecycleEvent(
-                            CodexLifecycleStage.CLEANUP_FAILED,
-                            thread_id=self.thread_id,
-                            turn_id=self.turn_id,
-                            error=str(exc),
-                        )
-                    )
-                except BaseException:
-                    # The cleanup failure remains the controlling evidence.  A
-                    # second receipt-write failure cannot make it safer.
-                    pass
-                raise
             self.emit_lifecycle(
                 CodexLifecycleEvent(
                     CodexLifecycleStage.PROCESS_QUIESCENT,
@@ -1424,11 +1738,6 @@ class _Conversation:
             return self.messages[-1], dict(self.usage)
 
 
-def _session_binding_path(receipt_dir: Path, thread_id: str) -> Path:
-    identity = hashlib.sha256(thread_id.encode()).hexdigest()
-    return Path(receipt_dir) / "codex-app-server-sessions" / f"{identity}.json"
-
-
 def _profile_fingerprint(
     tools: Sequence[DynamicTool],
     envelopes: Mapping[str, Any] | Sequence[Any],
@@ -1538,10 +1847,15 @@ class CodexAppServerProvider(_CLIProvider):
             if active is not None:
                 request, path = active
                 try:
-                    value = _read_receipt(path)
-                except ProviderInterruptedError as exc:
-                    return Unknown(str(exc))
-                return self._receipt_outcome(request, value, path)
+                    try:
+                        value = _read_receipt(path)
+                    except ProviderInterruptedError as exc:
+                        return Unknown(str(exc))
+                    return self._receipt_outcome(request, value, path)
+                finally:
+                    with self._active_receipts_lock:
+                        if self._active_receipts.get(operation_id) == active:
+                            del self._active_receipts[operation_id]
             return Stopped(
                 f"Codex app-server attempt {operation_id!r}: cleanup proves it "
                 "cannot continue but does not rule out earlier effects"
@@ -1645,9 +1959,33 @@ class CodexAppServerProvider(_CLIProvider):
             ):
                 return Unknown("Codex terminal response identity is inconsistent")
             try:
-                return Completed(_record_response(response, path))
+                parsed = _record_response(response, path)
             except ProviderInterruptedError as exc:
                 return Unknown(str(exc))
+            fingerprint = value.get("tool_fingerprint")
+            if (
+                value.get("provider") != cls.name
+                or value.get("adapter_version") != cls.capabilities.version
+                or not isinstance(fingerprint, str)
+                or not fingerprint
+            ):
+                return Unknown(
+                    "Codex terminal response continuation authority is invalid"
+                )
+            expected_continuation = ProviderContinuation(
+                thread_id,
+                cls.name,
+                {
+                    "adapter_version": cls.capabilities.version,
+                    "instruction_mode": "collaboration-mode-v1",
+                    "tool_fingerprint": fingerprint,
+                },
+            )
+            if parsed.continuation != expected_continuation:
+                return Unknown(
+                    "Codex terminal response continuation proof is inconsistent"
+                )
+            return Completed(parsed)
         if received is not None:
             return Unknown("Codex received-response evidence has no typed response")
         if quiescent is not None:
@@ -1764,6 +2102,7 @@ class CodexAppServerProvider(_CLIProvider):
         tools: list[DynamicTool]
         observations: list[ToolObservation] = []
         cleanups: list[Callable[[], None]] = []
+        attempt_owner = _AttemptLifecycle()
         evidence = ToolEvidence(
             request,
             self.capabilities.version,
@@ -1772,7 +2111,7 @@ class CodexAppServerProvider(_CLIProvider):
         )
         try:
             tools, mediator, envelopes, roots, exclusions = self._mediator(
-                request, observations, cleanups
+                request, observations, cleanups, attempt_owner
             )
             turn_profile = (
                 self._native_profile(request)
@@ -1808,6 +2147,7 @@ class CodexAppServerProvider(_CLIProvider):
                 request,
                 fingerprint,
                 thread_id=resume_thread_id or request.session_id,
+                receipt_bound=resume_receipt is not None,
             )
             evidence.prepare(envelopes)
         except BaseException:
@@ -1891,9 +2231,6 @@ class CodexAppServerProvider(_CLIProvider):
                         raise CodexAppServerProtocolError(
                             "thread lifecycle event has no thread id"
                         )
-                    self._save_session(
-                        request, CodexAppServerSession(event.thread_id, fingerprint)
-                    )
                 elif event.stage is CodexLifecycleStage.RECEIVED_RESPONSE:
                     if event.result is None:
                         raise CodexAppServerProtocolError(
@@ -1912,6 +2249,9 @@ class CodexAppServerProvider(_CLIProvider):
                                 item.to_record() for item in observations
                             ],
                         },
+                        self._continuation(
+                            event.result.session.thread_id, fingerprint
+                        ),
                     )
                     current["response"] = _response_record(response)
                     current["session_id"] = event.result.session.thread_id
@@ -1941,6 +2281,7 @@ class CodexAppServerProvider(_CLIProvider):
                 _atomic_json(path, current)
 
         registered = False
+        bridge_registered = False
         try:
             with self._active_receipts_lock:
                 if request.operation_id in self._active_receipts:
@@ -1948,6 +2289,9 @@ class CodexAppServerProvider(_CLIProvider):
                         f"Codex operation {request.operation_id!r} is already active"
                     )
                 _atomic_json(path, started)
+                attempt_owner.reserve_start()
+                self.bridge.register_attempt(request.operation_id, attempt_owner)
+                bridge_registered = True
                 self._active_receipts[request.operation_id] = (request, path)
                 registered = True
             dispatch.started()
@@ -1967,6 +2311,7 @@ class CodexAppServerProvider(_CLIProvider):
                 envelopes=envelopes,
                 registry_fingerprint=fingerprint,
                 owner_id=request.operation_id,
+                attempt_owner=attempt_owner,
                 profile=turn_profile,
                 effort=policy.effort.value if policy.effort is not None else None,
                 lifecycle=record_lifecycle,
@@ -1990,9 +2335,16 @@ class CodexAppServerProvider(_CLIProvider):
             dispatch.finish("failed", error=exc)
             raise ProviderInterruptedError(detail, receipt=path) from exc
         finally:
-            with self._active_receipts_lock:
-                if registered and self._active_receipts.get(request.operation_id) == (request, path):
-                    del self._active_receipts[request.operation_id]
+            attempt_owner.finish_start()
+            quiescent = attempt_owner.stop(2.0)
+            if bridge_registered and quiescent:
+                self.bridge.unregister_attempt(request.operation_id, attempt_owner)
+            if quiescent:
+                with self._active_receipts_lock:
+                    if registered and self._active_receipts.get(
+                        request.operation_id
+                    ) == (request, path):
+                        del self._active_receipts[request.operation_id]
             for cleanup in cleanups:
                 cleanup()
         assert response is not None
@@ -2031,6 +2383,7 @@ class CodexAppServerProvider(_CLIProvider):
         request: ProviderRequest,
         observations: list[ToolObservation],
         cleanups: list[Callable[[], None]],
+        attempt_owner: _AttemptLifecycle,
     ) -> tuple[
         list[DynamicTool],
         Mediator,
@@ -2058,6 +2411,7 @@ class CodexAppServerProvider(_CLIProvider):
                 exclusions=exclusions,
                 max_output_bytes=TOOL_OUTPUT_BYTES,
                 read_fence=request.read_fence,
+                attempt_owner=attempt_owner,
             )
             cleanups.append(reads.close)
             commands = None
@@ -2068,6 +2422,7 @@ class CodexAppServerProvider(_CLIProvider):
                 request.workspace,
                 request.allow_commands,
                 max_output_bytes=TOOL_OUTPUT_BYTES,
+                attempt_owner=attempt_owner,
             )
             tools = [
                 DynamicTool(
@@ -2095,31 +2450,32 @@ class CodexAppServerProvider(_CLIProvider):
             tools = []
 
         def mediate(name: str, arguments: Mapping[str, Any]) -> ToolObservation:
-            if len(observations) >= TOOL_CALL_LIMIT:
-                raise CapabilityError(
-                    f"native tool call limit of {TOOL_CALL_LIMIT} was reached"
-                )
-            if name == "exec_grant" and request.operation is OperationKind.GENERATE:
-                self._exact_keys(arguments, {"grant_id"})
-                observation = commands.execute(arguments.get("grant_id"))
-            elif name == "read" and reads is not None:
-                self._exact_keys(arguments, {"path"})
-                observation = reads.read(arguments.get("path"))
-            elif name == "list" and reads is not None:
-                self._exact_keys(arguments, {"path"})
-                observation = reads.list(arguments.get("path", "."))
-            elif name == "search" and reads is not None:
-                self._exact_keys(arguments, {"query", "path"})
-                observation = reads.search(
-                    arguments.get("query"), arguments.get("path", ".")
-                )
-            elif name == "count_lines" and reads is not None:
-                self._exact_keys(arguments, {"path"})
-                observation = reads.count_lines(arguments.get("path"))
-            else:
-                raise CapabilityError(f"Codex requested unavailable tool {name!r}")
-            observations.append(observation)
-            return observation
+            with attempt_owner.admit_mediator():
+                if len(observations) >= TOOL_CALL_LIMIT:
+                    raise CapabilityError(
+                        f"native tool call limit of {TOOL_CALL_LIMIT} was reached"
+                    )
+                if name == "exec_grant" and request.operation is OperationKind.GENERATE:
+                    self._exact_keys(arguments, {"grant_id"})
+                    observation = commands.execute(arguments.get("grant_id"))
+                elif name == "read" and reads is not None:
+                    self._exact_keys(arguments, {"path"})
+                    observation = reads.read(arguments.get("path"))
+                elif name == "list" and reads is not None:
+                    self._exact_keys(arguments, {"path"})
+                    observation = reads.list(arguments.get("path", "."))
+                elif name == "search" and reads is not None:
+                    self._exact_keys(arguments, {"query", "path"})
+                    observation = reads.search(
+                        arguments.get("query"), arguments.get("path", ".")
+                    )
+                elif name == "count_lines" and reads is not None:
+                    self._exact_keys(arguments, {"path"})
+                    observation = reads.count_lines(arguments.get("path"))
+                else:
+                    raise CapabilityError(f"Codex requested unavailable tool {name!r}")
+                observations.append(observation)
+                return observation
 
         return tools, mediate, envelopes, roots, exclusions
 
@@ -2372,23 +2728,28 @@ class CodexAppServerProvider(_CLIProvider):
         fingerprint: str,
         *,
         thread_id: str | None = None,
+        receipt_bound: bool = False,
     ) -> CodexAppServerSession | None:
         selected_thread = request.session_id if thread_id is None else thread_id
         if selected_thread is None:
             return None
-        path = _session_binding_path(request.receipt_dir, selected_thread)
-        try:
-            value = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
+        continuation = request.continuation
+        if continuation is None:
+            if receipt_bound:
+                return CodexAppServerSession(selected_thread, fingerprint)
             raise CapabilityError(
                 "Codex app-server session has no durable tool-registry binding"
-            ) from exc
+            )
+        value = continuation.metadata
         if (
-            not isinstance(value, Mapping)
-            or value.get("thread_id") != selected_thread
+            continuation.native_id != selected_thread
+            or continuation.adapter != self.name
             or value.get("tool_fingerprint") != fingerprint
             or value.get("adapter_version") != self.capabilities.version
             or value.get("instruction_mode") != "collaboration-mode-v1"
+            or set(value) != {
+                "adapter_version", "instruction_mode", "tool_fingerprint"
+            }
         ):
             raise CapabilityError(
                 "Codex app-server session tool-registry binding does not match "
@@ -2396,20 +2757,16 @@ class CodexAppServerProvider(_CLIProvider):
             )
         return CodexAppServerSession(selected_thread, fingerprint)
 
-    def _save_session(
-        self, request: ProviderRequest, session: CodexAppServerSession
-    ) -> None:
-        _atomic_json(
-            _session_binding_path(request.receipt_dir, session.thread_id),
+    def _continuation(
+        self, thread_id: str, fingerprint: str
+    ) -> ProviderContinuation:
+        return ProviderContinuation(
+            thread_id,
+            self.name,
             {
-                "version": 1,
-                "provider": self.name,
                 "adapter_version": self.capabilities.version,
-                "codex_version": self.bridge.installed_version,
                 "instruction_mode": "collaboration-mode-v1",
-                "thread_id": session.thread_id,
-                "tool_fingerprint": session.tool_fingerprint,
-                "updated_at": _now(),
+                "tool_fingerprint": fingerprint,
             },
         )
 

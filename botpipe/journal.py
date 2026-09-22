@@ -15,7 +15,7 @@ from typing import Any
 from .errors import RunBusy
 
 
-JOURNAL_VERSION = 2
+JOURNAL_VERSION = 3
 JOURNAL_APPLICATION_ID = 0x42505432  # "BPT2"
 
 
@@ -83,7 +83,7 @@ class Journal:
             UNIQUE(run_id,scope,ordinal));
           CREATE TABLE IF NOT EXISTS sessions (
             id TEXT PRIMARY KEY, scope TEXT NOT NULL, affinity TEXT NOT NULL,
-            native_session_id TEXT, revision INTEGER NOT NULL,
+            continuation TEXT, revision INTEGER NOT NULL,
             owner_run_id TEXT, owner_operation_id TEXT,
             CHECK(revision >= 0),
             CHECK((owner_run_id IS NULL) = (owner_operation_id IS NULL)));
@@ -91,7 +91,7 @@ class Journal:
           CREATE TABLE IF NOT EXISTS events (seq INTEGER PRIMARY KEY AUTOINCREMENT,
             run_id TEXT NOT NULL, operation_id TEXT, event TEXT NOT NULL, data TEXT NOT NULL, at TEXT NOT NULL);
           PRAGMA application_id=1112560690;
-          PRAGMA user_version=2;
+          PRAGMA user_version=3;
         """)
 
     @contextmanager
@@ -514,6 +514,12 @@ class Journal:
         result = dict(row)
         result["scope"] = json.loads(result["scope"])
         result["affinity"] = json.loads(result["affinity"])
+        continuation = result.get("continuation")
+        if continuation is not None:
+            from .providers import ProviderContinuation
+            result["continuation"] = ProviderContinuation.from_record(
+                json.loads(continuation)
+            )
         return result
 
     def session(self, key):
@@ -718,11 +724,18 @@ class Journal:
         owner = (record["owner_run_id"], record["owner_operation_id"])
         expected_owner = (operation["run_id"], operation["id"])
         expected_revision = update.get("expected_revision")
-        native = update.get("native_session_id")
+        continuation = update.get("continuation")
         if type(expected_revision) is not int or expected_revision < 0:
             raise TypeError("Malformed expected session revision")
-        if native is not None and type(native) is not str:
-            raise TypeError("Malformed native session identity")
+        if continuation is not None:
+            from .providers import ProviderContinuation
+            if not isinstance(continuation, ProviderContinuation):
+                raise TypeError("Malformed provider continuation")
+            encoded_continuation = json.dumps(
+                continuation.to_record(), sort_keys=True, allow_nan=False
+            )
+        else:
+            encoded_continuation = None
         from .sessions import SessionBusy, SessionHistoryConflict
 
         if owner != expected_owner:
@@ -735,11 +748,11 @@ class Journal:
                 f"Session {update['session_id']} changed before response commit"
             )
         cursor = db.execute(
-            "UPDATE sessions SET native_session_id=COALESCE(?,native_session_id),"
+            "UPDATE sessions SET continuation=COALESCE(?,continuation),"
             "revision=revision+1,owner_run_id=NULL,owner_operation_id=NULL "
             "WHERE id=? AND revision=? AND owner_run_id=? AND owner_operation_id=?",
             (
-                native,
+                encoded_continuation,
                 update["session_id"],
                 expected_revision,
                 operation["run_id"],

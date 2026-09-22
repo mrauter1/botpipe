@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from botpipe import (
     Botpipe,
     BudgetExceeded,
+    Codex,
     Provider,
     Result,
     Session,
@@ -368,3 +369,302 @@ def test_shared_session_rejects_profile_affinity_change_before_dispatch(tmp_path
         with pytest.raises(SessionAffinityError, match="affinity"):
             second.generate("continue")
     assert len(native.calls) == 1
+
+
+@pytest.mark.parametrize("with_default", [False, True])
+def test_explicit_backend_uses_its_catalog_settings_without_becoming_default(
+    tmp_path, monkeypatch, with_default
+):
+    default = 'default_provider = "claude"\n' if with_default else ""
+    (tmp_path / "botpipe.toml").write_text(
+        default
+        + '''[providers.claude.options]
+unavailable = true
+[providers.codex]
+model = "codex-model"
+[providers.codex.options]
+marker = "codex-options"
+''',
+        encoding="utf-8",
+    )
+    native = FakeProvider(["done"])
+    resolutions = []
+
+    def resolve(name, config):
+        resolutions.append((name, config))
+        if name == "claude":
+            raise AssertionError("unrelated default was instantiated")
+        return native
+
+    monkeypatch.setattr("botpipe.providers.get_provider", resolve)
+    with Botpipe(tmp_path) as runtime:
+        result = Codex(runtime=runtime, session=None).generate("work")
+    assert result.value == "done"
+    assert resolutions == [("codex", {"marker": "codex-options"})]
+    assert native.calls[0].policy.model == "codex-model"
+
+
+def test_explicit_backend_without_catalog_entry_uses_empty_settings(
+    tmp_path, monkeypatch
+):
+    native = FakeProvider(["done"])
+    seen = []
+
+    def resolve(name, config):
+        seen.append((name, config))
+        return native
+
+    monkeypatch.setattr("botpipe.providers.get_provider", resolve)
+    with Botpipe(tmp_path, provider=None) as runtime:
+        assert Codex(runtime=runtime, session=None).generate("work").value == "done"
+    assert seen == [("codex", {})]
+
+
+def test_run_catalog_survives_config_change_before_first_backend_use(
+    tmp_path, monkeypatch
+):
+    config = tmp_path / "botpipe.toml"
+    config.write_text(
+        'default_provider = "claude"\n[providers.codex.options]\nmarker = "old"\n',
+        encoding="utf-8",
+    )
+
+    @workflow
+    def approval():
+        ask_human("continue?")
+        return Codex(session=None).generate("work").value
+
+    first = Botpipe(tmp_path)
+    paused = first.run(approval, run_id="catalog-snapshot")
+    assert paused.status == "awaiting_input"
+    first.close()
+    config.write_text(
+        'default_provider = "claude"\n[providers.codex.options]\nmarker = "new"\n',
+        encoding="utf-8",
+    )
+    seen = []
+
+    def resolve(name, config):
+        seen.append((name, config))
+        return FakeProvider(["resumed" if config["marker"] == "old" else "new"])
+
+    monkeypatch.setattr("botpipe.providers.get_provider", resolve)
+    with Botpipe(tmp_path) as resumed:
+        result = resumed.answer(
+            paused.run_id,
+            paused.pending_input["operation_id"],
+            "yes",
+            workflow=approval,
+        )
+        assert result.value == "resumed"
+
+    @workflow
+    def fresh():
+        return Codex(session=None).generate("work").value
+
+    with Botpipe(tmp_path) as current:
+        assert current.run(fresh).value == "new"
+    assert seen == [
+        ("codex", {"marker": "old"}),
+        ("codex", {"marker": "new"}),
+    ]
+
+
+def test_programmatic_runtime_does_not_read_ambient_provider_config(
+    tmp_path, monkeypatch
+):
+    (tmp_path / "botpipe.toml").write_text("unknown = true\n", encoding="utf-8")
+    native = FakeProvider(["done"])
+    seen = []
+
+    def resolve(name, config):
+        seen.append((name, config))
+        return native
+
+    monkeypatch.setattr("botpipe.providers.get_provider", resolve)
+    with Botpipe(
+        tmp_path,
+        provider=" CoDeX ",
+        provider_config={"marker": "programmatic"},
+        provider_defaults={"model": "explicit-model"},
+    ) as runtime:
+        assert Provider(runtime=runtime, session=None).generate("work").value == "done"
+    assert seen == [("codex", {"marker": "programmatic"})]
+    assert native.calls[0].policy.model == "explicit-model"
+
+
+def test_selected_model_and_effort_overrides_reach_provider_request(
+    tmp_path, monkeypatch
+):
+    from botpipe.config import load_config
+
+    (tmp_path / "botpipe.toml").write_text(
+        'default_provider = "codex"\n[providers.codex]\nmodel = "base"\n',
+        encoding="utf-8",
+    )
+    configured = load_config(tmp_path, model="cli-model", effort="high")
+    native = FakeProvider(["done"])
+    monkeypatch.setattr(
+        "botpipe.providers.get_provider", lambda name, config: native
+    )
+    with Botpipe(**configured.client_kwargs()) as runtime:
+        Provider(runtime=runtime, session=None).generate("work")
+        assert runtime.policy.model is None
+        assert runtime.policy.effort is None
+    assert native.calls[0].policy.model == "cli-model"
+    assert native.calls[0].policy.effort.value == "high"
+
+
+def test_close_attempts_all_owned_adapters_and_retries_only_failures(
+    tmp_path, monkeypatch
+):
+    events = []
+
+    class ClosingAdapter(FakeProvider):
+        def __init__(self, name, failures=0):
+            super().__init__([])
+            self.name = name
+            self.failures = failures
+            self.close_calls = 0
+
+        def close(self):
+            self.close_calls += 1
+            events.append(self.name)
+            if self.close_calls <= self.failures:
+                raise RuntimeError(f"{self.name} close failed")
+
+    adapters = {
+        "codex": ClosingAdapter("codex", failures=1),
+        "claude": ClosingAdapter("claude", failures=1),
+        "pi": ClosingAdapter("pi"),
+    }
+    monkeypatch.setattr(
+        "botpipe.providers.get_provider", lambda name, config: adapters[name]
+    )
+    runtime = Botpipe(tmp_path, provider=None)
+    close_journal = runtime.journal.close
+
+    def journal_close():
+        events.append("journal")
+        close_journal()
+
+    runtime.journal.close = journal_close
+    for name in adapters:
+        runtime.resolve_adapter(name)
+    # The same identity under another cache key must still close once.
+    runtime._adapter_cache[("duplicate", "{}")]=adapters["pi"]
+    with pytest.raises(ExceptionGroup) as raised:
+        runtime.close()
+    assert len(raised.value.exceptions) == 2
+    assert {str(error) for error in raised.value.exceptions} == {
+        "codex close failed",
+        "claude close failed",
+    }
+    assert [adapter.close_calls for adapter in adapters.values()] == [1, 1, 1]
+    assert events == ["codex", "claude", "pi", "journal"]
+    with pytest.raises(Exception, match="closed"):
+        runtime.resolve_adapter("pi")
+    runtime.close()
+    assert [adapter.close_calls for adapter in adapters.values()] == [2, 2, 1]
+    runtime.close()
+    assert [adapter.close_calls for adapter in adapters.values()] == [2, 2, 1]
+
+
+def test_close_preserves_one_original_failure(tmp_path, monkeypatch):
+    failure = RuntimeError("original close failure")
+
+    class Failing(FakeProvider):
+        def close(self):
+            raise failure
+
+    native = Failing([])
+    monkeypatch.setattr(
+        "botpipe.providers.get_provider", lambda name, config: native
+    )
+    runtime = Botpipe(tmp_path, provider=None)
+    runtime.resolve_adapter("codex")
+    with pytest.raises(RuntimeError) as raised:
+        runtime.close()
+    assert raised.value is failure
+
+
+def test_close_never_closes_caller_owned_adapter(tmp_path):
+    class CallerOwned(FakeProvider):
+        def __init__(self):
+            super().__init__([])
+            self.close_calls = 0
+
+        def close(self):
+            self.close_calls += 1
+
+    native = CallerOwned()
+    runtime = Botpipe(tmp_path, provider=native)
+    runtime.close()
+    runtime.close()
+    assert native.close_calls == 0
+
+
+def test_injected_mixed_case_name_suspends_and_resumes_with_one_catalog_key(
+    tmp_path,
+):
+    class Mixed(FakeProvider):
+        name = "MiXeD"
+
+    @workflow
+    def job():
+        ask_human("continue?")
+        return Provider(session=None).generate("work").value
+
+    native = Mixed(["done"])
+    with Botpipe(tmp_path, provider=native) as runtime:
+        paused = runtime.run(job, run_id="mixed-name")
+        assert paused.status == "awaiting_input"
+        recorded = runtime.journal.run(paused.run_id)
+        assert recorded["provider"] == "mixed"
+        assert set(recorded["provider_catalog"]) == {"mixed"}
+        result = runtime.answer(
+            paused.run_id,
+            paused.pending_input["operation_id"],
+            "yes",
+            workflow=job,
+        )
+    assert result.value == "done"
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("config", {"nested": {"api_key": "TOPSECRET"}}),
+        ("defaults", {"nested": {"access_token": "TOPSECRET"}}),
+    ],
+)
+def test_nondefault_public_catalog_rejects_nested_secrets(
+    tmp_path, field, value
+):
+    from botpipe import ConfigurationError
+
+    selection = {"name": "codex", "config": {}, "defaults": {}}
+    selection[field] = value
+    with pytest.raises(ConfigurationError, match="environment credential"):
+        Botpipe(
+            tmp_path,
+            provider=None,
+            provider_catalog={"codex": selection},
+        )
+    assert not (tmp_path / ".botpipe-v2" / "state.sqlite3").exists()
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf")])
+def test_public_catalog_rejects_nonfinite_durable_values(tmp_path, value):
+    with pytest.raises(ValueError, match="finite JSON"):
+        Botpipe(
+            tmp_path,
+            provider=None,
+            provider_catalog={
+                "codex": {
+                    "name": "codex",
+                    "config": {"temperature": value},
+                    "defaults": {},
+                }
+            },
+        )
