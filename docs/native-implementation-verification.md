@@ -185,6 +185,52 @@ install an old Codex release. Linux and Windows native-contract jobs must pass
 before these new integration checks count as evidence. They do not establish
 authenticated account behavior or real cached-token usage.
 
+## Review follow-up: ownership, results, and interruption recovery
+
+One OS-backed execution guard now owns each canonical journal/run across initial
+execution, resume, and manual resolution. Workspace read claims still permit
+independent readers and parallel child operations. Cancellation and inspection
+remain available while the execution guard is held.
+
+Linux namespace init sends the payload's wait status over its private control
+socket. The owner reports that status separately from the launcher's exit code,
+and confirms both namespace-init and monitor exit before releasing ownership.
+This preserves signal termination, including SIGKILL, without self-signaling
+namespace init. Forced termination can have no recoverable payload exit status;
+that is distinct from an ordinary command failure.
+
+Codex's current attempt receipt records spawn intent, thread binding, turn intent,
+turn acknowledgement, the response, and confirmed process-tree cleanup. Required
+receipt writes precede the next protocol action. A completed response is exposed
+only with cleanup evidence; an interrupted attempt with confirmed cleanup is
+stopped and may be explicitly reconciled or retried on its retained thread.
+Cancellation cannot replace an already durable completed result or allow later
+protocol events to rewrite a stopped result. Unsupported receipt schemas and
+unproven cleanup remain unknown. In particular, an abrupt owner crash before
+cleanup is recorded can still require manual investigation: a missing PID or
+released run lock is not cross-process proof of tree quiescence.
+
+Continuation retains the private Codex home and native thread. Generated system
+skill cache files may remain, but their instruction/discovery paths are disabled;
+unapproved additional skill/configuration sources are rejected. Native tests
+exercise a hostile cached skill on both an initial and a resumed request while
+checking that preceding model inputs remain an exact prefix.
+Native RUN preserves the inherited home environment for Git, SSH, and other native
+tools; mediated turns use the private home. Preflight checks include explicit home
+environment overrides so they cannot introduce an unchecked skill source.
+
+CI installs the complete current Linux Codex distribution, including its matching
+sandbox resources. Downloading only the standalone executable omitted Bubblewrap;
+the older Ubuntu system package then exposed a native launcher compatibility
+failure. Windows installation retains all packaged helpers, and restricted RUN
+uses Codex's unelevated sandbox rather than leaving the backend disabled. Both
+platforms keep the requested approval and filesystem policies.
+
+The native suite also interrupts an actual Codex turn after its acknowledgement,
+checks the durable stopped outcome after cleanup, and completes an explicitly
+authorized retry on the same thread. These checks use the local Responses fixture
+and do not measure authenticated model behavior or cache hits.
+
 ## Sources
 
 - [Codex 0.155.1 release](https://github.com/openai/codex/releases/tag/rust-v0.155.1)

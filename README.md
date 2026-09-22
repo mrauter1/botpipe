@@ -24,6 +24,11 @@ system Python, and pidfd support. Botpipe checks this before launching work and
 rejects hosts that cannot guarantee descendant cleanup. Other POSIX hosts do not
 currently have a supported native subprocess backend.
 
+Codex RUN also needs Codex's native sandbox dependencies. On Linux, use the
+complete Codex package with its bundled resources, including Bubblewrap. On
+Windows, keep Codex's packaged helper executables beside the main executable;
+Botpipe selects the native unelevated Windows sandbox for restricted RUN policies.
+
 ```bash
 pip install botpipe
 ```

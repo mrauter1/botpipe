@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-import multiprocessing
+import os
+from pathlib import Path
+import subprocess
+import sys
 import threading
+import time
 
 import pytest
 
@@ -32,38 +36,68 @@ def _interrupted_query(workspace, state_dir):
     return run_id, operation_id
 
 
-def _hold_execution_guard(registry, journal, run_id, ready, release):
-    coordinator = WorkspaceCoordinator(registry)
-    with coordinator.execution_guard(journal, run_id):
-        ready.set()
-        if not release.wait(5):
-            raise AssertionError("parent did not release execution guard")
-
-
 def test_execution_guard_excludes_another_process(tmp_path):
-    context = multiprocessing.get_context("spawn")
-    ready = context.Event()
-    release = context.Event()
     registry = tmp_path / "coordinator"
     journal = tmp_path / "state.sqlite3"
-    process = context.Process(
-        target=_hold_execution_guard,
-        args=(registry, journal, "run", ready, release),
+    ready = tmp_path / "ready"
+    release = tmp_path / "release"
+    repository = Path(__file__).resolve().parents[1]
+    environment = dict(os.environ)
+    environment["PYTHONPATH"] = str(repository)
+    script = """
+import pathlib
+import sys
+import time
+from botpipe.workspace_ownership import WorkspaceCoordinator
+
+registry, journal, ready, release = map(pathlib.Path, sys.argv[1:])
+with WorkspaceCoordinator(registry).execution_guard(journal, "run"):
+    ready.write_text("ready")
+    deadline = time.monotonic() + 10
+    while not release.exists():
+        if time.monotonic() >= deadline:
+            raise RuntimeError("parent did not release execution guard")
+        time.sleep(0.01)
+"""
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            script,
+            str(registry),
+            str(journal),
+            str(ready),
+            str(release),
+        ],
+        cwd=repository,
+        env=environment,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
     )
-    process.start()
+    stderr = ""
     try:
-        assert ready.wait(5)
+        deadline = time.monotonic() + 5
+        while not ready.exists() and process.poll() is None:
+            if time.monotonic() >= deadline:
+                break
+            time.sleep(0.01)
+        if not ready.exists():
+            _stdout, stderr = process.communicate(timeout=5)
+            pytest.fail(f"guard child did not start: {stderr}")
         coordinator = WorkspaceCoordinator(registry)
         with pytest.raises(RunBusy):
             with coordinator.execution_guard(journal, "run"):
                 pass
     finally:
-        release.set()
-        process.join(5)
-        if process.is_alive():
-            process.terminate()
-            process.join(5)
-    assert process.exitcode == 0
+        release.write_text("release")
+        try:
+            _stdout, stderr = process.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            _stdout, stderr = process.communicate(timeout=5)
+            raise
+    assert process.returncode == 0, stderr
 
 
 def test_concurrent_resolves_admit_only_one_recovery(tmp_path):

@@ -161,7 +161,7 @@ def test_native_receipt_recovery_does_not_consume_another_turn(tmp_path, monkeyp
         assert result.status == "interrupted"
         monkeypatch.setattr(client.journal, "response", original)
         resumed = client.resume(result.run_id, workflow=work)
-        assert resumed.status == "completed"
+        assert resumed.status == "completed", resumed.error
         assert resumed.value == "done"
         assert states(client)[0]["used_turns"] == 1
 

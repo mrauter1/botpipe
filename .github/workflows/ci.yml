@@ -24,11 +24,6 @@ jobs:
           python-version: "3.12"
       - name: Install package and tests
         run: python -m pip install -e '.[test]'
-      - name: Install Codex Linux sandbox dependency
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes bubblewrap
       - name: Download and verify current stable Codex
         shell: python
         env:
@@ -42,7 +37,7 @@ jobs:
           with urllib.request.urlopen(request, timeout=30) as response:
               release = json.load(response)
           windows = platform.system() == "Windows"
-          asset_name = "codex-x86_64-pc-windows-msvc.exe.zip" if windows else "codex-x86_64-unknown-linux-musl.tar.gz"
+          asset_name = "codex-x86_64-pc-windows-msvc.exe.zip" if windows else "codex-package-x86_64-unknown-linux-musl.tar.gz"
           asset = next(item for item in release["assets"] if item["name"] == asset_name)
           root = pathlib.Path(os.environ["RUNNER_TEMP"]) / "botpipe-native-codex"
           root.mkdir()
@@ -81,12 +76,12 @@ jobs:
                   binary = root / "codex.exe"
           else:
               with tarfile.open(archive) as bundle:
-                  members = bundle.getmembers()
-                  if len(members) != 1 or not members[0].isfile():
-                      raise RuntimeError("Unexpected Codex archive layout")
-                  binary = root / "codex"
-                  with bundle.extractfile(members[0]) as source, binary.open("wb") as destination:
-                      shutil.copyfileobj(source, destination)
+                  # Use the complete native distribution, including its matching
+                  # sandbox resources, rather than the standalone executable.
+                  bundle.extractall(root, filter="data")
+              binary = root / "bin" / "codex"
+              if not binary.is_file() or not (root / "codex-resources" / "bwrap").is_file():
+                  raise RuntimeError("Codex package is missing native sandbox resources")
               binary.chmod(0o755)
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as output:
               output.write(f"BOTPIPE_TEST_CODEX_BINARY={binary}\n")
@@ -205,6 +200,7 @@ jobs:
           tests/test_processes.py
           tests/test_codex_appserver.py
           tests/test_workspace_ownership.py
+          tests/test_run_ownership.py
           tests/test_workspace_fencing.py
           tests/test_candidate_v2.py
           tests/test_execution_isolation.py

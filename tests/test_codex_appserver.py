@@ -20,6 +20,7 @@ from botpipe.codex_appserver import (
     CodexAppServerProtocolError,
     CodexAppServerProvider,
     CodexAppServerSession,
+    CodexLifecycleStage,
     DynamicTool,
     tool_fingerprint,
 )
@@ -32,7 +33,7 @@ from botpipe.providers import (
     get_provider,
     receipt_path,
 )
-from botpipe.recovery import Completed, Unknown
+from botpipe.recovery import Completed, Running, Stopped, Unknown
 
 
 @pytest.fixture(autouse=True)
@@ -47,7 +48,8 @@ def local_process_containment(monkeypatch: pytest.MonkeyPatch):
         def spawn(self, argv, **kwargs):
             return subprocess.Popen(argv, start_new_session=True, **kwargs)
 
-        def ensure_tree_exited(self, process, *, grace_seconds):
+        def finish(self, process, *, grace_seconds, forced):
+            assert forced is True
             try:
                 os.killpg(process.pid, signal.SIGTERM)
             except ProcessLookupError:
@@ -61,6 +63,7 @@ def local_process_containment(monkeypatch: pytest.MonkeyPatch):
             except ProcessLookupError:
                 pass
             process.wait(timeout=2)
+            return process.returncode
 
         def close(self):
             return None
@@ -97,13 +100,21 @@ def stub(
     resume: bool = False,
     call_tool: bool = True,
     effective_model: str = "gpt-5.4",
+    fail_after_turn_intent: bool = False,
+    environment_path: Path | None = None,
 ) -> tuple[str, ...]:
     transcript = tmp_path / "transcript.jsonl"
     script = tmp_path / "app_server.py"
     arguments = {"path": "README.md"} if arguments is None else arguments
     script.write_text(
-        f"""import json, pathlib, sys
+        f"""import json, os, pathlib, sys
 out = pathlib.Path({str(transcript)!r})
+environment_path = {str(environment_path) if environment_path is not None else None!r}
+if environment_path is not None:
+    pathlib.Path(environment_path).write_text(json.dumps({{
+        'HOME': os.environ.get('HOME'),
+        'USERPROFILE': os.environ.get('USERPROFILE'),
+    }}, sort_keys=True))
 def receive():
     value = json.loads(sys.stdin.readline())
     with out.open('a', encoding='utf-8') as handle:
@@ -127,6 +138,8 @@ assert request['method'] == {'thread/resume' if resume else 'thread/start'!r}
 send({{'id': request['id'], 'result': {{'thread': {{'id': 'thread-1'}}, 'model': {effective_model!r}, 'reasoningEffort': 'medium'}}}})
 request = receive()
 assert request['method'] == 'turn/start'
+if {fail_after_turn_intent!r}:
+    raise SystemExit(3)
 send({{'id': request['id'], 'result': {{'turn': {{'id': 'turn-1', 'status': 'inProgress', 'items': []}}}}}})
 if {unexpected_request!r}:
     send({{'id': 77, 'method': 'item/tool/requestUserInput', 'params': {{'threadId': 'thread-1', 'turnId': 'turn-1'}}}})
@@ -414,8 +427,9 @@ def test_uncertain_process_tree_cleanup_prevents_successful_result(
                 kwargs["start_new_session"] = True
             return subprocess.Popen(argv, **kwargs)
 
-        def ensure_tree_exited(self, _process, *, grace_seconds):
+        def finish(self, _process, *, grace_seconds, forced):
             assert grace_seconds == 0.1
+            assert forced is True
             raise RuntimeError("tree cleanup uncertain")
 
         def close(self):
@@ -426,6 +440,7 @@ def test_uncertain_process_tree_cleanup_prevents_successful_result(
         lambda: UncertainContainment(),
     )
 
+    lifecycle = []
     with pytest.raises(RuntimeError, match="tree cleanup uncertain"):
         bridge(tmp_path, stub(tmp_path)).execute(
             prompt="hello",
@@ -433,7 +448,38 @@ def test_uncertain_process_tree_cleanup_prevents_successful_result(
             tools=[tool()],
             mediator=lambda _name, _args: "ok",
             timeout=5,
+            lifecycle=lifecycle.append,
         )
+    assert lifecycle[-1].stage is CodexLifecycleStage.CLEANUP_FAILED
+    assert not any(
+        event.stage is CodexLifecycleStage.PROCESS_QUIESCENT for event in lifecycle
+    )
+
+
+def test_required_lifecycle_write_failure_aborts_before_turn_start(
+    tmp_path: Path,
+) -> None:
+    events = []
+
+    def lifecycle(event):
+        events.append(event)
+        if event.stage is CodexLifecycleStage.TURN_INTENT:
+            raise OSError("receipt unavailable")
+
+    with pytest.raises(OSError, match="receipt unavailable"):
+        bridge(tmp_path, stub(tmp_path, call_tool=False)).execute(
+            prompt="hello",
+            workspace=tmp_path,
+            tools=[],
+            mediator=lambda _name, _args: "unused",
+            timeout=5,
+            lifecycle=lifecycle,
+        )
+
+    assert not any(
+        message.get("method") == "turn/start" for message in read_transcript(tmp_path)
+    )
+    assert events[-1].stage is CodexLifecycleStage.PROCESS_QUIESCENT
 
 
 def test_app_server_spawn_failure_closes_containment(
@@ -488,6 +534,66 @@ def test_tool_free_profile_dispatches_with_exact_empty_inventory(tmp_path: Path)
     ] is False
     assert thread_start["params"]["config"]["tools.update_plan.enabled"] is False
     assert thread_start["params"]["config"]["orchestrator.skills.enabled"] is False
+
+
+@pytest.mark.parametrize("native_run", [False, True])
+def test_turn_home_environment_matches_profile(
+    tmp_path: Path, native_run: bool
+) -> None:
+    private_home = tmp_path / "codex-home"
+    private_home.mkdir()
+    native_home = tmp_path / "native-home"
+    native_home.mkdir()
+    observed = tmp_path / "environment.json"
+    bridge_adapter = CodexAppServerBridge(
+        command=stub(tmp_path, call_tool=False, environment_path=observed),
+        codex_home=private_home,
+        env={"HOME": str(native_home), "USERPROFILE": str(native_home)},
+        version_probe=lambda: f"codex-cli {CURRENT_VERIFIED_CODEX_VERSION}",
+    )
+
+    if native_run:
+        CodexAppServerProvider(bridge=bridge_adapter).run(
+            provider_request(
+                tmp_path,
+                operation=OperationKind.RUN,
+                allow_commands=(),
+            )
+        )
+        expected_home = native_home
+    else:
+        bridge_adapter.execute(
+            prompt="hello",
+            workspace=tmp_path,
+            tools=[],
+            mediator=lambda _name, _args: "unused",
+            timeout=2,
+        )
+        expected_home = private_home
+
+    assert json.loads(observed.read_text(encoding="utf-8")) == {
+        "HOME": str(expected_home),
+        "USERPROFILE": str(expected_home),
+    }
+
+
+def test_overridden_home_skills_fail_preflight(tmp_path: Path) -> None:
+    private_home = tmp_path / "codex-home"
+    private_home.mkdir()
+    native_home = tmp_path / "native-home"
+    (native_home / ".agents" / "skills").mkdir(parents=True)
+    adapter = CodexAppServerBridge(
+        command=stub(tmp_path, call_tool=False),
+        codex_home=private_home,
+        env={"HOME": str(native_home), "USERPROFILE": str(native_home)},
+        version_probe=lambda: f"codex-cli {CURRENT_VERIFIED_CODEX_VERSION}",
+    )
+
+    with pytest.raises(
+        CodexAppServerCapabilityError,
+        match="prohibited configuration surfaces exist",
+    ):
+        adapter.verify_installation()
 
 
 def test_unknown_version_fails_before_app_server_dispatch(tmp_path: Path) -> None:
@@ -710,6 +816,20 @@ def test_provider_adapter_commits_receipt_tool_evidence_and_session_binding(
     receipt = json.loads(receipt_path(request).read_text(encoding="utf-8"))
     assert receipt["status"] == "completed"
     assert receipt["response"]["session_id"] == "thread-1"
+    assert [
+        receipt[name]["sequence"]
+        for name in (
+            "spawn_intent",
+            "contained_spawn",
+            "thread_binding",
+            "turn_intent",
+            "turn_acknowledged",
+            "received_response",
+            "process_quiescent",
+        )
+    ] == list(range(1, 8))
+    assert receipt["thread_binding"]["thread_id"] == "thread-1"
+    assert receipt["turn_acknowledged"]["turn_id"] == "turn-1"
     evidence_dir = next((tmp_path / "receipts").glob("*.tools"))
     manifest = json.loads((evidence_dir / "manifest.json").read_text())
     assert manifest["envelopes"][0]["grant_id"] == "grant_1"
@@ -775,6 +895,114 @@ def test_provider_empty_generate_uses_strict_empty_inventory(tmp_path: Path) -> 
     assert thread_start["params"]["dynamicTools"] == []
 
 
+def test_prepared_live_attempt_is_running_and_cannot_be_replaced(tmp_path, monkeypatch):
+    adapter = CodexAppServerProvider(
+        bridge=bridge(tmp_path, stub(tmp_path, call_tool=False))
+    )
+    request = provider_request(tmp_path, allow_commands=())
+    execute = CodexAppServerBridge.execute
+
+    def before_spawn(self, **kwargs):
+        before = receipt_path(request).read_bytes()
+        assert not self.is_active(request.operation_id)
+        assert isinstance(adapter.recover(request), Running)
+        with pytest.raises(ProviderInterruptedError, match="active"):
+            adapter.run(request)
+        assert receipt_path(request).read_bytes() == before
+        return execute(self, **kwargs)
+
+    monkeypatch.setattr(CodexAppServerBridge, "execute", before_spawn)
+
+    assert adapter.run(request).text == "answer"
+    assert isinstance(adapter.recover(request), Completed)
+
+
+def test_cancellation_seals_receipt_before_a_late_response(tmp_path, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from botpipe.codex_appserver import _Conversation
+
+    adapter = CodexAppServerProvider(
+        bridge=bridge(tmp_path, stub(tmp_path, call_tool=False))
+    )
+    request = provider_request(tmp_path, allow_commands=())
+    entered, release = threading.Event(), threading.Event()
+    emit = _Conversation.emit_lifecycle
+
+    def delayed_response(self, event):
+        if event.stage is CodexLifecycleStage.RECEIVED_RESPONSE:
+            entered.set()
+            assert release.wait(5)
+        return emit(self, event)
+
+    monkeypatch.setattr(_Conversation, "emit_lifecycle", delayed_response)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        running = pool.submit(adapter.run, request)
+        try:
+            assert entered.wait(5)
+            assert isinstance(adapter.cancel(request.operation_id), Stopped)
+        finally:
+            release.set()
+        with pytest.raises(ProviderInterruptedError, match="cannot advance after"):
+            running.result(timeout=5)
+
+    assert isinstance(adapter.recover(request), Stopped)
+    assert "response" not in json.loads(receipt_path(request).read_text())
+
+
+def test_authorized_retry_reuses_quiescent_attempt_thread(tmp_path: Path) -> None:
+    adapter = CodexAppServerProvider(
+        bridge=bridge(
+            tmp_path,
+            stub(tmp_path, call_tool=False, fail_after_turn_intent=True),
+        )
+    )
+    first = provider_request(tmp_path, allow_commands=())
+
+    with pytest.raises(ProviderInterruptedError):
+        adapter.run(first)
+
+    first_receipt = json.loads(receipt_path(first).read_text(encoding="utf-8"))
+    assert first_receipt["status"] == "stopped"
+    assert first_receipt["thread_binding"]["thread_id"] == "thread-1"
+    adapter.bridge.command = stub(
+        tmp_path,
+        call_tool=False,
+        resume=True,
+    )
+    retry = provider_request(tmp_path, attempt=2, allow_commands=())
+
+    response = adapter.run(retry)
+
+    assert response.session_id == "thread-1"
+    assert any(
+        message.get("method") == "thread/resume"
+        for message in read_transcript(tmp_path)
+    )
+
+
+def test_authorized_retry_cannot_replace_the_retained_thread(tmp_path: Path) -> None:
+    adapter = CodexAppServerProvider(
+        bridge=bridge(
+            tmp_path, stub(tmp_path, call_tool=False, fail_after_turn_intent=True)
+        )
+    )
+    first = provider_request(tmp_path, allow_commands=())
+    with pytest.raises(ProviderInterruptedError):
+        adapter.run(first)
+    adapter._save_session(
+        first,
+        CodexAppServerSession(
+            "thread-2", json.loads(receipt_path(first).read_text())["tool_fingerprint"]
+        ),
+    )
+    transcript = read_transcript(tmp_path)
+
+    with pytest.raises(CapabilityError, match="cannot replace.*thread"):
+        adapter.run(provider_request(tmp_path, attempt=2, allow_commands=(), session_id="thread-2"))
+
+    assert read_transcript(tmp_path) == transcript
+
+
 def test_provider_run_uses_native_app_server_profile_on_every_turn(
     tmp_path: Path,
 ) -> None:
@@ -805,7 +1033,13 @@ def test_provider_run_uses_native_app_server_profile_on_every_turn(
         "runtimeWorkspaceRoots": [str(tmp_path.resolve())],
     }
     assert thread_start["dynamicTools"] == []
-    assert thread_start["config"] == {}
+    assert thread_start["config"] == {
+        "skills.include_instructions": False,
+        "skills.bundled.enabled": False,
+        "orchestrator.skills.enabled": False,
+        "project_root_markers": [],
+        **({"windows.sandbox": "unelevated"} if os.name == "nt" else {}),
+    }
     assert thread_start["environments"] == [environment]
     assert thread_start["approvalPolicy"] == "on-request"
     assert thread_start["sandbox"] == "workspace-write"
@@ -926,7 +1160,7 @@ def test_evidence_prepare_failure_precedes_dispatch_and_receipt(
     assert not receipt_path(request).exists()
 
 
-def test_evidence_record_failure_aborts_native_turn_and_marks_uncertain(
+def test_evidence_record_failure_aborts_native_turn_and_records_quiescence(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     class Envelope:
@@ -968,11 +1202,12 @@ def test_evidence_record_failure_aborts_native_turn_and_marks_uncertain(
         adapter.run(request)
 
     receipt = json.loads(receipt_path(request).read_text(encoding="utf-8"))
-    assert receipt["status"] == "uncertain"
+    assert receipt["status"] == "stopped"
+    assert "process_quiescent" in receipt
     assert not any(message.get("id") == 77 for message in read_transcript(tmp_path))
 
 
-def test_cancel_requests_native_interrupt_before_returning_unknown(
+def test_cancel_requests_native_interrupt_and_returns_stopped_after_cleanup(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ready = tmp_path / "ready"
@@ -1043,8 +1278,10 @@ send({{'method': 'turn/completed', 'params': {{'turn': {{'id': 'turn-1', 'status
     outcome = adapter.cancel(request.operation_id)
     worker.join(timeout=3)
 
-    assert isinstance(outcome, Unknown)
-    assert "turn/interrupt was requested" in outcome.detail
+    from botpipe.recovery import Stopped
+
+    assert isinstance(outcome, Stopped)
+    assert "earlier effects may have occurred" in outcome.detail
     assert not worker.is_alive()
     assert len(failures) == 1
     assert isinstance(failures[0], ProviderInterruptedError)

@@ -15,13 +15,19 @@ import pytest
 
 from botpipe.processes import ProcessContainment, ProcessContainmentUnavailable
 
+_SIGTERM = int(getattr(signal, "SIGTERM", 15))
+_SIGKILL = int(getattr(signal, "SIGKILL", 9))
 
+
+@pytest.mark.skipif(
+    not sys.platform.startswith("linux"), reason="Linux wait-status contract"
+)
 @pytest.mark.parametrize(
     ("wait_status", "exit_code"),
     [
         (37 << 8, 37),
-        (signal.SIGTERM, -signal.SIGTERM),
-        (signal.SIGKILL, -signal.SIGKILL),
+        (_SIGTERM, -_SIGTERM),
+        (_SIGKILL, -_SIGKILL),
     ],
 )
 def test_linux_payload_status_decodes_wait_status(wait_status, exit_code):
@@ -33,6 +39,9 @@ def test_linux_payload_status_decodes_wait_status(wait_status, exit_code):
     assert containment._read_linux_payload_status(required=True) == exit_code
 
 
+@pytest.mark.skipif(
+    not sys.platform.startswith("linux"), reason="Linux wait-status contract"
+)
 @pytest.mark.parametrize(
     "record",
     [
@@ -53,6 +62,9 @@ def test_linux_payload_status_missing_or_malformed_fails_closed(record):
         containment._read_linux_payload_status(required=True)
 
 
+@pytest.mark.skipif(
+    not sys.platform.startswith("linux"), reason="Linux wait-status contract"
+)
 def test_forced_linux_cleanup_allows_missing_payload_status(monkeypatch):
     parent, helper = socket.socketpair()
     helper.close()
@@ -69,6 +81,9 @@ def test_forced_linux_cleanup_allows_missing_payload_status(monkeypatch):
     assert containment.finish(process, grace_seconds=0.1, forced=True) is None
 
 
+@pytest.mark.skipif(
+    not sys.platform.startswith("linux"), reason="Linux wait-status contract"
+)
 def test_linux_finish_caches_authenticated_payload_status(monkeypatch):
     parent, helper = socket.socketpair()
     helper.sendall(b"S" + struct.pack("!I", 23 << 8))
@@ -89,6 +104,9 @@ def test_linux_finish_caches_authenticated_payload_status(monkeypatch):
     assert cleanups == [process]
 
 
+@pytest.mark.skipif(
+    not sys.platform.startswith("linux"), reason="Linux wait-status contract"
+)
 def test_concurrent_linux_finish_reads_terminal_status_once(monkeypatch):
     parent, helper = socket.socketpair()
     helper.sendall(b"S" + struct.pack("!I", 17 << 8))
@@ -184,6 +202,9 @@ def test_windows_close_proves_job_exit_before_releasing_handle(monkeypatch):
     assert containment.finish(process, grace_seconds=0.1, forced=True) == 1
 
 
+@pytest.mark.skipif(
+    not sys.platform.startswith("linux"), reason="Linux close contract"
+)
 def test_linux_close_proves_monitor_exit_before_closing_status_channel(monkeypatch):
     parent, helper = socket.socketpair()
     process = SimpleNamespace(pid=123)
@@ -364,8 +385,8 @@ def test_linux_payload_restores_default_sigpipe(
     ("script", "expected"),
     [
         ("import sys;sys.exit(37)", 37),
-        ("import os,signal;os.kill(os.getpid(),signal.SIGTERM)", -signal.SIGTERM),
-        ("import os,signal;os.kill(os.getpid(),signal.SIGKILL)", -signal.SIGKILL),
+        ("import os,signal;os.kill(os.getpid(),signal.SIGTERM)", -_SIGTERM),
+        ("import os,signal;os.kill(os.getpid(),signal.SIGKILL)", -_SIGKILL),
     ],
 )
 def test_linux_finish_reports_payload_status(

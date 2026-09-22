@@ -14,6 +14,7 @@ import threading
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Protocol
@@ -29,18 +30,22 @@ from .processes import ProcessContainment, ProcessContainmentUnavailable
 from .providers import (
     CapabilityError,
     CODEX_APPSERVER_CAPABILITIES,
+    ProviderError,
     ProviderInterruptedError,
     ProviderRequest,
     ProviderResponse,
     _CLIProvider,
     _NATIVE_EVENT_SINK,
     _atomic_json,
-    _existing_response_or_raise,
     _now,
+    _read_receipt,
+    _record_response,
+    _receipt_path_for,
+    _receipt_matches,
     _response_record,
     receipt_path,
 )
-from .recovery import RecoveryOutcome, Unknown
+from .recovery import Completed, RecoveryOutcome, Running, Stopped, Unknown
 from .tool_evidence import ToolEvidence
 
 
@@ -191,6 +196,33 @@ Mediator = Callable[[str, Mapping[str, Any]], object]
 EventSink = Callable[[Mapping[str, Any]], None]
 
 
+class CodexLifecycleStage(str, Enum):
+    """Durable boundaries around one owned app-server process and turn."""
+
+    SPAWN_INTENT = "spawn_intent"
+    CONTAINED_SPAWN = "contained_spawn"
+    THREAD_BOUND = "thread_binding"
+    TURN_INTENT = "turn_intent"
+    TURN_ACKNOWLEDGED = "turn_acknowledged"
+    RECEIVED_RESPONSE = "received_response"
+    PROCESS_QUIESCENT = "process_quiescent"
+    CLEANUP_FAILED = "cleanup_failure"
+
+
+@dataclass(frozen=True, slots=True)
+class CodexLifecycleEvent:
+    """One small synchronous lifecycle update persisted by the provider."""
+
+    stage: CodexLifecycleStage
+    thread_id: str | None = None
+    turn_id: str | None = None
+    result: CodexAppServerResult | None = None
+    error: str | None = None
+
+
+LifecycleCallback = Callable[[CodexLifecycleEvent], None]
+
+
 class EvidenceRecorder(Protocol):
     def prepare(self, envelopes: Any = ()) -> Path: ...
     def record(self, observation: Any) -> Path: ...
@@ -314,6 +346,9 @@ def _clean_config_overrides() -> dict[str, Any]:
             "tools.experimental_request_user_input.enabled": False,
             "tools.update_plan.enabled": False,
             "orchestrator.skills.enabled": False,
+            "skills.include_instructions": False,
+            "skills.bundled.enabled": False,
+            "project_root_markers": [],
         }
     )
     return result
@@ -470,8 +505,8 @@ class _JsonlProcess:
                 # The leader may already have exited after reporting a terminal
                 # turn.  Containment still has to prove that its descendants
                 # cannot outlive the successful response.
-                self.containment.ensure_tree_exited(
-                    self.process, grace_seconds=0.1
+                self.containment.finish(
+                    self.process, grace_seconds=0.1, forced=True
                 )
             except BaseException as exc:
                 cleanup_error = exc
@@ -573,8 +608,15 @@ class CodexAppServerBridge:
             except (OSError, ValueError):
                 pass
             state.terminal_event.wait(max(0.0, float(timeout)))
-        state.process.close()
+        try:
+            state.close()
+        except BaseException:
+            return "cleanup-failed"
         return "turn-interrupt" if requested else "contained"
+
+    def is_active(self, owner_id: str) -> bool:
+        with self._active_lock:
+            return owner_id in self._active
 
     def verify_installation(self, *, strict_inventory: bool = True) -> None:
         """Check protocol support and, when needed, reviewed strict inventory."""
@@ -700,19 +742,35 @@ class CodexAppServerBridge:
     def _verify_config_hygiene(self) -> None:
         # A private home may contain auth and model cache, but none of the
         # surfaces that can register tools or spawn lifecycle hooks.
+        effective_env = {**os.environ, **self.env}
+        home_roots = [Path.home()]
+        for name in ("HOME", "USERPROFILE"):
+            value = effective_env.get(name)
+            if value:
+                home_roots.append(Path(value).expanduser())
+        unique_home_roots = tuple(dict.fromkeys(path.resolve() for path in home_roots))
         prohibited = (
             self.codex_home / "config.toml",
             self.codex_home / "hooks.json",
-            self.codex_home / "skills",
             self.codex_home / "plugins",
+            self.codex_home / ".agents" / "skills",
+            *(root / ".agents" / "skills" for root in unique_home_roots),
+            Path("/etc/codex/skills"),
         )
         present = [str(path) for path in prohibited if path.exists()]
+        skill_root = self.codex_home / "skills"
+        if skill_root.exists():
+            present.extend(
+                str(path)
+                for path in skill_root.iterdir()
+                if path.name != ".system" or path.is_symlink()
+            )
         system = Path("/etc/codex/config.toml")
         if system.exists():
             present.append(str(system))
         if present:
             raise CodexAppServerCapabilityError(
-                "Codex mediated profile requires an isolated configuration home; "
+                "Codex profile requires an isolated configuration home; "
                 "prohibited configuration surfaces exist: " + ", ".join(present)
             )
 
@@ -735,6 +793,7 @@ class CodexAppServerBridge:
         owner_id: str | None = None,
         profile: CodexTurnProfile | None = None,
         effort: str | None = None,
+        lifecycle: LifecycleCallback | None = None,
     ) -> CodexAppServerResult:
         """Run one turn under an explicit semantic execution profile."""
         self._validate_execute(
@@ -771,6 +830,9 @@ class CodexAppServerBridge:
             # see the tool registry.
             evidence.prepare(envelopes)
 
+        if lifecycle is not None and not callable(lifecycle):
+            raise TypeError("lifecycle must be callable or None")
+
         environment = {
             **os.environ,
             **self.env,
@@ -778,6 +840,15 @@ class CodexAppServerBridge:
             "RUST_LOG": "error",
             "LOG_FORMAT": "json",
         }
+        if not profile.native_tools:
+            environment.update(
+                HOME=str(self.codex_home),
+                USERPROFILE=str(self.codex_home),
+            )
+        if lifecycle is not None:
+            # This write precedes process creation.  A prepared receipt without
+            # this boundary therefore proves that no native process was spawned.
+            lifecycle(CodexLifecycleEvent(CodexLifecycleStage.SPAWN_INTENT))
         process = _JsonlProcess(
             self.command,
             cwd=root,
@@ -797,11 +868,19 @@ class CodexAppServerBridge:
             max_events=self.max_events,
             evidence=evidence,
             native_tools=profile.native_tools,
+            lifecycle=lifecycle,
         )
+        try:
+            state.emit_lifecycle(
+                CodexLifecycleEvent(CodexLifecycleStage.CONTAINED_SPAWN)
+            )
+        except BaseException:
+            state.close()
+            raise
         if owner_id is not None:
             with self._active_lock:
                 if owner_id in self._active:
-                    process.close()
+                    state.close()
                     raise CodexAppServerCapabilityError(
                         f"Codex app-server owner {owner_id!r} is already active"
                     )
@@ -860,6 +939,13 @@ class CodexAppServerBridge:
                 thread_id = thread.get("id") if isinstance(thread, Mapping) else None
             if not isinstance(thread_id, str) or not thread_id:
                 raise CodexAppServerProtocolError("thread response contained no thread id")
+            state.thread_id = thread_id
+            state.emit_lifecycle(
+                CodexLifecycleEvent(
+                    CodexLifecycleStage.THREAD_BOUND,
+                    thread_id=thread_id,
+                )
+            )
             if not profile.native_tools:
                 effective_model = thread_response.get("model")
                 if effective_model not in VERIFIED_MEDIATED_MODELS:
@@ -887,6 +973,12 @@ class CodexAppServerBridge:
                     else None
                 ),
             }
+            state.emit_lifecycle(
+                CodexLifecycleEvent(
+                    CodexLifecycleStage.TURN_INTENT,
+                    thread_id=thread_id,
+                )
+            )
             turn_started = state.rpc(
                 "turn/start",
                 {key: value for key, value in turn_params.items() if value is not None},
@@ -895,10 +987,16 @@ class CodexAppServerBridge:
             turn_id = turn.get("id") if isinstance(turn, Mapping) else None
             if not isinstance(turn_id, str) or not turn_id:
                 raise CodexAppServerProtocolError("turn/start contained no turn id")
-            state.thread_id = thread_id
             state.turn_id = turn_id
+            state.emit_lifecycle(
+                CodexLifecycleEvent(
+                    CodexLifecycleStage.TURN_ACKNOWLEDGED,
+                    thread_id=thread_id,
+                    turn_id=turn_id,
+                )
+            )
             text, usage = state.wait_for_terminal()
-            return CodexAppServerResult(
+            result = CodexAppServerResult(
                 text=text,
                 session=CodexAppServerSession(thread_id, fingerprint),
                 turn_id=turn_id,
@@ -906,6 +1004,15 @@ class CodexAppServerBridge:
                 usage=MappingProxyType(usage),
                 events=tuple(MappingProxyType(dict(event)) for event in state.events),
             )
+            state.emit_lifecycle(
+                CodexLifecycleEvent(
+                    CodexLifecycleStage.RECEIVED_RESPONSE,
+                    thread_id=thread_id,
+                    turn_id=turn_id,
+                    result=result,
+                )
+            )
+            return result
         except TimeoutError:
             if state.thread_id and state.turn_id:
                 try:
@@ -922,7 +1029,7 @@ class CodexAppServerBridge:
                 with self._active_lock:
                     if self._active.get(owner_id) is state:
                         del self._active[owner_id]
-            process.close()
+            state.close()
 
     def _validate_execute(
         self,
@@ -956,6 +1063,12 @@ class CodexAppServerBridge:
 
     @staticmethod
     def _verify_project_config(workspace: Path) -> None:
+        workspace_skills = workspace / ".agents" / "skills"
+        if workspace_skills.exists():
+            raise CodexAppServerCapabilityError(
+                "workspace host skills are unavailable to the mediated profile: "
+                f"{workspace_skills}"
+            )
         for root in (workspace, *workspace.parents):
             for relative in (Path(".codex/config.toml"), Path(".codex/hooks.json")):
                 candidate = root / relative
@@ -1026,6 +1139,49 @@ class _Conversation:
     id_lock: threading.Lock = field(default_factory=threading.Lock)
     terminal_event: threading.Event = field(default_factory=threading.Event)
     retained_event_bytes: int = 0
+    lifecycle: LifecycleCallback | None = None
+    lifecycle_close_lock: threading.RLock = field(default_factory=threading.RLock)
+    quiescence_recorded: bool = False
+
+    def emit_lifecycle(self, event: CodexLifecycleEvent) -> None:
+        with self.lifecycle_close_lock:
+            if self.quiescence_recorded:
+                raise CodexAppServerProtocolError(
+                    "Codex lifecycle cannot advance after process-tree cleanup"
+                )
+            if self.lifecycle is not None:
+                self.lifecycle(event)
+
+    def close(self) -> None:
+        """Close the owned tree and durably report exactly what close proved."""
+        with self.lifecycle_close_lock:
+            if self.quiescence_recorded:
+                return
+            try:
+                self.process.close()
+            except BaseException as exc:
+                try:
+                    self.emit_lifecycle(
+                        CodexLifecycleEvent(
+                            CodexLifecycleStage.CLEANUP_FAILED,
+                            thread_id=self.thread_id,
+                            turn_id=self.turn_id,
+                            error=str(exc),
+                        )
+                    )
+                except BaseException:
+                    # The cleanup failure remains the controlling evidence.  A
+                    # second receipt-write failure cannot make it safer.
+                    pass
+                raise
+            self.emit_lifecycle(
+                CodexLifecycleEvent(
+                    CodexLifecycleStage.PROCESS_QUIESCENT,
+                    thread_id=self.thread_id,
+                    turn_id=self.turn_id,
+                )
+            )
+            self.quiescence_recorded = True
 
     def _next_request_id(self) -> int:
         with self.id_lock:
@@ -1305,6 +1461,8 @@ class CodexAppServerProvider(_CLIProvider):
         elif codex_home is not None:
             raise ValueError("codex_home cannot be combined with an injected bridge")
         self.bridge = bridge
+        self._active_receipts_lock = threading.Lock()
+        self._active_receipts: dict[str, tuple[ProviderRequest, Path]] = {}
 
     def validate_request(self, request: ProviderRequest) -> None:
         super().validate_request(request)
@@ -1330,28 +1488,238 @@ class CodexAppServerProvider(_CLIProvider):
         )
 
     def cancel(self, operation_id: str) -> RecoveryOutcome:
+        with self._active_receipts_lock:
+            active = self._active_receipts.get(operation_id)
         attempted = self.bridge.interrupt(operation_id, timeout=2.0)
-        if attempted is not None:
-            detail = (
-                "native turn/interrupt was requested and the owned process was bounded"
-                if attempted == "turn-interrupt"
-                else "the owned pre-turn app-server process was bounded"
-            )
+        if attempted == "cleanup-failed":
             return Unknown(
-                f"Codex app-server attempt {operation_id!r}: {detail}; terminal "
-                "quiescence was not independently acknowledged"
+                f"Codex app-server attempt {operation_id!r}: owned process-tree "
+                "cleanup could not be confirmed"
+            )
+        if attempted is not None:
+            if active is not None:
+                request, path = active
+                try:
+                    value = _read_receipt(path)
+                except ProviderInterruptedError as exc:
+                    return Unknown(str(exc))
+                return self._receipt_outcome(request, value, path)
+            return Stopped(
+                f"Codex app-server attempt {operation_id!r}: cleanup proves it "
+                "cannot continue but does not rule out earlier effects"
             )
         return Unknown(
             f"Codex app-server attempt {operation_id!r}: no owned active app-server "
             "process was found; terminal quiescence was not independently acknowledged"
         )
 
+    @staticmethod
+    def _stage_record(
+        value: Mapping[str, Any], stage: CodexLifecycleStage
+    ) -> Mapping[str, Any] | None:
+        record = value.get(stage.value)
+        if record is None:
+            return None
+        if (
+            not isinstance(record, Mapping)
+            or not isinstance(record.get("at"), str)
+            or not isinstance(record.get("sequence"), int)
+            or isinstance(record.get("sequence"), bool)
+            or record["sequence"] < 1
+        ):
+            raise ValueError(f"invalid {stage.value} evidence")
+        return record
+
+    @classmethod
+    def _receipt_outcome(
+        cls, request: ProviderRequest, value: Mapping[str, Any], path: Path
+    ) -> RecoveryOutcome:
+        """Interpret one exact v2 lifecycle receipt, failing closed."""
+        if value.get("version") != 2:
+            return Unknown("Codex lifecycle receipt has an unsupported schema")
+        try:
+            stages = {
+                stage: cls._stage_record(value, stage) for stage in CodexLifecycleStage
+            }
+        except ValueError as exc:
+            return Unknown(str(exc))
+        if value.get("lifecycle_conflict") is not None:
+            return Unknown("Codex receipt has conflicting lifecycle evidence")
+        sequences = [record["sequence"] for record in stages.values() if record]
+        if len(sequences) != len(set(sequences)):
+            return Unknown("Codex lifecycle sequence contains duplicates")
+        ordered = [
+            CodexLifecycleStage.SPAWN_INTENT,
+            CodexLifecycleStage.CONTAINED_SPAWN,
+            CodexLifecycleStage.THREAD_BOUND,
+            CodexLifecycleStage.TURN_INTENT,
+            CodexLifecycleStage.TURN_ACKNOWLEDGED,
+            CodexLifecycleStage.RECEIVED_RESPONSE,
+            CodexLifecycleStage.PROCESS_QUIESCENT,
+        ]
+        ordered_sequences = [
+            stages[stage]["sequence"] for stage in ordered if stages[stage] is not None
+        ]
+        if ordered_sequences != sorted(ordered_sequences):
+            return Unknown("Codex lifecycle stage order is invalid")
+
+        spawn = stages[CodexLifecycleStage.SPAWN_INTENT]
+        quiescent = stages[CodexLifecycleStage.PROCESS_QUIESCENT]
+        cleanup_failure = stages[CodexLifecycleStage.CLEANUP_FAILED]
+        received = stages[CodexLifecycleStage.RECEIVED_RESPONSE]
+        if spawn is None:
+            if any(record is not None for record in stages.values()):
+                return Unknown("Codex lifecycle evidence exists without spawn intent")
+            return Stopped("Codex attempt was prepared but native spawn was not authorized")
+        if cleanup_failure is not None and (
+            quiescent is None or cleanup_failure["sequence"] > quiescent["sequence"]
+        ):
+            return Unknown("Codex owned process-tree cleanup was not confirmed")
+        response = value.get("response")
+        if response is not None:
+            if received is None:
+                return Unknown("Codex response exists without received-response evidence")
+            if quiescent is None:
+                return Unknown(
+                    "Codex response is durable but process-tree quiescence is unproven"
+                )
+            if received["sequence"] >= quiescent["sequence"]:
+                return Unknown("Codex response/quiescence lifecycle order is invalid")
+            thread_id = received.get("thread_id")
+            turn_id = received.get("turn_id")
+            binding = stages[CodexLifecycleStage.THREAD_BOUND]
+            turn_intent = stages[CodexLifecycleStage.TURN_INTENT]
+            turn_ack = stages[CodexLifecycleStage.TURN_ACKNOWLEDGED]
+            if (
+                binding is None
+                or turn_intent is None
+                or turn_ack is None
+                or not isinstance(thread_id, str)
+                or not thread_id
+                or not isinstance(turn_id, str)
+                or not turn_id
+                or binding.get("thread_id") != thread_id
+                or turn_intent.get("thread_id") != thread_id
+                or turn_ack.get("thread_id") != thread_id
+                or turn_ack.get("turn_id") != turn_id
+                or value.get("session_id") != thread_id
+                or value.get("turn_id") != turn_id
+            ):
+                return Unknown("Codex terminal response identity is inconsistent")
+            try:
+                return Completed(_record_response(response, path))
+            except ProviderInterruptedError as exc:
+                return Unknown(str(exc))
+        if received is not None:
+            return Unknown("Codex received-response evidence has no typed response")
+        if quiescent is not None:
+            return Stopped(
+                "Codex owned process tree is quiescent; earlier effects may have occurred"
+            )
+        return Unknown("Codex native attempt may have started and quiescence is unproven")
+
+    def _history(
+        self, request: ProviderRequest
+    ) -> list[tuple[int, Mapping[str, Any] | None, Path, RecoveryOutcome]]:
+        history: list[tuple[int, Mapping[str, Any] | None, Path, RecoveryOutcome]] = []
+        for attempt in range(request.attempt, 0, -1):
+            path = _receipt_path_for(request, attempt)
+            if not path.exists():
+                continue
+            try:
+                value = _read_receipt(path)
+            except ProviderInterruptedError as exc:
+                history.append((attempt, None, path, Unknown(str(exc))))
+                continue
+            if not _receipt_matches(value, request, attempt):
+                outcome: RecoveryOutcome = Unknown(
+                    f"Codex receipt identity does not match attempt {attempt}"
+                )
+            else:
+                outcome = self._receipt_outcome(request, value, path)
+            history.append((attempt, value, path, outcome))
+        return history
+
+    def _reduce_history(
+        self,
+        request: ProviderRequest,
+        history: Sequence[tuple[int, Mapping[str, Any] | None, Path, RecoveryOutcome]],
+    ) -> RecoveryOutcome:
+        with self._active_receipts_lock:
+            active = self._active_receipts.get(request.operation_id)
+        if active is not None:
+            active_request, _path = active
+            active_terminal = any(
+                attempt == active_request.attempt
+                and isinstance(value, Mapping)
+                and isinstance(value.get("process_quiescent"), Mapping)
+                and isinstance(outcome, (Completed, Stopped))
+                for attempt, value, _path, outcome in history
+            )
+            if not active_terminal:
+                return Running(f"Codex attempt {request.operation_id!r} is active")
+        for _attempt, _value, _path, outcome in history:
+            if isinstance(outcome, Running):
+                return outcome
+            if isinstance(outcome, Unknown):
+                if self.bridge.is_active(request.operation_id):
+                    return Running(f"Codex attempt {request.operation_id!r} is active")
+                return outcome
+        completed = [
+            outcome
+            for _attempt, _value, _path, outcome in history
+            if isinstance(outcome, Completed)
+        ]
+        if completed:
+            records = [item.response.to_record() for item in completed]
+            if any(record != records[0] for record in records[1:]):
+                return Unknown("Codex attempts contain conflicting completed responses")
+            return completed[0]
+        for _attempt, _value, _path, outcome in history:
+            if isinstance(outcome, Stopped):
+                return outcome
+        if self.bridge.is_active(request.operation_id):
+            return Running(f"Codex attempt {request.operation_id!r} is active")
+        return Unknown("no matching Codex lifecycle receipt")
+
+    def recover(self, request: ProviderRequest) -> RecoveryOutcome:
+        return self._reduce_history(request, self._history(request))
+
+    def _reconcile_codex_attempts(
+        self, request: ProviderRequest
+    ) -> tuple[ProviderResponse | None, Mapping[str, Any] | None]:
+        """Use the recovery reducer as the single retry authorization gate."""
+        history = self._history(request)
+        outcome = self._reduce_history(request, history)
+        if isinstance(outcome, Completed):
+            return outcome.response, None  # type: ignore[return-value]
+        if isinstance(outcome, Running) or (isinstance(outcome, Unknown) and history):
+            raise ProviderInterruptedError(
+                outcome.detail or "Codex attempt is not safely retryable",
+                receipt=history[0][2] if history else receipt_path(request),
+            )
+        current_exists = any(attempt == request.attempt for attempt, *_rest in history)
+        if current_exists:
+            raise ProviderError(
+                "Codex attempt is already stopped; authorize a new attempt to retry"
+            )
+        resume = next(
+            (
+                value
+                for _attempt, value, _path, item in history
+                if isinstance(item, Stopped)
+                and isinstance(value, Mapping)
+                and isinstance(
+                    value.get(CodexLifecycleStage.THREAD_BOUND.value), Mapping
+                )
+            ),
+            None,
+        )
+        return None, resume
+
     def run(self, request: ProviderRequest) -> ProviderResponse:
         self.validate_request(request)
-        existing = _existing_response_or_raise(request)
-        if existing is not None:
-            return existing
-        prior = self._reconcile_prior_attempts(request)
+        prior, resume_receipt = self._reconcile_codex_attempts(request)
         if prior is not None:
             return prior
 
@@ -1381,7 +1749,28 @@ class CodexAppServerProvider(_CLIProvider):
                 read_roots=roots,
                 read_exclusions=exclusions,
             )
-            session = self._load_session(request, fingerprint)
+            resume_thread_id: str | None = None
+            if resume_receipt is not None:
+                binding = resume_receipt[CodexLifecycleStage.THREAD_BOUND.value]
+                candidate = binding.get("thread_id")
+                if not isinstance(candidate, str) or not candidate:
+                    raise ProviderInterruptedError(
+                        "prior quiescent Codex receipt has an invalid thread binding"
+                    )
+                if resume_receipt.get("tool_fingerprint") != fingerprint:
+                    raise CapabilityError(
+                        "prior Codex thread is bound to a different execution profile"
+                    )
+                resume_thread_id = candidate
+                if request.session_id not in (None, resume_thread_id):
+                    raise CapabilityError(
+                        "authorized Codex retry cannot replace the prior attempt's thread"
+                    )
+            session = self._load_session(
+                request,
+                fingerprint,
+                thread_id=resume_thread_id or request.session_id,
+            )
             evidence.prepare(envelopes)
         except BaseException:
             for cleanup in cleanups:
@@ -1398,7 +1787,7 @@ class CodexAppServerProvider(_CLIProvider):
             raise
         path = receipt_path(request)
         started = {
-            "version": 1,
+            "version": 2,
             "provider": self.name,
             "adapter_version": self.capabilities.version,
             "codex_version": self.bridge.installed_version,
@@ -1409,12 +1798,120 @@ class CodexAppServerProvider(_CLIProvider):
             "status": "prepared",
             "prepared_at": _now(),
         }
-        dispatched = False
+        receipt_lock = threading.RLock()
+        response: ProviderResponse | None = None
+
+        def record_lifecycle(event: CodexLifecycleEvent) -> None:
+            nonlocal response
+            with receipt_lock:
+                current = _read_receipt(path)
+                if not _receipt_matches(current, request, request.attempt):
+                    raise ProviderInterruptedError(
+                        "Codex lifecycle receipt identity changed during execution",
+                        receipt=path,
+                    )
+                key = event.stage.value
+                record: dict[str, Any] = {"at": _now()}
+                if event.thread_id is not None:
+                    record["thread_id"] = event.thread_id
+                if event.turn_id is not None:
+                    record["turn_id"] = event.turn_id
+                if event.error is not None:
+                    record["error"] = event.error
+                existing_event = current.get(key)
+                if isinstance(existing_event, Mapping):
+                    comparable = {
+                        name: value
+                        for name, value in existing_event.items()
+                        if name not in {"at", "sequence"}
+                    }
+                    proposed = {
+                        name: value
+                        for name, value in record.items()
+                        if name != "at"
+                    }
+                    if comparable != proposed:
+                        current["lifecycle_conflict"] = {
+                            "stage": key,
+                            "at": _now(),
+                        }
+                        current["status"] = "uncertain"
+                        _atomic_json(path, current)
+                        raise ProviderInterruptedError(
+                            f"conflicting Codex lifecycle event for {key}", receipt=path
+                        )
+                    return
+                sequence = current.get("lifecycle_sequence", 0)
+                if not isinstance(sequence, int) or sequence < 0:
+                    raise ProviderInterruptedError(
+                        "Codex lifecycle sequence is malformed", receipt=path
+                    )
+                record["sequence"] = sequence + 1
+
+                if event.stage is CodexLifecycleStage.THREAD_BOUND:
+                    if event.thread_id is None:
+                        raise CodexAppServerProtocolError(
+                            "thread lifecycle event has no thread id"
+                        )
+                    self._save_session(
+                        request, CodexAppServerSession(event.thread_id, fingerprint)
+                    )
+                elif event.stage is CodexLifecycleStage.RECEIVED_RESPONSE:
+                    if event.result is None:
+                        raise CodexAppServerProtocolError(
+                            "response lifecycle event has no typed result"
+                        )
+                    response = ProviderResponse(
+                        event.result.text,
+                        event.result.session.thread_id,
+                        self._usage(event.result.usage),
+                        {
+                            "provider": self.name,
+                            "adapter_version": self.capabilities.version,
+                            "codex_version": event.result.codex_version,
+                            "tool_fingerprint": fingerprint,
+                            "tool_observations": [
+                                item.to_record() for item in observations
+                            ],
+                        },
+                    )
+                    current["response"] = _response_record(response)
+                    current["session_id"] = event.result.session.thread_id
+                    current["turn_id"] = event.result.turn_id
+
+                current[key] = record
+                current["lifecycle_sequence"] = sequence + 1
+                quiescent = isinstance(
+                    current.get(CodexLifecycleStage.PROCESS_QUIESCENT.value), Mapping
+                )
+                failed_cleanup = isinstance(
+                    current.get(CodexLifecycleStage.CLEANUP_FAILED.value), Mapping
+                )
+                if quiescent:
+                    current["status"] = (
+                        "completed" if "response" in current else "stopped"
+                    )
+                    current["finished_at"] = _now()
+                elif failed_cleanup:
+                    current["status"] = "uncertain"
+                    current["finished_at"] = _now()
+                elif event.stage is CodexLifecycleStage.SPAWN_INTENT:
+                    current["status"] = "dispatching"
+                    current["dispatched_at"] = _now()
+                else:
+                    current["status"] = "running"
+                _atomic_json(path, current)
+
+        registered = False
         try:
-            _atomic_json(path, started)
-            started.update(status="dispatched", dispatched_at=_now())
-            _atomic_json(path, started)
-            dispatched = True
+            with self._active_receipts_lock:
+                if request.operation_id in self._active_receipts:
+                    raise CodexAppServerCapabilityError(
+                        f"Codex operation {request.operation_id!r} is already active"
+                    )
+                _atomic_json(path, started)
+                self._active_receipts[request.operation_id] = (request, path)
+                registered = True
             dispatch.started()
             policy = request.policy.effective()
             result = self.bridge.execute(
@@ -1434,63 +1931,62 @@ class CodexAppServerProvider(_CLIProvider):
                 owner_id=request.operation_id,
                 profile=turn_profile,
                 effort=policy.effort.value if policy.effort is not None else None,
+                lifecycle=record_lifecycle,
             )
-            usage = self._usage(result.usage)
-            response = ProviderResponse(
-                result.text,
-                result.session.thread_id,
-                usage,
-                {
-                    "provider": self.name,
-                    "adapter_version": self.capabilities.version,
-                    "codex_version": result.codex_version,
-                    "tool_fingerprint": fingerprint,
-                    "tool_observations": [item.to_record() for item in observations],
-                },
-            )
-            self._save_session(request, result.session)
-            completed = {
-                **started,
-                "status": "completed",
-                "finished_at": _now(),
-                "session_id": result.session.thread_id,
-                "turn_id": result.turn_id,
-                "response": _response_record(response),
-            }
-            _atomic_json(path, completed)
+            if response is None:
+                raise CodexAppServerProtocolError(
+                    "Codex bridge returned without a durable response callback"
+                )
         except (KeyboardInterrupt, SystemExit):
             dispatch.finish("interrupted")
             raise
         except CodexAppServerCapabilityError as exc:
-            failed = {
-                **started,
-                "status": "failed",
-                "finished_at": _now(),
-                "error": str(exc),
-            }
-            _atomic_json(path, failed)
+            if registered:
+                self._record_run_error(path, request, str(exc))
             dispatch.finish("failed", error=exc)
             raise CapabilityError(str(exc)) from exc
         except BaseException as exc:
-            if dispatched:
-                uncertain = {
-                    **started,
-                    "status": "uncertain",
-                    "finished_at": _now(),
-                    "error": f"Codex app-server terminal result was not committed: {exc}",
-                }
-                _atomic_json(path, uncertain)
-                dispatch.finish("failed", error=exc)
-                raise ProviderInterruptedError(
-                    uncertain["error"], receipt=path
-                ) from exc
+            detail = f"Codex app-server terminal result was not committed: {exc}"
+            if registered:
+                self._record_run_error(path, request, detail)
             dispatch.finish("failed", error=exc)
-            raise
+            raise ProviderInterruptedError(detail, receipt=path) from exc
         finally:
+            with self._active_receipts_lock:
+                if registered and self._active_receipts.get(request.operation_id) == (request, path):
+                    del self._active_receipts[request.operation_id]
             for cleanup in cleanups:
                 cleanup()
+        assert response is not None
         dispatch.finish("completed", usage=response.usage)
         return response
+
+    @staticmethod
+    def _record_run_error(
+        path: Path, request: ProviderRequest, detail: str
+    ) -> None:
+        """Attach an error without discarding stronger durable milestones."""
+        try:
+            current = _read_receipt(path)
+            if not _receipt_matches(current, request, request.attempt):
+                return
+            current["error"] = detail
+            current["error_at"] = _now()
+            if isinstance(
+                current.get(CodexLifecycleStage.PROCESS_QUIESCENT.value), Mapping
+            ):
+                current["status"] = (
+                    "completed" if "response" in current else "stopped"
+                )
+            elif current.get(CodexLifecycleStage.SPAWN_INTENT.value) is None:
+                current["status"] = "failed"
+            else:
+                current["status"] = "uncertain"
+            _atomic_json(path, current)
+        except (OSError, ProviderInterruptedError):
+            # The original failure remains controlling.  In particular, do not
+            # replace a response or quiescence record with a weaker template.
+            return
 
     def _mediator(
         self,
@@ -1731,13 +2227,21 @@ class CodexAppServerProvider(_CLIProvider):
                 "runtimeWorkspaceRoots": [str(workspace)],
             }
         )
+        native_config: dict[str, Any] = {
+            "skills.include_instructions": False,
+            "skills.bundled.enabled": False,
+            "orchestrator.skills.enabled": False,
+            "project_root_markers": [],
+        }
+        if os.name == "nt":
+            native_config["windows.sandbox"] = "unelevated"
         return CodexTurnProfile(
             name="native-run-v1",
             environments=(environment,),
             approval_policy=approval,
             sandbox_mode=sandbox_mode,
             sandbox_policy=MappingProxyType(sandbox_policy),
-            config=MappingProxyType({}),
+            config=MappingProxyType(native_config),
             native_tools=True,
         )
 
@@ -1825,11 +2329,16 @@ class CodexAppServerProvider(_CLIProvider):
         }
 
     def _load_session(
-        self, request: ProviderRequest, fingerprint: str
+        self,
+        request: ProviderRequest,
+        fingerprint: str,
+        *,
+        thread_id: str | None = None,
     ) -> CodexAppServerSession | None:
-        if request.session_id is None:
+        selected_thread = request.session_id if thread_id is None else thread_id
+        if selected_thread is None:
             return None
-        path = _session_binding_path(request.receipt_dir, request.session_id)
+        path = _session_binding_path(request.receipt_dir, selected_thread)
         try:
             value = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
@@ -1838,7 +2347,7 @@ class CodexAppServerProvider(_CLIProvider):
             ) from exc
         if (
             not isinstance(value, Mapping)
-            or value.get("thread_id") != request.session_id
+            or value.get("thread_id") != selected_thread
             or value.get("tool_fingerprint") != fingerprint
             or value.get("adapter_version") != self.capabilities.version
             or value.get("instruction_mode") != "collaboration-mode-v1"
@@ -1847,7 +2356,7 @@ class CodexAppServerProvider(_CLIProvider):
                 "Codex app-server session tool-registry binding does not match "
                 "the requested authority or role-instruction mode"
             )
-        return CodexAppServerSession(request.session_id, fingerprint)
+        return CodexAppServerSession(selected_thread, fingerprint)
 
     def _save_session(
         self, request: ProviderRequest, session: CodexAppServerSession
@@ -1877,6 +2386,8 @@ __all__ = [
     "CodexAppServerProvider",
     "CodexAppServerResult",
     "CodexAppServerSession",
+    "CodexLifecycleEvent",
+    "CodexLifecycleStage",
     "DynamicTool",
     "CURRENT_VERIFIED_CODEX_COMMIT",
     "CURRENT_VERIFIED_CODEX_VERSION",
