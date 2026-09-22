@@ -185,13 +185,30 @@ def no_tool_calls(_name, _arguments):
     pytest.fail("the local model fixture never requests a tool call")
 
 
+def _bounded_json(value, limit=8_000):
+    rendered = json.dumps(value, sort_keys=True, ensure_ascii=True)
+    if len(rendered) <= limit:
+        return rendered
+    return rendered[:limit] + f"... <{len(rendered) - limit} bytes omitted>"
+
+
 def _function_output(request, call_id):
-    return next(
-        item["output"]
-        for item in request["input"]
+    matches = [
+        item
+        for item in request.get("input", [])
         if item.get("type") == "function_call_output"
         and item.get("call_id") == call_id
+    ]
+    assert len(matches) == 1, (
+        f"expected one function_call_output for {call_id!r}; "
+        f"follow-up request={_bounded_json(request)}"
     )
+    output = matches[0].get("output")
+    assert isinstance(output, str), (
+        f"function_call_output for {call_id!r} had non-string output; "
+        f"item={_bounded_json(matches[0])}"
+    )
+    return output
 
 
 def _environment_context(request):
@@ -333,19 +350,24 @@ def test_current_codex_native_exec_obeys_turn_sandbox(
     assert '<file_system type="restricted"' in environment
     has_write_entry = '<entry access="write">' in environment
     output = _function_output(follow_up, call_id)
-    exit_code_line = next(
+    exit_code_lines = [
         line for line in output.splitlines() if line.startswith("Process exited with code ")
+    ]
+    assert len(exit_code_lines) == 1, (
+        f"native exec output for {call_id!r} contained no unique exit status: "
+        f"{output[:8_000]!r}"
     )
+    exit_code_line = exit_code_lines[0]
     exit_code = int(exit_code_line.removeprefix("Process exited with code ").strip())
 
     if write_succeeds:
-        assert has_write_entry
-        assert exit_code == 0
-        assert target.read_text() == f"{marker}\n"
+        assert has_write_entry, environment
+        assert exit_code == 0, output[:8_000]
+        assert target.read_text() == f"{marker}\n", output[:8_000]
     else:
-        assert not has_write_entry
-        assert exit_code != 0
-        assert not target.exists()
+        assert not has_write_entry, environment
+        assert exit_code != 0, output[:8_000]
+        assert not target.exists(), output[:8_000]
         lowered = output.lower()
         assert any(
             phrase in lowered
@@ -355,4 +377,4 @@ def test_current_codex_native_exec_obeys_turn_sandbox(
                 "operation not permitted",
                 "read-only file system",
             )
-        )
+        ), output[:8_000]
