@@ -197,14 +197,6 @@ def prepare_selected_candidate_surface(
     return prepare_candidate_workspace(repo_root, paths, destination)
 
 
-@activity(name="execute candidate validation")
-def execute_candidate_validation(workspace, argv: Sequence[str], timeout: float):
-    """Run configured argv against an isolated candidate overlay."""
-    from botpipe_optimizer import evaluate_candidate_workspace
-
-    return evaluate_candidate_workspace(workspace, argv, timeout=timeout)
-
-
 @activity(retry_safe=True, name="validate workflow parameters")
 def validate_selected_workflow_parameters(
     reference: str,
@@ -445,7 +437,6 @@ __all__ = [
     "PhaseRun",
     "ReplanRequired",
     "artifact",
-    "execute_candidate_validation",
     "finish",
     "observe_catalog",
     "observe_run_history",
