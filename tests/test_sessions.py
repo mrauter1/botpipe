@@ -92,6 +92,8 @@ def test_session_lock_serializes_across_processes(monkeypatch, tmp_path):
 def test_provider_resolution_obeys_cross_process_session_lock(
     monkeypatch, tmp_path
 ):
+    import botpipe.runtime as runtime
+
     from botpipe import codec
     from botpipe.recovery import Stopped
 
@@ -105,9 +107,10 @@ def test_provider_resolution_obeys_cross_process_session_lock(
 
     @workflow
     def work():
-        return Provider(session=Session.task("shared")).run(
-            "work", timeout=0.05
-        )
+        return Provider(session=Session.task("shared")).run("work")
+
+    def fail_fast_session_lock(journal, session_key, **options):
+        return session_lock(journal, session_key, **{**options, "timeout": 0})
 
     provider = InterruptedProvider([SystemExit("interrupted")])
     with Botpipe(tmp_path, provider=provider) as client:
@@ -144,10 +147,12 @@ def test_provider_resolution_obeys_cross_process_session_lock(
             while not ready.exists() and time.monotonic() < deadline:
                 time.sleep(0.01)
             assert ready.exists()
-            with pytest.raises(ProviderTimeoutError, match="session"):
-                client.resolve(
-                    "session-resolution", operation["id"], retry=True
-                )
+            # Limit only the contention check, once the other process owns the
+            # real lock. Durable fixture creation has no tiny dispatch deadline.
+            with monkeypatch.context() as patch:
+                patch.setattr(runtime, "acquire_session_lock", fail_fast_session_lock)
+                with pytest.raises(ProviderTimeoutError, match="session"):
+                    client.resolve("session-resolution", operation["id"], retry=True)
             assert recoveries == []
         finally:
             assert process.stdin is not None

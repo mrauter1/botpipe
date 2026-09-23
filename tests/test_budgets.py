@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import threading
 
 from botpipe import (
     Botpipe,
@@ -48,18 +49,27 @@ def test_schema_repairs_consume_turns_and_exhaustion_replays_without_dispatch(tm
 
 
 def test_child_parallel_calls_share_one_atomic_limit(tmp_path):
+    concurrent_turns = threading.Barrier(2)
+
+    def respond(request):
+        # Both permitted calls must reach the provider together: a workspace
+        # writer lock must not serialize the budget reservations for this test.
+        concurrent_turns.wait(timeout=30)
+        return "done"
+
     @workflow
     def child():
-        return Provider().run("read", sandbox="read-only").value
+        return Provider().query("read").value
 
     @workflow
     def work():
         with provider_budget(max_turns=2):
             return parallel(lambda: child(), lambda: child(), lambda: child())
 
-    provider = FakeProvider(["one", "two", "three"])
+    provider = FakeProvider([respond, respond, respond])
     with Botpipe(tmp_path, provider=provider) as client:
-        assert client.run(work).status == "budget_exceeded"
+        result = client.run(work)
+        assert result.status == "budget_exceeded", result.error
         assert len(provider.calls) == 2
         assert states(client)[0]["used_turns"] == 2
 

@@ -161,9 +161,8 @@ class _FileMutex:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         descriptor = os.open(self.path, os.O_CREAT | os.O_RDWR, 0o600)
         self._handle = os.fdopen(descriptor, "r+b", buffering=0)
-        if os.name == "nt" and os.fstat(descriptor).st_size == 0:
-            self._handle.write(b"\0")
-            self._handle.seek(0)
+        # Windows byte-range locks may extend beyond EOF. Initializing a byte
+        # before acquiring the lock races with another caller already holding it.
         deadline = time.monotonic() + self.timeout
         while True:
             if self.cancellation is not None and self.cancellation.is_set():

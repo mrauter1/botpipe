@@ -144,6 +144,26 @@ def test_run_lock_is_fail_fast_across_processes(monkeypatch, tmp_path):
         process.wait(timeout=5)
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows byte-range locking")
+def test_empty_lock_file_contention_reports_run_busy(monkeypatch, tmp_path):
+    import msvcrt
+
+    _coordination(monkeypatch, tmp_path)
+    lock = run_lock(tmp_path / "journal.sqlite3", "shared")
+    lock.path.parent.mkdir(parents=True, exist_ok=True)
+    # An empty file is a valid Windows lock target. Contending callers must
+    # acquire the byte-range lock, never write an initialization byte into it.
+    with lock.path.open("w+b", buffering=0) as holder:
+        msvcrt.locking(holder.fileno(), msvcrt.LK_NBLCK, 1)
+        try:
+            with pytest.raises(RunBusy, match="already executing"), lock:
+                pass
+        finally:
+            msvcrt.locking(holder.fileno(), msvcrt.LK_UNLCK, 1)
+    with run_lock(tmp_path / "journal.sqlite3", "shared"):
+        pass
+
+
 def test_unresolved_fence_blocks_other_operations_but_not_readers(
     monkeypatch, tmp_path
 ):
@@ -541,15 +561,17 @@ async def test_async_cancellation_joins_worker_cleanup_under_repeated_cancel():
 @pytest.mark.asyncio
 async def test_outer_cancellation_reaches_nested_provider_worker(tmp_path):
     import asyncio
+    from contextlib import suppress
 
     from botpipe import Botpipe, Provider, workflow
     from botpipe.providers import FakeProvider, ProviderInterruptedError
 
-    entered, cleaned = threading.Event(), threading.Event()
+    loop = asyncio.get_running_loop()
+    entered, cleaned = asyncio.Event(), threading.Event()
 
     def blocking(request):
-        entered.set()
-        deadline = time.monotonic() + 5
+        loop.call_soon_threadsafe(entered.set)
+        deadline = time.monotonic() + 30
         while not request.cancel_event.is_set() and time.monotonic() < deadline:
             time.sleep(0.01)
         assert request.cancel_event.is_set()
@@ -562,11 +584,18 @@ async def test_outer_cancellation_reaches_nested_provider_worker(tmp_path):
 
     with Botpipe(tmp_path, provider=FakeProvider([blocking])) as client:
         task = asyncio.create_task(client.arun(work))
-        assert await asyncio.to_thread(entered.wait, 2)
-        task.cancel()
-        with pytest.raises(asyncio.CancelledError):
-            await asyncio.wait_for(task, 2)
-        assert cleaned.is_set()
+        try:
+            # Wait for actual provider entry, not a runner-speed assumption.
+            # These bounds only detect hangs; cleanup ordering is the contract.
+            await asyncio.wait_for(entered.wait(), 30)
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await asyncio.wait_for(task, 30)
+            assert cleaned.is_set()
+        finally:
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
 
 
 @pytest.mark.parametrize("mutate_after_accept", [False, True])
