@@ -13,12 +13,28 @@ class RunBusy(BotpipeError):
     pass
 
 
+class WorkspaceBusy(BotpipeError):
+    pass
+
+
+class WorkspaceUnresolved(BotpipeError):
+    pass
+
+
+class SessionError(BotpipeError):
+    """A conversation cannot be resumed with its recorded identity."""
+
+
 class ActivityFailed(BotpipeError):
     """A recorded exception whose state cannot be restored safely."""
 
 
 class Suspension(BaseException):
     """Control signal deliberately excluded from application except Exception."""
+
+
+class CancellationRequested(Suspension):
+    """Async cancellation reached synchronous cleanup before dispatch."""
 
 
 class InputRequired(Suspension):

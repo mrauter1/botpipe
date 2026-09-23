@@ -6,8 +6,9 @@ import argparse
 import dataclasses
 import json
 import sys
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 from .config import ConfigError, load_config
 from .discovery import (
@@ -29,6 +30,13 @@ def build_parser() -> argparse.ArgumentParser:
         prog="botpipe", description="Run and inspect durable Python workflows."
     )
     commands = parser.add_subparsers(dest="command", required=True)
+
+    doctor = commands.add_parser(
+        "doctor",
+        parents=[_client_parser()],
+        help="Check the installed Codex capabilities.",
+    )
+    doctor.set_defaults(handler=_doctor)
 
     workflows = commands.add_parser("workflows", help="Discover and inspect workflows.")
     workflow_commands = workflows.add_subparsers(dest="workflow_command", required=True)
@@ -97,6 +105,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Explicitly retry the interrupted operation.",
     )
     resolution.add_argument(
+        "--accept",
+        action="store_true",
+        help="Accept the workspace and capture declared outputs.",
+    )
+    resolution.add_argument(
+        "--fail",
+        action="store_true",
+        help="Record the interrupted operation as failed.",
+    )
+    resolution.add_argument(
         "--response",
         help="Record its externally observed JSON response (or plain text).",
     )
@@ -149,6 +167,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
+    args = None
     try:
         args = parser.parse_args(argv)
         return int(args.handler(args))
@@ -161,9 +180,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     except KeyboardInterrupt:
         print("interrupted", file=sys.stderr)
         return 130
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - CLI boundary reports workflow failures
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_RUNTIME
+    finally:
+        client = getattr(args, "_runtime", None)
+        if client is not None:
+            client.close()
 
 
 def _location_parser() -> argparse.ArgumentParser:
@@ -226,6 +249,15 @@ def _workflows_list(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _doctor(args: argparse.Namespace) -> int:
+    with _client(args) as client:
+        capabilities = client.provider.probe()
+        _emit(
+            capabilities.to_dict() if hasattr(capabilities, "to_dict") else capabilities
+        )
+    return EXIT_OK
+
+
 def _workflows_show(args: argparse.Namespace) -> int:
     _emit(inspect_workflow(args.workflow, args.workspace))
     return EXIT_OK
@@ -275,6 +307,10 @@ def _answer(args: argparse.Namespace) -> int:
 def _resolve(args: argparse.Namespace) -> int:
     client = _client(args)
     options = {"retry": args.retry}
+    if args.accept:
+        options["accept"] = True
+    if args.fail:
+        options["fail"] = True
     if args.response is not None:
         # Passing the keyword is significant: JSON null is a valid activity result.
         options["response"] = _json_or_text(args.response)
@@ -283,7 +319,7 @@ def _resolve(args: argparse.Namespace) -> int:
             args.artifact_digests, "--artifact-digests"
         )
     client.resolve(args.run_id, args.operation_id, **options)
-    if args.no_resume:
+    if args.no_resume or args.fail:
         _emit(
             {"run_id": args.run_id, "operation_id": args.operation_id, "resolved": True}
         )
@@ -355,7 +391,8 @@ def _client(args: argparse.Namespace) -> Any:
     kwargs["policy"] = _make_policy(kwargs["policy"])
     from . import Botpipe
 
-    return Botpipe(**kwargs)
+    args._runtime = Botpipe(**kwargs)
+    return args._runtime
 
 
 def _invocation(args: argparse.Namespace) -> tuple[tuple[Any, ...], dict[str, Any]]:

@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+import math
 import os
+import re
+import tomllib
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Mapping
-
-import tomllib
+from typing import Any
+from urllib.parse import urlsplit
 
 from .limits import RunLimits
 
@@ -90,6 +93,9 @@ def load_config(
             raise ConfigError(f"configuration file does not exist: {source}")
         payload = _load_mapping(source)
     allowed = {
+        "default_provider",
+        "codex",
+        "codex_path",
         "provider",
         "provider_config",
         "policy",
@@ -101,14 +107,40 @@ def load_config(
     if unknown:
         raise ConfigError(f"unknown configuration keys: {', '.join(unknown)}")
 
-    file_provider, file_provider_config = _provider_values(
+    if "default_provider" in payload and payload["default_provider"] != "codex":
+        raise ConfigError("default_provider must be 'codex' in Botpipe 2.0")
+    file_provider, legacy_config = _provider_values(
         payload.get("provider"), payload.get("provider_config")
     )
-    resolved_provider = provider or file_provider or "codex"
+    resolved_provider = (
+        provider or payload.get("default_provider") or file_provider or "codex"
+    )
+    if resolved_provider != "codex":
+        raise ConfigError("Botpipe 2.0 supports only the codex provider")
+    file_provider_config = _merge(
+        legacy_config, _mapping(payload.get("codex"), "codex")
+    )
+    if "codex_path" in payload:
+        file_provider_config.setdefault("path", payload["codex_path"])
     resolved_provider_config = _merge(file_provider_config, provider_config)
+    validate_codex_config(resolved_provider_config)
+    executable = resolved_provider_config.get("path")
+    if executable and ("/" in executable or "\\" in executable):
+        executable_path = Path(executable).expanduser()
+        if not executable_path.is_absolute():
+            executable_path = (
+                source.parent if source is not None else root
+            ) / executable_path
+        resolved_provider_config["path"] = str(executable_path.resolve())
     resolved_policy = _mapping(payload.get("policy"), "policy")
     if policy is not None:
         resolved_policy = _merge(resolved_policy, policy)
+    from .policy import Policy
+
+    try:
+        resolved_policy = Policy.from_dict(resolved_policy).to_dict()
+    except (TypeError, ValueError) as exc:
+        raise ConfigError(str(exc)) from exc
 
     raw_state_dir = state_dir if state_dir is not None else payload.get("state_dir")
     resolved_state_dir = None
@@ -208,3 +240,104 @@ __all__ = [
     "discover_config",
     "load_config",
 ]
+
+
+_CODEX_FIELDS = frozenset(
+    {
+        "path",
+        "model",
+        "effort",
+        "sandbox",
+        "network",
+        "interrupt_grace_seconds",
+        "instructions",
+        "tools",
+        "timeout",
+        "output_retries",
+        "name",
+        "settings",
+    }
+)
+_SECRET_KEY = re.compile(
+    r"(?:^|[_.-])(?:api[_-]?key|access[_-]?token|auth[_-]?token|password|secret|credentials?|authorization|bearer|token)(?:$|[_.-])",
+    re.IGNORECASE,
+)
+
+
+def validate_non_secret_settings(value: Any, path: str = "configuration") -> None:
+    """Reject secret-bearing keys before durable configuration is written."""
+    if isinstance(value, Mapping):
+        for key, item in value.items():
+            if not isinstance(key, str):
+                raise ConfigError(f"{path} keys must be strings")
+            if _SECRET_KEY.search(key):
+                raise ConfigError(
+                    f"secret-looking setting is not durable configuration: {path}.{key}"
+                )
+            validate_non_secret_settings(item, f"{path}.{key}")
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            validate_non_secret_settings(item, path)
+    elif isinstance(value, str) and "://" in value:
+        for part in re.findall(r"[a-zA-Z][a-zA-Z0-9+.-]*://[^\s]+", value):
+            try:
+                parsed = urlsplit(part)
+            except ValueError:
+                continue
+            if parsed.username is not None or parsed.password is not None:
+                raise ConfigError(
+                    f"credential-bearing URL is not durable configuration: {path}"
+                )
+
+
+def validate_codex_config(value: Mapping[str, Any]) -> None:
+    unknown = value.keys() - _CODEX_FIELDS
+    if unknown:
+        raise ConfigError(
+            f"unknown Codex configuration keys: {', '.join(sorted(unknown))}"
+        )
+    validate_non_secret_settings(value)
+    for name in ("path", "model", "effort", "instructions", "name"):
+        if name in value and (
+            not isinstance(value[name], str) or not value[name].strip()
+        ):
+            raise ConfigError(f"codex.{name} must be a nonempty string")
+    if "network" in value and type(value["network"]) is not bool:
+        raise ConfigError("codex.network must be true or false")
+    if "sandbox" in value and value["sandbox"] not in {
+        "read-only",
+        "workspace-write",
+        "full-access",
+    }:
+        raise ConfigError(
+            "codex.sandbox must be read-only, workspace-write or full-access"
+        )
+    for name in ("timeout", "interrupt_grace_seconds"):
+        if name in value:
+            number = value[name]
+            allow_zero = name == "interrupt_grace_seconds"
+            if (
+                type(number) not in (int, float)
+                or not math.isfinite(number)
+                or number < 0
+                or (number == 0 and not allow_zero)
+            ):
+                raise ConfigError(
+                    f"codex.{name} must be a finite {'nonnegative' if allow_zero else 'positive'} number"
+                )
+    if "output_retries" in value and (
+        type(value["output_retries"]) is not int or value["output_retries"] < 0
+    ):
+        raise ConfigError("codex.output_retries must be a nonnegative integer")
+    if "tools" in value and (
+        not isinstance(value["tools"], (list, tuple))
+        or any(not isinstance(tool, str) or not tool for tool in value["tools"])
+    ):
+        raise ConfigError("codex.tools must be a list of tool names")
+    settings = value.get("settings", {})
+    if not isinstance(settings, Mapping):
+        raise ConfigError("codex.settings must be a mapping")
+    try:
+        json.dumps(settings, allow_nan=False)
+    except (TypeError, ValueError) as exc:
+        raise ConfigError("codex.settings must contain finite JSON values") from exc

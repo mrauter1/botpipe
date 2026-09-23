@@ -3,20 +3,17 @@
 from __future__ import annotations
 
 import json
-import os
 import sqlite3
 import threading
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from .errors import RunBusy
-
 
 def now():
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 @dataclass(frozen=True)
@@ -38,8 +35,13 @@ class Journal:
         )
         self.db.row_factory = sqlite3.Row
         version = self.db.execute("PRAGMA user_version").fetchone()[0]
-        if version not in (0, 1):
+        if version not in (0, 2):
             self.db.close()
+            if version == 1:
+                raise ValueError(
+                    "Botpipe 1.x journals are not migrated; use a new state directory "
+                    "and leave the existing journal untouched"
+                )
             raise ValueError(f"Unsupported Botpipe journal version {version}")
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute("PRAGMA synchronous=FULL")
@@ -51,13 +53,15 @@ class Journal:
             scope TEXT NOT NULL, ordinal INTEGER NOT NULL, kind TEXT NOT NULL,
             name TEXT, fingerprint TEXT NOT NULL, inputs TEXT NOT NULL,
             status TEXT NOT NULL, result TEXT, error TEXT, response TEXT,
+            thread_id TEXT, turn_id TEXT, preset TEXT, enforcement TEXT,
+            probe_hash TEXT,
             started_at TEXT NOT NULL, finished_at TEXT,
             UNIQUE(run_id,scope,ordinal));
           CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, value TEXT NOT NULL);
           CREATE TABLE IF NOT EXISTS provider_budgets (id TEXT PRIMARY KEY, state TEXT NOT NULL);
           CREATE TABLE IF NOT EXISTS events (seq INTEGER PRIMARY KEY AUTOINCREMENT,
             run_id TEXT NOT NULL, operation_id TEXT, event TEXT NOT NULL, data TEXT NOT NULL, at TEXT NOT NULL);
-          PRAGMA user_version=1;
+          PRAGMA user_version=2;
         """)
 
     @contextmanager
@@ -145,7 +149,7 @@ class Journal:
         try:
             connection.execute("PRAGMA query_only=ON")
             version = connection.execute("PRAGMA user_version").fetchone()[0]
-            if version != 1:
+            if version != 2:
                 raise ValueError(f"Unsupported Botpipe journal version {version}")
             return cls._snapshot(connection, run_id)
         finally:
@@ -197,67 +201,12 @@ class Journal:
             db.execute("COMMIT")
             return snapshot
 
-    @classmethod
-    def foreign_has_unresolved_effects(cls, path, run_id):
-        """Conservatively decide whether a foreign run may still own effects."""
-
-        try:
-            snapshot = cls.read_only_snapshot(path, run_id)
-            return cls._has_unresolved_effects(snapshot.operations)
-        except (OSError, sqlite3.Error, KeyError, TypeError, ValueError, UnicodeError):
-            return True
-
-    @staticmethod
-    def _has_unresolved_effects(operations):
-        for record in operations:
-            kind = record.get("kind")
-            if kind not in {"activity", "provider"}:
-                continue
-            status = record.get("status")
-            if status in {"completed", "failed"}:
-                continue
-            if status not in {"started", "response"}:
-                return True
-            if kind == "activity":
-                # Activities have no typed non-dispatch checkpoint. Until their
-                # operation reaches a terminal state, their effects are unknown.
-                return True
-            from .provider_checkpoints import (
-                ProviderCheckpoint,
-                ProviderCheckpointError,
-            )
-
-            try:
-                has_writes = Journal._provider_has_writes(record.get("inputs"))
-                checkpoint = ProviderCheckpoint.from_record(record.get("response"))
-                if checkpoint.has_unresolved_effects(has_writes=has_writes):
-                    return True
-            except (ProviderCheckpointError, TypeError, ValueError, KeyError):
-                return True
-        return False
-
-    @staticmethod
-    def _provider_has_writes(inputs):
-        if (
-            type(inputs) is not dict
-            or inputs.get("$botpipe") != "dict"
-            or set(inputs) != {"$botpipe", "value"}
-            or type(inputs.get("value")) is not dict
-        ):
-            raise TypeError("Provider inputs are not an encoded mapping")
-        if "writes" not in inputs["value"]:
-            raise ValueError("Provider inputs omit their writes declaration")
-        writes = inputs["value"]["writes"]
-        if type(writes) is not list:
-            raise TypeError("Provider writes are not an encoded list")
-        return bool(writes)
-
     @staticmethod
     def _record(row):
         if row is None:
             return None
         result = dict(row)
-        for field in ("inputs", "result", "error", "response"):
+        for field in ("inputs", "result", "error", "response", "enforcement"):
             if result.get(field) is not None:
                 result[field] = json.loads(result[field])
         return result
@@ -293,6 +242,20 @@ class Journal:
         inputs,
         limit,
     ):
+        preset = None
+        enforcement = None
+        if kind == "provider" and type(inputs) is dict:
+            values = inputs.get("value")
+            if inputs.get("$botpipe") == "dict" and type(values) is dict:
+                candidate = values.get("operation")
+                if candidate in {"run", "query", "generate"}:
+                    preset = candidate
+                enforcement = {
+                    "status": "requested",
+                    "policy": values.get("policy"),
+                    "tools": values.get("tools"),
+                    "settings": values.get("settings"),
+                }
         with self.transaction() as db:
             count = db.execute(
                 "SELECT count(*) FROM operations WHERE run_id=?", (run_id,)
@@ -302,8 +265,8 @@ class Journal:
 
                 raise BudgetExceeded(f"Run reached its {limit} operation budget")
             db.execute(
-                "INSERT INTO operations(id,run_id,scope,ordinal,kind,name,fingerprint,inputs,status,started_at) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO operations(id,run_id,scope,ordinal,kind,name,fingerprint,inputs,status,"
+                "preset,enforcement,started_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     operation_id,
                     run_id,
@@ -314,6 +277,8 @@ class Journal:
                     fingerprint,
                     json.dumps(inputs),
                     "started",
+                    preset,
+                    json.dumps(enforcement) if enforcement is not None else None,
                     now(),
                 ),
             )
@@ -357,6 +322,55 @@ class Journal:
             response=response,
             session_key=session_key,
         )
+
+    def provider_metadata(
+        self,
+        operation_id,
+        *,
+        thread_id=None,
+        turn_id=None,
+        preset=None,
+        enforcement=None,
+        probe_hash=None,
+    ):
+        """Persist adapter identity/evidence without changing operation state."""
+
+        values = {
+            "thread_id": thread_id,
+            "turn_id": turn_id,
+            "preset": preset,
+            "enforcement": enforcement,
+            "probe_hash": probe_hash,
+        }
+        updates = {key: value for key, value in values.items() if value is not None}
+        if not updates:
+            return
+        if any(
+            key != "enforcement" and type(value) is not str
+            for key, value in updates.items()
+        ):
+            raise TypeError("Provider metadata identifiers must be strings")
+        if preset is not None and preset not in {"run", "query", "generate"}:
+            raise ValueError("Provider preset is invalid")
+        if enforcement is not None:
+            json.dumps(enforcement, allow_nan=False)
+        with self.transaction() as db:
+            row = db.execute(
+                "SELECT kind FROM operations WHERE id=?", (operation_id,)
+            ).fetchone()
+            if row is None:
+                raise KeyError(operation_id)
+            if row["kind"] != "provider":
+                raise ValueError("Provider metadata belongs only to provider operations")
+            assignments = ",".join(f"{field}=?" for field in updates)
+            encoded = [
+                json.dumps(value) if field == "enforcement" else value
+                for field, value in updates.items()
+            ]
+            db.execute(
+                f"UPDATE operations SET {assignments} WHERE id=?",
+                (*encoded, operation_id),
+            )
 
     def session(self, key):
         with self.lock:
@@ -421,6 +435,22 @@ class Journal:
                 if value is not self._MISSING:
                     assignments.append(f"{field}=?")
                     values.append(json.dumps(value) if value is not None else None)
+            if response is not self._MISSING and type(response) is dict:
+                metadata = response.get("metadata")
+                metadata = metadata if type(metadata) is dict else {}
+                provider_fields = {
+                    "thread_id": response.get("session_id"),
+                    "turn_id": metadata.get("turn_id"),
+                    "probe_hash": metadata.get("probe_hash"),
+                    "enforcement": metadata.get("enforcement"),
+                }
+                for field, value in provider_fields.items():
+                    if value is None:
+                        continue
+                    assignments.append(f"{field}=?")
+                    values.append(
+                        json.dumps(value) if field == "enforcement" else value
+                    )
             if status in {"completed", "failed"}:
                 assignments.append("finished_at=?")
                 values.append(now())
@@ -471,31 +501,3 @@ class Journal:
                 )
             )
         return [{**dict(row), "data": json.loads(row["data"])} for row in rows]
-
-
-@contextmanager
-def workspace_lock(path):
-    """OS-owned lock; never use an expiring lease to assume a writer stopped."""
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)
-    handle = os.fdopen(descriptor, "r+b")
-    try:
-        try:
-            if os.name == "nt":
-                import msvcrt
-
-                if os.fstat(handle.fileno()).st_size == 0:
-                    handle.write(b" ")
-                    handle.flush()
-                handle.seek(0)
-                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
-            else:
-                import fcntl
-
-                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except (OSError, BlockingIOError) as exc:
-            raise RunBusy(f"Another Botpipe run owns {path.parent}") from exc
-        yield handle
-    finally:
-        handle.close()

@@ -1,6 +1,7 @@
 """Portable owned-process-tree containment primitives."""
 
 from __future__ import annotations
+
 import os
 import signal
 import subprocess
@@ -12,17 +13,22 @@ from typing import Any
 @dataclass(slots=True)
 class ProcessContainment:
     creation_kwargs: dict[str, Any]
-    _windows_job: "WindowsJobObject | None" = None
+    _windows_job: WindowsJobObject | None = None
     _owned_pid: int | None = None
     _owned_pgid: int | None = None
 
     @classmethod
-    def create(cls) -> "ProcessContainment":
+    def create(cls) -> ProcessContainment:
         if os.name == "posix":
             return cls({"start_new_session": True})
         if os.name == "nt":
             return cls(
-                {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP | 4},
+                {
+                    "creationflags": getattr(
+                        subprocess, "CREATE_NEW_PROCESS_GROUP", 512
+                    )
+                    | 4
+                },
                 WindowsJobObject.create(),
             )
         raise RuntimeError(f"process-tree containment unavailable on {os.name!r}")
@@ -44,7 +50,7 @@ class ProcessContainment:
         self._owned_pgid = process_group
 
     def terminate(
-        self, process: subprocess.Popen[bytes], *, grace_seconds: float
+        self, process: subprocess.Popen[bytes], *, grace_seconds: float = 10.0
     ) -> None:
         if process.pid != self._owned_pid:
             raise RuntimeError("refusing to terminate an unregistered process")
@@ -57,7 +63,7 @@ class ProcessContainment:
             process.wait(timeout=grace_seconds)
 
     def ensure_tree_exited(
-        self, process: subprocess.Popen[bytes], *, grace_seconds: float
+        self, process: subprocess.Popen[bytes], *, grace_seconds: float = 10.0
     ) -> None:
         """Wait briefly for owned descendants, then terminate any survivors."""
 
@@ -129,11 +135,11 @@ class ProcessContainment:
 
 
 class WindowsJobObject:
-    def __init__(self, handle: object, kernel32: object) -> None:
+    def __init__(self, handle: Any, kernel32: Any) -> None:
         self.handle, self.kernel32 = (handle, kernel32)
 
     @classmethod
-    def create(cls) -> "WindowsJobObject":
+    def create(cls) -> WindowsJobObject:
         import ctypes
         from ctypes import wintypes
 
@@ -173,7 +179,8 @@ class WindowsJobObject:
                 ("PeakJobMemoryUsed", ctypes.c_size_t),
             ]
 
-        k = ctypes.WinDLL("kernel32", use_last_error=True)
+        ctypes_api: Any = ctypes
+        k = ctypes_api.WinDLL("kernel32", use_last_error=True)
         k.CreateJobObjectW.argtypes = [ctypes.c_void_p, wintypes.LPCWSTR]
         k.CreateJobObjectW.restype = wintypes.HANDLE
         k.SetInformationJobObject.argtypes = [
@@ -201,11 +208,11 @@ class WindowsJobObject:
         k.OpenThread.restype = wintypes.HANDLE
         h = k.CreateJobObjectW(None, None)
         if not h:
-            raise OSError(ctypes.get_last_error(), "CreateJobObjectW failed")
+            raise OSError(ctypes_api.get_last_error(), "CreateJobObjectW failed")
         info = EXT()
         info.BasicLimitInformation.LimitFlags = 8192
         if not k.SetInformationJobObject(h, 9, ctypes.byref(info), ctypes.sizeof(info)):
-            error = ctypes.get_last_error()
+            error = ctypes_api.get_last_error()
             k.CloseHandle(h)
             raise OSError(error, "SetInformationJobObject failed")
         return cls(h, k)
@@ -213,15 +220,21 @@ class WindowsJobObject:
     def assign_and_resume(self, process: subprocess.Popen[bytes]) -> None:
         import ctypes
 
+        ctypes_api: Any = ctypes
+        process_api: Any = process
         if not self.kernel32.AssignProcessToJobObject(
-            self.handle, int(process._handle)
+            self.handle, int(process_api._handle)
         ):
-            raise OSError(ctypes.get_last_error(), "AssignProcessToJobObject failed")
+            raise OSError(
+                ctypes_api.get_last_error(), "AssignProcessToJobObject failed"
+            )
         self._resume_process_threads(process.pid)
 
     def _resume_process_threads(self, process_id: int) -> None:
         import ctypes
         from ctypes import wintypes
+
+        ctypes_api: Any = ctypes
 
         class THREADENTRY32(ctypes.Structure):
             _fields_ = [
@@ -236,7 +249,9 @@ class WindowsJobObject:
 
         snapshot = self.kernel32.CreateToolhelp32Snapshot(4, 0)
         if snapshot == ctypes.c_void_p(-1).value:
-            raise OSError(ctypes.get_last_error(), "CreateToolhelp32Snapshot failed")
+            raise OSError(
+                ctypes_api.get_last_error(), "CreateToolhelp32Snapshot failed"
+            )
         resumed = 0
         try:
             entry = THREADENTRY32()
@@ -261,7 +276,8 @@ class WindowsJobObject:
         if not self.kernel32.TerminateJobObject(self.handle, code):
             import ctypes
 
-            raise OSError(ctypes.get_last_error(), "TerminateJobObject failed")
+            ctypes_api: Any = ctypes
+            raise OSError(ctypes_api.get_last_error(), "TerminateJobObject failed")
 
     def close(self) -> None:
         if self.handle:

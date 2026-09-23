@@ -117,7 +117,7 @@ class Dispatch:
         details = {
             "provider": self.provider_name,
             "model": effective.model,
-            "effort": None if effective.effort is None else effective.effort.value,
+            "effort": effective.effort,
             "policy_fingerprint": hashlib.sha256(
                 json.dumps(effective.to_dict(), sort_keys=True).encode()
             ).hexdigest(),

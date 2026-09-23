@@ -30,6 +30,8 @@ _SDK_SOURCE_FILES = {
     for name in (
         "runtime.py",
         "sessions.py",
+        "provider.py",
+        "operations.py",
         "prompts.py",
         "artifacts.py",
         "worklists.py",

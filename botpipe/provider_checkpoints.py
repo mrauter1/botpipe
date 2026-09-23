@@ -7,13 +7,14 @@ fields; callers operate on variants and serialize a complete legal state.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from enum import Enum
-from typing import Any, Mapping
+from typing import Any
 
 from .errors import ReplayMismatch
 from .providers import ProviderResponse
-from .recovery import Completed, RecoveryOutcome, Running, Stopped
+from .recovery import Completed, RecoveryOutcome, Running, Stopped, Unknown
 
 
 class ProviderCheckpointError(ReplayMismatch):
@@ -374,7 +375,7 @@ class ProviderLifecycle:
         if isinstance(outcome, Completed):
             return RecoveryAction.USE_RESPONSE
         if isinstance(checkpoint, RetryAuthorizedCheckpoint) and isinstance(
-            outcome, Stopped
+            outcome, (Stopped, Unknown)
         ):
             return RecoveryAction.START_RETRY
         return RecoveryAction.BLOCK

@@ -292,7 +292,9 @@ class Worklist:
         )
 
         def publish() -> dict[str, Any]:
-            store = ArtifactStore(run.folder, workspace=run.workspace)
+            store = ArtifactStore(
+                run.folder, workspace=run.workspace, allowed_roots=(run.task_folder,)
+            )
             declaration = Artifact.json(
                 self._artifact.source_path,
                 name=self._artifact.name,
