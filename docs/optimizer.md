@@ -17,7 +17,8 @@ there is no additional phase engine or scheduler.
 ## Evidence and decisions
 
 `selected_workflow` accepts a catalog name, `module:function`, or
-`file.py:function`. By default the latest 25 matching runs are inspected.
+`file.py:function`. By default the latest 25 matching runs that are not executing
+are selected. Created and running runs do not consume the history limit.
 `run_refs` selects exact run IDs or `task/run` references.
 
 | Objective | Eligible observations | Ordering |

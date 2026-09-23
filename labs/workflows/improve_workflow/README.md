@@ -35,7 +35,9 @@ botpipe run improve_workflow --workspace . \
 
 `selected_workflow` accepts a catalog name, `module:function`, or
 `file.py:function`. `run_refs` selects exact run IDs or `task/run` references;
-otherwise the latest 25 matching runs are inspected. The supported objectives
+otherwise the latest 25 matching runs that are not executing are selected.
+Created and running runs do not consume that limit; explicit references remain exact.
+The supported objectives
 are `reliability`, `token_usage`, and `latency`. Rankings describe recorded
 burden, not predicted benefit. Source identity and evidence checks prevent
 unrelated runs from being treated as observations of the selected workflow.

@@ -92,7 +92,7 @@ def _capture_history(
     run_refs: tuple[str, ...],
     history_limit: int,
 ) -> tuple[dict[str, Any], ...]:
-    """Read either the exact requested runs or bounded recent matching runs."""
+    """Read exact requested runs or bounded recent runs that are not executing."""
 
     context = current_run()
     if run_refs:
@@ -117,7 +117,11 @@ def _capture_history(
             record.get("workflow_name") or record.get("workflow")
         ) != canonical_workflow_name:
             continue
-        matching.append(context.client.inspect(str(record["run_id"])))
+        details = context.client.inspect(str(record["run_id"]))
+        # Use the snapshot: a listed historical run may have since resumed.
+        if details["run"].get("status") in {"created", "running"}:
+            continue
+        matching.append(details)
         if len(matching) >= history_limit:
             break
     return tuple(matching)
