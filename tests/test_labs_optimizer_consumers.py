@@ -1,15 +1,12 @@
 from __future__ import annotations
 
 import json
-import sys
-from hashlib import sha256
 
 import pytest
 from pydantic import ValidationError
 
 from botpipe import Botpipe
 from botpipe.discovery import resolve_workflow
-from botpipe.providers import FakeProvider
 from botpipe.surface_identity import derive_workflow_surface_manifest
 from botpipe_optimizer.evidence import capture_evidence_snapshot
 from botpipe_optimizer.optimization import (
@@ -24,106 +21,32 @@ from botpipe_optimizer.recommendations import (
 )
 from labs.workflows.optimizer_integration import (
     evaluation_suite_identity,
-    load_legacy_evaluation_inputs,
     load_optimizer_candidate_handoff,
     staged_workflow_reference,
     validate_materialized_handoff,
 )
-from labs.workflows.workflow_and_eval_to_refined_workflow_package import (
-    Params as RefinementParams,
+from labs.workflows.improve_workflow import ImproveWorkflowParams, improve_workflow
+from tests.improvement_support import (
+    ACCEPT,
+    evaluation_spec,
+    implement,
+    observed_workflow,
+    propose,
+    validation_argv,
 )
-from labs.workflows.workflow_and_eval_to_refined_workflow_package import (
-    workflow_callable as refinement_workflow,
-)
-from labs.workflows.workflow_package_to_composable_building_blocks import (
-    Params as DecompositionParams,
-)
+from tests.improvement_support import FixtureProvider as FakeProvider
 from labs.workflows.workflow_to_eval_suite import Params as EvalSuiteParams
 from labs.workflows.workflow_to_eval_suite import (
     workflow_callable as eval_suite_workflow,
 )
 
 
-def _refinement(**changes):
-    values = {
-        "selected_workflow": "release_candidate_to_go_no_go",
-        "task_title": "Refine release review",
-        "evaluation_summary_path": "summary.json",
-        "evaluation_findings_path": "findings.md",
-    }
-    values.update(changes)
-    return RefinementParams(**values)
-
-
-def test_refinement_requires_one_complete_input_form():
-    assert _refinement().evaluation_summary_path == "summary.json"
-    with pytest.raises(ValidationError, match="mutually exclusive"):
-        _refinement(
-            optimization_receipt_path="receipt.json",
-            candidate_id="candidate_" + "1" * 64,
-        )
-    with pytest.raises(ValidationError, match="requires evaluation_summary_path"):
-        RefinementParams(
-            selected_workflow="release_candidate_to_go_no_go",
-            task_title="Refine",
-            evaluation_findings_path="findings.md",
-        )
-    candidate = "candidate_" + "2" * 64
-    params = RefinementParams(
-        selected_workflow="release_candidate_to_go_no_go",
-        task_title="Refine",
-        optimization_receipt_path="receipt.json",
-        candidate_id=candidate,
-    )
-    assert params.candidate_id == candidate
-
-
-def test_commands_are_argv_and_eval_selection_is_complete():
-    params = DecompositionParams(
-        selected_workflow="release_candidate_to_go_no_go",
-        task_title="Decompose",
-        target_test_command="python -c 'raise SystemExit(0)'",
-    )
-    assert params.target_test_argv == ["python", "-c", "raise SystemExit(0)"]
-    with pytest.raises(ValidationError, match="mutually exclusive"):
-        DecompositionParams(
-            selected_workflow="release_candidate_to_go_no_go",
-            task_title="Decompose",
-            target_test_command="pytest -q",
-            target_test_argv=["pytest", "-q"],
-        )
+def test_eval_selection_requires_complete_receipt_identity():
     with pytest.raises(ValidationError, match="supplied together"):
         EvalSuiteParams(
             selected_workflow="release_candidate_to_go_no_go",
             task_title="Build evals",
             candidate_id="candidate_" + "3" * 64,
-        )
-
-
-def test_legacy_evaluation_is_bound_to_selected_workflow(tmp_path):
-    (tmp_path / "summary.json").write_text(
-        json.dumps({"selected_workflow_name": "release_candidate_to_go_no_go"}),
-        encoding="utf-8",
-    )
-    (tmp_path / "findings.md").write_text("# Findings\n", encoding="utf-8")
-    result = load_legacy_evaluation_inputs.__wrapped__(
-        workspace=str(tmp_path),
-        evaluation_summary_path="summary.json",
-        evaluation_findings_path="findings.md",
-        expected_selected_workflow="release_candidate_to_go_no_go",
-    )
-    assert result["findings"] == "# Findings\n"
-
-    (tmp_path / "summary.json").write_text(
-        json.dumps({"selected_workflow_name": "another_workflow"}),
-        encoding="utf-8",
-    )
-    with pytest.raises(ValueError, match="must match"):
-        load_legacy_evaluation_inputs.__wrapped__(
-            workspace=str(tmp_path),
-            evaluation_summary_path="summary.json",
-            evaluation_findings_path="findings.md",
-            expected_selected_workflow="release_candidate_to_go_no_go",
         )
 
 
@@ -295,132 +218,31 @@ def test_strict_optimizer_receipt_routes_candidate_kind(tmp_path, kind, allowed)
         )
 
 
-@pytest.mark.parametrize("kind", ["workflow", "evaluation_case"])
-def test_optimizer_candidate_runs_through_native_consumer(tmp_path, kind):
+def test_eval_suite_consumes_reviewed_evaluation_case(tmp_path):
     from tests.test_labs import _successful_provider
 
-    candidate_id = _publish_optimizer_candidate(tmp_path, kind=kind)
-    common = {
-        "selected_workflow": "release-go-no-go",
-        "task_title": "Consume optimizer recommendation",
-        "optimization_receipt_path": "optimization_publication_receipt.json",
-        "candidate_id": candidate_id,
-    }
-    if kind == "workflow":
-        workflow = refinement_workflow
-        params = RefinementParams(
-            **common,
-            target_test_argv=["python", "-c", "pass"],
-        )
-    else:
-        workflow = eval_suite_workflow
-        params = EvalSuiteParams(**common)
+    candidate_id = _publish_optimizer_candidate(tmp_path, kind="evaluation_case")
     result = Botpipe(tmp_path, provider=FakeProvider([_successful_provider] * 24)).run(
-        workflow, params, request="Use the accepted optimizer candidate"
+        eval_suite_workflow,
+        EvalSuiteParams(
+            selected_workflow="release-go-no-go",
+            task_title="Build evals",
+            optimization_receipt_path="optimization_publication_receipt.json",
+            candidate_id=candidate_id,
+        ),
     )
     assert result.ok, result.error
 
 
-def _write_evaluation_spec(root):
-    calls = root / "evaluator-calls.txt"
-    evaluator = root / "evaluator.py"
-    evaluator.write_text(
-        "\n".join(
-            [
-                "import json, os",
-                "from pathlib import Path",
-                f"calls = Path({str(calls)!r})",
-                "with calls.open('a', encoding='utf-8') as stream: stream.write('call\\n')",
-                "request = json.loads(Path(os.environ['BOTPIPE_EVAL_REQUEST']).read_text())",
-                "cases = [{'case_id': case, 'repetition': 1, 'outcome': 'scored', 'metrics': {'quality': 1.0}, 'evidence_paths': [], 'usage_availability': 'not_attempted', 'elapsed_seconds': 0.01} for case in request['case_ids']]",
-                "result = {'schema': 'botpipe.optimizer.eval_result/v1', 'execution_id': request['execution_id'], 'surface_id': request['surface_id'], 'spec_id': request['spec_id'], 'cases': cases}",
-                "Path(os.environ['BOTPIPE_EVAL_RESULT']).write_text(json.dumps(result))",
-            ]
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    cases = root / "cases.json"
-    cases.write_text('{"cases":[{"id":"release-blocked"}]}\n', encoding="utf-8")
-    spec = root / "evaluation-spec.json"
-    spec.write_text(
-        json.dumps(
-            {
-                "schema": "botpipe.optimizer.evaluation_spec/v1",
-                "evaluator_argv": [sys.executable, "{evaluator_path}"],
-                "evaluator_path": "evaluator.py",
-                "evaluator_content_id": sha256(evaluator.read_bytes()).hexdigest(),
-                "case_input_path": "cases.json",
-                "case_input_content_id": sha256(cases.read_bytes()).hexdigest(),
-                "case_ids": ["release-blocked"],
-                "metrics": [
-                    {
-                        "name": "quality",
-                        "unit": "score",
-                        "direction": "higher_is_better",
-                        "minimum_improvement": 0.1,
-                    }
-                ],
-                "primary_metric": "quality",
-            }
-        ),
-        encoding="utf-8",
-    )
-    return spec, calls
-
-
-def test_completed_workflow_reads_saved_pair_without_relaunch(tmp_path):
-    from tests.test_labs import _successful_provider
-
-    candidate_id = _publish_optimizer_candidate(tmp_path, kind="workflow")
-    spec, calls = _write_evaluation_spec(tmp_path)
-    params = RefinementParams(
-        selected_workflow="release-go-no-go",
-        task_title="Measure optimizer recommendation",
-        optimization_receipt_path="optimization_publication_receipt.json",
-        candidate_id=candidate_id,
-        evaluation_spec_path=spec.name,
-        target_test_argv=[sys.executable, "-c", "pass"],
-    )
-    with Botpipe(
-        tmp_path, provider=FakeProvider([_successful_provider] * 24)
-    ) as client:
-        result = client.run(
-            refinement_workflow,
-            params,
-            request="Measure the accepted optimizer candidate",
-            run_id="paired-replay",
-        )
-        assert result.ok, result.error
-        assert calls.read_text(encoding="utf-8").splitlines() == ["call", "call"]
-        clean_replay = client.resume(result.run_id)
-        assert clean_replay.ok, clean_replay.error
-        frozen_evaluator = next(
-            (result.folder / "candidate-execution").glob(
-                "paired-evaluation-output-*/frozen/evaluator-*"
-            )
-        )
-        frozen_evaluator.write_text("changed after completion\n", encoding="utf-8")
-        replay = client.resume(result.run_id)
-    assert replay.ok, replay.error
-    assert replay.value == result.value
-    assert calls.read_text(encoding="utf-8").splitlines() == ["call", "call"]
-
-
 def _interrupt_paired_cache(tmp_path, monkeypatch, *, cache_saved):
-    from tests.test_labs import _successful_provider
-
     from labs.workflows import optimizer_integration
 
-    candidate_id = _publish_optimizer_candidate(tmp_path, kind="workflow")
-    spec, calls = _write_evaluation_spec(tmp_path)
-    params = RefinementParams(
-        selected_workflow="release-go-no-go",
-        task_title="Recover interrupted evaluation",
-        optimization_receipt_path="optimization_publication_receipt.json",
-        candidate_id=candidate_id,
-        evaluation_spec_path=spec.name,
-        target_test_argv=[sys.executable, "-c", "pass"],
+    reference, _ = observed_workflow(tmp_path)
+    spec, calls = evaluation_spec(tmp_path)
+    params = ImproveWorkflowParams(
+        selected_workflow=reference,
+        evaluation_spec_path=str(spec),
+        target_test_argv=validation_argv(),
     )
     atomic_json = optimizer_integration._atomic_json
     saved = {}
@@ -434,12 +256,12 @@ def _interrupt_paired_cache(tmp_path, monkeypatch, *, cache_saved):
         return atomic_json(path, payload)
 
     with Botpipe(
-        tmp_path, provider=FakeProvider([_successful_provider] * 24)
+        tmp_path, provider=FakeProvider([propose, ACCEPT, implement, ACCEPT])
     ) as client:
         with monkeypatch.context() as patched:
             patched.setattr(optimizer_integration, "_atomic_json", interrupt_cache)
             result = client.run(
-                refinement_workflow,
+                improve_workflow,
                 params,
                 request="Measure the accepted optimizer candidate",
                 run_id="interrupted-pair",
@@ -458,16 +280,12 @@ def _interrupt_paired_cache(tmp_path, monkeypatch, *, cache_saved):
 
 @pytest.mark.parametrize("cache_saved", [False, True])
 def test_interrupted_pair_recovers_without_relaunch(tmp_path, monkeypatch, cache_saved):
-    from tests.test_labs import _successful_provider
-
     from labs.workflows import optimizer_integration
 
     run_id, operation_id, saved, calls = _interrupt_paired_cache(
         tmp_path, monkeypatch, cache_saved=cache_saved
     )
-    with Botpipe(
-        tmp_path, provider=FakeProvider([_successful_provider] * 24)
-    ) as client:
+    with Botpipe(tmp_path, provider=FakeProvider([ACCEPT])) as client:
         if not cache_saved:
             for _ in range(2):
                 suspended = client.resume(run_id)

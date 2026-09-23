@@ -122,39 +122,6 @@ def validate_materialized_handoff(
         )
 
 
-@activity(retry_safe=True, name="load legacy evaluation evidence")
-def load_legacy_evaluation_inputs(
-    *,
-    workspace: str,
-    evaluation_summary_path: str,
-    evaluation_findings_path: str,
-    expected_selected_workflow: str,
-) -> dict[str, Any]:
-    """Load and bind the legacy evaluation pair to the selected workflow."""
-
-    summary_path = _resolve_file(
-        workspace, evaluation_summary_path, "evaluation_summary_path"
-    )
-    findings_path = _resolve_file(
-        workspace, evaluation_findings_path, "evaluation_findings_path"
-    )
-    if summary_path.stat().st_size > 10 * 1024 * 1024:
-        raise ValueError("evaluation summary exceeds 10 MiB")
-    if findings_path.stat().st_size > 10 * 1024 * 1024:
-        raise ValueError("evaluation findings exceed 10 MiB")
-    summary = _read_json(summary_path)
-    if summary.get("selected_workflow_name") != expected_selected_workflow:
-        raise ValueError(
-            "evaluation summary selected_workflow_name must match the selected workflow"
-        )
-    return {
-        "summary_path": str(summary_path),
-        "summary": summary,
-        "findings_path": str(findings_path),
-        "findings": findings_path.read_text(encoding="utf-8"),
-    }
-
-
 def evaluation_suite_identity(
     validated_manifest: Mapping[str, Any], *, source_candidate_id: str | None
 ) -> str:
@@ -286,6 +253,165 @@ def _read_json(path: Path) -> dict[str, Any]:
     return value
 
 
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        while chunk := stream.read(1024 * 1024):
+            digest.update(chunk)
+    return f"sha256:{digest.hexdigest()}"
+
+
+def _revalidate_frozen_evaluation(
+    value: Mapping[str, Any], *, staging_parent: str, invocation_id: str
+) -> dict[str, Any]:
+    """Verify that a replayed pre-build evaluation snapshot is still exact."""
+
+    from botpipe_optimizer.paired_evaluation import (
+        _assert_frozen,
+        load_evaluation_spec,
+    )
+
+    result = dict(value)
+    if result.get("invocation_id") != invocation_id:
+        raise ValueError("frozen evaluation invocation identity is stale")
+    parent = Path(staging_parent).resolve()
+    freeze_root = Path(str(result.get("freeze_root", "")))
+    if (
+        not freeze_root.is_absolute()
+        or freeze_root.is_symlink()
+        or not freeze_root.is_dir()
+        or not freeze_root.resolve().is_relative_to(parent)
+    ):
+        raise ValueError("frozen evaluation root is unavailable or outside staging")
+    frozen_inputs = result.get("frozen_inputs")
+    if not isinstance(frozen_inputs, Mapping):
+        raise TypeError("frozen evaluation input identities are missing")
+    inputs_root = freeze_root / "inputs"
+    frozen = {
+        "spec_path": inputs_root / "evaluation-spec.json",
+        "evaluator_path": Path(str(result.get("evaluator_path", ""))),
+        "case_input_path": Path(str(result.get("case_input_path", ""))),
+        **dict(frozen_inputs),
+    }
+    if any(
+        not Path(frozen[key]).resolve().is_relative_to(freeze_root.resolve())
+        for key in ("spec_path", "evaluator_path", "case_input_path")
+    ):
+        raise ValueError("frozen evaluation inputs escaped their owned directory")
+    _assert_frozen(frozen)
+    source_spec, source_spec_id = load_evaluation_spec(frozen["spec_path"])
+    if source_spec_id != result.get("source_spec_id"):
+        raise ValueError("frozen source evaluation specification changed")
+    spec_path = Path(str(result.get("evaluation_spec_path", "")))
+    if (
+        spec_path.is_symlink()
+        or spec_path.resolve() != (freeze_root / "evaluation-spec.json").resolve()
+        or _file_sha256(spec_path) != result.get("evaluation_spec_file_id")
+    ):
+        raise ValueError("frozen portable evaluation specification changed")
+    portable, portable_id = load_evaluation_spec(spec_path)
+    if portable_id != result.get("evaluation_spec_id"):
+        raise ValueError("frozen evaluation specification identity is stale")
+    if (
+        portable.evaluator_path != str(frozen["evaluator_path"])
+        or portable.case_input_path != str(frozen["case_input_path"])
+        or portable.evaluator_content_id != source_spec.evaluator_content_id
+        or portable.case_input_content_id != source_spec.case_input_content_id
+    ):
+        raise ValueError("frozen evaluation specification inputs are stale")
+    return result
+
+
+@activity(retry_safe=True, name="freeze improvement evaluation inputs")
+def _freeze_improvement_evaluation_activity(
+    *,
+    workspace: str,
+    evaluation_spec_path: str,
+    staging_parent: str,
+    invocation_id: str,
+) -> dict[str, Any]:
+    """Copy an evaluation plan and all executable inputs before candidate work."""
+
+    from botpipe_optimizer.paired_evaluation import _freeze, load_evaluation_spec
+
+    parent = Path(staging_parent).resolve()
+    parent.mkdir(parents=True, exist_ok=True)
+    suffix = hashlib.sha256(invocation_id.encode()).hexdigest()
+    destination = parent / f"frozen-improvement-evaluation-{suffix}"
+    if destination.exists():
+        record = _read_json(destination / "freeze-record.json")
+        return _revalidate_frozen_evaluation(
+            record, staging_parent=staging_parent, invocation_id=invocation_id
+        )
+
+    source_path = _resolve_file(workspace, evaluation_spec_path, "evaluation_spec_path")
+    spec, source_spec_id = load_evaluation_spec(source_path)
+    temporary = Path(tempfile.mkdtemp(prefix=".freeze-evaluation-", dir=parent))
+    try:
+        raw_frozen = _freeze(spec, source_path, temporary / "inputs")
+        final_inputs = destination / "inputs"
+        evaluator_path = final_inputs / raw_frozen["evaluator_path"].name
+        case_input_path = final_inputs / raw_frozen["case_input_path"].name
+        portable_payload = spec.model_dump(mode="json", by_alias=True)
+        original_evaluator_path = portable_payload["evaluator_path"]
+        portable_payload["evaluator_path"] = str(evaluator_path)
+        portable_payload["case_input_path"] = str(case_input_path)
+        portable_payload["evaluator_argv"] = [
+            str(evaluator_path) if item == original_evaluator_path else item
+            for item in portable_payload["evaluator_argv"]
+        ]
+        portable_path = temporary / "evaluation-spec.json"
+        _atomic_json(portable_path, portable_payload)
+        _, portable_id = load_evaluation_spec(portable_path)
+        record = {
+            "invocation_id": invocation_id,
+            "freeze_root": str(destination),
+            "evaluation_spec_path": str(destination / "evaluation-spec.json"),
+            "evaluation_spec_id": portable_id,
+            "evaluation_spec_file_id": _file_sha256(portable_path),
+            "source_spec_id": source_spec_id,
+            "evaluator_path": str(evaluator_path),
+            "case_input_path": str(case_input_path),
+            "frozen_inputs": {
+                "spec_file_id": raw_frozen["spec_file_id"],
+                "evaluator_id": raw_frozen["evaluator_id"],
+                "case_input_id": raw_frozen["case_input_id"],
+                "evaluator_executable": raw_frozen["evaluator_executable"],
+            },
+        }
+        _atomic_json(temporary / "freeze-record.json", record)
+        os.replace(temporary, destination)
+        sync_directory(parent)
+        return _revalidate_frozen_evaluation(
+            record, staging_parent=staging_parent, invocation_id=invocation_id
+        )
+    finally:
+        if temporary.exists():
+            import shutil
+
+            shutil.rmtree(temporary)
+
+
+def freeze_improvement_evaluation(
+    *,
+    workspace: str,
+    evaluation_spec_path: str,
+    staging_parent: str,
+    invocation_id: str,
+) -> dict[str, Any]:
+    """Freeze evaluator goalposts and revalidate their bytes on every replay."""
+
+    result = _freeze_improvement_evaluation_activity(
+        workspace=workspace,
+        evaluation_spec_path=evaluation_spec_path,
+        staging_parent=staging_parent,
+        invocation_id=invocation_id,
+    )
+    return _revalidate_frozen_evaluation(
+        result, staging_parent=staging_parent, invocation_id=invocation_id
+    )
+
+
 def _attempt_id(
     invocation_id: str,
     spec_id: str,
@@ -351,14 +477,8 @@ def _validate_candidate_and_compare_activity(
             target_test_argv=tuple(target_test_argv),
             test_timeout_seconds=validation_timeout,
         )
-        if not validation.success:
-            raise ValueError(
-                f"candidate validation failed: {'; '.join(validation.errors)}"
-            )
         manifest = candidate_manifest(candidate_workspace)
         candidate_surface = candidate_surface_manifest(candidate_workspace, bundle)
-        if not manifest.changed_paths:
-            raise ValueError("candidate must change at least one allowed source file")
         paired: dict[str, Any] = {
             "schema": "botpipe.optimizer.paired_evaluation/v1",
             "evaluation": "not_evaluated",
@@ -366,7 +486,7 @@ def _validate_candidate_and_compare_activity(
             "comparison": {"state": "not_evaluated"},
             "automatic_promotion": False,
         }
-        if evaluation_spec_path:
+        if validation.success and manifest.changed_paths and evaluation_spec_path:
             spec_path = _resolve_file(
                 workspace, evaluation_spec_path, "evaluation_spec_path"
             )
@@ -423,7 +543,7 @@ def _validate_candidate_and_compare_activity(
                     or attempt.get("invocation_id") != invocation_id
                 ):
                     raise ValueError(
-                        "paired evaluation inputs changed; start a new refinement run"
+                        "paired evaluation inputs changed; start a new improvement run"
                     )
                 raise UncertainOperation(
                     "Paired evaluation outcome is unresolved; recover its result before "
@@ -492,7 +612,7 @@ def _validate_candidate_and_compare_activity(
                 )
 
 
-def _revalidate_candidate_comparison(
+def revalidate_candidate_comparison(
     result: Mapping[str, Any],
     *,
     candidate_workspace: Any,
@@ -502,12 +622,13 @@ def _revalidate_candidate_comparison(
     staging_parent: str,
     invocation_id: str,
 ) -> dict[str, Any]:
-    """Revalidate a completed comparison after every durable activity replay."""
+    """Check source identities and saved evidence without repeating execution."""
 
     value = dict(result)
-    if evaluation_spec_path is None:
-        return value
-    from botpipe_optimizer.candidates import candidate_surface_manifest
+    from botpipe_optimizer.candidates import (
+        candidate_manifest,
+        candidate_surface_manifest,
+    )
     from botpipe_optimizer.execution_trees import verify_frozen_execution_tree
     from botpipe_optimizer.paired_evaluation import (
         load_evaluation_spec,
@@ -517,16 +638,40 @@ def _revalidate_candidate_comparison(
     bundle = _restore_frozen_bundle(frozen_candidate)
     verify_frozen_execution_tree(bundle.snapshot)
     candidate_surface = candidate_surface_manifest(candidate_workspace, bundle)
+    manifest = candidate_manifest(candidate_workspace)
     validation = value.get("validation")
+    saved_manifest = value.get("candidate_manifest")
     paired = value.get("paired_evaluation")
-    if not isinstance(validation, Mapping) or not isinstance(paired, Mapping):
+    if (
+        not isinstance(validation, Mapping)
+        or not isinstance(saved_manifest, Mapping)
+        or not isinstance(paired, Mapping)
+    ):
         raise TypeError("saved candidate evaluation is incomplete")
+    expected_manifest = {
+        "changed_paths": list(manifest.changed_paths),
+        "added_paths": list(manifest.added_paths),
+        "removed_paths": list(manifest.removed_paths),
+    }
+    if dict(saved_manifest) != expected_manifest:
+        raise ValueError("saved candidate manifest is stale")
     baseline_surface_id = str(bundle.baseline_surface_manifest["surface_id"])
     candidate_surface_id = str(candidate_surface["surface_id"])
     if validation.get("baseline_surface_id") != baseline_surface_id:
         raise ValueError("saved validation baseline surface is stale")
     if validation.get("candidate_surface_id") != candidate_surface_id:
         raise ValueError("saved validation candidate surface is stale")
+    if paired.get("evaluation") == "not_evaluated":
+        expected = {
+            "schema": "botpipe.optimizer.paired_evaluation/v1",
+            "evaluation": "not_evaluated",
+            "execution_state": "not_run",
+            "comparison": {"state": "not_evaluated"},
+            "automatic_promotion": False,
+        }
+        if dict(paired) != expected:
+            raise ValueError("saved unevaluated comparison is invalid")
+        return value
     arms = paired.get("arms")
     if not isinstance(arms, Mapping):
         raise TypeError("saved paired evaluation arms are missing")
@@ -591,7 +736,7 @@ def validate_candidate_and_compare(
         workspace=workspace,
         invocation_id=invocation_id,
     )
-    return _revalidate_candidate_comparison(
+    return revalidate_candidate_comparison(
         result,
         candidate_workspace=candidate_workspace,
         frozen_candidate=frozen_candidate,
@@ -605,8 +750,9 @@ def validate_candidate_and_compare(
 __all__ = [
     "evaluation_suite_identity",
     "freeze_candidate_baseline",
-    "load_legacy_evaluation_inputs",
+    "freeze_improvement_evaluation",
     "load_optimizer_candidate_handoff",
+    "revalidate_candidate_comparison",
     "staged_workflow_reference",
     "validate_candidate_and_compare",
     "validate_materialized_handoff",

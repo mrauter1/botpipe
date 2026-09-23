@@ -136,6 +136,6 @@ Full access must be explicitly requested.
 - [Migration](docs/migration.md): the 1.x to 2.0 changes.
 - [Codex compatibility](docs/codex-compatibility.md): capabilities and validation.
 - [Testing](docs/testing.md): behavioral coverage, parallel runs and CI timings.
-- [Optimizer](docs/optimizer.md): packaged optimization workflows.
+- [Workflow improvement](docs/optimizer.md): diagnose, implement, and evaluate a bounded change.
 
 Version 1.x journals are rejected untouched. Use a new state directory for 2.0.

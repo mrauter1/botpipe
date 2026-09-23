@@ -31,12 +31,7 @@ from botpipe_optimizer.recommendations import (
     validate_candidate_review,
     validate_candidate_set,
 )
-from labs.workflows.workflow_run_traces_to_optimization_candidates import (
-    Params as OptimizerParams,
-)
-from labs.workflows.workflow_run_traces_to_optimization_candidates import (
-    WorkflowRunTracesToOptimizationCandidates,
-)
+from labs.workflows.improve_workflow import ImproveWorkflowParams, improve_workflow
 
 
 class EvalInputs(BaseModel):
@@ -776,14 +771,13 @@ def test_v2_evidence_and_candidate_bytes_are_bounded_and_identities_are_verified
         )
 
 
-def test_v2_no_eligible_evidence_uses_zero_provider_turns(tmp_path):
+def test_improvement_without_eligible_evidence_uses_zero_provider_turns(tmp_path):
     provider = FakeProvider([])
     with Botpipe(tmp_path, provider=provider) as client:
         result = client.run(
-            WorkflowRunTracesToOptimizationCandidates,
-            OptimizerParams(
-                selected_workflow="release_candidate_to_go_no_go",
-                task_title="Review release workflow",
+            improve_workflow,
+            ImproveWorkflowParams(
+                selected_workflow="release_candidate_to_go_no_go"
             ),
             request="Recommend the next useful action.",
             task_id="optimizer",
@@ -792,14 +786,15 @@ def test_v2_no_eligible_evidence_uses_zero_provider_turns(tmp_path):
         inspection = client.inspect(result.run_id)
 
     assert result.ok
-    assert result.value.candidate_set.next_action == "collect_evidence"
-    assert result.value.candidate_set.candidates == []
-    assert result.value.review is None
+    assert result.value.outcome == "collect_evidence"
+    assert result.value.recommendation.candidate_set.next_action == "collect_evidence"
+    assert result.value.recommendation.candidate_set.candidates == []
+    assert result.value.recommendation.review is None
     assert result.value.provider_budget["used_turns"] == 0
     assert not [item for item in inspection["operations"] if item["kind"] == "provider"]
 
 
-def test_v2_file_reference_uses_canonical_name_and_exact_task_run_refs(tmp_path):
+def test_improvement_file_reference_uses_canonical_name_and_exact_task_run_refs(tmp_path):
     provider = FakeProvider([])
     reference = "test_optimizer:alias_observed_workflow"
     with Botpipe(tmp_path, provider=provider) as client:
@@ -808,16 +803,15 @@ def test_v2_file_reference_uses_canonical_name_and_exact_task_run_refs(tmp_path)
         )
         assert observed.ok
         result = client.run(
-            WorkflowRunTracesToOptimizationCandidates,
-            OptimizerParams(selected_workflow=reference, task_title="Alias selection"),
+            improve_workflow,
+            ImproveWorkflowParams(selected_workflow=reference),
             task_id="optimizer",
             run_id="alias",
         )
         mismatch = client.run(
-            WorkflowRunTracesToOptimizationCandidates,
-            OptimizerParams(
+            improve_workflow,
+            ImproveWorkflowParams(
                 selected_workflow=reference,
-                task_title="Exact selection",
                 run_refs=["wrong-task/observed"],
             ),
             task_id="optimizer",
@@ -825,128 +819,9 @@ def test_v2_file_reference_uses_canonical_name_and_exact_task_run_refs(tmp_path)
         )
 
     assert result.ok, result.error
-    assert result.value.evidence_snapshot.selected_workflow == "alias_observed"
-    assert result.value.evidence_snapshot.selection.admitted_run_count == 1
+    snapshot = result.value.recommendation.evidence_snapshot
+    assert snapshot.selected_workflow == "alias_observed"
+    assert snapshot.selection.admitted_run_count == 1
     assert result.value.provider_budget["used_turns"] == 0
     assert not mismatch.ok
     assert "run reference task does not match journal" in mismatch.error
-
-
-def test_v2_eligible_evidence_uses_one_producer_and_independent_verifier(tmp_path):
-    from botpipe_optimizer.recommendations import (
-        finalize_candidate_review_payload,
-        finalize_candidate_set_payload,
-    )
-
-    def prompt_input(request):
-        body = request.prompt.rsplit("\n\nInput:\n", 1)[1]
-        return json.JSONDecoder().raw_decode(body)[0]
-
-    def propose(request):
-        value = prompt_input(request)
-        evidence = value["evidence_snapshot"]
-        observation_id = next(
-            item["observation_id"]
-            for item in evidence["observations"]
-            if item["group_id"] == evidence["selected_group_id"]
-        )
-        result = finalize_candidate_set_payload(
-            {
-                "schema": "botpipe.workflow_optimization.candidate_set/v2",
-                "selected_workflow": evidence["selected_workflow"],
-                "evidence_snapshot_id": evidence["snapshot_id"],
-                "baseline_surface_manifest_id": evidence[
-                    "baseline_surface_manifest_id"
-                ],
-                "candidates": [
-                    {
-                        "kind": "workflow",
-                        "title": "Guard the observed failure",
-                        "targets": ["workflow.py"],
-                        "cited_observation_ids": [observation_id],
-                        "proposed_change": "Add a typed failure guard.",
-                        "expected_effect": "The observed invalid state is rejected earlier.",
-                        "risks": ["The guard may reject a valid boundary case."],
-                        "validation_plan": {
-                            "description": "Replay the observed failure.",
-                            "checks": ["Run the regression case."],
-                            "falsification": "The invalid state still reaches execution.",
-                        },
-                        "payload": {
-                            "target_paths": ["workflow.py"],
-                            "workflow_change": "Validate the state before execution.",
-                        },
-                    }
-                ],
-                "next_action": "implement_candidate",
-                "no_candidate_reason": None,
-            }
-        )
-        return result.model_dump(mode="json", by_alias=True)
-
-    def review(request):
-        candidate_set = prompt_input(request)["candidate_set"]
-        result = finalize_candidate_review_payload(
-            {
-                "schema": "botpipe.workflow_optimization.candidate_review/v2",
-                "candidate_set_id": candidate_set["candidate_set_id"],
-                "evidence_snapshot_id": candidate_set["evidence_snapshot_id"],
-                "baseline_surface_manifest_id": candidate_set[
-                    "baseline_surface_manifest_id"
-                ],
-                "accepted": True,
-                "reviewed_candidate_ids": [
-                    item["candidate_id"] for item in candidate_set["candidates"]
-                ],
-                "findings": [],
-            }
-        )
-        return result.model_dump(mode="json", by_alias=True)
-
-    class TimedFakeProvider(FakeProvider):
-        supports_timeout = True
-
-    source = tmp_path / "failing_release.py"
-    source.write_text(
-        "from botpipe import current_run, workflow\n"
-        "def explode():\n"
-        "    raise RuntimeError('observed failure')\n"
-        "@workflow(name='release_candidate_to_go_no_go')\n"
-        "def failing_release():\n"
-        "    return current_run().operation(\n"
-        "        'activity', {'case': 'observed-failure'}, explode,\n"
-        "        retry_safe=True, name='explode')\n"
-    )
-    provider = TimedFakeProvider([propose, review])
-    with Botpipe(tmp_path, provider=provider) as client:
-        failed = client.run(
-            f"{source}:failing_release",
-            task_id="release",
-            run_id="failed-observation",
-        )
-        assert not failed.ok
-        result = client.run(
-            WorkflowRunTracesToOptimizationCandidates,
-            OptimizerParams(
-                selected_workflow="release_candidate_to_go_no_go",
-                task_title="Review release workflow",
-                include_adversarial_generation=False,
-                include_token_optimization=False,
-            ),
-            request="Recommend the next useful action.",
-            task_id="optimizer",
-            run_id="recommend",
-        )
-        inspection = client.inspect(result.run_id)
-
-    assert result.ok, result.error
-    assert result.value.review is not None and result.value.review.accepted
-    assert result.value.candidate_set.candidates[0].cited_observation_ids
-    assert result.value.provider_budget["used_turns"] == 2
-    providers = [
-        item for item in inspection["operations"] if item["kind"] == "provider"
-    ]
-    assert [item["name"] for item in providers] == [
-        "propose evidence-bound candidates",
-        "independently review candidate set",
-    ]
