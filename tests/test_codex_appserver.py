@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sys
 import threading
 import time
@@ -294,6 +295,39 @@ def test_unchanged_thread_profile_needs_no_unsubscribe_but_changes_require_it(
         "thread/start", "thread/resume",
     ]
     assert sum(item["method"] == "turn/start" for item in calls) == 2
+
+
+@pytest.mark.skipif(os.name != "posix", reason="separate POSIX process group")
+def test_terminal_notification_still_cleans_native_background_groups(tmp_path):
+    marker = tmp_path / "background-survived"
+    client = adapter(
+        tmp_path,
+        "native_background",
+        BOTPIPE_FAKE_DESCENDANT_MARKER=str(marker),
+        BOTPIPE_FAKE_DESCENDANT_PID=str(tmp_path / "background.pid"),
+    )
+    client._capabilities = replace(
+        capabilities(),
+        methods=capabilities().methods | {"thread/backgroundTerminals/clean"},
+    )
+    try:
+        client._start()
+        client._thread_profiles["previous-thread"] = "previous-profile"
+        with pytest.raises(ProviderTimeoutError):
+            client.start_turn(request(tmp_path, timeout=0.2))
+    finally:
+        client.close()
+
+    calls = transcript(tmp_path)
+    methods = [item["method"] for item in calls]
+    assert methods.index("turn/interrupt") < methods.index("thread/backgroundTerminals/clean")
+    assert {
+        item["params"]["threadId"]
+        for item in calls
+        if item["method"] == "thread/backgroundTerminals/clean"
+    } == {"previous-thread", "thread-fixture"}
+    time.sleep(1.1)
+    assert not marker.exists(), "native background group survived turn cancellation"
 
 
 @pytest.mark.parametrize("cancel", [False, True], ids=["timeout", "cancellation"])

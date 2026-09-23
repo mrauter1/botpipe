@@ -24,7 +24,7 @@ def send(value: dict) -> None:
     print(json.dumps(value, separators=(",", ":")), flush=True)
 
 
-def spawn_descendant() -> None:
+def spawn_descendant(*, new_session: bool = False) -> subprocess.Popen:
     marker = Path(os.environ["BOTPIPE_FAKE_DESCENDANT_MARKER"])
     pid_file = Path(os.environ["BOTPIPE_FAKE_DESCENDANT_PID"])
     child = subprocess.Popen(
@@ -33,9 +33,11 @@ def spawn_descendant() -> None:
             "-c",
             "import pathlib,sys,time; time.sleep(1); pathlib.Path(sys.argv[1]).write_text('escaped')",
             str(marker),
-        ]
+        ],
+        start_new_session=new_session,
     )
     pid_file.write_text(str(child.pid), encoding="utf-8")
+    return child
 
 
 request = receive()
@@ -44,9 +46,26 @@ send({"id": request["id"], "result": {"userAgent": "botpipe-contract-fixture"}})
 assert receive()["method"] == "initialized"
 
 turn_number = 0
+background_child = None
 while True:
     request = receive()
     method = request.get("method")
+    if method == "thread/backgroundTerminals/clean":
+        if background_child is not None:
+            background_child.terminate()
+            background_child.wait(timeout=2)
+        send({"id": request["id"], "result": {}})
+        continue
+    if SCENARIO == "native_background" and method == "turn/interrupt":
+        send({"id": request["id"], "result": {}})
+        send({
+            "method": "turn/completed",
+            "params": {
+                "threadId": request["params"]["threadId"],
+                "turn": {"id": request["params"]["turnId"], "status": "interrupted"},
+            },
+        })
+        continue
     if method == "mcpServerStatus/list":
         send({"id": request["id"], "result": {"data": []}})
         continue
@@ -83,6 +102,9 @@ while True:
 
     if SCENARIO == "stall_tree":
         spawn_descendant()
+        continue
+    if SCENARIO == "native_background":
+        background_child = spawn_descendant(new_session=True)
         continue
 
     if SCENARIO == "disallowed_shell":

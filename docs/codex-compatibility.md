@@ -13,6 +13,7 @@ Run `botpipe doctor` to check the installation that will execute your work.
 | `turn/interrupt` | Every provider call | CapabilityError before dispatch |
 | `outputSchema` | Optional | Embed schema in prompt; validate and repair locally |
 | `thread/unsubscribe` | Changing a loaded thread's configuration | CapabilityError before dispatch; unchanged calls still work |
+| `thread/backgroundTerminals/clean` | Native terminal cleanup when available | Fall back to process-group or Job cleanup |
 | Tool-feature configuration | Read-only presets | Affected preset unavailable |
 | Ambient MCP disablement | Read-only presets | Affected preset unavailable |
 
@@ -66,8 +67,10 @@ opt-in when that native limitation applies. A named remote MCP server can have
 remote effects; filesystem read-only does not constrain that server.
 
 The app-server process uses a POSIX process group or a Windows kill-on-close Job.
-Cancellation requests `turn/interrupt`, waits the configured grace period, then
-closes the process tree before returning. A process that escapes its group is outside
+Cancellation requests `turn/interrupt` and uses Codex's native background-terminal
+cleanup when available: interrupt alone intentionally leaves those terminals
+running. After the configured grace period, Botpipe closes the process tree before
+returning. A process that escapes its group is outside
 Botpipe's containment. Killing a shared app-server interrupts its other active
 turns too; writable turns remain subject to reconciliation.
 

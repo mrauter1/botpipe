@@ -1120,13 +1120,13 @@ class CodexAppServerAdapter:
             self.interrupt(turn.thread_id, turn.turn_id)
         except Exception:  # noqa: BLE001,S110 - escalation below is authoritative
             pass
-        deadline = time.monotonic() + self.interrupt_grace_seconds
-        with turn.condition:
-            while not turn.completed and time.monotonic() < deadline:
-                turn.condition.wait(min(0.1, deadline - time.monotonic()))
-        # Native tool subprocesses can outlive the terminal turn notification.
-        # Close containment before reporting cancellation to the caller.
-        self._kill_transport(CodexTurnError(reason), grace_seconds=0.1)
+        # Codex deliberately keeps background terminals alive after interruption.
+        # Give its native cleanup the grace period, including after turn/completed.
+        self._kill_transport(
+            CodexTurnError(reason),
+            grace_seconds=0.1,
+            cleanup_seconds=self.interrupt_grace_seconds,
+        )
 
     def _fail_transport(
         self, error: BaseException, *, process: subprocess.Popen[bytes] | None = None
@@ -1147,10 +1147,44 @@ class CodexAppServerAdapter:
                 turn.condition.notify_all()
 
     def _kill_transport(
-        self, error: BaseException, *, grace_seconds: float = 0.1
+        self,
+        error: BaseException,
+        *,
+        grace_seconds: float = 0.1,
+        cleanup_seconds: float = 0.1,
     ) -> None:
-        self._fail_transport(error)
         process, containment = self._process, self._containment
+        if process is not None and process.poll() is None:
+            deadline = time.monotonic() + cleanup_seconds
+            if (
+                self._capabilities is not None
+                and "thread/backgroundTerminals/clean" in self._capabilities.methods
+            ):
+                with self._lock:
+                    threads = set(self._thread_profiles) | {
+                        thread_id for thread_id, _ in self._turns
+                    }
+                    requests = [
+                        ("turn/interrupt", {"threadId": tid, "turnId": turn_id})
+                        for (tid, turn_id), turn in self._turns.items()
+                        if not turn.completed
+                    ]
+                requests.extend(
+                    ("thread/backgroundTerminals/clean", {"threadId": thread_id})
+                    for thread_id in sorted(threads)
+                )
+                for method, params in requests:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        break
+                    try:
+                        self._rpc(method, params, remaining)
+                    except Exception:  # noqa: BLE001,S110 - containment still closes below
+                        pass
+            # The cleanup RPC acknowledges acceptance before native jobs exit.
+            while process.poll() is None and time.monotonic() < deadline:
+                time.sleep(max(0.0, min(0.02, deadline - time.monotonic())))
+        self._fail_transport(error)
         if process is not None and containment is not None:
             if process.poll() is None:
                 containment.terminate(process, grace_seconds=grace_seconds)
