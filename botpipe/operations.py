@@ -204,6 +204,7 @@ def execute_provider_operation(
     try:
         feedback = None
         repair_usage = {}
+        repair_thread_id = None
         for attempt in range(output_retries + 1):
             inputs = {
                 "session": session_key,
@@ -381,7 +382,11 @@ def execute_provider_operation(
                         )
                     binding = ctx.journal.session(session_key) or {}
                     request_data = checkpoint.request_data or {
-                        "session_id": binding.get("session_id"),
+                        "session_id": (
+                            repair_thread_id
+                            if session is None
+                            else binding.get("session_id")
+                        ),
                         "receipt_dir": str(ctx.folder / "receipts"),
                         "prompt": complete_prompt,
                         "artifacts": {
@@ -713,6 +718,10 @@ def execute_provider_operation(
             except OutputValidationError as exc:
                 operation_id = f"{ctx.run_id}:{ctx.scope}:{ctx.ordinal - 1}"
                 response = ctx.journal.get(operation_id).get("response") or {}
+                failed = ProviderCheckpoint.from_record(response)
+                if session is None and isinstance(failed, ValidationFailedCheckpoint):
+                    # Rebuild call-local continuity on both execution and replay.
+                    repair_thread_id = failed.response.session_id
                 for key, value in response.get("usage", {}).items():
                     if isinstance(value, (int, float)) and not isinstance(value, bool):
                         repair_usage[key] = repair_usage.get(key, 0) + value

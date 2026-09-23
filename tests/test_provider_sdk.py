@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from pydantic import BaseModel
 
 from botpipe import Botpipe, Provider, Session, StreamEvent
@@ -72,20 +73,62 @@ def test_query_and_generate_apply_fixed_safe_presets(tmp_path: Path):
     assert generate.tools == ("web_search",)
 
 
-def test_typed_repairs_continue_same_thread_and_charge_all_usage(tmp_path: Path):
+@pytest.mark.parametrize("preset", ["run", "query", "generate"])
+@pytest.mark.parametrize("independent", [False, True])
+def test_typed_repairs_continue_same_thread_and_charge_all_usage(
+    tmp_path: Path, preset: str, independent: bool
+):
     fake = FakeProvider(
         [
             ProviderResponse("not-json", "thread-1", {"tokens": 3}),
             ProviderResponse('{"count": 2}', "thread-1", {"tokens": 5}),
+            ProviderResponse("next call", "thread-2" if independent else "thread-1"),
         ]
     )
-    provider = Provider(runtime=runtime(tmp_path, fake), session=Session.task("typed"))
+    provider = Provider(
+        runtime=runtime(tmp_path, fake),
+        session=None if independent else Session.task("typed"),
+    )
 
-    result = provider.run("count", returns=Answer, output_retries=1)
+    call = getattr(provider, preset)
+    result = call("count", returns=Answer, output_retries=1)
 
     assert result.value == Answer(count=2)
     assert result.usage == {"tokens": 8}
     assert [call.session_id for call in fake.calls] == [None, "thread-1"]
+    assert call("next").value == "next call"
+    assert fake.calls[-1].session_id == (None if independent else "thread-1")
+
+
+@pytest.mark.parametrize("preset", ["run", "query", "generate"])
+def test_independent_repair_restores_thread_on_resume(tmp_path: Path, preset: str):
+    from botpipe import workflow
+
+    fake = FakeProvider(
+        [
+            ProviderResponse("invalid", "thread-1", {"tokens": 3}),
+            ProviderResponse('{"count": 2}', "thread-1", {"tokens": 5}),
+        ]
+    )
+
+    @workflow
+    def flow():
+        return getattr(Provider(session=None), preset)(
+            "count", returns=Answer, output_retries=1
+        )
+
+    with Botpipe(
+        tmp_path, provider=fake, state_dir=tmp_path / "state", max_operations=1
+    ) as client:
+        first = client.run(flow)
+        assert first.status == "budget_exceeded"
+        assert len(fake.calls) == 1
+
+        resumed = client.resume(first.run_id, workflow=flow, max_operations=2)
+        assert resumed.ok, resumed.error
+        assert resumed.value.value == Answer(count=2)
+        assert resumed.value.usage == {"tokens": 8}
+        assert [call.session_id for call in fake.calls] == [None, "thread-1"]
 
 
 def test_session_none_is_independent_and_callback_is_best_effort(tmp_path: Path):
