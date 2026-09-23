@@ -150,6 +150,9 @@ def test_default_run_routes_nested_completion_and_records_protocol(tmp_path: Pat
     assert response.session_id == "thread-fixture"
     assert response.usage == {"inputTokens": 7, "outputTokens": 3}
     assert response.metadata["turn_id"] == "turn-1"
+    assert response.metadata["codex_version"] == "codex-cli contract-fixture"
+    assert response.metadata["enforcement"]["sandbox"] == "codex:workspace-write"
+    assert response.metadata["enforcement"]["network"] == "codex:off"
     assert any(event["type"] == "turn/completed" for event in response.metadata["audit"])
     methods = [entry["method"] for entry in transcript(tmp_path)]
     assert methods == ["initialize", "initialized", "thread/start", "turn/start"]
@@ -168,6 +171,8 @@ def test_query_is_read_only_and_workspace_remains_byte_identical(tmp_path: Path)
 
     assert response.text == "fixture answer"
     assert workspace_bytes(workspace) == before
+    assert response.metadata["enforcement"]["sandbox"] == "codex:read-only"
+    assert response.metadata["enforcement"]["audit"] == "no-tool-calls-observed"
     turn = next(item for item in transcript(tmp_path) if item.get("method") == "turn/start")
     assert turn["params"]["sandboxPolicy"] == {
         "type": "readOnly",

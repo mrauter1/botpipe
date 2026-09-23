@@ -60,7 +60,9 @@ def prepare_generated_workflow_candidate(
         destination,
     )
     generated_root = (
-        str(Path(package_path).parent) if authoring_shape == "single" else package_path
+        Path(package_path).parent.as_posix()
+        if authoring_shape == "single"
+        else package_path
     )
     return replace(
         candidate,

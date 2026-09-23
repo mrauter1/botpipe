@@ -325,7 +325,9 @@ class CodexProvider:
             )
             response.to_record()
         except CapabilityError as exc:
-            if record.get("status") in {"prepared", "thread_bound"}:
+            if request.preset in {"query", "generate"}:
+                record.update(status="failed", policy_error=True, error=str(exc))
+            elif record.get("status") in {"prepared", "thread_bound"}:
                 record.update(status="failed", error=str(exc))
             else:
                 record.update(error=str(exc))
@@ -357,6 +359,10 @@ class CodexProvider:
                 or value.get("attempt") != attempt
             ):
                 return Unknown("provider receipt identity mismatch")
+            if value.get("policy_error"):
+                raise ProviderPolicyError(
+                    str(value.get("error") or "Codex tool policy failed")
+                )
             if value.get("status") == "completed":
                 try:
                     return Completed(_response(value.get("response"), path))
@@ -371,20 +377,40 @@ class CodexProvider:
                 return Unknown(
                     "turn dispatch was sent before its native turn id was durable"
                 )
+            def checkpoint(
+                update: dict[str, Any], value=value, path=path
+            ) -> None:
+                value.update(update)
+                _atomic_json(path, value)
+                if request.on_checkpoint is not None:
+                    request.on_checkpoint(dict(value))
+
             try:
                 status, response = self.adapter.recover_turn(
-                    replace(request, session_id=thread_id, checkpoint=value),
+                    replace(
+                        request,
+                        session_id=thread_id,
+                        checkpoint=value,
+                        on_checkpoint=checkpoint,
+                    ),
                     thread_id=thread_id,
                     turn_id=turn_id,
                 )
+            except CapabilityError as exc:
+                if request.preset in {"query", "generate"}:
+                    checkpoint(
+                        {"status": "failed", "policy_error": True, "error": str(exc)}
+                    )
+                    raise ProviderPolicyError(str(exc)) from exc
+                return Unknown(f"Codex native recovery failed policy audit: {exc}")
             except Exception as exc:  # noqa: BLE001 - recovery must normalize adapter failures
                 return Unknown(f"Codex native recovery failed: {exc}")
             if status == "completed" and isinstance(response, ProviderResponse):
                 metadata = {
-                    **response.metadata,
                     "probe_hash": value.get("probe_hash"),
                     "profile_hash": value.get("profile_hash"),
                     "enforcement": value.get("enforcement", {}),
+                    **response.metadata,
                 }
                 recovered = replace(response, metadata=metadata)
                 value.update(status="completed", response=recovered.to_record())

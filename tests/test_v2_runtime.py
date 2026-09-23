@@ -424,12 +424,158 @@ def test_accept_inventories_current_declared_outputs(
         if mutate_after_accept:
             destination.write_text("changed", encoding="utf-8")
         resumed = client.resume(first.run_id, workflow=work)
-        if mutate_after_accept:
-            assert resumed.status == "interrupted"
-            assert "changed after operator approval" in resumed.error
-        else:
-            assert resumed.ok, resumed.error
-            assert resumed.value.artifacts.accepted.read_text() == "accepted"
+        assert resumed.ok, resumed.error
+        assert resumed.value.artifacts.accepted.read_text() == "accepted"
+
+
+@pytest.mark.parametrize("outcome", ["stopped", "unknown", "running"])
+def test_accept_unresolved_turn_adopts_workspace_and_keeps_thread(tmp_path, outcome):
+    from botpipe import Artifact, Botpipe, BotpipeError, Provider, workflow
+    from botpipe.providers import FakeProvider
+    from botpipe.recovery import Running, Stopped, Unknown
+
+    destination = tmp_path / "accepted.txt"
+
+    def interrupted(request):
+        destination.write_text("partial result", encoding="utf-8")
+        raise SystemExit("lost terminal response")
+
+    class InterruptedProvider(FakeProvider):
+        def recover(self, request):
+            return {"stopped": Stopped(), "unknown": Unknown(), "running": Running()}[
+                outcome
+            ]
+
+    @workflow
+    def work():
+        return Provider().run("write", writes=[Artifact.text(destination, required=True)])
+
+    provider = InterruptedProvider([interrupted])
+    with Botpipe(tmp_path, provider=provider) as client:
+        with pytest.raises(SystemExit):
+            client.run(work, run_id="accept-unresolved")
+        operation = next(
+            row for row in client.journal.operations("accept-unresolved")
+            if row["kind"] == "provider"
+        )
+        client.journal.provider_metadata(operation["id"], thread_id="accepted-thread")
+        if outcome == "running":
+            with pytest.raises(BotpipeError, match="still running"):
+                client.resolve("accept-unresolved", operation["id"], accept=True)
+            with pytest.raises(WorkspaceUnresolved), client.workspace_turn(
+                run_id="other-run", operation_id="other-operation", timeout=0
+            ):
+                pass
+            return
+
+        client.resolve("accept-unresolved", operation["id"], accept=True)
+        saved = client.journal.get(operation["id"])["response"]
+        assert saved["session_id"] == "accepted-thread"
+        assert saved["metadata"]["operator_accepted"] is True
+        destination.write_text("later writer", encoding="utf-8")
+        resumed = client.resume("accept-unresolved", workflow=work)
+        assert resumed.ok, resumed.error
+        assert resumed.value.value == ""
+        assert resumed.value.artifacts.accepted.read_text() == "partial result"
+        assert len(provider.calls) == 1
+
+
+@pytest.mark.parametrize("sandbox", ["workspace-write", "read-only"])
+def test_accept_typed_unresolved_turn_requires_valid_response(tmp_path, sandbox):
+    from botpipe import Botpipe, Provider, workflow
+    from botpipe.providers import FakeProvider, ProviderResponse
+    from botpipe.recovery import Unknown
+
+    locked_recoveries = []
+
+    class InterruptedProvider(FakeProvider):
+        def recover(self, request):
+            with pytest.raises(WorkspaceBusy), client.workspace_turn(
+                run_id="other-run", operation_id="other-operation", timeout=0
+            ):
+                pass
+            locked_recoveries.append(request.operation_id)
+            return Unknown()
+
+    @workflow
+    def work():
+        return Provider().run("count", returns=int, sandbox=sandbox)
+
+    provider = InterruptedProvider([SystemExit("lost terminal response")])
+    with Botpipe(tmp_path, provider=provider) as client:
+        with pytest.raises(SystemExit):
+            client.run(work, run_id="accept-typed")
+        operation = next(
+            row for row in client.journal.operations("accept-typed")
+            if row["kind"] == "provider"
+        )
+        before = operation["response"]
+        with pytest.raises(ValueError, match="requires a response"):
+            client.resolve("accept-typed", operation["id"], accept=True)
+        with pytest.raises(ValueError, match="does not match the output schema"):
+            client.resolve(
+                "accept-typed", operation["id"], accept=True,
+                response=ProviderResponse('"invalid"'),
+            )
+        assert client.journal.get(operation["id"])["response"] == before
+        client.resolve(
+            "accept-typed", operation["id"], accept=True, response=ProviderResponse("7")
+        )
+        assert locked_recoveries == [operation["id"]] * 3
+        resumed = client.resume("accept-typed", workflow=work)
+        assert resumed.ok, resumed.error
+        assert resumed.value.value == 7
+        assert len(provider.calls) == 1
+
+
+def test_accept_checkpoints_selection_before_capture(tmp_path, monkeypatch):
+    from botpipe import Artifact, Botpipe, Provider, workflow
+    from botpipe.artifacts import ArtifactStore
+    from botpipe.providers import FakeProvider
+
+    destination = tmp_path / "accepted.txt"
+
+    def interrupted(request):
+        destination.write_text("accepted", encoding="utf-8")
+        raise SystemExit("lost terminal response")
+
+    @workflow
+    def work():
+        return Provider().run(
+            "write", writes=[Artifact.text(destination, required=True)]
+        )
+
+    with Botpipe(tmp_path, provider=FakeProvider([interrupted])) as client:
+        with pytest.raises(SystemExit):
+            client.run(work, run_id="accept-crash")
+        operation = next(
+            row for row in client.journal.operations("accept-crash")
+            if row["kind"] == "provider"
+        )
+        capture = ArtifactStore.capture
+
+        def crash(*args, **kwargs):
+            saved = client.journal.get(operation["id"])["response"]
+            assert saved["artifact_resolution"]["digests"] == {
+                "accepted": hashlib.sha256(b"accepted").hexdigest()
+            }
+            with pytest.raises(WorkspaceBusy), client.workspace_turn(
+                run_id="other-run", operation_id="other-operation", timeout=0
+            ):
+                pass
+            raise SystemExit("before capture")
+
+        monkeypatch.setattr(ArtifactStore, "capture", crash)
+        with pytest.raises(SystemExit, match="before capture"):
+            client.resolve("accept-crash", operation["id"], accept=True)
+        with pytest.raises(WorkspaceUnresolved), client.workspace_turn(
+            run_id="other-run", operation_id="other-operation", timeout=0
+        ):
+            pass
+        monkeypatch.setattr(ArtifactStore, "capture", capture)
+        resumed = client.resume("accept-crash", workflow=work)
+        assert resumed.ok, resumed.error
+        assert resumed.value.artifacts.accepted.read_text() == "accepted"
 
 
 def test_fail_resolution_replays_fence_cleanup_after_hard_crash(tmp_path, monkeypatch):

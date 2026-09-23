@@ -48,7 +48,9 @@ def WorkflowPackageToComposableBuildingBlocks(
         str(run.workspace),
         params.candidate_paths,
     )
-    relative_source = str(Path(source_path).resolve().relative_to(candidate.repo_root))
+    relative_source = (
+        Path(source_path).resolve().relative_to(candidate.repo_root).as_posix()
+    )
     if relative_source not in candidate.authoritative_hashes:
         raise ValueError("candidate_paths must include the selected workflow source")
     validation_reference = staged_workflow_reference(

@@ -6,22 +6,27 @@ OpenAI credential, external network, or model charge is involved.
 
 from __future__ import annotations
 
+import asyncio
 import gzip
 import json
 import os
+import re
 import shlex
 import shutil
 import signal
-import sys
+import subprocess
 import threading
 import time
+import uuid
+from contextlib import suppress
+from dataclasses import replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
 from pydantic import BaseModel
 
-from botpipe import Botpipe, Provider
+from botpipe import Artifact, Botpipe, Provider
 from botpipe.codex_appserver import CodexAppServerAdapter, CodexProtocolError
 from botpipe.errors import UncertainOperation
 from botpipe.policy import NetworkMode, Policy, SandboxMode
@@ -284,7 +289,6 @@ def test_latest_native_default_session_presets_and_read_only_enforcement(native)
     assert discovered.version.startswith("codex-cli ")
     assert discovered.supports_turn_sandbox
     assert discovered.supports_interrupt
-    assert discovered.supports_output_schema
     assert discovered.presets["run"].available
     assert discovered.presets["query"].available
     assert discovered.presets["generate"].available
@@ -295,8 +299,22 @@ def test_latest_native_default_session_presets_and_read_only_enforcement(native)
         state_dir=workspace.parent / "runtime-state",
     )
     sdk = Provider(runtime=runtime, model="gpt-5.4", workspace=workspace)
+    report = workspace / "native-report.md"
+    if os.name == "nt":
+        windows_report = str(report).replace("'", "''")
+        write_command = (
+            f"Set-Content -LiteralPath '{windows_report}' "
+            "-Value 'native artifact' -NoNewline"
+        )
+    else:
+        write_command = f"printf %s 'native artifact' > {shlex.quote(str(report))}"
+    server.queue_exec("run-write", write_command)
     try:
-        default = sdk.run("Return the fixed response.", returns=NativeAnswer)
+        default = sdk.run(
+            "Write the requested report, then return the fixed response.",
+            returns=NativeAnswer,
+            writes=(Artifact.md(report, name="report", required=True),),
+        )
     except (CodexProtocolError, UncertainOperation) as exc:
         # Runtime restores provider exceptions for the public SDK path.
         if (
@@ -307,12 +325,17 @@ def test_latest_native_default_session_presets_and_read_only_enforcement(native)
             pytest.skip(f"host cannot start the native Codex sandbox: {exc}")
         raise
     assert default.value == NativeAnswer(ok=True)
+    assert report.read_text(encoding="utf-8") == "native artifact"
+    assert default.artifacts.report.read_text() == "native artifact"
+    assert default.artifacts.report.path != report
     assert default.metadata["probe_hash"] == discovered.probe_hash
     assert default.metadata["enforcement"]["approval_policy"] == "never"
     assert default.metadata["enforcement"]["sandbox_policy"] == {
         "type": "workspaceWrite",
         "writableRoots": [str(workspace.resolve())],
         "networkAccess": False,
+        "excludeSlashTmp": True,
+        "excludeTmpdirEnvVar": True,
     }
 
     forbidden = workspace / "query-must-not-write.txt"
@@ -320,14 +343,13 @@ def test_latest_native_default_session_presets_and_read_only_enforcement(native)
         windows_target = str(forbidden).replace("'", "''")
         command = f"Set-Content -LiteralPath '{windows_target}' -Value 'changed'"
     else:
-        command = (
-            f"{shlex.quote(sys.executable)} -c "
-            + shlex.quote(
-                "from pathlib import Path; "
-                f"Path({str(forbidden)!r}).write_text('changed', encoding='utf-8')"
-            )
-        )
+        command = f"printf %s changed > {shlex.quote(str(forbidden))}"
     server.queue_exec("query-write", command)
+    before_query = {
+        path.relative_to(workspace): path.read_bytes()
+        for path in workspace.rglob("*")
+        if path.is_file()
+    }
     query = sdk.query(
         "Try the requested write, then return the fixed response.",
         returns=NativeAnswer,
@@ -335,6 +357,12 @@ def test_latest_native_default_session_presets_and_read_only_enforcement(native)
     )
     assert query.value == NativeAnswer(ok=True)
     assert not forbidden.exists()
+    assert {
+        path.relative_to(workspace): path.read_bytes()
+        for path in workspace.rglob("*")
+        if path.is_file()
+    } == before_query
+    assert query.metadata["enforcement"]["sandbox"] == "codex:read-only"
     assert query.metadata["enforcement"]["sandbox_policy"] == {
         "type": "readOnly",
         "networkAccess": False,
@@ -358,20 +386,22 @@ def test_latest_native_default_session_presets_and_read_only_enforcement(native)
     assert enforcement["feature_overrides"]
     assert not any(enforcement["feature_overrides"].values())
 
-    # First response call is run, the query consumes an exec request plus its
-    # follow-up, and the last response call is the tool-free generate turn.
-    assert len(server.requests) == 4
-    assert server.authorizations == [None, None, None, None]
+    # Run and query each consume an exec request plus its follow-up; generate
+    # needs one response without tools.
+    assert len(server.requests) == 5
+    assert server.authorizations == [None] * 5
     assert server.requests[-1].get("tools") == []
     function_outputs = [
         item
-        for item in server.requests[2].get("input", [])
+        for item in server.requests[3].get("input", [])
         if item.get("type") == "function_call_output"
         and item.get("call_id") == "query-write"
     ]
     assert len(function_outputs) == 1
     output = function_outputs[0]["output"].lower()
     assert any(word in output for word in ("denied", "read-only", "permission")), output
+    report.write_text("later workspace edit", encoding="utf-8")
+    assert default.artifacts.report.read_text() == "native artifact"
 
 
 def _process_exists(process_id: int) -> bool:
@@ -393,59 +423,199 @@ def _process_exists(process_id: int) -> bool:
             return bool(kernel32.GetExitCodeProcess(handle, ctypes.byref(status))) and status.value == 259
         finally:
             kernel32.CloseHandle(handle)
-    try:
-        os.kill(process_id, 0)
-    except ProcessLookupError:
+    result = subprocess.run(
+        ["ps", "-o", "stat=", "-p", str(process_id)],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=5,
+    )
+    if result.returncode != 0 or not result.stdout.strip():
         return False
-    except PermissionError:
-        return True
-    return True
+    # A zombie has terminated and cannot perform more edits; kill(0) alone
+    # reports it as alive until its parent reaps it, especially on macOS.
+    return any(not state.lstrip().startswith("Z") for state in result.stdout.splitlines())
 
 
-def test_latest_native_timeout_cleans_up_long_running_shell_process(native) -> None:
-    client, server, workspace = native
-    pid_file = workspace / "native-sleeper.pid"
+def _event_strings(value):
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for item in value.values():
+            yield from _event_strings(item)
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            yield from _event_strings(item)
+
+
+def _process_diagnostic(process_id: int) -> str:
     if os.name == "nt":
-        windows_pid = str(pid_file).replace("'", "''")
-        command = (
-            f"Set-Content -LiteralPath '{windows_pid}' -Value $PID -NoNewline; "
-            "Start-Sleep -Seconds 60"
-        )
+        return f"Windows process {process_id} is still active"
+    result = subprocess.run(
+        ["ps", "-o", "pid=,ppid=,pgid=,state=,command=", "-p", str(process_id)],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=5,
+    )
+    return (result.stdout + result.stderr).strip()
+
+
+def _marked_processes(marker: str) -> set[int]:
+    """Find host PIDs, since a sandbox shell's $$ can be namespace-local."""
+    result = subprocess.run(
+        ["ps", "-ww", "-axo", "pid=,stat=,command="],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=5,
+    )
+    found = set()
+    for line in result.stdout.splitlines():
+        fields = line.split(None, 2)
+        if len(fields) != 3 or marker not in fields[2] or fields[1].startswith("Z"):
+            continue
+        process_id = int(fields[0])
+        if process_id > 1 and process_id not in {os.getpid(), os.getppid()}:
+            found.add(process_id)
+    return found
+
+
+@pytest.mark.parametrize("interruption", ["timeout", "cancel"])
+def test_latest_native_interruption_cleans_up_long_running_shell_process(
+    native, interruption: str
+) -> None:
+    client, server, workspace = native
+    marker = f"BOTPIPE_SLEEPER_{uuid.uuid4().hex}"
+    if os.name == "nt":
+        command = f'Write-Output "{marker} $PID"; while ($true) {{}}'
     else:
-        program = (
-            "import os,pathlib,sys,time; "
-            "pathlib.Path(sys.argv[1]).write_text(str(os.getpid())); time.sleep(60)"
-        )
-        command = (
-            f"{shlex.quote(sys.executable)} -c {shlex.quote(program)} "
-            f"{shlex.quote(str(pid_file))}"
-        )
+        # Only shell built-ins are needed. This remains running even when the
+        # sandbox deliberately hides /tmp and external interpreter paths.
+        command = f"printf '%s\\n' '{marker}'; while :; do :; done"
     server.queue_exec("native-sleeper", command)
-    call = native_request(
-        workspace,
-        operation_id="native-timeout-cleanup",
-        preset="run",
-        prompt="Run the requested sleeper command.",
-        tools=("shell",),
-        timeout=2,
+    events = []
+    call = replace(
+        native_request(
+            workspace,
+            operation_id="native-timeout-cleanup",
+            preset="run",
+            prompt="Run the requested sleeper command.",
+            tools=("shell",),
+            timeout=2,
+        ),
+        on_event=events.append,
     )
 
-    try:
-        with pytest.raises(ProviderTimeoutError):
-            _start_or_skip_local_sandbox(client, call)
-    finally:
-        # A failed assertion must not leave the diagnostic sleeper behind.
-        if pid_file.exists():
-            process_id = int(pid_file.read_text(encoding="utf-8").strip())
-        else:
-            process_id = None
-    assert process_id is not None, "native shell never launched the sleeper"
-    deadline = time.monotonic() + 5
-    while _process_exists(process_id) and time.monotonic() < deadline:
-        time.sleep(0.05)
-    if _process_exists(process_id):
+    observed: set[int] = set()
+    monitor_errors: list[Exception] = []
+    stop_monitor = threading.Event()
+    remaining_at_return: set[int] | None = None
+    cancellation_elapsed = 0.0
+
+    def collect_windows_pid() -> None:
+        event_text = "".join(_event_strings([event.data for event in events]))
+        match = re.search(rf"{marker}\s+(\d+)", event_text)
+        if match is not None:
+            process_id = int(match.group(1))
+            assert process_id > 1 and process_id not in {os.getpid(), os.getppid()}
+            observed.add(process_id)
+
+    def survivors() -> set[int]:
+        if os.name == "nt":
+            return {pid for pid in observed if _process_exists(pid)}
+        return _marked_processes(marker)
+
+    async def cancel_public_call() -> None:
+        nonlocal remaining_at_return, cancellation_elapsed
+        with Botpipe(
+            workspace,
+            provider=CodexProvider(adapter=client),
+            state_dir=workspace.parent / "runtime-state",
+        ) as runtime:
+            sdk = Provider(runtime=runtime, model="gpt-5.4", workspace=workspace)
+            task = asyncio.create_task(sdk.arun(
+                "Run the requested sleeper command.",
+                tools=("shell",),
+                timeout=30,
+                on_event=events.append,
+            ))
+            try:
+                deadline = time.monotonic() + 30
+                while not observed:
+                    if task.done():
+                        await task
+                        pytest.fail("native shell returned before cancellation")
+                    if os.name == "nt":
+                        collect_windows_pid()
+                    assert time.monotonic() < deadline, "native shell never started"
+                    await asyncio.sleep(0.02)
+                cancelled_at = time.monotonic()
+                task.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await task
+                cancellation_elapsed = time.monotonic() - cancelled_at
+                # Check before closing the runtime: cancellation itself must
+                # join process cleanup, without help from context teardown.
+                remaining_at_return = survivors()
+            finally:
+                if not task.done():
+                    task.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await task
+
+    def monitor() -> None:
         try:
-            os.kill(process_id, signal.SIGKILL)
+            while not stop_monitor.is_set():
+                observed.update(_marked_processes(marker))
+                stop_monitor.wait(0.02)
+        except (OSError, ValueError, subprocess.SubprocessError) as exc:
+            monitor_errors.append(exc)
+
+    monitor_thread = None
+    if os.name != "nt":
+        monitor_thread = threading.Thread(target=monitor, daemon=True)
+        monitor_thread.start()
+    try:
+        if interruption == "timeout":
+            with pytest.raises(ProviderTimeoutError):
+                _start_or_skip_local_sandbox(client, call)
+        else:
+            try:
+                asyncio.run(cancel_public_call())
+            except (CodexProtocolError, UncertainOperation) as exc:
+                if (
+                    not os.environ.get("CI")
+                    and "bwrap:" in str(exc)
+                    and "Operation not permitted" in str(exc)
+                ):
+                    pytest.skip(f"host cannot start the native Codex sandbox: {exc}")
+                raise
+    finally:
+        stop_monitor.set()
+        if monitor_thread is not None:
+            monitor_thread.join(timeout=6)
+            assert not monitor_thread.is_alive()
+    assert not monitor_errors
+    if os.name == "nt":
+        collect_windows_pid()
+    assert observed, "native shell never appeared in the host process table"
+
+    deadline = time.monotonic() + 5
+    while survivors() and time.monotonic() < deadline:
+        time.sleep(0.05)
+    remaining = survivors()
+    diagnostics = [_process_diagnostic(pid) for pid in remaining]
+    for process_id in remaining:
+        # Recheck the marker before cleanup, so a reused host PID cannot target
+        # an unrelated process. Windows's reported $PID is already a host PID.
+        if os.name != "nt" and process_id not in _marked_processes(marker):
+            continue
+        try:
+            os.kill(process_id, signal.SIGTERM if os.name == "nt" else signal.SIGKILL)
         except (OSError, ValueError):
             pass
-        pytest.fail(f"native Codex sleeper {process_id} survived timeout cleanup")
+    assert not remaining, f"native Codex processes survived timeout cleanup: {diagnostics}"
+    if interruption == "cancel":
+        assert not remaining_at_return, f"arun returned before cleanup: {remaining_at_return}"
+        assert cancellation_elapsed <= 6, "cancellation exceeded interrupt grace plus 5 seconds"

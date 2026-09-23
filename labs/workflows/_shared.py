@@ -191,9 +191,9 @@ def prepare_selected_candidate_surface(
     if candidate_paths:
         paths = list(candidate_paths)
     elif (source.parent / "__init__.py").is_file():
-        paths = [str(source.parent.relative_to(repo_root))]
+        paths = [source.parent.relative_to(repo_root).as_posix()]
     else:
-        paths = [str(source.relative_to(repo_root))]
+        paths = [source.relative_to(repo_root).as_posix()]
     return prepare_candidate_workspace(repo_root, paths, destination)
 
 

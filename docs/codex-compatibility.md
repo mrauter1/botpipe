@@ -44,7 +44,7 @@ remote effects; filesystem read-only does not constrain that server.
 
 The app-server process uses a POSIX process group or a Windows kill-on-close Job.
 Cancellation requests `turn/interrupt`, waits the configured grace period, then
-kills the process tree if needed. A process that escapes its group is outside
+closes the process tree before returning. A process that escapes its group is outside
 Botpipe's containment. Killing a shared app-server interrupts its other active
 turns too; writable turns remain subject to reconciliation.
 

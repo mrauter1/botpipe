@@ -1886,13 +1886,58 @@ class Botpipe:
                     elif (
                         isinstance(outcome, Unknown)
                         and not retry
+                        and not accept
                         and response is _UNSET
                     ):
                         raise BotpipeError(ProviderLifecycle.blocked_message(outcome))
-                    elif accept:
-                        raise BotpipeError(
-                            "The provider has no completed response to accept"
+                    if accept and response is _UNSET:
+                        if inputs.get("schema") is not None:
+                            raise ValueError(
+                                "Accepting a typed result without a completed turn "
+                                "requires a response matching its output schema"
+                            )
+                        response = ProviderResponse(
+                            "",
+                            session_id=record.get("thread_id") or request.session_id,
+                            metadata={"operator_accepted": True},
                         )
+                    if response is not _UNSET:
+                        if isinstance(response, dict):
+                            response = ProviderResponse(**response)
+                        if not isinstance(response, ProviderResponse):
+                            raise TypeError(
+                                "Provider reconciliation needs ProviderResponse or its field mapping"
+                            )
+                        if accept and source == "operator":
+                            response = dataclasses.replace(
+                                response,
+                                session_id=(
+                                    response.session_id
+                                    or record.get("thread_id")
+                                    or request.session_id
+                                ),
+                                metadata={**response.metadata, "operator_accepted": True},
+                            )
+                        response.to_record()
+                        if accept and inputs.get("schema") is not None:
+                            from jsonschema import ValidationError as SchemaError
+                            from jsonschema import validate
+
+                            text = response.text.strip()
+                            fenced = re.fullmatch(
+                                r"```(?:json)?\s*\n(.*?)\n```", text, re.DOTALL
+                            )
+                            try:
+                                validate(
+                                    json.loads(fenced.group(1) if fenced else text),
+                                    inputs["schema"],
+                                )
+                            except (ValueError, SchemaError) as exc:
+                                raise ValueError(
+                                    "Accepted response does not match the output schema: "
+                                    f"{exc}"
+                                ) from exc
+                        checkpoint = ProviderLifecycle.completed(checkpoint, response)
                     from .artifacts import Artifact, ArtifactError, ArtifactStore
 
                     declarations = tuple(
@@ -1916,27 +1961,31 @@ class Botpipe:
                             forbidden_paths=(self.journal.path,),
                         )
                         if accept and artifact_digests is None:
-                            paths = store.destinations(declarations)
-                            accepted = {}
-                            for declaration in declarations:
-                                path = paths[declaration.name]
-                                if not path.exists():
-                                    accepted[declaration.name] = None
-                                    continue
-                                digest = hashlib.sha256()
-                                try:
-                                    with path.open("rb") as handle:
-                                        for chunk in iter(
-                                            lambda: handle.read(1024 * 1024), b""
-                                        ):
-                                            digest.update(chunk)
-                                except OSError as exc:
-                                    raise ArtifactError(
-                                        "Could not inventory accepted artifact: "
-                                        f"{declaration.name}"
-                                    ) from exc
-                                accepted[declaration.name] = digest.hexdigest()
-                            artifact_digests = accepted
+                            resolution = checkpoint.artifact_resolution
+                            if resolution is not None:
+                                artifact_digests = resolution["digests"]
+                            else:
+                                paths = store.destinations(declarations)
+                                accepted = {}
+                                for declaration in declarations:
+                                    path = paths[declaration.name]
+                                    if not path.exists():
+                                        accepted[declaration.name] = None
+                                        continue
+                                    digest = hashlib.sha256()
+                                    try:
+                                        with path.open("rb") as handle:
+                                            for chunk in iter(
+                                                lambda: handle.read(1024 * 1024), b""
+                                            ):
+                                                digest.update(chunk)
+                                    except OSError as exc:
+                                        raise ArtifactError(
+                                            "Could not inventory accepted artifact: "
+                                            f"{declaration.name}"
+                                        ) from exc
+                                    accepted[declaration.name] = digest.hexdigest()
+                                artifact_digests = accepted
                         artifact_operation = f"{operation_id}:generation:{previous}"
                         if store.has_capture_evidence(artifact_operation):
                             resolution = (
@@ -1952,18 +2001,25 @@ class Botpipe:
                             approved = store.check_capture_digests(
                                 declarations, artifact_digests
                             )
-                            if response is _UNSET:
-                                raise ValueError(
-                                    "Artifact reconciliation also needs a provider response"
-                                )
-                            if not isinstance(response, ProviderResponse):
-                                response = ProviderResponse(**response)
-                            checkpoint = ProviderLifecycle.completed(
-                                checkpoint, response
-                            )
                             checkpoint = ProviderLifecycle.with_artifact_resolution(
                                 checkpoint, approved
                             )
+                    if response is not _UNSET:
+                        # Record the operator's selection before capture, while
+                        # the workspace remains locked and fenced against writers.
+                        _persist_response(
+                            self.journal,
+                            operation_id,
+                            checkpoint.to_record(),
+                            session_key=inputs.get("session"),
+                        )
+                    if accept and declarations:
+                        store.capture(
+                            declarations,
+                            artifact_operation,
+                            recover=True,
+                            expected_digests=artifact_digests,
+                        )
 
                 target = request.workspace.resolve()
                 writable = self._operation_is_writable(inputs)
@@ -1985,20 +2041,6 @@ class Botpipe:
                     )
                     return
 
-                if response is not _UNSET:
-                    if isinstance(response, dict):
-                        response = ProviderResponse(**response)
-                    if not isinstance(response, ProviderResponse):
-                        raise TypeError(
-                            "Provider reconciliation needs ProviderResponse or its field mapping"
-                        )
-                    checkpoint = ProviderLifecycle.completed(checkpoint, response)
-                    _persist_response(
-                        self.journal,
-                        operation_id,
-                        checkpoint.to_record(),
-                        session_key=inputs.get("session"),
-                    )
             elif response is not _UNSET:
                 result = codec.encode(response)
                 _commit_or_confirm(
@@ -2107,10 +2149,7 @@ class Botpipe:
     @staticmethod
     def _operation_is_writable(inputs):
         preset = inputs.get("operation", inputs.get("preset"))
-        if preset in {"query", "generate"}:
-            return False
-        policy = inputs.get("policy") or {}
-        return policy.get("sandbox_mode") != "read_only"
+        return preset not in {"query", "generate"}
 
     def close(self):
         close = getattr(self.provider, "close", None)

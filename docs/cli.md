@@ -46,6 +46,12 @@ with an externally observed return value, use `--response JSON_OR_TEXT`; JSON
 `null` is a valid value. Artifact reconciliation can supply an explicit
 `--artifact-digests` JSON object when required.
 
+`--accept` captures declared artifacts immediately, before releasing the workspace
+fence. Later edits cannot change the accepted versions. If an interrupted turn
+has no answer, string results become an empty string; typed results require an
+explicit provider response whose `text` matches the recorded output schema,
+for example `--response '{"text":"{\"ok\":true}"}'`.
+
 A second process executing the same run receives `RunBusy`. An unresolved
 workspace fence names the run that must be resolved before other runs write
 that root. Query and generation remain available.

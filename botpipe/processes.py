@@ -10,6 +10,32 @@ from dataclasses import dataclass
 from typing import Any
 
 
+def _posix_group_is_quiescent(process_group: int) -> bool:
+    """Confirm that a group contains no process that can still execute."""
+
+    try:
+        snapshot = subprocess.run(
+            ["ps", "-axo", "pid=,pgid=,stat="],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    for line in snapshot.stdout.splitlines():
+        fields = line.split(None, 2)
+        if len(fields) != 3:
+            continue
+        try:
+            member_group = int(fields[1])
+        except ValueError:
+            continue
+        if member_group == process_group and fields[2][:1] not in {"X", "Z"}:
+            return False
+    return True
+
+
 @dataclass(slots=True)
 class ProcessContainment:
     creation_kwargs: dict[str, Any]
@@ -88,6 +114,10 @@ class ProcessContainment:
                 os.killpg(process_group, 0)
             except ProcessLookupError:
                 return
+            except PermissionError:
+                if _posix_group_is_quiescent(process_group):
+                    return
+                raise
             time.sleep(0.02)
         self._terminate_posix_group(process, grace_seconds=grace_seconds)
 
@@ -113,6 +143,11 @@ class ProcessContainment:
             os.killpg(process_group, signal.SIGTERM)
         except ProcessLookupError:
             return
+        except PermissionError:
+            if _posix_group_is_quiescent(process_group):
+                process.poll()
+                return
+            raise
         deadline = time.monotonic() + grace_seconds
         while time.monotonic() < deadline:
             process.poll()
@@ -120,12 +155,19 @@ class ProcessContainment:
                 os.killpg(process_group, 0)
             except ProcessLookupError:
                 break
+            except PermissionError:
+                if _posix_group_is_quiescent(process_group):
+                    break
+                raise
             time.sleep(0.02)
         else:
             try:
                 os.killpg(process_group, signal.SIGKILL)
             except ProcessLookupError:
                 pass
+            except PermissionError:
+                if not _posix_group_is_quiescent(process_group):
+                    raise
         if process.poll() is None:
             process.wait(timeout=grace_seconds)
 

@@ -58,6 +58,7 @@ def recover_outcome(provider: Any, request: ProviderRequest) -> RecoveryOutcome:
     from .providers import (
         ProviderError,
         ProviderInterruptedError,
+        ProviderPolicyError,
         ProviderResponse,
     )
 
@@ -73,9 +74,13 @@ def recover_outcome(provider: Any, request: ProviderRequest) -> RecoveryOutcome:
         if exc.process_alive is False:
             return Stopped(detail)
         return Unknown(detail)
+    except ProviderPolicyError as exc:
+        if request.preset in {"query", "generate"}:
+            raise
+        return Unknown(str(exc))
     except ProviderError as exc:
         return Unknown(str(exc))
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - unknown provider failures are uncertain
         return Unknown(f"recovery failed: {exc}")
 
     if isinstance(value, ProviderResponse):

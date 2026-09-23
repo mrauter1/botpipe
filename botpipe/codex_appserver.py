@@ -85,6 +85,7 @@ class _Turn:
     messages: list[str] = field(default_factory=list)
     events: list[dict[str, Any]] = field(default_factory=list)
     usage: dict[str, Any] = field(default_factory=dict)
+    tools_observed: bool = False
     completed: bool = False
     error: BaseException | None = None
 
@@ -522,6 +523,8 @@ class CodexAppServerAdapter:
                 ):
                     turn.messages.append(item["text"])
                 tool = _TOOL_ITEMS.get(str(kind))
+                if tool is not None:
+                    turn.tools_observed = True
                 if tool is not None and not self._tool_allowed(
                     turn.allowed_tools, tool, item
                 ):
@@ -684,6 +687,22 @@ class CodexAppServerAdapter:
                 "installed Codex cannot apply instructions when starting and resuming threads"
             )
         enforcement = {
+            "sandbox": f"codex:{sandbox_name}",
+            "network": (
+                "codex:on"
+                if sandbox_name == "danger-full-access" or sandbox_policy.get("networkAccess")
+                else "codex:off"
+            ),
+            "tools": (
+                {"mode": "defaults"}
+                if request.tools is None
+                else {
+                    "mode": "allowlist",
+                    "allowed": list(request.tools),
+                    "disabled_via": "codex-features",
+                }
+            ),
+            "codex_version": capabilities.version,
             "approval_policy": "never",
             "sandbox_policy": sandbox_policy,
             "feature_overrides": {
@@ -917,6 +936,7 @@ class CodexAppServerAdapter:
                     dict(turn.usage),
                     {
                         "provider": "codex",
+                        "codex_version": capabilities.version,
                         "thread_id": thread_id,
                         "turn_id": turn_id,
                         "probe_hash": capabilities.probe_hash,
@@ -926,9 +946,22 @@ class CodexAppServerAdapter:
                     },
                 )
             finally:
-                with self._lock:
-                    self._turns.pop((thread_id, turn_id), None)
-                outer_lock.release()
+                enforcement["audit"] = (
+                    "tool-policy-violation"
+                    if isinstance(turn.error, CapabilityError)
+                    else "tool-calls-observed"
+                    if turn.tools_observed
+                    else "no-tool-calls-observed"
+                )
+                try:
+                    if request.on_checkpoint is not None:
+                        request.on_checkpoint(
+                            {"enforcement": enforcement, "audit": list(turn.events)}
+                        )
+                finally:
+                    with self._lock:
+                        self._turns.pop((thread_id, turn_id), None)
+                    outer_lock.release()
 
     def recover_turn(
         self, request: Any, *, thread_id: str, turn_id: str
@@ -980,26 +1013,45 @@ class CodexAppServerAdapter:
             return "unknown", None
         status = match.get("status")
         if status == "completed":
-            messages = [
-                item.get("text")
-                for item in match.get("items", ())
-                if isinstance(item, Mapping)
-                and item.get("type") == "agentMessage"
-                and isinstance(item.get("text"), str)
-            ]
-            if not messages:
+            recovered = _Turn(thread_id, turn_id, request.tools, None)
+            for item in match.get("items", ()):
+                if isinstance(item, Mapping):
+                    self._record_event(
+                        recovered,
+                        "item/completed",
+                        {"threadId": thread_id, "turnId": turn_id, "item": dict(item)},
+                    )
+            checkpoint = request.checkpoint or {}
+            enforcement = dict(checkpoint.get("enforcement") or {})
+            enforcement["audit"] = (
+                "tool-policy-violation"
+                if isinstance(recovered.error, CapabilityError)
+                else "tool-calls-observed"
+                if recovered.tools_observed
+                else "no-tool-calls-observed"
+            )
+            evidence = {"enforcement": enforcement, "audit": recovered.events}
+            if request.on_checkpoint is not None:
+                request.on_checkpoint(evidence)
+            if recovered.error is not None:
+                raise recovered.error
+            if not recovered.messages:
                 return "unknown", None
             from .providers import ProviderResponse
 
             return "completed", ProviderResponse(
-                str(messages[-1]),
+                recovered.messages[-1],
                 thread_id,
                 {},
                 {
                     "provider": "codex",
+                    "codex_version": enforcement.get(
+                        "codex_version", capabilities.version
+                    ),
                     "thread_id": thread_id,
                     "turn_id": turn_id,
                     "recovered": True,
+                    **evidence,
                 },
             )
         if status in {"inProgress", "running", "pending"}:
@@ -1024,8 +1076,9 @@ class CodexAppServerAdapter:
         with turn.condition:
             while not turn.completed and time.monotonic() < deadline:
                 turn.condition.wait(min(0.1, deadline - time.monotonic()))
-        if not turn.completed:
-            self._kill_transport(CodexTurnError(reason), grace_seconds=0.1)
+        # Native tool subprocesses can outlive the terminal turn notification.
+        # Close containment before reporting cancellation to the caller.
+        self._kill_transport(CodexTurnError(reason), grace_seconds=0.1)
 
     def _fail_transport(
         self, error: BaseException, *, process: subprocess.Popen[bytes] | None = None
@@ -1050,8 +1103,10 @@ class CodexAppServerAdapter:
     ) -> None:
         self._fail_transport(error)
         process, containment = self._process, self._containment
-        if process is not None and containment is not None and process.poll() is None:
-            containment.terminate(process, grace_seconds=grace_seconds)
+        if process is not None and containment is not None:
+            if process.poll() is None:
+                containment.terminate(process, grace_seconds=grace_seconds)
+            containment.ensure_tree_exited(process, grace_seconds=grace_seconds)
 
     def close(self) -> None:
         with self._lock:

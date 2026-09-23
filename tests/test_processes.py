@@ -10,8 +10,53 @@ import pytest
 from botpipe.processes import ProcessContainment
 
 
+@pytest.mark.skipif(os.name != "posix", reason="POSIX process-group behavior")
+def test_posix_zombie_only_group_permission_error_is_quiescent(monkeypatch):
+    from botpipe import processes
+
+    process = SimpleNamespace(pid=321, poll=lambda: 0)
+    containment = ProcessContainment({}, _owned_pid=321, _owned_pgid=321)
+    monkeypatch.setattr(processes.os, "getpgrp", lambda: 1)
+    monkeypatch.setattr(processes.os, "getpgid", lambda _pid: 321)
+    monkeypatch.setattr(
+        processes.os,
+        "killpg",
+        lambda *_args: (_ for _ in ()).throw(PermissionError()),
+    )
+    monkeypatch.setattr(
+        processes.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(stdout="321 321 Z\n"),
+    )
+
+    containment._terminate_posix_group(process, grace_seconds=0)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX process-group behavior")
+def test_posix_live_group_permission_error_is_not_suppressed(monkeypatch):
+    from botpipe import processes
+
+    process = SimpleNamespace(pid=321, poll=lambda: None)
+    containment = ProcessContainment({}, _owned_pid=321, _owned_pgid=321)
+    monkeypatch.setattr(processes.os, "getpgrp", lambda: 1)
+    monkeypatch.setattr(processes.os, "getpgid", lambda _pid: 321)
+    monkeypatch.setattr(
+        processes.os,
+        "killpg",
+        lambda *_args: (_ for _ in ()).throw(PermissionError()),
+    )
+    monkeypatch.setattr(
+        processes.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(stdout="321 321 S\n"),
+    )
+
+    with pytest.raises(PermissionError):
+        containment._terminate_posix_group(process, grace_seconds=0)
+
+
 def test_windows_child_is_suspended_until_owned_job_assignment(monkeypatch):
-    import botpipe.processes as processes
+    from botpipe import processes
 
     calls = []
     job = SimpleNamespace(
