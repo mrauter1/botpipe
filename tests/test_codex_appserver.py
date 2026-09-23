@@ -544,20 +544,37 @@ def test_probe_subprocess_uses_remaining_dispatch_budget(monkeypatch) -> None:
     assert 0 < timeouts[0] <= 0.25
 
 
-def test_setup_and_turn_start_share_one_timeout_budget(tmp_path: Path) -> None:
-    client = adapter(
-        tmp_path,
-        BOTPIPE_FAKE_THREAD_DELAY="0.18",
-        BOTPIPE_FAKE_TURN_START_DELAY="0.18",
-    )
-    client._start()
-    try:
-        with pytest.raises(ProviderTimeoutError, match="turn start"):
-            client.start_turn(request(tmp_path, timeout=0.25))
-    finally:
-        client.close()
+def test_setup_and_turn_start_share_one_timeout_budget(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import botpipe.codex_appserver as appserver
 
-    assert any(item.get("method") == "turn/start" for item in transcript(tmp_path))
+    client = adapter(tmp_path)
+    clock = [100.0]
+    calls = []
+
+    monkeypatch.setattr(appserver.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(client, "_start", lambda **_kwargs: None)
+    monkeypatch.setattr(client, "_kill_transport", lambda *_args, **_kwargs: None)
+
+    def rpc(method, params, timeout, cancel_event=None, *, deadline=None):
+        calls.append((method, timeout, deadline))
+        if method == "thread/start":
+            clock[0] += 0.18
+            return {"thread": {"id": "thread-budget"}}
+        if method == "turn/start":
+            raise TimeoutError("controlled turn/start timeout")
+        raise AssertionError(method)
+
+    monkeypatch.setattr(client, "_rpc", rpc)
+
+    with pytest.raises(ProviderTimeoutError, match="turn start"):
+        client.start_turn(request(tmp_path, timeout=0.25))
+
+    assert [call[0] for call in calls] == ["thread/start", "turn/start"]
+    assert calls[0][1] == pytest.approx(0.25)
+    assert calls[1][1] == pytest.approx(0.07)
+    assert calls[1][2] == pytest.approx(100.25)
 
 
 def test_expired_setup_budget_prevents_thread_dispatch(
