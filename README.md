@@ -41,16 +41,28 @@ report = Artifact.md("report.md", required=True)
 change = p.run("Add CSV export, tests, and a report.", writes=(report,))
 ```
 
-| Call | Sandbox | Network | Tools | Interrupted effects |
+| Call | Sandbox | Network | Tools | Recovery default |
 | --- | --- | --- | --- | --- |
-| `run` | Workspace write | Off by default | Codex defaults | Require reconciliation |
-| `query` | Read only | Off | Codex tools; ambient MCP off | Retry automatically |
-| `generate` | Read only | Off | None by default | Retry automatically |
+| `run` | Workspace write | Off by default | Codex defaults | Retry after confirmed stop |
+| `query` | Read only | Off | Codex tools; ambient MCP off | Retry after confirmed stop |
+| `generate` | Read only | Off | None by default | Retry after confirmed stop |
 
 `generate(allowed_tools=("shell",))` opts into named tools. Restrictions use
 Codex configuration and its sandbox, followed by an audit of observed tool
 calls. Every result records the mechanisms used. Botpipe does not replace
-Codex's tools or claim stronger isolation than Codex provides.
+Codex's tools or claim stronger isolation than Codex provides. Read-only and
+network-off settings govern commands inside that sandbox, not opted-in remote
+MCP or web tools. Audit can detect a disallowed call and retain evidence, but it
+cannot undo a remote effect. Workspace-write also permits declared artifact
+parents and Codex's native temporary roots.
+
+Every preset defaults to `retry_safe=True`, including async calls. The flag
+permits another attempt after Botpipe confirms the previous attempt stopped; it
+does not prove idempotence. Set `retry_safe=False` for nonrepeatable external
+effects. `Completed` recovery results are adopted, `Unknown` remains unresolved,
+and a currently `Running` turn receives only a targeted bounded interrupt and
+reconciliation attempt. A historical interrupted status or acceptance of a
+native cleanup request does not confirm a stop without durable cleanup evidence.
 
 Reusing `p` continues one conversation. `p.with_config(instructions="Review carefully.")`
 shares that conversation; pass `session=Session()` for a separate one or
@@ -78,8 +90,9 @@ with Botpipe(workspace=".") as runtime:
 
 Loops, conditionals, activities, nested workflows, worklists, `parallel` and
 `aparallel` use the same durable journal. Completed operations replay recorded
-results. An interrupted writable provider turn stays unresolved until its
-outcome is recovered or an operator resolves it.
+results. An interrupted provider turn follows its recorded retry policy; an
+unresolved writable turn keeps its workspace fenced until recovery or operator
+resolution.
 
 ```bash
 botpipe workflows list
@@ -90,6 +103,8 @@ botpipe resume RUN_ID
 botpipe resolve RUN_ID OPERATION_ID --retry
 botpipe resolve RUN_ID OPERATION_ID --accept
 botpipe resolve RUN_ID OPERATION_ID --fail
+# Explicitly abandon a stale fence only after confirming the old work stopped.
+botpipe resolve RUN_ID OPERATION_ID --clear-fence --workspace PATH
 ```
 
 ## Configuration
@@ -104,6 +119,7 @@ model = "gpt-5.4"
 effort = "medium"
 sandbox = "workspace-write"
 network = false
+retry_safe = true
 interrupt_grace_seconds = 10
 ```
 

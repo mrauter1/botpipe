@@ -330,8 +330,10 @@ active phase executable. Return ReviewReport without editing files and cover the
 TEST_PRODUCER = """Test the supplied phase against its acceptance criteria and current implementation. Run suitable
 checks, fix only test-harness defects, and write a test strategy containing commands and observed results."""
 
-TEST_VERIFIER = """Independently verify the phase test evidence against every supplied criterion. Return ReviewReport
-without editing files. Failed implementation behavior requires candidate rework."""
+TEST_VERIFIER = """Independently verify the phase test evidence against every supplied criterion. Execute suitable
+checks yourself when that is practical; do not merely trust the producer's report. Return ReviewReport and do not
+repair implementation or test source: report failures for candidate rework. Test execution may create ordinary
+temporary files, caches, or other incidental test outputs."""
 
 AUDIT_PRODUCER = """Perform a final audit of the original request using the completed phase plan and evidence bundle.
 Write audit_result.json, gap_report.md, and revised_request.md. Use passed only when no gaps remain; otherwise write a
@@ -640,7 +642,7 @@ def devloop(
                 writes=(test_strategy,),
             )
             test_review_id = _review_id("test", phase.phase_id, stage_attempt)
-            test_checked = phase_verifier.query(
+            test_checked = phase_verifier.run(
                 TEST_VERIFIER,
                 input=_review_input(
                     request=request,

@@ -129,25 +129,28 @@ def test_manual_recovery_uses_timeout_recorded_for_run(tmp_path):
         assert provider.recovery_requests[-1].timeout == 7.5
 
 
-def test_known_stopped_attempt_only_reexecutes_after_retry_authorization(tmp_path):
+def test_known_stopped_unsafe_attempt_only_reexecutes_after_retry_authorization(
+    tmp_path,
+):
     @workflow
     def work():
-        return Provider().run("effectful work").value
+        return Provider().run("effectful work", retry_safe=False).value
 
     provider = FakeProvider([ProviderError("known synchronous failure"), "done"])
     with Botpipe(tmp_path, provider=provider) as client:
         interrupted = client.run(work, run_id="known-stopped")
         assert interrupted.status == "interrupted"
-        operation = _provider_operation(client, "known-stopped")
         assert len(provider.calls) == 1
 
         still_interrupted = client.resume("known-stopped", workflow=work)
         assert still_interrupted.status == "interrupted"
         assert len(provider.calls) == 1
 
+        operation = _provider_operation(client, "known-stopped")
         client.resolve("known-stopped", operation["id"], retry=True)
         authorized = client.journal.get(operation["id"])["response"]
         assert authorized["retry_authorized"] is True
+        assert authorized["retry_origin"] == "operator"
         assert authorized["generation"] == 1
         assert len(provider.calls) == 1
 

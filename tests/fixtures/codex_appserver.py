@@ -88,11 +88,54 @@ while True:
     time.sleep(float(os.environ.get("BOTPIPE_FAKE_TURN_START_DELAY", "0")))
     thread_id = request["params"]["threadId"]
     turn_id = f"turn-{turn_number}"
-    if SCENARIO == "stall_turn_start":
+    if SCENARIO in {
+        "stall_turn_start",
+        "stall_turn_start_complete",
+        "stall_turn_start_disallowed",
+    }:
         # The native turn may already be executing even though its RPC response
         # was lost. With no turn id available, only transport-tree teardown can
         # establish quiescence.
-        spawn_descendant(new_session=True)
+        if SCENARIO == "stall_turn_start":
+            spawn_descendant(new_session=True)
+        elif SCENARIO == "stall_turn_start_disallowed":
+            send(
+                {
+                    "method": "item/completed",
+                    "params": {
+                        "threadId": thread_id,
+                        "turnId": turn_id,
+                        "item": {
+                            "type": "commandExecution",
+                            "id": "pre-ack-forbidden-command",
+                        },
+                    },
+                }
+            )
+        else:
+            send(
+                {
+                    "method": "item/completed",
+                    "params": {
+                        "threadId": thread_id,
+                        "turnId": turn_id,
+                        "item": {
+                            "type": "agentMessage",
+                            "id": "pre-ack-answer",
+                            "text": "completed before acknowledgement",
+                        },
+                    },
+                }
+            )
+            send(
+                {
+                    "method": "turn/completed",
+                    "params": {
+                        "threadId": thread_id,
+                        "turn": {"id": turn_id, "status": "completed"},
+                    },
+                }
+            )
         while True:
             time.sleep(60)
     send(

@@ -118,7 +118,7 @@ class CodexCapabilities:
 _CORE_METHODS = frozenset(
     {"initialize", "thread/start", "thread/resume", "turn/start", "turn/interrupt"}
 )
-_PROBE_FORMAT = 6
+_PROBE_FORMAT = 7
 
 
 def _method_names(document: Mapping[str, Any]) -> frozenset[str]:
@@ -296,7 +296,13 @@ def probe_codex(
         if not Path(raw).is_absolute() and Path(raw).parent == Path(".")
         else None
     )
-    path = Path(located or raw).expanduser().resolve(strict=True)
+    try:
+        path = Path(located or raw).expanduser().resolve(strict=True)
+    except OSError as exc:
+        raise CapabilityError(
+            f"Codex executable {raw!r} is unavailable: {exc}. "
+            "Install Codex or configure codex.path to an executable."
+        ) from exc
     stat = path.stat()
     install_key = hashlib.sha256(
         f"{_PROBE_FORMAT}\0{path}\0{stat.st_size}\0{stat.st_mtime_ns}".encode()
@@ -407,11 +413,7 @@ def probe_codex(
     supports_sandbox = "sandboxPolicy" in turn_start
     supports_output = "outputSchema" in turn_start
     supports_dynamic = "dynamicTools" in thread_start
-    supports_strict_roots = {
-        "writableRoots",
-        "excludeSlashTmp",
-        "excludeTmpdirEnvVar",
-    }.issubset(workspace_write_fields)
+    supports_strict_roots = "writableRoots" in workspace_write_fields
     supports_tool_config = bool(features) and "web_search" in config_properties
     supports_mcp = (
         "mcpServerStatus/list" in methods

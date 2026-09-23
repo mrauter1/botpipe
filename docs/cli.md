@@ -1,9 +1,10 @@
 # Command line
 
 `botpipe doctor` reports the installed Codex version, required and optional
-capabilities, probe identity, and preset availability. A missing required
-capability exits nonzero with its name. Include this output in compatibility
-bug reports. Probing does not need a model turn or credentials.
+capabilities, probe identity, preset availability, and the selected workspace's
+fence state. A missing required capability exits nonzero with its name. Include
+this output in compatibility bug reports. Probing does not need a model turn or
+credentials. Use `--workspace PATH` to inspect the exact workspace in question.
 
 ```bash
 botpipe doctor --workspace .
@@ -56,6 +57,23 @@ A second process executing the same run receives `RunBusy`. An unresolved
 workspace fence names the run that must be resolved before other runs write
 that root. Query and generation remain available.
 
+If the owner journal is gone and normal resolution is impossible, the operator
+can explicitly abandon the matching fence after independently confirming that
+the old work has stopped:
+
+```bash
+botpipe resolve RUN_ID OPERATION_ID --clear-fence --workspace PATH
+```
+
+`--clear-fence` is the operator's assertion that the abandoned work is stopped.
+It does not create or open a runtime journal. Under the workspace mutex, Botpipe
+requires the exact workspace, run, and operation identifiers; refuses an
+existing or unverifiable owner journal; and atomically archives the fence as a
+timestamped `.cleared.*.json` receipt beside it. The JSON output records the
+workspace, owner identifiers, journal and fence paths, receipt path, cleared
+status, and operator assertion. A missing owner journal never clears a fence
+automatically.
+
 ## Configuration
 
 `--workspace`, `--config`, `--state-dir`, `--model`, `--effort`,
@@ -76,6 +94,7 @@ model = "gpt-5.4"
 effort = "high"
 sandbox = "workspace-write"
 network = false
+retry_safe = true
 interrupt_grace_seconds = 10
 ```
 

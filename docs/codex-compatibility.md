@@ -14,7 +14,8 @@ Run `botpipe doctor` to check the installation that will execute your work.
 | `outputSchema` | Optional | Embed schema in prompt; validate and repair locally |
 | `thread/unsubscribe` | Changing a loaded thread's configuration | CapabilityError before dispatch; unchanged calls still work |
 | `thread/backgroundTerminals/clean` | Native terminal cleanup when available | Fall back to process-group or Job cleanup |
-| Tool-feature configuration | Read-only presets | Affected preset unavailable |
+| `thread/backgroundTerminals/list` | Confirming native recovery cleanup | Historical interrupted work stays `Unknown` |
+| Tool-feature configuration | Calls with an explicit tool profile | CapabilityError before dispatch when the requested profile cannot be applied |
 | Ambient MCP disablement | Read-only presets | Affected preset unavailable |
 
 The probe reads the executable identity (resolved path, size and modification
@@ -22,7 +23,10 @@ time), version, generated app-server JSON schemas and reported feature inventory
 It caches capabilities in state and records the probe hash with each operation.
 Executable changes trigger another probe. Corrupt cache data triggers probing,
 not relaxed enforcement. The feature inventory comes from the installed Codex;
-there is no maintained list of approved Codex releases.
+there is no maintained list of approved Codex releases. Unused schema item
+versions do not veto the installation. A changed probe hash or derived execution
+profile remains audit evidence rather than a durable replay-identity veto; a
+capability actually required by the next dispatch is still enforced.
 
 The earliest installation checked during this rewrite is **Codex 0.156.0**.
 This is a measured compatibility reference, not a hard-coded minimum. Earlier
@@ -46,20 +50,25 @@ administrator setup on the SDK user's behalf. Windows contract CI provisions the
 elevated sandbox explicitly in its isolated Codex home.
 
 Codex keeps loaded threads subscribed and ignores configuration changes on that
-resume path. When a session's profile changes, Botpipe unsubscribes it before
-resuming the same thread so Codex reloads its configuration and conversation.
+resume path. Sandbox policy is sent with each turn. Tool configuration belongs
+to the thread, so when a session's tool profile changes Botpipe unsubscribes it
+before resuming the same thread and history with the new configuration.
 
 ## Enforcement
 
-Approval is always `never`. Presets use Codex read-only/no-network policy;
-generation restricts configured tools and audits observed tool calls. Ambient
-MCP servers are disabled unless explicitly named. If the installed protocol
-cannot express a restriction, Botpipe reports the missing capability before
-dispatch. It does not silently broaden the requested profile.
+Approval is always `never`. Presets use Codex read-only/no-network policy for
+commands inside its sandbox; opted-in remote MCP servers and web tools remain
+outside that filesystem guarantee. For an explicit allowlist, Botpipe disables
+known, discovered tool-enabling feature flags, preserves unrelated and unknown
+flags, and audits observed calls. Ambient MCP servers are disabled unless
+explicitly named. If the installed protocol cannot express a required
+restriction, Botpipe reports the missing capability before dispatch.
 
 Some native core tools remain advertised even with optional features disabled.
-Generation's audit rejects disallowed observed calls, including planning and
-human-input requests; an empty advertised tool inventory is not claimed.
+The audit rejects an actual disallowed call, including planning and human-input
+requests, and retains the event evidence; an empty advertised tool inventory is
+not claimed. Audit detection cannot undo an effect already performed by a remote
+tool, so nonrepeatable remote work should use `retry_safe=False`.
 
 `full-access` inherits no Codex sandbox guarantee. Codex's unrestricted policy
 cannot enforce network off, so full access also requires an explicit network
@@ -70,10 +79,19 @@ The app-server process uses a POSIX process group or a Windows kill-on-close Job
 Cancellation requests `turn/interrupt` and uses Codex's native background-terminal
 cleanup when available: interrupt alone intentionally leaves those terminals
 running. Botpipe captures still-attached descendant process groups before cleanup
-and checks their process identities before signalling them. After the configured
-grace period, it closes the process tree before returning. A daemon already
-detached from that tree is outside Botpipe's containment. Killing a shared app-server interrupts its other active
-turns too; writable turns remain subject to reconciliation.
+and checks their process identities before signalling them. A pre-ack attempt is
+`Stopped` only when its durable receipt records failed dispatch and completed,
+verified local teardown. Native history marked failed, interrupted, or cancelled
+is `Stopped` only after background cleanup and a bounded, paginated inventory
+proves empty. The historical status or successful cleanup RPC by itself is not
+proof. Missing support, nonempty inventory, timeout, or inspection error yields
+`Unknown`; writable work remains fenced. Native `Completed` history can still be
+adopted when terminal items pass the tool audit and an assistant message supplies
+the response, even if cleanup evidence is incomplete.
+A daemon already detached from the process tree is outside Botpipe's containment,
+so Botpipe cannot guarantee that every escaped daemon ended. Killing a shared
+app-server interrupts its other active turns too; each remains subject to
+reconciliation.
 
 ## Validation and release gate
 

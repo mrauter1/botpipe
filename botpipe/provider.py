@@ -51,6 +51,7 @@ _CONFIG = frozenset(
         "tools",
         "timeout",
         "output_retries",
+        "retry_safe",
         "name",
         "settings",
     }
@@ -93,6 +94,8 @@ def _validate_config(values: Mapping[str, Any]) -> Mapping[str, Any]:
         isinstance(retries, bool) or not isinstance(retries, int) or retries < 0
     ):
         raise ValueError("output_retries must be a nonnegative integer or None")
+    if "retry_safe" in values and type(values["retry_safe"]) is not bool:
+        raise TypeError("retry_safe must be a boolean")
     timeout = values.get("timeout")
     if timeout is not None and (
         isinstance(timeout, bool)
@@ -266,6 +269,7 @@ class Provider:
             "output_retries": (
                 2 if config.get("output_retries") is None else config["output_retries"]
             ),
+            "retry_safe": config.get("retry_safe", True),
             "workspace": config.get("workspace"),
             "operation": operation,
             "instructions": config.get("instructions"),
@@ -359,6 +363,7 @@ class Provider:
         tools: Sequence[str] | None = None,
         timeout: float | None = None,
         output_retries: int | None = None,
+        retry_safe: bool | None = None,
         on_event: Any = None,
     ) -> Result[T]: ...
     @overload
@@ -376,6 +381,7 @@ class Provider:
         tools: Sequence[str] | None = None,
         timeout: float | None = None,
         output_retries: int | None = None,
+        retry_safe: bool | None = None,
         on_event: Any = None,
     ) -> Result[str]: ...
     def run(
@@ -392,6 +398,7 @@ class Provider:
         tools=None,
         timeout=None,
         output_retries=None,
+        retry_safe=None,
         on_event=None,
     ):
         values = {"input": input, "reads": reads, "writes": writes, "returns": returns}
@@ -401,6 +408,7 @@ class Provider:
             ("tools", tools),
             ("timeout", timeout),
             ("output_retries", output_retries),
+            ("retry_safe", retry_safe),
         ):
             if value is not None:
                 values[key] = value
@@ -418,6 +426,7 @@ class Provider:
         tools: Sequence[str] | None = None,
         timeout: float | None = None,
         output_retries: int | None = None,
+        retry_safe: bool | None = None,
         on_event: Any = None,
     ) -> Result[T]: ...
     @overload
@@ -432,6 +441,7 @@ class Provider:
         tools: Sequence[str] | None = None,
         timeout: float | None = None,
         output_retries: int | None = None,
+        retry_safe: bool | None = None,
         on_event: Any = None,
     ) -> Result[str]: ...
     def query(
@@ -445,6 +455,7 @@ class Provider:
         tools=None,
         timeout=None,
         output_retries=None,
+        retry_safe=None,
         on_event=None,
     ):
         values = {
@@ -459,6 +470,8 @@ class Provider:
             values["timeout"] = timeout
         if output_retries is not None:
             values["output_retries"] = output_retries
+        if retry_safe is not None:
+            values["retry_safe"] = retry_safe
         return self._invoke(
             "query", prompt, session=session, on_event=on_event, **values
         )
@@ -475,6 +488,7 @@ class Provider:
         allowed_tools: Sequence[str] = (),
         timeout: float | None = None,
         output_retries: int | None = None,
+        retry_safe: bool | None = None,
         on_event: Any = None,
     ) -> Result[T]: ...
     @overload
@@ -489,6 +503,7 @@ class Provider:
         allowed_tools: Sequence[str] = (),
         timeout: float | None = None,
         output_retries: int | None = None,
+        retry_safe: bool | None = None,
         on_event: Any = None,
     ) -> Result[str]: ...
     def generate(
@@ -502,6 +517,7 @@ class Provider:
         allowed_tools=(),
         timeout=None,
         output_retries=None,
+        retry_safe=None,
         on_event=None,
     ):
         values = {
@@ -515,6 +531,8 @@ class Provider:
             values["timeout"] = timeout
         if output_retries is not None:
             values["output_retries"] = output_retries
+        if retry_safe is not None:
+            values["retry_safe"] = retry_safe
         return self._invoke(
             "generate", prompt, session=session, on_event=on_event, **values
         )

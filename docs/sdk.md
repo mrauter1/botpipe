@@ -8,17 +8,20 @@ opens the durable runtime and probes Codex. Model names pass through unchanged.
 
 `run(prompt, *, input=None, reads=(), writes=(), returns=str, session=INHERIT,
 sandbox=None, network=None, tools=None, timeout=None, output_retries=None,
-on_event=None)` is the execution primitive. `None` inherits configuration.
-The default sandbox is `workspace-write`, with network disabled.
+retry_safe=None, on_event=None)` is the execution primitive. `None` inherits
+configuration. The default sandbox is `workspace-write`, with network disabled,
+and `retry_safe` defaults to `True`.
 
 `query` fixes `sandbox="read-only"`, `network=False` and `writes=()`.
 `generate` fixes those same values and takes `allowed_tools=()` instead of
 `tools`. Supplying a fixed argument raises `TypeError`, even when its value
 matches the preset. Use `run` for different settings.
 
-`arun`, `aquery` and `agenerate` have the same semantics. Cancelling an async
-call waits for interrupt and process cleanup before raising `CancelledError`.
-The default interrupt grace period is ten seconds.
+All three presets, including `query` and `generate`, accept `retry_safe`; their
+async forms `arun`, `aquery` and `agenerate` have the same semantics. Cancelling
+an async call waits for the bounded interrupt and cleanup attempt before raising
+`CancelledError`. Cancellation ends that invocation and never redispatches on
+its own. The default interrupt grace period is ten seconds.
 
 ```python
 from pydantic import BaseModel
@@ -37,7 +40,19 @@ Typed results use Codex's `outputSchema` when available and a prompt schema
 otherwise. Botpipe always validates the result locally. A validation failure
 gets up to `output_retries` additional turns (default two), on the same thread.
 Repairs count against budgets. A completed turn advances conversation history
-even when its output fails validation.
+even when its output fails validation. `retry_safe=False` suppresses new repair
+turns as well as recovery retries. It does not discard a repair response that
+was already completed and can be adopted during replay.
+
+`retry_safe=True` permits repetition; it does not prove that a prompt or tool is
+idempotent. After an interrupted attempt, Botpipe adopts `Completed`, retries
+automatically only after confirmed `Stopped`, makes a targeted bounded interrupt
+attempt for `Running`, and leaves `Unknown` unresolved. Use `False` for
+nonrepeatable external effects. `Stopped` requires durable evidence that cleanup
+completed; a historical interrupted status or acceptance of a native cleanup
+request alone remains `Unknown`. A later user-initiated resume can retry subject
+to the recorded policy and remaining limits. Retry evidence records whether the
+origin was automatic or operator-authorized.
 
 ## Sessions and roles
 
@@ -58,15 +73,18 @@ reviewer = base.with_config(instructions="Find correctness defects.", session=Se
 
 `with_config` returns an immutable variant. Supported fields are `instructions`,
 `model`, `effort`, `workspace`, `sandbox`, `network`, `tools`, `timeout`,
-`output_retries`, `name`, `settings` and `session`. A role can tighten an
-enclosing run's permissions; it cannot widen them. Settings are validated
+`output_retries`, `retry_safe`, `name`, `settings` and `session`. The same
+setting can come from construction, `with_config`, an individual call, or the
+`[codex]` TOML table, with per-call values taking precedence. A role can tighten
+an enclosing run's permissions; it cannot widen them. Settings are validated
 non-secret Codex configuration overrides. Never put credentials in a prompt or
 durable configuration.
 
 Turns sharing a session are serialized. Parallel branches use separate
-sessions. A session can mix presets because its sandbox is set for each turn.
-Thread-level tool configuration must remain enforceable; unsupported transitions
-fail before dispatch with a capability error.
+sessions. A session can mix presets because sandbox policy is set for each turn.
+Tool configuration applies to the Codex thread. A changed tool profile causes
+an unsubscribe/resume of the same history; an installation that cannot enforce
+that transition fails before dispatch with a capability error.
 
 ## Results, artifacts and events
 
@@ -88,14 +106,18 @@ recorded separately from the callback.
 ## Enforcement boundaries
 
 Approval policy is always `never`. Query and generation disable ambient MCP
-servers unless explicitly named in their tool allowlist. Generation configures
-available Codex tool features and audits notifications; an unlisted observed
-tool call fails with `CapabilityError`, preserving its evidence.
+servers unless explicitly named in their tool allowlist. For a tool allowlist,
+Botpipe disables discovered tool-enabling features it knows how to control and
+leaves unrelated or unknown feature flags alone. It audits notifications; an
+unlisted observed tool call fails with `CapabilityError` and retains its
+evidence. The audit detects a violation but cannot undo a remote effect.
 
-The read-only sandbox is Codex's filesystem protection, not a guarantee about
-remote MCP servers. Opting into an MCP server authorizes its tools and their
-possible remote effects. `run(sandbox="full-access")` supplies no filesystem
-isolation. Botpipe records these mechanisms honestly.
+The read-only and network-off settings govern commands within Codex's sandbox;
+they are not a guarantee about opted-in remote MCP servers or web tools. Opting
+into such a tool authorizes its possible remote effects. Workspace-write allows
+the workspace, declared artifact parents, and Codex's native temporary roots.
+`run(sandbox="full-access")` supplies no filesystem isolation. Botpipe records
+these mechanisms honestly.
 
 Direct calls are one-operation durable runs, visible through `botpipe runs` and
 recoverable through `resume` and `resolve`, just like workflow operations.

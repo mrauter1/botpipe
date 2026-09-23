@@ -254,6 +254,7 @@ _CODEX_FIELDS = frozenset(
         "tools",
         "timeout",
         "output_retries",
+        "retry_safe",
         "name",
         "settings",
     }
@@ -329,6 +330,8 @@ def validate_codex_config(value: Mapping[str, Any]) -> None:
         type(value["output_retries"]) is not int or value["output_retries"] < 0
     ):
         raise ConfigError("codex.output_retries must be a nonnegative integer")
+    if "retry_safe" in value and type(value["retry_safe"]) is not bool:
+        raise ConfigError("codex.retry_safe must be true or false")
     if "tools" in value and (
         not isinstance(value["tools"], (list, tuple))
         or any(not isinstance(tool, str) or not tool for tool in value["tools"])

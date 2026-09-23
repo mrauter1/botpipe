@@ -31,6 +31,15 @@ def test_provider_is_lazy_and_with_config_shares_managed_session(tmp_path: Path)
     assert variant.session is None
 
 
+def test_retry_safety_is_configurable_and_defaults_true(tmp_path: Path):
+    provider = Provider(workspace=tmp_path, retry_safe=False)
+
+    assert provider.config["retry_safe"] is False
+    assert provider.with_config(retry_safe=True).config["retry_safe"] is True
+    with pytest.raises(TypeError, match="retry_safe"):
+        Provider(retry_safe=1)
+
+
 def test_direct_calls_are_durable_and_continue_one_thread(tmp_path: Path):
     fake = FakeProvider(
         [
@@ -271,7 +280,7 @@ def test_completed_turn_replay_emits_one_replayed_event(tmp_path: Path):
     assert len(fake.calls) == 1
 
 
-def test_query_unknown_recovery_retries_same_thread(tmp_path: Path):
+def test_query_unknown_recovery_remains_unresolved(tmp_path: Path):
     from botpipe import workflow
     from botpipe.providers import ProviderInterruptedError
     from botpipe.recovery import Unknown
@@ -304,9 +313,368 @@ def test_query_unknown_recovery_retries_same_thread(tmp_path: Path):
 
     resumed = managed_runtime.resume(first.run_id, workflow=flow)
 
+    assert resumed.status == "interrupted"
+    assert [call.attempt for call in adapter.calls] == [1]
+
+
+@pytest.mark.parametrize("preset", ["run", "query", "generate"])
+def test_stopped_provider_attempt_retries_once_on_resume(
+    tmp_path: Path, preset: str
+):
+    from botpipe import workflow
+    from botpipe.providers import ProviderError
+
+    fake = FakeProvider([ProviderError("stopped"), "recovered"])
+
+    @workflow
+    def flow():
+        return getattr(Provider(), preset)("work").value
+
+    managed_runtime = runtime(tmp_path, fake)
+    first = managed_runtime.run(flow, run_id=f"stopped-{preset}")
+    assert first.status == "interrupted"
+
+    resumed = managed_runtime.resume(first.run_id, workflow=flow)
+
     assert resumed.value == "recovered"
+    assert [call.attempt for call in fake.calls] == [1, 2]
+    assert fake.calls[1].deadline is not None
+
+
+def test_each_resume_dispatches_at_most_one_stopped_replacement(tmp_path: Path):
+    from botpipe import workflow
+    from botpipe.providers import ProviderError
+
+    fake = FakeProvider(
+        [ProviderError("first stopped"), ProviderError("second stopped"), "done"]
+    )
+
+    @workflow
+    def flow():
+        return Provider().run("work").value
+
+    managed_runtime = runtime(tmp_path, fake)
+    first = managed_runtime.run(flow, run_id="one-replacement")
+    second = managed_runtime.resume(first.run_id, workflow=flow)
+
+    assert second.status == "interrupted"
+    assert [call.attempt for call in fake.calls] == [1, 2]
+
+    third = managed_runtime.resume(first.run_id, workflow=flow)
+    assert third.value == "done"
+    assert [call.attempt for call in fake.calls] == [1, 2, 3]
+
+
+def test_timeout_does_not_retry_until_a_later_resume(tmp_path: Path):
+    from botpipe import workflow
+    from botpipe.providers import ProviderTimeoutError
+    from botpipe.recovery import Stopped
+
+    class Adapter:
+        name = "fixture"
+
+        def __init__(self):
+            self.calls = []
+
+        def run(self, request):
+            self.calls.append(request)
+            if len(self.calls) == 1:
+                raise ProviderTimeoutError("attempt timed out")
+            return ProviderResponse("done")
+
+        def recover(self, request):
+            return Stopped("timed-out attempt is stopped")
+
+    adapter = Adapter()
+
+    @workflow
+    def flow():
+        return Provider().run("work").value
+
+    managed_runtime = Botpipe(tmp_path, provider=adapter, state_dir=tmp_path / "state")
+    first = managed_runtime.run(flow, run_id="timeout-resume")
+
+    assert first.status == "interrupted"
+    assert len(adapter.calls) == 1
+
+    resumed = managed_runtime.resume(first.run_id, workflow=flow)
+    assert resumed.value == "done"
+    assert len(adapter.calls) == 2
+    assert adapter.calls[1].deadline is not None
+
+
+@pytest.mark.parametrize(
+    ("recorded_safe", "current_safe"), [(False, True), (True, False)]
+)
+def test_automatic_provider_retry_requires_recorded_and_current_safety(
+    tmp_path: Path, recorded_safe: bool, current_safe: bool
+):
+    from botpipe import workflow
+    from botpipe.providers import ProviderError
+
+    fake = FakeProvider([ProviderError("stopped"), "must not run"])
+
+    @workflow(name="provider-safety-flow")
+    def first_flow():
+        return Provider().run("work", retry_safe=recorded_safe).value
+
+    managed_runtime = runtime(tmp_path, fake)
+    first = managed_runtime.run(
+        first_flow, run_id=f"provider-safety-{recorded_safe}-{current_safe}"
+    )
+
+    @workflow(name="provider-safety-flow")
+    def second_flow():
+        return Provider().run("work", retry_safe=current_safe).value
+
+    resumed = managed_runtime.resume(first.run_id, workflow=second_flow)
+
+    assert resumed.status == "interrupted"
+    assert len(fake.calls) == 1
+
+
+def test_operator_retry_overrides_unknown_recovery(tmp_path: Path):
+    from botpipe import workflow
+    from botpipe.providers import ProviderInterruptedError
+    from botpipe.recovery import Unknown
+
+    class Adapter:
+        name = "fixture"
+
+        def __init__(self):
+            self.calls = []
+
+        def run(self, request):
+            self.calls.append(request)
+            if len(self.calls) == 1:
+                raise ProviderInterruptedError("unknown result")
+            return ProviderResponse("operator retry")
+
+        def recover(self, request):
+            return Unknown("no durable native turn id")
+
+    adapter = Adapter()
+
+    @workflow
+    def flow():
+        return Provider().run("work").value
+
+    managed_runtime = Botpipe(tmp_path, provider=adapter, state_dir=tmp_path / "state")
+    first = managed_runtime.run(flow, run_id="operator-unknown")
+    operation = next(
+        row
+        for row in managed_runtime.journal.operations(first.run_id)
+        if row["kind"] == "provider"
+    )
+    managed_runtime.resolve(first.run_id, operation["id"], retry=True)
+
+    resumed = managed_runtime.resume(first.run_id, workflow=flow)
+
+    assert resumed.value == "operator retry"
     assert [call.attempt for call in adapter.calls] == [1, 2]
+
+
+def test_safety_tightening_blocks_saved_automatic_retry_until_operator_override(
+    tmp_path: Path,
+):
+    from botpipe import workflow
+    from botpipe.provider_checkpoints import ProviderCheckpoint, ProviderLifecycle
+    from botpipe.providers import ProviderError
+
+    fake = FakeProvider([ProviderError("stopped"), "operator retry"])
+
+    @workflow(name="saved-automatic-retry")
+    def first_flow():
+        return Provider().run("work", retry_safe=True).value
+
+    managed_runtime = runtime(tmp_path, fake)
+    first = managed_runtime.run(first_flow, run_id="saved-automatic-retry")
+    operation = next(
+        row
+        for row in managed_runtime.journal.operations(first.run_id)
+        if row["kind"] == "provider"
+    )
+    checkpoint = ProviderCheckpoint.from_record(operation["response"])
+    automatic = ProviderLifecycle.authorize_retry(
+        checkpoint, origin="automatic"
+    )
+    managed_runtime.journal.response(operation["id"], automatic.to_record())
+
+    @workflow(name="saved-automatic-retry")
+    def tightened_flow():
+        return Provider().run("work", retry_safe=False).value
+
+    blocked = managed_runtime.resume(first.run_id, workflow=tightened_flow)
+    assert blocked.status == "interrupted"
+    assert len(fake.calls) == 1
+
+    managed_runtime.resolve(first.run_id, operation["id"], retry=True)
+    resumed = managed_runtime.resume(first.run_id, workflow=tightened_flow)
+
+    assert resumed.value == "operator retry"
+    assert len(fake.calls) == 2
+
+
+def test_retry_unsafe_call_does_not_dispatch_new_output_repair(tmp_path: Path):
+    fake = FakeProvider(
+        [ProviderResponse("not-json", "thread-1"), ProviderResponse('{"count": 2}')]
+    )
+    provider = Provider(runtime=runtime(tmp_path, fake))
+
+    with pytest.raises(ValueError):
+        provider.run(
+            "count", returns=Answer, output_retries=1, retry_safe=False
+        )
+
+    assert len(fake.calls) == 1
+
+
+def test_recorded_unsafe_output_does_not_gain_repair_after_safety_change(
+    tmp_path: Path,
+):
+    from botpipe import workflow
+
+    fake = FakeProvider(
+        [ProviderResponse("not-json", "thread-1"), ProviderResponse('{"count": 2}')]
+    )
+
+    @workflow(name="unsafe-repair")
+    def first_flow():
+        return Provider().run(
+            "count", returns=Answer, output_retries=1, retry_safe=False
+        )
+
+    managed_runtime = runtime(tmp_path, fake)
+    first = managed_runtime.run(first_flow, run_id="unsafe-repair")
+    assert first.status == "failed"
+
+    @workflow(name="unsafe-repair")
+    def revised_flow():
+        return Provider().run(
+            "count", returns=Answer, output_retries=1, retry_safe=True
+        )
+
+    resumed = managed_runtime.resume(first.run_id, workflow=revised_flow)
+
+    assert resumed.status == "failed"
+    assert len(fake.calls) == 1
+
+
+def test_tightened_safety_does_not_dispatch_prepared_repair(
+    tmp_path: Path, monkeypatch
+):
+    from botpipe import workflow
+
+    fake = FakeProvider(
+        [ProviderResponse("not-json", "thread-1"), ProviderResponse('{"count": 2}')]
+    )
+
+    @workflow(name="prepared-repair")
+    def first_flow():
+        return Provider().run(
+            "count", returns=Answer, output_retries=1, retry_safe=True
+        )
+
+    managed_runtime = runtime(tmp_path, fake)
+    original = managed_runtime.journal.response
+    preparations = 0
+
+    def crash_second_preparation(operation_id, record, session_key=None):
+        nonlocal preparations
+        original(operation_id, record, session_key=session_key)
+        if record.get("preparing") is True:
+            preparations += 1
+            if preparations == 2:
+                raise SystemExit("after repair preparation")
+
+    monkeypatch.setattr(managed_runtime.journal, "response", crash_second_preparation)
+    with pytest.raises(SystemExit, match="after repair preparation"):
+        managed_runtime.run(first_flow, run_id="prepared-repair")
+    monkeypatch.setattr(managed_runtime.journal, "response", original)
+    assert len(fake.calls) == 1
+
+    @workflow(name="prepared-repair")
+    def tightened_flow():
+        return Provider().run(
+            "count", returns=Answer, output_retries=1, retry_safe=False
+        )
+
+    resumed = managed_runtime.resume("prepared-repair", workflow=tightened_flow)
+
+    assert resumed.status == "failed"
+    assert len(fake.calls) == 1
+
+
+def test_retry_safety_tightening_replays_completed_output_repair(tmp_path: Path):
+    from botpipe import ask_human, workflow
+
+    fake = FakeProvider(
+        [ProviderResponse("not-json", "thread-1"), ProviderResponse('{"count": 2}')]
+    )
+    safety = [True]
+
+    @workflow
+    def flow():
+        result = Provider().run(
+            "count", returns=Answer, output_retries=1, retry_safe=safety[0]
+        )
+        ask_human("continue?")
+        return result.value.count
+
+    managed_runtime = runtime(tmp_path, fake)
+    paused = managed_runtime.run(flow, run_id="repair-replay")
+    assert paused.status == "awaiting_input"
+    safety[0] = False
+
+    resumed = managed_runtime.resume(paused.run_id, workflow=flow, answer="yes")
+
+    assert resumed.value == 2
+    assert len(fake.calls) == 2
+
+
+def test_codex_retry_carries_thread_without_reusing_old_profile_checkpoint(
+    tmp_path: Path,
+):
+    from dataclasses import replace
+
+    from botpipe.policy import Policy
+    from botpipe.providers import CodexProvider, ProviderRequest
+
+    class Adapter:
+        def __init__(self):
+            self.calls = []
+
+        def start_turn(self, request, on_event=None):
+            self.calls.append(request)
+            if request.attempt == 1:
+                request.on_checkpoint(
+                    {"session_id": "thread-1", "profile_hash": "old-profile"}
+                )
+            return ProviderResponse("done", "thread-1")
+
+        def close(self):
+            pass
+
+    adapter = Adapter()
+    provider = CodexProvider(adapter=adapter)
+    request = ProviderRequest(
+        operation_id="retry-thread",
+        prompt="work",
+        workspace=tmp_path,
+        session_id=None,
+        output_schema=None,
+        policy=Policy(),
+        artifacts={},
+        receipt_dir=tmp_path / "receipts",
+        timeout=10,
+        preset="run",
+    )
+    provider.run(request)
+    current_checkpoint = {"profile_hash": "current-profile"}
+    provider.run(replace(request, attempt=2, checkpoint=current_checkpoint))
+
     assert adapter.calls[1].session_id == "thread-1"
+    assert adapter.calls[1].checkpoint == current_checkpoint
 
 
 def test_stopped_policy_failure_preserves_capability_error(tmp_path: Path):
@@ -367,6 +735,36 @@ def test_cancelled_direct_call_stops_waiting_for_shared_session(tmp_path: Path):
 
     asyncio.run(scenario())
     assert len(fake.calls) == 1
+
+
+def test_async_cancellation_keeps_worker_cleanup_failure_as_cause():
+    import asyncio
+    import threading
+
+    from botpipe.runtime import _async_call
+
+    started = threading.Event()
+    release = threading.Event()
+
+    def worker():
+        started.set()
+        release.wait(2)
+        raise RuntimeError("cleanup failed")
+
+    async def scenario():
+        task = asyncio.create_task(_async_call(worker))
+        assert await asyncio.to_thread(started.wait, 1)
+        task.cancel()
+        release.set()
+        try:
+            await task
+        except asyncio.CancelledError as exc:
+            assert isinstance(exc.__cause__, RuntimeError)
+            assert str(exc.__cause__) == "cleanup failed"
+        else:
+            raise AssertionError("expected cancellation")
+
+    asyncio.run(scenario())
 
 
 def test_failed_preflight_restores_artifacts_and_clears_writer_fence(tmp_path: Path):

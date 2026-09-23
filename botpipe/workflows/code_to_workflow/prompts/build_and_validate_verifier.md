@@ -22,11 +22,11 @@ Accept with `build_validated` only if:
 - The implementation follows the Botpipe workflow authoring skill's guidance for provider work, session boundaries, artifact handoffs, Python branches, public authoring APIs, and validation.
 - The generated workflow implements the accepted session topology deliberately: shared sessions are used for dependent continuation where designed, and independent sessions have enough artifact/prompt context to work without hidden history.
 - Validation evidence is real, specific, and sufficient for the requested scope.
-- Botpipe can discover and compile the generated workflow from the target workspace. If an environment cannot run the CLI, inspect the generated authoring code for the same failure classes, including missing package-relative imports, unresolved artifact references, and simple helper artifacts used as shared workflow-level inputs.
+- Botpipe can discover and compile the generated workflow from the target workspace. Run executable discovery, import, compile, and focused test checks yourself when the environment supports them. If a check truly cannot run, explain why and inspect the generated authoring code for the same failure classes, including missing package-relative imports, unresolved artifact references, and simple helper artifacts used as shared workflow-level inputs.
 - No required behavior is left unhandled in the coverage map.
 - Any unsupported behavior is explicitly justified.
 
 Use `needs_rework` for local generated-file or validation-report defects.
 Use `needs_replan` if the accepted design cannot produce a coherent workflow.
 
-Return the typed decision and exact required rework. Do not edit repository files.
+Return the typed decision and exact required rework. Do not repair generated source or tests yourself. Executed checks may create normal temporary files, caches, or other incidental test outputs; report failures for rework.

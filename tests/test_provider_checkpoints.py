@@ -56,6 +56,15 @@ RESPONSE = {
         ),
         (
             {
+                "generation": 1,
+                "request": REQUEST,
+                "retry_authorized": True,
+                "retry_origin": "automatic",
+            },
+            RetryAuthorizedCheckpoint,
+        ),
+        (
+            {
                 "generation": 0,
                 "request": REQUEST,
                 "not_dispatched": True,
@@ -97,6 +106,12 @@ def test_legacy_checkpoint_states_round_trip(record, kind):
         {"generation": True, "request": REQUEST},
         {"generation": 0, "preparing": True, "request": REQUEST},
         {"generation": 0, "request": REQUEST, "retry_authorized": True},
+        {
+            "generation": 1,
+            "request": REQUEST,
+            "retry_authorized": True,
+            "retry_origin": "guess",
+        },
         {
             "generation": 0,
             "request": REQUEST,
@@ -175,6 +190,7 @@ def test_retry_generation_is_idempotent_and_completed_receipt_wins():
     intent = IntentCheckpoint(2, REQUEST)
     authorized = ProviderLifecycle.authorize_retry(intent)
     assert authorized.generation == 3
+    assert authorized.origin == "operator"
     assert authorized.attempt_generation == 2
     assert ProviderLifecycle.authorize_retry(authorized) is authorized
 
@@ -201,11 +217,21 @@ def test_running_attempt_blocks_both_recovery_paths():
 
 
 def test_authorized_unknown_attempt_may_start_explicit_retry():
-    authorized = RetryAuthorizedCheckpoint(1, REQUEST)
+    authorized = RetryAuthorizedCheckpoint(1, REQUEST, "operator")
     assert (
         ProviderLifecycle.recovery_action(authorized, Unknown("unknown"))
         is RecoveryAction.START_RETRY
     )
+
+
+def test_explicit_retry_promotes_legacy_authorization_origin():
+    legacy = RetryAuthorizedCheckpoint(1, REQUEST)
+
+    promoted = ProviderLifecycle.authorize_retry(legacy)
+
+    assert promoted.generation == 1
+    assert promoted.origin == "operator"
+    assert promoted.to_record()["retry_origin"] == "operator"
 
 
 def test_only_stopped_authorized_attempt_may_start_retry():
@@ -217,6 +243,12 @@ def test_only_stopped_authorized_attempt_may_start_retry():
     assert (
         ProviderLifecycle.recovery_action(
             RetryAuthorizedCheckpoint(1, REQUEST), stopped
+        )
+        is RecoveryAction.BLOCK
+    )
+    assert (
+        ProviderLifecycle.recovery_action(
+            RetryAuthorizedCheckpoint(1, REQUEST, "automatic"), stopped
         )
         is RecoveryAction.START_RETRY
     )
@@ -458,5 +490,6 @@ def test_retry_authorization_ack_loss_never_skips_generation(
     else:
         assert "retry_authorized" not in observations[0]
         assert observations[0]["generation"] == 0
-        assert result.status == "interrupted"
-        assert len(provider.calls) == 1
+        assert result.ok, result.error
+        assert result.value == "done"
+        assert len(provider.calls) == 2

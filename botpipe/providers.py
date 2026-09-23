@@ -139,7 +139,7 @@ class ProviderResponse:
 
 
 @runtime_checkable
-class Provider(Protocol):
+class ProviderBackend(Protocol):
     name: str
 
     def run(self, request: ProviderRequest) -> ProviderResponse: ...
@@ -310,7 +310,7 @@ class CodexProvider:
                 "provider attempt has no durable terminal result; refusing to resend",
                 receipt=path,
             )
-        if request.attempt > 1 and request.preset in {"query", "generate"}:
+        if request.attempt > 1:
             for attempt in range(request.attempt - 1, 0, -1):
                 prior_path = _receipt_path_for(request, attempt)
                 if not prior_path.exists():
@@ -318,7 +318,7 @@ class CodexProvider:
                 prior = _read_receipt(prior_path)
                 session_id = prior.get("session_id")
                 if isinstance(session_id, str):
-                    request = replace(request, session_id=session_id, checkpoint=prior)
+                    request = replace(request, session_id=session_id)
                     break
         record: dict[str, Any] = {
             "version": 2,
@@ -385,12 +385,25 @@ class CodexProvider:
                     return Completed(_response(value.get("response"), path))
                 except ProviderInterruptedError as exc:
                     return Unknown(str(exc))
-            if value.get("status") == "failed":
+            cleanup = value.get("cleanup")
+            cleanup_incomplete = (
+                isinstance(cleanup, Mapping)
+                and cleanup.get("status") == "incomplete"
+            )
+            if value.get("status") == "failed" and not cleanup_incomplete:
                 return Stopped(str(value.get("error") or "provider attempt failed"))
             if value.get("status") in {"prepared", "configured", "thread_bound"}:
+                if cleanup_incomplete:
+                    return Unknown(
+                        str(cleanup.get("error") or "provider cleanup is incomplete")
+                    )
                 continue
             thread_id, turn_id = value.get("session_id"), value.get("turn_id")
             if not isinstance(thread_id, str) or not isinstance(turn_id, str):
+                if cleanup_incomplete:
+                    return Unknown(
+                        str(cleanup.get("error") or "provider cleanup is incomplete")
+                    )
                 return Unknown(
                     "turn dispatch was sent before its native turn id was durable"
                 )
@@ -433,6 +446,10 @@ class CodexProvider:
                 value.update(status="completed", response=recovered.to_record())
                 _atomic_json(path, value)
                 return Completed(recovered, "adopted from Codex thread history")
+            if cleanup_incomplete:
+                return Unknown(
+                    str(cleanup.get("error") or "provider cleanup is incomplete")
+                )
             if status == "running":
                 from .recovery import Running
 
@@ -496,7 +513,7 @@ class FakeProvider:
         return self._recovery.get(key, Unknown(f"fake provider has no record of {key}"))
 
 
-def get_provider(name: str, config: Mapping[str, Any] | None = None) -> Provider:
+def get_provider(name: str, config: Mapping[str, Any] | None = None) -> ProviderBackend:
     if name.strip().lower() != "codex":
         raise ValueError(f"unknown provider {name!r}; expected 'codex'")
     values = dict(config or {})
@@ -516,7 +533,7 @@ __all__ = [
     "CapabilityError",
     "CodexProvider",
     "FakeProvider",
-    "Provider",
+    "ProviderBackend",
     "ProviderError",
     "ProviderInterruptedError",
     "ProviderPolicyError",

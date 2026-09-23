@@ -268,6 +268,122 @@ def test_doctor_missing_required_method_fails_clearly(monkeypatch, capsys):
     assert "turn/interrupt" in capsys.readouterr().err
 
 
+def test_doctor_is_nonzero_when_run_preset_is_unavailable(monkeypatch, capsys):
+    from botpipe import cli
+
+    class Adapter:
+        def probe(self):
+            return {
+                "version": "fake-current",
+                "presets": {
+                    "run": {"available": False, "reason": "run controls missing"},
+                    "generate": {"available": True},
+                },
+            }
+
+    class Client:
+        provider = Adapter()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+    monkeypatch.setattr(cli, "_client", lambda args: Client())
+    assert cli.main(["doctor"]) == 1
+    captured = capsys.readouterr()
+    report = json.loads(captured.out)
+    assert report["presets"]["run"]["available"] is False
+    assert "run controls missing" in captured.err
+
+
+def test_doctor_reports_fence_when_codex_probe_is_unavailable(
+    monkeypatch, tmp_path, capsys
+):
+    from botpipe import cli
+    from botpipe.locks import workspace_fence_path, workspace_turn
+
+    monkeypatch.setenv("BOTPIPE_COORDINATION_DIR", str(tmp_path / "coordination"))
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    journal = tmp_path / "missing" / "state.sqlite3"
+    with workspace_turn(
+        workspace,
+        journal=journal,
+        run_id="abandoned",
+        operation_id="effect",
+        timeout=0,
+    ) as turn:
+        assert turn is not None
+        turn.mark_unresolved("effect")
+
+    def unavailable(_args):
+        raise FileNotFoundError("codex executable is unavailable")
+
+    monkeypatch.setattr(cli, "_client", unavailable)
+    assert cli.main(["doctor", "--workspace", str(workspace)]) == 1
+    captured = capsys.readouterr()
+    report = json.loads(captured.out)
+    assert report["codex"]["available"] is False
+    assert report["workspace"] == turn.workspace
+    assert report["workspace_fence"] == {
+        "status": "unresolved",
+        "workspace": turn.workspace,
+        "run_id": "abandoned",
+        "operation_id": "effect",
+        "journal": turn.owner["journal"],
+        "fence_path": str(workspace_fence_path(workspace)),
+    }
+    assert "codex executable is unavailable" in captured.err
+
+
+def test_clear_fence_does_not_construct_runtime_or_recreate_missing_journal(
+    monkeypatch, tmp_path, capsys
+):
+    from botpipe import cli
+    from botpipe.locks import workspace_fence_path, workspace_turn
+
+    monkeypatch.setenv("BOTPIPE_COORDINATION_DIR", str(tmp_path / "coordination"))
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    journal = tmp_path / "missing-state" / "state.sqlite3"
+    with workspace_turn(
+        workspace,
+        journal=journal,
+        run_id="abandoned",
+        operation_id="effect",
+        timeout=0,
+    ) as turn:
+        assert turn is not None
+        turn.mark_unresolved("effect")
+
+    def forbidden(_args):
+        raise AssertionError("clear-fence constructed a runtime")
+
+    monkeypatch.setattr(cli, "_client", forbidden)
+    assert (
+        cli.main(
+            [
+                "resolve",
+                "abandoned",
+                "effect",
+                "--clear-fence",
+                "--workspace",
+                str(workspace),
+            ]
+        )
+        == 0
+    )
+    report = json.loads(capsys.readouterr().out)
+    assert report["cleared"] is True
+    assert report["fence_path"] == str(workspace_fence_path(workspace))
+    assert Path(report["receipt_path"]).is_file()
+    assert not workspace_fence_path(workspace).exists()
+    assert not journal.exists()
+    assert not journal.parent.exists()
+
+
 @pytest.mark.parametrize("default", ["", "claude", "pi"])
 def test_config_rejects_unsupported_default_provider(tmp_path, default):
     (tmp_path / "botpipe.toml").write_text(f'default_provider = "{default}"\n')
@@ -283,6 +399,15 @@ def test_config_canonicalizes_relative_codex_binary(tmp_path):
     )
     config_file.write_text('[codex]\npath = "codex"\n')
     assert load_config(tmp_path).provider_config["path"] == "codex"
+
+
+def test_config_accepts_provider_retry_safety(tmp_path):
+    (tmp_path / "botpipe.toml").write_text("[codex]\nretry_safe = false\n")
+    assert load_config(tmp_path).provider_config["retry_safe"] is False
+
+    (tmp_path / "botpipe.toml").write_text('[codex]\nretry_safe = "yes"\n')
+    with pytest.raises(ConfigError, match="retry_safe"):
+        load_config(tmp_path)
 
 
 @pytest.mark.parametrize(

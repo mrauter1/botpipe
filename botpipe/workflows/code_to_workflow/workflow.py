@@ -280,7 +280,7 @@ def code_to_workflow(
                     validation_report,
                 ),
             )
-            build_check = build_verifier.query(
+            build_check = build_verifier.run(
                 Prompt.file("prompts/build_and_validate_verifier.md"),
                 input={
                     "request": request,

@@ -18,18 +18,33 @@ new `Session()`; `session=None` makes calls independent. Use `Session.task(key)`
 or `Session.work_item(item)` where continuity must have a durable scoped identity.
 
 `query` and `generate` cannot declare writes. Return a typed review and save it
-through an activity when a workflow needs a review file. Typed returns and
-artifacts are locally validated with bounded repairs. Invalid outputs do not
-roll back arbitrary workspace changes.
+through an activity when a workflow needs a review file. Use a typed `run`
+without declared artifacts when verification must execute tests or builds;
+`writes=()` does not promise that test caches or temporary files are absent.
+Typed returns and artifacts are locally validated with bounded repairs. Invalid
+outputs do not roll back arbitrary workspace changes.
 
 In `botpipe.toml`, use `default_provider = "codex"` and a `[codex]` table with
-`path`, `model`, `effort`, `sandbox`, `network` and `interrupt_grace_seconds`.
-Run `botpipe doctor` to inspect installed capabilities. Codex is not pinned.
+`path`, `model`, `effort`, `sandbox`, `network`, `retry_safe` and
+`interrupt_grace_seconds`. `retry_safe` is also available at provider
+construction, through `with_config`, per call, and on every async form. Run
+`botpipe doctor --workspace PATH` to inspect installed capabilities and the
+workspace fence. Codex is not pinned.
 
 **1.x journals cannot be opened by 2.0.** They are rejected untouched; there is
 no migration. Finish existing work with 1.x or start in a new state directory.
 Completed 2.0 operations replay without Codex. Interrupted `run` operations need
-recovery or `resolve --retry`, `--accept` or `--fail`; read-only presets retry.
+reconciliation just like read-only presets. All presets default to
+`retry_safe=True`: Botpipe retries only after confirmed `Stopped`, adopts
+`Completed`, tries a targeted bounded interrupt for `Running`, and leaves
+`Unknown` unresolved. The flag permits repetition rather than proving
+idempotence; use `False` for nonrepeatable external effects. It also suppresses
+new output-repair dispatches, while an already completed repair still replays.
+
+If an unresolved workspace fence outlives a missing owner journal, it is never
+cleared automatically. After independently confirming the old work stopped, use
+`botpipe resolve RUN OP --clear-fence --workspace PATH` to assert abandonment
+and archive a receipt under the workspace lock.
 
 The provider-first experimental API's `decide`, streaming iterators, exact argv
 grants and non-Codex constructors are not included. Progress uses `on_event`.

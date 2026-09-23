@@ -8,6 +8,7 @@ import threading
 import time
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -63,6 +64,9 @@ def capabilities(*, output_schema: bool = True) -> CodexCapabilities:
         ),
         features=(
             {"name": "apps", "stage": "stable", "enabled": True},
+            {"name": "browser_use", "stage": "stable", "enabled": True},
+            {"name": "code_mode_host", "stage": "stable", "enabled": True},
+            {"name": "fast_mode", "stage": "stable", "enabled": True},
             {"name": "shell_tool", "stage": "stable", "enabled": True},
             {"name": "standalone_web_search", "stage": "stable", "enabled": True},
         ),
@@ -184,6 +188,9 @@ def test_query_is_read_only_and_workspace_remains_byte_identical(tmp_path: Path)
     assert thread["params"]["sandbox"] == "read-only"
     config = thread["params"]["config"]
     assert config["features.apps"] is False
+    assert config["features.browser_use"] is False
+    assert config["features.code_mode_host"] is False
+    assert "features.fast_mode" not in config
     assert not any(key.startswith("mcp_servers.") for key in config)
 
 
@@ -203,6 +210,9 @@ def test_generate_has_exact_empty_inventory_and_rejects_disallowed_tool_with_evi
     assert config["features.shell_tool"] is False
     assert config["features.standalone_web_search"] is False
     assert config["features.apps"] is False
+    assert config["features.browser_use"] is False
+    assert config["features.code_mode_host"] is False
+    assert "features.fast_mode" not in config
     assert config["tools.experimental_request_user_input.enabled"] is False
     assert config["tools.update_plan.enabled"] is False
     assert not any(key.startswith("mcp_servers.") for key in config)
@@ -245,6 +255,70 @@ def test_generate_audits_control_tools_and_declines_interactive_requests(
         assert "error" in sent[0]
     client._record_event(turn, "error", {"error": "tool stopped"})
     assert isinstance(turn.error, CapabilityError)
+
+
+def test_allowlist_accepts_new_schema_item_until_it_is_observed(tmp_path: Path) -> None:
+    client = adapter(tmp_path)
+    client._capabilities = replace(
+        capabilities(), item_types=capabilities().item_types | {"futureToolItem"}
+    )
+    try:
+        response = client.start_turn(request(tmp_path, preset="generate", tools=()))
+    finally:
+        client.close()
+    assert response.text == "fixture answer"
+
+    from botpipe.codex_appserver import _Turn
+
+    observed = _Turn("thread", "turn", (), None)
+    client._record_event(
+        observed,
+        "item/completed",
+        {"item": {"type": "futureToolItem", "id": "future-evidence"}},
+    )
+    assert isinstance(observed.error, CapabilityError)
+    assert "futureToolItem" in str(observed.error)
+    assert "future-evidence" in str(observed.error)
+
+
+def test_stale_receipt_profile_does_not_veto_native_resume(tmp_path: Path) -> None:
+    client = adapter(tmp_path)
+    resumed = replace(
+        request(tmp_path, session_id="thread-fixture"),
+        checkpoint={"profile_hash": "profile-from-prior-process"},
+    )
+    try:
+        response = client.start_turn(resumed)
+    finally:
+        client.close()
+    assert response.session_id == "thread-fixture"
+
+
+def test_named_mcp_tool_enables_only_its_server(tmp_path: Path) -> None:
+    client = adapter(tmp_path)
+    client._mcp_servers = frozenset({"docs", "other"})
+    try:
+        client.start_turn(
+            request(
+                tmp_path,
+                preset="generate",
+                tools=("mcp:docs/search",),
+            )
+        )
+    finally:
+        client.close()
+
+    thread = next(
+        item for item in transcript(tmp_path) if item.get("method") == "thread/start"
+    )
+    assert thread["params"]["config"]['mcp_servers."docs".enabled'] is True
+    assert thread["params"]["config"]['mcp_servers."other".enabled'] is False
+
+
+def test_missing_codex_binary_is_an_actionable_capability_error(tmp_path: Path) -> None:
+    client = CodexAppServerAdapter(tmp_path / "missing-codex")
+    with pytest.raises(CapabilityError, match=r"Install Codex.*codex\.path"):
+        client.probe()
 
 
 def test_query_then_run_resumes_same_native_thread(tmp_path: Path) -> None:
@@ -387,8 +461,14 @@ def test_turn_start_ack_timeout_kills_unknown_dispatched_turn_tree(
         BOTPIPE_FAKE_DESCENDANT_PID=str(pid_file),
     )
 
+    checkpoints = []
     with pytest.raises(ProviderTimeoutError, match="turn start"):
-        client.start_turn(request(tmp_path, timeout=0.2))
+        client.start_turn(
+            replace(
+                request(tmp_path, timeout=0.2),
+                on_checkpoint=checkpoints.append,
+            )
+        )
     client.close()
 
     assert pid_file.exists(), "fixture never dispatched its unknown turn"
@@ -397,6 +477,52 @@ def test_turn_start_ack_timeout_kills_unknown_dispatched_turn_tree(
     ), "an unknown turn id must not be guessed"
     time.sleep(1.1)
     assert not marker.exists(), "pre-acknowledgement turn survived RPC timeout"
+    assert checkpoints[-1]["status"] == "failed"
+    assert checkpoints[-1]["cleanup"] == {"status": "completed"}
+
+
+def test_pre_ack_cleanup_preserves_orphaned_tool_policy_evidence(
+    tmp_path: Path,
+) -> None:
+    client = adapter(tmp_path, "stall_turn_start_disallowed")
+    checkpoints = []
+
+    with pytest.raises(CapabilityError, match="disallowed tool 'shell'"):
+        client.start_turn(
+            replace(
+                request(tmp_path, preset="generate", tools=(), timeout=0.2),
+                on_checkpoint=checkpoints.append,
+            )
+        )
+    client.close()
+
+    terminal = checkpoints[-1]
+    assert terminal["status"] == "failed"
+    assert terminal["cleanup"] == {"status": "completed"}
+    assert terminal["policy_error"] is True
+    assert terminal["enforcement"]["audit"] == "tool-policy-violation"
+    assert terminal["audit"][0]["data"]["item"]["id"] == (
+        "pre-ack-forbidden-command"
+    )
+
+
+def test_completed_orphan_wins_lost_turn_start_ack(tmp_path: Path) -> None:
+    client = adapter(tmp_path, "stall_turn_start_complete")
+    checkpoints = []
+    try:
+        response = client.start_turn(
+            replace(
+                request(tmp_path, timeout=0.2),
+                on_checkpoint=checkpoints.append,
+            )
+        )
+    finally:
+        client.close()
+
+    assert response.text == "completed before acknowledgement"
+    assert response.metadata["turn_id"] == "turn-1"
+    assert response.metadata["recovered_from_lost_ack"] is True
+    assert checkpoints[-1]["status"] == "response_received"
 
 
 def test_probe_subprocess_uses_remaining_dispatch_budget(monkeypatch) -> None:
@@ -496,6 +622,65 @@ def test_expired_thread_checkpoint_releases_session_lock(tmp_path: Path) -> None
     assert not worker.is_alive(), "expired request retained the session lock"
     assert not errors
     assert responses[0].text == "fixture answer"
+
+
+def test_terminal_audit_checkpoint_failure_releases_session_lock(tmp_path: Path) -> None:
+    client = adapter(tmp_path)
+
+    def fail_audit(checkpoint: dict) -> None:
+        if "audit" in checkpoint:
+            raise RuntimeError("receipt audit write failed")
+
+    first = replace(request(tmp_path), on_checkpoint=fail_audit)
+    try:
+        with pytest.raises(RuntimeError, match="audit write failed"):
+            client.start_turn(first)
+        second = client.start_turn(
+            request(tmp_path, session_id="thread-fixture", timeout=1)
+        )
+    finally:
+        client.close()
+    assert second.text == "fixture answer"
+
+
+def test_cleanup_failure_checkpoints_every_affected_turn(tmp_path: Path) -> None:
+    from botpipe.codex_appserver import CodexProtocolError, _Turn
+
+    client = adapter(tmp_path)
+    process = SimpleNamespace(pid=123, poll=lambda: None)
+
+    class BrokenContainment:
+        def capture_descendant_groups(self, _process):
+            pass
+
+        def terminate(self, _process, *, grace_seconds):
+            raise RuntimeError("process inspection unavailable")
+
+        def ensure_tree_exited(self, _process, *, grace_seconds):
+            raise RuntimeError("cleanup unverified")
+
+    updates: dict[str, list[dict]] = {"one": [], "two": []}
+    for name in updates:
+        turn = _Turn(
+            f"thread-{name}",
+            f"turn-{name}",
+            None,
+            None,
+            updates[name].append,
+        )
+        client._turns[(turn.thread_id, turn.turn_id)] = turn
+    client._process = process
+    client._containment = BrokenContainment()  # type: ignore[assignment]
+
+    with pytest.raises(CodexProtocolError, match="cleanup was incomplete"):
+        client._kill_transport(
+            CodexProtocolError("transport failed"),
+            cleanup_seconds=0,
+        )
+
+    for recorded in updates.values():
+        assert recorded[-1]["cleanup"]["status"] == "incomplete"
+        assert "process inspection unavailable" in recorded[-1]["cleanup"]["error"]
 
 
 @pytest.mark.asyncio

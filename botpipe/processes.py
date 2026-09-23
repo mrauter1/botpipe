@@ -10,6 +10,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
+class ProcessCleanupError(RuntimeError):
+    """Owned process cleanup ran, but descendant inspection was incomplete."""
+
+
 def _posix_processes() -> dict[int, tuple[int, int, str, str]]:
     """Return pid -> (ppid, pgid, state, stable process identity)."""
 
@@ -36,8 +40,11 @@ def _posix_processes() -> dict[int, tuple[int, int, str, str]]:
                 with open(f"/proc/{pid}/stat", "rb") as proc_stat:
                     tail = proc_stat.read().rsplit(b") ", 1)[1]
                 identity = f"linux:{tail.split()[19].decode('ascii')}"
-            except (OSError, IndexError, UnicodeDecodeError):
+            except FileNotFoundError:
+                # The process exited between ps and procfs inspection.
                 continue
+            except (OSError, IndexError, UnicodeDecodeError) as exc:
+                raise OSError(f"could not identify process {pid} from procfs") from exc
         processes[pid] = (ppid, pgid, fields[3], identity)
     return processes
 
@@ -75,6 +82,18 @@ class ProcessContainment:
     _owned_pid: int | None = None
     _owned_pgid: int | None = None
     _descendant_groups: dict[int, dict[int, str]] = field(default_factory=dict)
+    _inspection_errors: list[str] = field(default_factory=list)
+
+    def _inspection_failed(self, operation: str, exc: BaseException) -> None:
+        self._inspection_errors.append(f"{operation}: {exc}")
+
+    def _raise_if_unverified(self) -> None:
+        if self._inspection_errors:
+            detail = "; ".join(dict.fromkeys(self._inspection_errors))
+            raise ProcessCleanupError(
+                "process-tree cleanup could not be verified because inspection failed: "
+                + detail
+            )
 
     @classmethod
     def create(cls) -> ProcessContainment:
@@ -122,9 +141,13 @@ class ProcessContainment:
                 return
         except ProcessLookupError:
             return
+        except OSError as exc:
+            self._inspection_failed("inspect owned process group", exc)
+            return
         try:
             processes = _posix_processes()
-        except (OSError, subprocess.SubprocessError):
+        except (OSError, subprocess.SubprocessError) as exc:
+            self._inspection_failed("snapshot descendants", exc)
             return
         descendants = {process.pid}
         changed = True
@@ -144,7 +167,8 @@ class ProcessContainment:
             return
         try:
             processes = _posix_processes()
-        except (OSError, subprocess.SubprocessError):
+        except (OSError, subprocess.SubprocessError) as exc:
+            self._inspection_failed("verify descendant identities", exc)
             return
         finished = set()
         for pgid, witnesses in self._descendant_groups.items():
@@ -178,6 +202,7 @@ class ProcessContainment:
             self._signal_descendant_groups(signal.SIGTERM)
             self._terminate_posix_group(process, grace_seconds=grace_seconds)
             self._signal_descendant_groups(signal.SIGKILL)
+            self._raise_if_unverified()
             return
         assert self._windows_job is not None
         self._windows_job.terminate(1)
@@ -211,15 +236,18 @@ class ProcessContainment:
                 os.killpg(process_group, 0)
             except ProcessLookupError:
                 self._signal_descendant_groups(signal.SIGKILL)
+                self._raise_if_unverified()
                 return
             except PermissionError:
                 if _posix_group_is_quiescent(process_group):
                     self._signal_descendant_groups(signal.SIGKILL)
+                    self._raise_if_unverified()
                     return
                 raise
             time.sleep(0.02)
         self._terminate_posix_group(process, grace_seconds=grace_seconds)
         self._signal_descendant_groups(signal.SIGKILL)
+        self._raise_if_unverified()
 
     def _terminate_posix_group(
         self, process: subprocess.Popen[bytes], *, grace_seconds: float
@@ -427,4 +455,4 @@ class WindowsJobObject:
             self.handle = None
 
 
-__all__ = ["ProcessContainment", "WindowsJobObject"]
+__all__ = ["ProcessCleanupError", "ProcessContainment", "WindowsJobObject"]

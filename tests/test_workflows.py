@@ -191,6 +191,85 @@ def test_devloop_docloop_runs_phase_repair_free_path_and_final_audit(
     assert len(provider.calls) == 6
 
 
+def test_devloop_test_verifier_independently_runs_without_declared_artifacts(
+    tmp_path: Path,
+) -> None:
+    def respond(req):
+        data = _input(req)
+        if "phase_plan" in req.artifacts:
+            _write(
+                req,
+                "phase_plan",
+                {
+                    "version": 1,
+                    "task_id": "verified-tests",
+                    "request_snapshot_ref": data["request_snapshot_ref"],
+                    "status": "planned",
+                    "phases": [
+                        {
+                            "phase_id": "p1",
+                            "title": "Implement",
+                            "objective": "implement and test",
+                            "status": "planned",
+                            "scope": {"in_scope": ["src"], "out_of_scope": []},
+                            "dependencies": [],
+                            "criteria": [{"id": "P1", "text": "tests pass"}],
+                            "deliverables": ["src/app.py"],
+                            "risks": [],
+                            "rollback": ["revert"],
+                        }
+                    ],
+                },
+            )
+            return "planned"
+        if "impl_notes" in req.artifacts:
+            _write(req, "impl_notes", "# Implementation\n\nComplete.\n")
+            return "implemented"
+        if "test_strat" in req.artifacts:
+            _write(req, "test_strat", "# Tests\n\n`pytest`: passed.\n")
+            return "tested"
+        if "audit_result" in req.artifacts:
+            _write(
+                req,
+                "audit_result",
+                {
+                    "version": 1,
+                    "task_id": "verified-tests",
+                    "request_snapshot_ref": data["request_snapshot_ref"],
+                    "status": "passed",
+                    "summary": "complete",
+                    "gaps": [],
+                },
+            )
+            _write(req, "gap_report", "# Gaps\n\nNone.\n")
+            return "audited"
+        return _review(
+            data["review_id"], [criterion["id"] for criterion in data["criteria"]]
+        )
+
+    provider = FakeProvider([respond] * 8)
+    result = Botpipe(tmp_path, provider=provider).run(
+        devloop,
+        "implement and test",
+        task_id="verified-tests",
+        run_id="run",
+    )
+
+    assert result.status == "completed"
+    assert [call.preset for call in provider.calls] == [
+        "run",
+        "query",
+        "run",
+        "query",
+        "run",
+        "run",
+        "run",
+        "query",
+    ]
+    test_verifier = provider.calls[5]
+    assert test_verifier.artifacts == {}
+
+
 def test_devloop_repairs_phase_item_and_records_skipped_followup(
     tmp_path: Path,
 ) -> None:
@@ -596,3 +675,12 @@ def test_code_to_workflow_runs_distill_design_build_and_publication(
     assert result.status == "completed"
     assert result.value.generated_workflow_name == "generated"
     assert Path(result.value.publication_receipt).is_file()
+    assert [call.preset for call in provider.calls] == [
+        "run",
+        "query",
+        "run",
+        "query",
+        "run",
+        "run",
+    ]
+    assert provider.calls[-1].artifacts == {}

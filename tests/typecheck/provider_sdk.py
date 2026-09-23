@@ -29,6 +29,7 @@ provider = Provider(
     tools=(),
     timeout=30,
     output_retries=1,
+    retry_safe=True,
     name="review",
     settings={"reasoning": {"summary": "concise"}},
 )
@@ -37,18 +38,24 @@ assert_type(configured, Provider)
 assert_type(provider.session, Session | None)
 assert_type(provider.run("write", writes=(Artifact.text("out.txt"),)), Result[str])
 assert_type(provider.run("review", returns=Review, on_event=receive_event), Result[Review])
+assert_type(provider.run("safe write", retry_safe=False), Result[str])
 assert_type(provider.query("inspect", reads=("input.txt",)), Result[str])
+assert_type(provider.query("inspect", retry_safe=False), Result[str])
 assert_type(provider.query("review", returns=Review), Result[Review])
 assert_type(provider.generate("draft", allowed_tools=("read_file",)), Result[str])
+assert_type(provider.generate("draft", retry_safe=False), Result[str])
 assert_type(Codex().generate("review", returns=Review), Result[Review])
 
 
 async def async_contract() -> None:
     assert_type(await provider.arun("write"), Result[str])
+    assert_type(await provider.arun("write", retry_safe=False), Result[str])
     assert_type(await provider.arun("review", returns=Review), Result[Review])
     assert_type(await provider.aquery("inspect"), Result[str])
+    assert_type(await provider.aquery("inspect", retry_safe=False), Result[str])
     assert_type(await provider.aquery("review", returns=Review), Result[Review])
     assert_type(await provider.agenerate("draft"), Result[str])
+    assert_type(await provider.agenerate("draft", retry_safe=False), Result[str])
     assert_type(await provider.agenerate("review", returns=Review), Result[Review])
 
 

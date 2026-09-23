@@ -9,7 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from botpipe.processes import ProcessContainment
+from botpipe.processes import ProcessCleanupError, ProcessContainment
 
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX process-group behavior")
@@ -116,6 +116,33 @@ def test_captured_group_with_reused_witness_is_not_signalled(monkeypatch):
     containment._signal_descendant_groups(signal.SIGKILL)
 
     assert signals == []
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX process-group behavior")
+def test_inspection_failure_still_attempts_group_cleanup_and_is_exposed(monkeypatch):
+    from botpipe import processes
+
+    process = SimpleNamespace(pid=321, poll=lambda: None)
+    containment = ProcessContainment({}, _owned_pid=321, _owned_pgid=321)
+    monkeypatch.setattr(processes.os, "getpgrp", lambda: 1)
+    monkeypatch.setattr(processes.os, "getpgid", lambda _pid: 321)
+    monkeypatch.setattr(
+        processes,
+        "_posix_processes",
+        lambda: (_ for _ in ()).throw(OSError("ps unavailable")),
+    )
+    signals = []
+
+    def missing_group(pgid, sig):
+        signals.append((pgid, sig))
+        raise ProcessLookupError
+
+    monkeypatch.setattr(processes.os, "killpg", missing_group)
+
+    containment.capture_descendant_groups(process)
+    with pytest.raises(ProcessCleanupError, match="ps unavailable"):
+        containment.terminate(process, grace_seconds=0)
+    assert signals == [(321, signal.SIGTERM)]
 
 
 def test_windows_child_is_suspended_until_owned_job_assignment(monkeypatch):

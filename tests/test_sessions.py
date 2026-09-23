@@ -89,6 +89,76 @@ def test_session_lock_serializes_across_processes(monkeypatch, tmp_path):
         process.wait(timeout=5)
 
 
+def test_provider_resolution_obeys_cross_process_session_lock(
+    monkeypatch, tmp_path
+):
+    from botpipe import codec
+    from botpipe.recovery import Stopped
+
+    monkeypatch.setenv("BOTPIPE_COORDINATION_DIR", str(tmp_path / "coordination"))
+    recoveries = []
+
+    class InterruptedProvider(FakeProvider):
+        def recover(self, request):
+            recoveries.append(request.operation_id)
+            return Stopped("stopped")
+
+    @workflow
+    def work():
+        return Provider(session=Session.task("shared")).run(
+            "work", timeout=0.05
+        )
+
+    provider = InterruptedProvider([SystemExit("interrupted")])
+    with Botpipe(tmp_path, provider=provider) as client:
+        with pytest.raises(SystemExit):
+            client.run(work, run_id="session-resolution")
+        operation = next(
+            row
+            for row in client.journal.operations("session-resolution")
+            if row["kind"] == "provider"
+        )
+        session_key = codec.decode(operation["inputs"])["session"]
+        ready = tmp_path / "resolve-ready"
+        script = (
+            "import sys\n"
+            "from pathlib import Path\n"
+            "from botpipe.locks import session_lock\n"
+            "with session_lock(sys.argv[1], sys.argv[2], timeout=1):\n"
+            " Path(sys.argv[3]).write_text('ready')\n"
+            " sys.stdin.read(1)\n"
+        )
+        process = subprocess.Popen(
+            [
+                sys.executable,
+                "-c",
+                script,
+                str(client.journal.path),
+                session_key,
+                str(ready),
+            ],
+            stdin=subprocess.PIPE,
+        )
+        try:
+            deadline = time.monotonic() + 5
+            while not ready.exists() and time.monotonic() < deadline:
+                time.sleep(0.01)
+            assert ready.exists()
+            with pytest.raises(ProviderTimeoutError, match="session"):
+                client.resolve(
+                    "session-resolution", operation["id"], retry=True
+                )
+            assert recoveries == []
+        finally:
+            assert process.stdin is not None
+            process.stdin.write(b"x")
+            process.stdin.flush()
+            process.wait(timeout=5)
+
+        client.resolve("session-resolution", operation["id"], retry=True)
+        assert recoveries == [operation["id"]]
+
+
 def test_constructor_sessions_are_independent_and_task_sessions_persist(tmp_path):
     @workflow
     def talk():

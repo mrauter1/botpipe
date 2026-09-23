@@ -13,7 +13,7 @@ import re
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from enum import Enum
 from pathlib import Path
 from types import MemberDescriptorType
@@ -40,6 +40,7 @@ from .journal import Journal, now
 from .limits import RunLimits
 from .locks import default_state_dir
 from .locks import run_lock as acquire_run_lock
+from .locks import session_lock as acquire_session_lock
 from .locks import workspace_turn as acquire_workspace_turn
 from .models import RunResult
 from .policy import Policy
@@ -155,12 +156,18 @@ def _preflight_recorded_contracts(data, operations):
                 _preflight_exception_record(error)
         for record in operations:
             recorded_inputs = codec.decode(record["inputs"])
-            if record["kind"] == "activity":
+            if record["kind"] in {"activity", "provider"}:
                 if not isinstance(recorded_inputs, dict):
-                    raise ReplayMismatch("Recorded activity inputs are malformed")
+                    raise ReplayMismatch(
+                        f"Recorded {record['kind']} inputs are malformed"
+                    )
                 retry_safe = recorded_inputs.pop("retry_safe", None)
-                if type(retry_safe) is not bool:
-                    raise ReplayMismatch("Recorded activity retry safety is malformed")
+                if type(retry_safe) is not bool and not (
+                    record["kind"] == "provider" and retry_safe is None
+                ):
+                    raise ReplayMismatch(
+                        f"Recorded {record['kind']} retry safety is malformed"
+                    )
             expected = _hash(
                 {
                     "kind": record["kind"],
@@ -592,12 +599,12 @@ async def _async_call(fn, *args, **kwargs):
             if task.done():
                 try:
                     result = task.result()
-                except BaseException:
-                    raise asyncio.CancelledError from None
+                except BaseException as exc:
+                    raise asyncio.CancelledError from exc
                 break
-        except BaseException:
+        except BaseException as exc:
             if cancelled:
-                raise asyncio.CancelledError from None
+                raise asyncio.CancelledError from exc
             raise
     if cancelled:
         raise asyncio.CancelledError
@@ -1013,10 +1020,14 @@ class RunContext:
         fingerprint_inputs = codec.encode(inputs)
         fingerprint = _hash({"kind": kind, "name": name, "inputs": fingerprint_inputs})
         durable_inputs = (
-            {**inputs, "retry_safe": retry_safe} if kind == "activity" else inputs
+            {**inputs, "retry_safe": retry_safe}
+            if kind in {"activity", "provider"}
+            else inputs
         )
         encoded_inputs = (
-            codec.encode(durable_inputs) if kind == "activity" else fingerprint_inputs
+            codec.encode(durable_inputs)
+            if kind in {"activity", "provider"}
+            else fingerprint_inputs
         )
         record = self.journal.get(operation_id)
         if record is not None:
@@ -1039,7 +1050,7 @@ class RunContext:
                     (record.get("response") or {}).get("retry_authorized")
                 )
             automatic_retry = retry_safe
-            if kind == "activity":
+            if kind in {"activity", "provider"}:
                 recorded_inputs = codec.decode(record["inputs"])
                 automatic_retry = (
                     retry_safe
@@ -2023,13 +2034,31 @@ class Botpipe:
 
                 target = request.workspace.resolve()
                 writable = self._operation_is_writable(inputs)
-                with self.workspace_turn(
-                    target,
-                    run_id=run_id,
-                    operation_id=operation_id,
-                    writable=writable,
-                ):
-                    reconcile_provider()
+                session_key = inputs.get("session")
+                recorded_timeout = inputs.get("timeout")
+                session_timeout = (
+                    RunLimits.from_record(data).timeout
+                    if recorded_timeout is None
+                    else recorded_timeout
+                )
+                session_guard = (
+                    acquire_session_lock(
+                        self.journal.path,
+                        session_key,
+                        timeout=session_timeout,
+                        cancellation=_cancellation_event(),
+                    )
+                    if session_key is not None
+                    else nullcontext()
+                )
+                with session_guard:
+                    with self.workspace_turn(
+                        target,
+                        run_id=run_id,
+                        operation_id=operation_id,
+                        writable=writable,
+                    ):
+                        reconcile_provider()
 
                 if fail:
                     self._fail_resolution(

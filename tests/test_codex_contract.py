@@ -356,8 +356,6 @@ def test_latest_native_default_session_presets_and_read_only_enforcement(native)
         "type": "workspaceWrite",
         "writableRoots": [str(workspace.resolve())],
         "networkAccess": False,
-        "excludeSlashTmp": True,
-        "excludeTmpdirEnvVar": True,
     }
 
     forbidden = workspace / "query-must-not-write.txt"
@@ -389,7 +387,11 @@ def test_latest_native_default_session_presets_and_read_only_enforcement(native)
         "type": "readOnly",
         "networkAccess": False,
     }
-    assert query.metadata["enforcement"]["allowed_tools"] == ["shell"]
+    assert query.metadata["enforcement"]["tools"] == {
+        "mode": "allowlist",
+        "allowed": ["shell"],
+        "disabled_via": "codex-features",
+    }
 
     generated = sdk.generate(
         "Return the fixed response without tools.",
@@ -403,7 +405,7 @@ def test_latest_native_default_session_presets_and_read_only_enforcement(native)
         generated.metadata["thread_id"],
     } == {default.metadata["thread_id"]}
     enforcement = generated.metadata["enforcement"]
-    assert enforcement["allowed_tools"] == []
+    assert enforcement["tools"]["allowed"] == []
     assert enforcement["mcp_servers"] == {}
     assert enforcement["feature_overrides"]
     assert not any(enforcement["feature_overrides"].values())

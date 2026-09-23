@@ -11,6 +11,7 @@ import subprocess
 import threading
 import time
 from collections.abc import Callable, Mapping, Sequence
+from contextlib import ExitStack
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Self
@@ -56,16 +57,71 @@ _PASSIVE_ITEMS = {
     "contextCompaction",
 }
 _TOOL_FEATURES = {
-    "shell": ("shell_tool", "unified_exec"),
-    "web_search": ("standalone_web_search",),
+    # This is deliberately a reviewed list of feature flags that expose a
+    # model-facing tool.  Feature discovery tells us which entries the
+    # installed Codex accepts; unrelated discovered features retain their
+    # native value.
+    "shell": (
+        "shell_tool",
+        "unified_exec",
+        "unified_exec_tty",
+    ),
+    "web_search": (
+        "standalone_web_search",
+        "search_tool",
+        "web_search_cached",
+        "web_search_request",
+    ),
     "view_image": ("view_image",),
     "sleep": ("sleep_tool",),
     "image_generation": ("image_generation",),
-    "collaboration": ("multi_agent",),
-    "mcp": ("enable_mcp_apps",),
-    "request_user_input": (),
+    "collaboration": (
+        "multi_agent",
+        "multi_agent_v2",
+        "multi_agent_mode",
+        "collaboration_modes",
+        "enable_fanout",
+    ),
+    "mcp": (),
+    "request_user_input": ("default_mode_request_user_input",),
     "update_plan": (),
 }
+_DISABLED_ONLY_TOOL_FEATURES = frozenset(
+    {
+        # These expose alternate execution/catalog surfaces that Botpipe does
+        # not yet classify as one of its allowlisted tool families.
+        "apps",
+        "artifact",
+        "browser_use",
+        "browser_use_external",
+        "browser_use_full_cdp_access",
+        "code_mode",
+        "code_mode_host",
+        "code_mode_only",
+        "codex_apps_mcp_2026_07_28",
+        "computer_use",
+        "deferred_executor",
+        "enable_mcp_apps",
+        "hooks",
+        "in_app_browser",
+        "in_app_local_automation",
+        "js_repl",
+        "js_repl_tools_only",
+        "plugin_hooks",
+        "plugins",
+        "recommended_plugins",
+        "remote_plugin",
+        "request_permissions_tool",
+        "skill_mcp_dependency_install",
+        "tool_search",
+        "tool_suggest",
+        "unavailable_dummy_tools",
+        "workspace_dependencies",
+    }
+)
+_TOOL_ENABLING_FEATURES = frozenset(
+    feature for features in _TOOL_FEATURES.values() for feature in features
+) | _DISABLED_ONLY_TOOL_FEATURES
 _TOOL_EVENTS = {
     "turn/plan/updated": "update_plan",
     "item/tool/requestUserInput": "request_user_input",
@@ -160,8 +216,6 @@ def _sandbox(request: Any) -> tuple[str, dict[str, Any]]:
         "type": "workspaceWrite",
         "writableRoots": roots,
         "networkAccess": network == "full",
-        "excludeSlashTmp": True,
-        "excludeTmpdirEnvVar": True,
     }
 
 
@@ -200,13 +254,15 @@ def _tool_config(
         )
         config["web_search"] = "disabled"
         known_features = {item["name"] for item in capabilities.features}
-        for feature in ("apps", "enable_mcp_apps"):
+        for feature in _DISABLED_ONLY_TOOL_FEATURES:
             if feature in known_features:
                 config[f"features.{feature}"] = False
     if tools is None:
         return config
     known_features = {item["name"] for item in capabilities.features}
-    feature_values = {name: False for name in known_features if "sandbox" not in name}
+    feature_values = {
+        name: False for name in known_features & _TOOL_ENABLING_FEATURES
+    }
     for tool in tools:
         family = tool.split(":", 1)[0]
         for feature in _TOOL_FEATURES.get(family, ()):
@@ -226,7 +282,9 @@ def _tool_config(
             }
         )
     else:
-        allowed_servers = set(mcp_tools)
+        allowed_servers = {
+            name.removeprefix("mcp:").split("/", 1)[0] for name in mcp_tools
+        }
         missing = allowed_servers - ambient_mcp
         if missing:
             raise CapabilityError(
@@ -303,7 +361,13 @@ class CodexAppServerAdapter:
             and Path(self.executable).parent == Path(".")
             else None
         )
-        path = Path(located or self.executable).expanduser().resolve(strict=True)
+        try:
+            path = Path(located or self.executable).expanduser().resolve(strict=True)
+        except OSError as exc:
+            raise CapabilityError(
+                f"Codex executable {self.executable!r} is unavailable: {exc}. "
+                "Install Codex or configure codex.path to an executable."
+            ) from exc
         stat = path.stat()
         current = (str(path), stat.st_size, stat.st_mtime_ns)
         if self._probe_stat != current:
@@ -452,6 +516,11 @@ class CodexAppServerAdapter:
                     failure = CodexProtocolError(
                         f"app-server process-tree cleanup failed: {cleanup_error}"
                     )
+                    with self._lock:
+                        affected = [
+                            turn for turn in self._turns.values() if not turn.completed
+                        ]
+                    self._checkpoint_cleanup_failure(affected, failure)
             self._fail_transport(failure, process=process)
 
     def _receive(self, message: dict[str, Any]) -> None:
@@ -729,13 +798,6 @@ class CodexAppServerAdapter:
         except TimeoutError as exc:
             raise timed_out() from exc
         capabilities.require(request.preset)
-        if request.tools is not None:
-            unclassified = capabilities.item_types - _PASSIVE_ITEMS - _TOOL_ITEMS.keys()
-            if unclassified:
-                raise CapabilityError(
-                    "Codex protocol exposes unclassified turn items under a tool allowlist: "
-                    + ", ".join(sorted(unclassified))
-                )
         try:
             self._start(deadline=deadline)
         except TimeoutError as exc:
@@ -743,13 +805,6 @@ class CodexAppServerAdapter:
         config = _tool_config(request, capabilities, self._mcp_servers)
         sandbox_name, sandbox_policy = _sandbox(request)
         profile_hash = _profile_hash(request, config)
-        expected_profile = None
-        if isinstance(request.checkpoint, Mapping):
-            expected_profile = request.checkpoint.get("profile_hash")
-        if expected_profile is not None and expected_profile != profile_hash:
-            raise CapabilityError(
-                "resumed Codex thread has an incompatible execution profile"
-            )
         model = getattr(request.policy, "model", None)
         raw_effort = getattr(request.policy, "effort", None)
         effort = getattr(raw_effort, "value", raw_effort)
@@ -795,7 +850,6 @@ class CodexAppServerAdapter:
                 for key, value in config.items()
                 if key.startswith("mcp_servers.") and key.endswith(".enabled")
             },
-            "allowed_tools": list(request.tools) if request.tools is not None else None,
         }
         common = {
             "cwd": str(Path(request.workspace).resolve()),
@@ -819,78 +873,68 @@ class CodexAppServerAdapter:
                 }
             )
         remaining()
-        thread_id = request.session_id
-        outer_lock: threading.RLock | None = None
-        if thread_id is not None:
-            outer_lock = self._thread_locks.setdefault(thread_id, threading.RLock())
-            if not outer_lock.acquire(timeout=remaining()):
-                raise timed_out()
-        if thread_id is None:
-            dynamic_tools: list[dict[str, Any]] = []
-            try:
-                result = self._rpc(
-                    "thread/start",
-                    {**common, "ephemeral": False, "dynamicTools": dynamic_tools},
-                    remaining(10),
-                    deadline=deadline,
-                )
-            except TimeoutError as exc:
-                raise timed_out() from exc
-        else:
-            try:
-                previous_profile = self._thread_profiles.get(thread_id)
-                if previous_profile is not None and previous_profile != profile_hash:
-                    if "thread/unsubscribe" not in capabilities.methods:
-                        raise CapabilityError(
-                            "thread/unsubscribe is required to change a loaded thread's configuration"
-                        )
-                    # Codex ignores resume config while a thread has subscribers.
-                    # Detach this idle session so resume reloads the same history.
-                    self._rpc(
-                        "thread/unsubscribe",
-                        {"threadId": thread_id},
+        with ExitStack() as thread_scope:
+            thread_id = request.session_id
+            outer_lock: threading.RLock | None = None
+            if thread_id is not None:
+                outer_lock = self._thread_locks.setdefault(thread_id, threading.RLock())
+                if not outer_lock.acquire(timeout=remaining()):
+                    raise timed_out()
+                thread_scope.callback(outer_lock.release)
+            if thread_id is None:
+                dynamic_tools: list[dict[str, Any]] = []
+                try:
+                    result = self._rpc(
+                        "thread/start",
+                        {**common, "ephemeral": False, "dynamicTools": dynamic_tools},
                         remaining(10),
                         deadline=deadline,
                     )
-                result = self._rpc(
-                    "thread/resume",
-                    {**common, "threadId": thread_id},
-                    remaining(10),
-                    deadline=deadline,
-                )
-            except TimeoutError as exc:
-                assert outer_lock is not None
-                outer_lock.release()
-                raise timed_out() from exc
-            except CodexProtocolError as exc:
-                assert outer_lock is not None
-                outer_lock.release()
-                from .errors import SessionError
+                except TimeoutError as exc:
+                    raise timed_out() from exc
+            else:
+                try:
+                    previous_profile = self._thread_profiles.get(thread_id)
+                    if previous_profile is not None and previous_profile != profile_hash:
+                        if "thread/unsubscribe" not in capabilities.methods:
+                            raise CapabilityError(
+                                "thread/unsubscribe is required to change a loaded thread's configuration"
+                            )
+                        # Codex ignores resume config while a thread has subscribers.
+                        # Detach this idle session so resume reloads the same history.
+                        self._rpc(
+                            "thread/unsubscribe",
+                            {"threadId": thread_id},
+                            remaining(10),
+                            deadline=deadline,
+                        )
+                    result = self._rpc(
+                        "thread/resume",
+                        {**common, "threadId": thread_id},
+                        remaining(10),
+                        deadline=deadline,
+                    )
+                except TimeoutError as exc:
+                    raise timed_out() from exc
+                except CodexProtocolError as exc:
+                    from .errors import SessionError
 
-                raise SessionError(
-                    f"Codex thread {thread_id!r} could not be resumed: {exc}"
-                ) from exc
-            except BaseException:
-                assert outer_lock is not None
-                outer_lock.release()
-                raise
-        thread = result.get("thread")
-        actual_thread = thread.get("id") if isinstance(thread, Mapping) else None
-        if not isinstance(actual_thread, str) or not actual_thread:
-            if outer_lock is not None:
-                outer_lock.release()
-            raise CodexProtocolError("thread response contained no thread id")
-        if thread_id is not None and actual_thread != thread_id:
-            assert outer_lock is not None
-            outer_lock.release()
-            raise CodexProtocolError("thread/resume returned a different thread id")
-        thread_id = actual_thread
-        if outer_lock is None:
-            outer_lock = self._thread_locks.setdefault(thread_id, threading.RLock())
-            if not outer_lock.acquire(timeout=remaining()):
-                raise timed_out()
-        self._thread_profiles[thread_id] = profile_hash
-        try:
+                    raise SessionError(
+                        f"Codex thread {thread_id!r} could not be resumed: {exc}"
+                    ) from exc
+            thread = result.get("thread")
+            actual_thread = thread.get("id") if isinstance(thread, Mapping) else None
+            if not isinstance(actual_thread, str) or not actual_thread:
+                raise CodexProtocolError("thread response contained no thread id")
+            if thread_id is not None and actual_thread != thread_id:
+                raise CodexProtocolError("thread/resume returned a different thread id")
+            thread_id = actual_thread
+            if outer_lock is None:
+                outer_lock = self._thread_locks.setdefault(thread_id, threading.RLock())
+                if not outer_lock.acquire(timeout=remaining()):
+                    raise timed_out()
+                thread_scope.callback(outer_lock.release)
+            self._thread_profiles[thread_id] = profile_hash
             if request.on_checkpoint is not None:
                 request.on_checkpoint(
                     {
@@ -902,11 +946,6 @@ class CodexAppServerAdapter:
                     }
                 )
             remaining()
-        except BaseException:
-            outer_lock.release()
-            raise
-        thread_lock = outer_lock
-        with thread_lock:
             params: dict[str, Any] = {
                 "threadId": thread_id,
                 "input": [{"type": "text", "text": request.prompt}],
@@ -930,10 +969,14 @@ class CodexAppServerAdapter:
             if effort:
                 params["effort"] = effort
             if request.cancel_event is not None and request.cancel_event.is_set():
-                outer_lock.release()
                 from .providers import ProviderInterruptedError
 
                 raise ProviderInterruptedError("Codex turn cancelled before dispatch")
+            with self._lock:
+                orphan_baseline = {
+                    key for key in self._orphan_events if key[0] == thread_id
+                }
+            acknowledged_turn_id: str | None = None
             try:
                 if request.on_checkpoint is not None:
                     request.on_checkpoint(
@@ -958,6 +1001,7 @@ class CodexAppServerAdapter:
                 )
                 if not isinstance(turn_id, str) or not turn_id:
                     raise CodexProtocolError("turn/start returned no turn id")
+                acknowledged_turn_id = turn_id
                 if request.on_checkpoint is not None:
                     request.on_checkpoint(
                         {
@@ -970,11 +1014,115 @@ class CodexAppServerAdapter:
                         }
                     )
             except BaseException as exc:
-                self._kill_transport(
-                    CodexTurnError("turn/start acknowledgement was not durable"),
-                    grace_seconds=0.1,
+                try:
+                    self._kill_transport(
+                        CodexTurnError("turn/start acknowledgement was not durable"),
+                        grace_seconds=0.1,
+                    )
+                except BaseException as cleanup_exc:
+                    if request.on_checkpoint is not None:
+                        request.on_checkpoint(
+                            {
+                                "cleanup": {
+                                    "status": "incomplete",
+                                    "error": str(cleanup_exc),
+                                }
+                            }
+                        )
+                    raise
+                reader = self._reader
+                if reader is not None and reader is not threading.current_thread():
+                    reader.join(timeout=min(1.0, self.interrupt_grace_seconds))
+                    if reader.is_alive():
+                        audit_error = CodexProtocolError(
+                            "app-server event stream did not drain after cleanup"
+                        )
+                        if request.on_checkpoint is not None:
+                            request.on_checkpoint(
+                                {
+                                    "cleanup": {
+                                        "status": "incomplete",
+                                        "error": str(audit_error),
+                                    }
+                                }
+                            )
+                        raise audit_error
+                # A verified transport-tree teardown makes the unknown
+                # pre-acknowledgement dispatch durably stopped.  Audit any
+                # events that arrived before the RPC response was lost.
+                pre_ack = _Turn(thread_id, "pre-ack", request.tools, None)
+                with self._lock:
+                    orphaned = [
+                        (key, list(events))
+                        for key, events in self._orphan_events.items()
+                        if key[0] == thread_id
+                        and key not in orphan_baseline
+                        and (
+                            acknowledged_turn_id is None
+                            or key[1] == acknowledged_turn_id
+                        )
+                    ]
+                    for key, _events in orphaned:
+                        self._orphan_events.pop(key, None)
+                if len(orphaned) == 1:
+                    pre_ack.turn_id = orphaned[0][0][1]
+                for (_event_thread, _event_turn), events in orphaned:
+                    for method, event_params in events:
+                        self._record_event(pre_ack, method, event_params)
+                enforcement["audit"] = (
+                    "tool-policy-violation"
+                    if isinstance(pre_ack.error, CapabilityError)
+                    else "tool-calls-observed"
+                    if pre_ack.tools_observed
+                    else "no-tool-calls-observed"
                 )
-                outer_lock.release()
+                stopped_checkpoint: dict[str, Any] = {
+                    "status": "failed",
+                    "error": str(pre_ack.error or exc),
+                    "cleanup": {"status": "completed"},
+                    "enforcement": enforcement,
+                    "audit": list(pre_ack.events),
+                }
+                if isinstance(pre_ack.error, CapabilityError):
+                    stopped_checkpoint["policy_error"] = True
+                if (
+                    len(orphaned) == 1
+                    and pre_ack.completed
+                    and pre_ack.error is None
+                    and pre_ack.messages
+                ):
+                    if request.on_checkpoint is not None:
+                        request.on_checkpoint(
+                            {
+                                "status": "response_received",
+                                "session_id": thread_id,
+                                "turn_id": pre_ack.turn_id,
+                                "enforcement": enforcement,
+                                "audit": list(pre_ack.events),
+                            }
+                        )
+                    from .providers import ProviderResponse
+
+                    return ProviderResponse(
+                        pre_ack.messages[-1],
+                        thread_id,
+                        dict(pre_ack.usage),
+                        {
+                            "provider": "codex",
+                            "codex_version": capabilities.version,
+                            "thread_id": thread_id,
+                            "turn_id": pre_ack.turn_id,
+                            "probe_hash": capabilities.probe_hash,
+                            "profile_hash": profile_hash,
+                            "enforcement": enforcement,
+                            "audit": list(pre_ack.events),
+                            "recovered_from_lost_ack": True,
+                        },
+                    )
+                if request.on_checkpoint is not None:
+                    request.on_checkpoint(stopped_checkpoint)
+                if pre_ack.error is not None:
+                    raise pre_ack.error
                 if isinstance(exc, _RpcCancelled):
                     from .providers import ProviderInterruptedError
 
@@ -1069,16 +1217,27 @@ class CodexAppServerAdapter:
                 finally:
                     with self._lock:
                         self._turns.pop((thread_id, turn_id), None)
-                    outer_lock.release()
 
     def recover_turn(
         self, request: Any, *, thread_id: str, turn_id: str
     ) -> tuple[str, Any | None]:
-        """Interrogate native thread history without dispatching model input."""
-        capabilities = self.probe()
+        """Reconcile one durable native turn without dispatching model input."""
+        deadline = (
+            request.deadline
+            if request.deadline is not None
+            else time.monotonic() + request.timeout
+        )
+
+        def remaining(limit: float) -> float:
+            value = min(limit, deadline - time.monotonic())
+            if value <= 0:
+                raise TimeoutError("Codex native recovery timed out")
+            return value
+
+        capabilities = self.probe(deadline=deadline)
         if "thread/read" not in capabilities.methods:
             return "unknown", None
-        self._start()
+        self._start(deadline=deadline)
         config = _tool_config(request, capabilities, self._mcp_servers)
         sandbox_name, _ = _sandbox(request)
         common = {
@@ -1091,36 +1250,176 @@ class CodexAppServerAdapter:
         model = getattr(request.policy, "model", None)
         if model:
             common["model"] = model
+        def read_turn(
+            *, read_deadline: float = deadline
+        ) -> tuple[Mapping[str, Any] | None, str | None]:
+            rpc_deadline = min(deadline, read_deadline)
+            timeout = min(10.0, rpc_deadline - time.monotonic())
+            if timeout <= 0:
+                raise TimeoutError("Codex native recovery read timed out")
+            result = self._rpc(
+                "thread/read",
+                {"threadId": thread_id, "includeTurns": True},
+                timeout,
+                deadline=rpc_deadline,
+            )
+            thread = result.get("thread")
+            turns = thread.get("turns") if isinstance(thread, Mapping) else None
+            if not isinstance(turns, list):
+                return None, None
+            match = next(
+                (
+                    turn
+                    for turn in turns
+                    if isinstance(turn, Mapping) and turn.get("id") == turn_id
+                ),
+                None,
+            )
+            status = match.get("status") if isinstance(match, Mapping) else None
+            return match, status if isinstance(status, str) else None
+
+        lock = self._thread_locks.setdefault(thread_id, threading.RLock())
+        if not lock.acquire(timeout=remaining(request.timeout)):
+            raise TimeoutError("Codex native recovery timed out waiting for its thread")
+        cleanup_uncertain: str | None = None
         try:
-            with self._thread_locks.setdefault(thread_id, threading.RLock()):
-                self._rpc("thread/resume", common, min(10, request.timeout))
-                self._thread_profiles.setdefault(thread_id, "")
-                result = self._rpc(
-                    "thread/read",
-                    {"threadId": thread_id, "includeTurns": True},
-                    min(10, request.timeout),
+            self._rpc(
+                "thread/resume", common, remaining(10), deadline=deadline
+            )
+            self._thread_profiles.setdefault(thread_id, "")
+            match, status = read_turn()
+            if status in {"inProgress", "running", "pending"}:
+                if not capabilities.supports_interrupt:
+                    return "running", None
+                # The interrupt is scoped to the recorded turn.  A failure can
+                # be a completion race, so history remains authoritative.
+                try:
+                    self._rpc(
+                        "turn/interrupt",
+                        {"threadId": thread_id, "turnId": turn_id},
+                        remaining(min(5.0, self.interrupt_grace_seconds)),
+                        deadline=deadline,
+                    )
+                except (CodexProtocolError, TimeoutError):
+                    pass
+                reconcile_deadline = min(
+                    deadline, time.monotonic() + self.interrupt_grace_seconds
                 )
+                while status in {"inProgress", "running", "pending"}:
+                    if (
+                        request.cancel_event is not None
+                        and request.cancel_event.is_set()
+                    ) or time.monotonic() >= reconcile_deadline:
+                        break
+                    try:
+                        match, status = read_turn(read_deadline=reconcile_deadline)
+                    except TimeoutError:
+                        break
+                    if status in {"inProgress", "running", "pending"}:
+                        time.sleep(
+                            max(
+                                0.0,
+                                min(0.05, reconcile_deadline - time.monotonic()),
+                            )
+                        )
+            if status in {"failed", "interrupted", "cancelled"}:
+                cleanup_methods = {
+                    "thread/backgroundTerminals/clean",
+                    "thread/backgroundTerminals/list",
+                }
+                if (
+                    request.cancel_event is not None
+                    and request.cancel_event.is_set()
+                ):
+                    cleanup_uncertain = (
+                        "Codex background terminal cleanup was cancelled"
+                    )
+                elif not cleanup_methods.issubset(capabilities.methods):
+                    cleanup_uncertain = (
+                        "installed Codex cannot verify background terminal cleanup"
+                    )
+                else:
+                    cleanup_deadline = min(
+                        deadline, time.monotonic() + self.interrupt_grace_seconds
+                    )
+
+                    def cleanup_budget(limit: float) -> float:
+                        value = min(limit, cleanup_deadline - time.monotonic())
+                        if value <= 0:
+                            raise TimeoutError(
+                                "Codex background terminal cleanup timed out"
+                            )
+                        return value
+
+                    try:
+                        self._rpc(
+                            "thread/backgroundTerminals/clean",
+                            {"threadId": thread_id},
+                            cleanup_budget(5.0),
+                            deadline=cleanup_deadline,
+                        )
+                        while True:
+                            cursor: str | None = None
+                            found_background = False
+                            while True:
+                                params: dict[str, Any] = {
+                                    "threadId": thread_id,
+                                    "limit": 1000,
+                                }
+                                if cursor is not None:
+                                    params["cursor"] = cursor
+                                inventory = self._rpc(
+                                    "thread/backgroundTerminals/list",
+                                    params,
+                                    cleanup_budget(5.0),
+                                    deadline=cleanup_deadline,
+                                )
+                                data = inventory.get("data")
+                                if not isinstance(data, list):
+                                    raise CodexProtocolError(
+                                        "Codex returned an invalid background terminal inventory"
+                                    )
+                                if data:
+                                    found_background = True
+                                    break
+                                next_cursor = inventory.get("nextCursor")
+                                if next_cursor is None or next_cursor == "":
+                                    break
+                                if not isinstance(next_cursor, str):
+                                    raise CodexProtocolError(
+                                        "Codex returned an invalid background terminal cursor"
+                                    )
+                                cursor = next_cursor
+                            if not found_background:
+                                break
+                            if (
+                                request.cancel_event is not None
+                                and request.cancel_event.is_set()
+                            ):
+                                raise TimeoutError(
+                                    "Codex background terminal cleanup was cancelled"
+                                )
+                            time.sleep(
+                                max(
+                                    0.0,
+                                    min(
+                                        0.05,
+                                        cleanup_deadline - time.monotonic(),
+                                    ),
+                                )
+                            )
+                    except (CodexProtocolError, TimeoutError) as exc:
+                        cleanup_uncertain = str(exc)
         except CodexProtocolError as exc:
             from .errors import SessionError
 
             raise SessionError(
                 f"Codex thread {thread_id!r} could not be resumed: {exc}"
             ) from exc
-        thread = result.get("thread")
-        turns = thread.get("turns") if isinstance(thread, Mapping) else None
-        if not isinstance(turns, list):
-            return "unknown", None
-        match = next(
-            (
-                turn
-                for turn in turns
-                if isinstance(turn, Mapping) and turn.get("id") == turn_id
-            ),
-            None,
-        )
+        finally:
+            lock.release()
         if match is None:
             return "unknown", None
-        status = match.get("status")
         if status in {"inProgress", "running", "pending"}:
             return "running", None
         if status not in {"completed", "failed", "interrupted", "cancelled"}:
@@ -1143,11 +1442,18 @@ class CodexAppServerAdapter:
             else "no-tool-calls-observed"
         )
         evidence = {"enforcement": enforcement, "audit": recovered.events}
+        if cleanup_uncertain is not None:
+            evidence["cleanup"] = {
+                "status": "incomplete",
+                "error": cleanup_uncertain,
+            }
         if request.on_checkpoint is not None:
             request.on_checkpoint(evidence)
         if recovered.error is not None:
             raise recovered.error
         if status != "completed":
+            if cleanup_uncertain is not None:
+                return "unknown", None
             return "stopped", None
         if not recovered.messages:
             return "unknown", None
@@ -1210,6 +1516,27 @@ class CodexAppServerAdapter:
                     turn.error = error
                 turn.condition.notify_all()
 
+    @staticmethod
+    def _checkpoint_cleanup_failure(
+        turns: Sequence[_Turn], error: BaseException
+    ) -> list[BaseException]:
+        checkpoint_errors: list[BaseException] = []
+        for turn in turns:
+            if turn.on_checkpoint is None:
+                continue
+            try:
+                turn.on_checkpoint(
+                    {
+                        "cleanup": {
+                            "status": "incomplete",
+                            "error": str(error),
+                        }
+                    }
+                )
+            except BaseException as exc:
+                checkpoint_errors.append(exc)
+        return checkpoint_errors
+
     def _kill_transport(
         self,
         error: BaseException,
@@ -1218,6 +1545,8 @@ class CodexAppServerAdapter:
         cleanup_seconds: float = 0.1,
     ) -> None:
         process, containment = self._process, self._containment
+        with self._lock:
+            affected_turns = [turn for turn in self._turns.values() if not turn.completed]
         if process is not None and containment is not None:
             containment.capture_descendant_groups(process)
         if process is not None and process.poll() is None:
@@ -1253,28 +1582,62 @@ class CodexAppServerAdapter:
             if containment is not None:
                 containment.capture_descendant_groups(process)
         self._fail_transport(error)
+        cleanup_errors: list[BaseException] = []
         if process is not None and containment is not None:
             if process.poll() is None:
-                containment.terminate(process, grace_seconds=grace_seconds)
-            containment.ensure_tree_exited(process, grace_seconds=grace_seconds)
+                try:
+                    containment.terminate(process, grace_seconds=grace_seconds)
+                except BaseException as exc:  # cleanup still continues below
+                    cleanup_errors.append(exc)
+            try:
+                containment.ensure_tree_exited(process, grace_seconds=grace_seconds)
+            except BaseException as exc:
+                cleanup_errors.append(exc)
+        if cleanup_errors:
+            failure = CodexProtocolError(
+                "app-server process-tree cleanup was incomplete: "
+                + "; ".join(str(exc) for exc in cleanup_errors)
+            )
+            checkpoint_errors = self._checkpoint_cleanup_failure(
+                affected_turns, failure
+            )
+            if checkpoint_errors:
+                failure = CodexProtocolError(
+                    f"{failure}; cleanup checkpoint failed: "
+                    + "; ".join(str(exc) for exc in checkpoint_errors)
+                )
+            self._fail_transport(failure)
+            raise failure
 
     def close(self) -> None:
         with self._lock:
             if self._closed:
                 return
             self._closed = True
-        self._kill_transport(CodexProtocolError("Codex adapter closed"))
+        cleanup_error: BaseException | None = None
+        try:
+            self._kill_transport(CodexProtocolError("Codex adapter closed"))
+        except BaseException as exc:
+            cleanup_error = exc
         process, containment = self._process, self._containment
         if process is not None:
             try:
                 process.wait(timeout=1)
             except subprocess.TimeoutExpired:
                 if containment is not None:
-                    containment.terminate(process, grace_seconds=0.1)
+                    try:
+                        containment.terminate(process, grace_seconds=0.1)
+                    except BaseException as exc:
+                        cleanup_error = cleanup_error or exc
             if containment is not None:
-                containment.ensure_tree_exited(process, grace_seconds=0.1)
+                try:
+                    containment.ensure_tree_exited(process, grace_seconds=0.1)
+                except BaseException as exc:
+                    cleanup_error = cleanup_error or exc
         if containment is not None:
             containment.close()
+        if cleanup_error is not None:
+            raise cleanup_error
 
     def __enter__(self) -> Self:
         return self

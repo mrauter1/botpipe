@@ -50,7 +50,7 @@ from .providers import (
     ProviderResponse,
     ProviderTimeoutError,
 )
-from .recovery import Stopped, Unknown, recover_outcome
+from .recovery import Stopped, recover_outcome
 from .runtime import _cancellation_event, current_run
 
 
@@ -73,6 +73,7 @@ def execute_provider_operation(
     policy=None,
     name=None,
     output_retries=2,
+    retry_safe=True,
     workspace=None,
     operation="run",
     instructions=None,
@@ -230,6 +231,12 @@ def execute_provider_operation(
                 operation_id = ctx.operation_id
                 fresh_response = False
                 row = ctx.journal.get(operation_id)
+                recorded_inputs = codec.decode(row["inputs"])
+                allow_retry = (
+                    retry_safe
+                    and isinstance(recorded_inputs, dict)
+                    and recorded_inputs.get("retry_safe") is True
+                )
                 checkpoint = ProviderCheckpoint.from_record(row.get("response"))
                 generation = checkpoint.generation
                 authorized = isinstance(checkpoint, RetryAuthorizedCheckpoint)
@@ -446,11 +453,52 @@ def execute_provider_operation(
                         on_event=event_callback,
                         on_checkpoint=save_provider_metadata,
                     )
+                    recovery_outcome = None
+                    if (
+                        recover
+                        and not authorized
+                        and not preparing
+                        and not isinstance(checkpoint, RespondedCheckpoint)
+                    ):
+                        recovery_outcome = recover_outcome(
+                            ctx.client.provider, request
+                        )
+                        action = ProviderLifecycle.recovery_action(
+                            checkpoint, recovery_outcome
+                        )
+                        if action is RecoveryAction.USE_RESPONSE:
+                            checkpoint = ProviderLifecycle.completed(
+                                checkpoint, recovery_outcome.response
+                            )
+                            ctx.save_response(
+                                operation_id,
+                                checkpoint.to_record(),
+                                session_key=session_key,
+                            )
+                        elif isinstance(recovery_outcome, Stopped) and allow_retry:
+                            if cancellation is not None and cancellation.is_set():
+                                raise CancellationRequested(
+                                    "Cancelled before provider retry"
+                                )
+                            checkpoint = ProviderLifecycle.authorize_retry(
+                                checkpoint, origin="automatic"
+                            )
+                            ctx.save_response(operation_id, checkpoint.to_record())
+                            generation = checkpoint.generation
+                            authorized = True
+                        else:
+                            raise UncertainOperation(
+                                recovery_outcome.detail
+                                or "Provider intent has no durable response; reconcile before retrying",
+                                operation_id,
+                            )
                     if authorized:
                         # Reconcile before touching destinations: the previous
                         # process may still be writing them, or its completed
                         # response may already be recoverable from a receipt.
-                        outcome = recover_outcome(ctx.client.provider, request)
+                        outcome = recovery_outcome or recover_outcome(
+                            ctx.client.provider, request
+                        )
                         action = ProviderLifecycle.recovery_action(checkpoint, outcome)
                         if action is RecoveryAction.USE_RESPONSE:
                             generation = prepared_generation
@@ -463,6 +511,19 @@ def execute_provider_operation(
                                 session_key=session_key,
                             )
                         elif action is RecoveryAction.START_RETRY:
+                            if (
+                                checkpoint.origin == "automatic"
+                                and not allow_retry
+                            ):
+                                raise UncertainOperation(
+                                    "Automatic provider retry safety was tightened; "
+                                    "operator reconciliation is required",
+                                    operation_id,
+                                )
+                            if cancellation is not None and cancellation.is_set():
+                                raise CancellationRequested(
+                                    "Cancelled before provider retry"
+                                )
                             rollback()
                             artifact_operation = (
                                 f"{operation_id}:generation:{generation}"
@@ -520,82 +581,56 @@ def execute_provider_operation(
                             )
                         dispatched = False
                         try:
-                            if recover and not authorized and not preparing:
-                                outcome = recover_outcome(ctx.client.provider, request)
-                                action = ProviderLifecycle.recovery_action(
-                                    checkpoint, outcome
-                                )
-                                if isinstance(
-                                    outcome, (Stopped, Unknown)
-                                ) and operation in {
-                                    "query",
-                                    "generate",
-                                }:
-                                    checkpoint = ProviderLifecycle.authorize_retry(
-                                        checkpoint
-                                    )
-                                    ctx.save_response(
-                                        operation_id, checkpoint.to_record()
-                                    )
-                                    return execute(False)
-                                if action is not RecoveryAction.USE_RESPONSE:
-                                    raise UncertainOperation(
-                                        outcome.detail
-                                        or "Provider intent has no durable response; reconcile before retrying",
-                                        operation_id,
-                                    )
-                                response = outcome.response
-                            else:
-                                if not getattr(
-                                    ctx.client.provider, "_reserves_dispatch", False
-                                ):
-                                    from .dispatches import Dispatch
+                            if not getattr(
+                                ctx.client.provider, "_reserves_dispatch", False
+                            ):
+                                from .dispatches import Dispatch
 
-                                    dispatch = Dispatch(ctx.client.provider, request)
-                                    reserved_deadline = time.monotonic() + dispatch.timeout
-                                    request = replace(
-                                        request,
-                                        timeout=dispatch.timeout,
-                                        deadline=min(
-                                            request.deadline
-                                            if request.deadline is not None
-                                            else reserved_deadline,
-                                            reserved_deadline,
-                                        ),
-                                    )
-                                    dispatched = True
-                                    dispatch.started()
-                                    try:
-                                        response = _start_turn(
-                                            ctx.client.provider, request, event_callback
-                                        )
-                                        if not isinstance(response, ProviderResponse):
-                                            raise TypeError(
-                                                "Provider returned an invalid response object"
-                                            )
-                                        response.to_record()
-                                    except BaseException as exc:
-                                        dispatch.finish(
-                                            "timed_out"
-                                            if isinstance(exc, ProviderTimeoutError)
-                                            else "failed"
-                                            if isinstance(exc, Exception)
-                                            else "interrupted",
-                                            usage=getattr(exc, "usage", None),
-                                            error=exc,
-                                        )
-                                        raise
-                                    dispatch.finish(
-                                        "completed"
-                                        if isinstance(response, ProviderResponse)
-                                        else "failed",
-                                        usage=getattr(response, "usage", None),
-                                    )
-                                else:
+                                dispatch = Dispatch(ctx.client.provider, request)
+                                reserved_deadline = time.monotonic() + dispatch.timeout
+                                request = replace(
+                                    request,
+                                    timeout=dispatch.timeout,
+                                    deadline=min(
+                                        request.deadline
+                                        if request.deadline is not None
+                                        else reserved_deadline,
+                                        reserved_deadline,
+                                    ),
+                                )
+                                dispatched = True
+                                dispatch.started()
+                                try:
                                     response = _start_turn(
                                         ctx.client.provider, request, event_callback
                                     )
-                                fresh_response = True
+                                    if not isinstance(response, ProviderResponse):
+                                        raise TypeError(
+                                            "Provider returned an invalid response object"
+                                        )
+                                    response.to_record()
+                                except BaseException as exc:
+                                    dispatch.finish(
+                                        "timed_out"
+                                        if isinstance(exc, ProviderTimeoutError)
+                                        else "failed"
+                                        if isinstance(exc, Exception)
+                                        else "interrupted",
+                                        usage=getattr(exc, "usage", None),
+                                        error=exc,
+                                    )
+                                    raise
+                                dispatch.finish(
+                                    "completed"
+                                    if isinstance(response, ProviderResponse)
+                                    else "failed",
+                                    usage=getattr(response, "usage", None),
+                                )
+                            else:
+                                response = _start_turn(
+                                    ctx.client.provider, request, event_callback
+                                )
+                            fresh_response = True
                         except BudgetExceeded as exc:
                             if not dispatched:
                                 record_not_dispatched("budget_error", exc)
@@ -725,6 +760,7 @@ def execute_provider_operation(
                     "provider",
                     inputs,
                     execute,
+                    retry_safe=retry_safe,
                     recover=lambda: execute(True),
                     name=name,
                 )
@@ -741,7 +777,8 @@ def execute_provider_operation(
                 return replace(result, usage=usage)
             except OutputValidationError as exc:
                 operation_id = f"{ctx.run_id}:{ctx.scope}:{ctx.ordinal - 1}"
-                response = ctx.journal.get(operation_id).get("response") or {}
+                operation_record = ctx.journal.get(operation_id)
+                response = operation_record.get("response") or {}
                 failed = ProviderCheckpoint.from_record(response)
                 if session is None and isinstance(failed, ValidationFailedCheckpoint):
                     # Rebuild call-local continuity on both execution and replay.
@@ -752,6 +789,24 @@ def execute_provider_operation(
                 exc.usage = dict(repair_usage)
                 if attempt == output_retries:
                     raise
+                recorded_inputs = codec.decode(operation_record["inputs"])
+                repair_safe = (
+                    retry_safe
+                    and isinstance(recorded_inputs, dict)
+                    and recorded_inputs.get("retry_safe") is True
+                )
+                next_id = f"{ctx.run_id}:{ctx.scope}:{ctx.ordinal}"
+                if not repair_safe:
+                    next_record = ctx.journal.get(next_id)
+                    if next_record is None:
+                        raise
+                    next_checkpoint = ProviderCheckpoint.from_record(
+                        next_record.get("response")
+                    )
+                    if isinstance(
+                        next_checkpoint, (EmptyCheckpoint, PreparingCheckpoint)
+                    ):
+                        raise
                 feedback = str(exc)
     finally:
         lock.__exit__(None, None, None)
