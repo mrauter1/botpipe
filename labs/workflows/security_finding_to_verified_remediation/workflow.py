@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from botpipe import Session, workflow
+from botpipe import Provider, workflow
 from labs.workflows._shared import (
     LabWorkflowResult,
     ReplanRequired,
@@ -37,8 +37,8 @@ def SecurityFindingToVerifiedRemediation(
     params: Params, request: str = ""
 ) -> LabWorkflowResult:
     """Execute the security finding to verified remediation evidence workflow."""
-    _producer = Session(key="producer")
-    _verifier = Session(key="verifier")
+    _producer = Provider()
+    _verifier = _producer.with_config(session=None)
     context = {"request": request, "parameters": params.model_dump(mode="json")}
     completed = []
     prior_handles = ()

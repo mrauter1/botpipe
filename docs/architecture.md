@@ -1,287 +1,136 @@
 # Architecture
 
-Botpipe is a durable-functions runtime for trusted Python workflows.
+Botpipe has three responsibilities: authoring ordinary Python workflows,
+coordinating durable operations, and talking to Codex. Python expresses the
+process; there is no graph language or scheduler DSL.
 
-## The invariant
+## Runtime and journal
 
-Python owns control flow. Every material observation or external effect goes
-through a recorded Botpipe operation.
+The SQLite journal retains runs, operations, sessions, provider budgets and
+events. The 2.0 schema adds Codex thread and turn identifiers, the preset,
+enforcement record and probe hash. Opening a 1.x journal fails without migrating
+or modifying it.
 
-The workflow body can use normal functions, conditions, loops, exceptions,
-nested workflows, and `parallel()`. Botpipe does not compile that code into a
-second state machine. Instead it assigns deterministic operation identities and
-replays committed results from a SQLite ledger.
+An operation is identified by run, scope and position. Its fingerprint includes
+the prompt, input, read digests, output schema and resolved user configuration.
+Probe hashes and other discovered installation/profile facts remain audit
+evidence; a change in those observations alone is not a durable identity veto.
+A committed operation replays its result. A different durable fingerprint at a
+committed position fails before dispatch. Existing compatible source-edit checks
+remain part of workflow resume.
 
-## Ledger and replay
+A provider intent precedes dispatch. A terminal response is recorded before
+output validation and immutable artifact capture. This ordering lets recovery
+adopt completed work without another model call, including after interruption
+between response and capture. Repairs are additional recorded, budgeted attempts
+on the same thread. Recovery itself does not consume a dispatch budget.
 
-Each run records metadata, source fingerprints, operation intent and outcomes,
-provider sessions, human-input events, usage, and immutable artifact references.
-Files become durable before the ledger refers to them. A workspace lock protects
-one active run from another process.
+Activities, provider turns, human answers, nested workflows, parallel branches
+and worklist updates use the same operation journal. Activities and provider
+turns default to `retry_safe=True`. This flag permits repetition; it does not
+establish that the operation is idempotent. Provider recovery also confirms that
+the prior turn stopped before automatically dispatching a replacement.
+Nonrepeatable external effects must use `retry_safe=False`.
 
-Run records own root execution facts; operation records own their checkpoints.
-The journal commits an operation checkpoint, its native session update, and the
-associated event together. Physical-dispatch events retain separate evidence
-about each actual provider attempt and its usage. An operation response cannot
-retroactively establish the usage of an earlier unknown dispatch.
+## Codex adapter
 
-Atomic publication flushes file contents before replacement. On POSIX it also
-flushes directory entries and propagates flush failures. Windows retains the
-file flush and atomic replacement, but Python cannot fsync directory handles
-there; the same directory-entry persistence after sudden power loss is not
-guaranteed.
+One lazy `codex app-server` process belongs to a runtime and multiplexes its
+threads. Its small adapter boundary is `probe`, `start_turn`, `interrupt` and
+`close`. Runtime request/response records carry the durable attempt context.
+There is one transport and one provider implementation.
 
-On replay, a completed operation returns its recorded outcome. Matching uses its
-scope, ordinal, kind, logical callable identity, and actual inputs, including
-provider prompts and schemas. A mismatch blocks that operation before effects.
-Implementation hashes and workflow version labels are observational metadata.
-Activities, workflow bodies, and helpers may be edited: recorded work is reused
-and future work executes current code. A completed root run returns its saved
-result without rerunning the workflow or rewriting its history.
+Probing checks the installed executable's identity and generated protocol
+schemas. Required methods are `thread/start`, `thread/resume`, `turn/start` and
+`turn/interrupt`, with per-turn sandbox policy. Optional `outputSchema` falls
+back to a prompt schema and local validation. Unused schema item versions do not
+veto an otherwise usable installation. Missing capabilities actually required
+by a call fail before dispatch; probe or profile changes alone do not invalidate
+durable operation identity.
 
-Orchestration must still consume the recorded operation prefix. Botpipe does not
-remap inserted or reordered operations; indistinguishable requests at the same
-position retain the same identity. Material observations belong inside recorded
-operations, rather than unrecorded mutable closure or receiver state.
+Every turn uses approval policy `never`. `query` and `generate` fix the read-only
+sandbox and network off for commands within Codex's sandbox. Workspace-write
+turns allow the workspace, declared artifact parents, and Codex's native
+temporary roots. For an explicit tool allowlist, Botpipe disables discovered
+tool-enabling features it knows how to control while preserving unrelated and
+unknown feature flags. It audits the event stream, and a disallowed observed
+tool call fails the operation with retained evidence. That audit detects the
+violation; it cannot undo remote effects. Codex enforces its sandbox, while
+Botpipe records configuration and observations.
 
-## Durable value codec
+Session bindings persist Codex thread identifiers. Threads are resumed after
+restart. Sandbox policy is supplied per turn. Tool configuration is a thread
+profile: when it changes, Botpipe unsubscribes the idle thread and resumes the
+same history with the new configuration. If the installed Codex cannot perform
+that transition, the call fails before dispatch.
 
-The ledger stores a narrow JSON value language. It supports JSON scalars and
-containers plus explicit records for bytes, paths, dates, enums, sets, tuples,
-artifact handles, Pydantic models, and dataclass instances. Model and dataclass
-records use a versioned state format. Their fields are encoded recursively by
-canonical Python field name, so aliases do not change the durable identity and a
-nested model retains its concrete type. Pydantic records also retain which
-fields were explicitly set and any allowed extra fields.
+## Recovery
 
-Replay restores model and dataclass state without calling constructors,
-validators, default factories, `model_post_init`, or `__post_init__`. External
-run arguments, provider responses, and human answers are validated once before
-their normalized state is recorded. Internal workflow and activity calls retain
-ordinary Python argument semantics. Validation may repeat after a crash before
-its state was recorded, so validation hooks must remain free of external effects.
-Codec traversal has depth and value-count limits and rejects cycles.
-
-Typed records carry a codec-owned structural storage contract: concrete type
-identity, declared field types and layout, enum membership and backing type,
-flag storage, and supported exception storage. The contract excludes
-implementation code, validators, default values, aliases, and source locations.
-Source-only edits remain compatible; incompatible type or field changes fail
-clearly without coercion or automatic migration. Before a resume accepts an
-answer, changes limits, or starts work, it checks contracts throughout the
-recorded run state.
-
-Activity and child-workflow requests store keyword arguments as ordered
-name/value pairs. Replay therefore preserves observable Python keyword order;
-execution still receives ordinary keyword arguments.
-
-`Flag` and `IntFlag` pseudo-members store their native integer value and name.
-Enum records and contracts use native storage fields; public `name` and `value`
-properties remain views of that state. An int-backed pseudo-member's integer
-payload must match its stored value, or encoding rejects it.
-Application attributes and populated custom slots are rejected; disposable
-stdlib caches are not durable state. Restoration does not invoke application
-construction hooks. A historical value that current construction would no longer
-produce is restored without inserting it into the enum's shared cache, so reading
-old state does not change the validation of new values. Equivalent standard
-composites retain normal enum identity. Custom metaclass dispatch, attribute
-lookup, or class construction prevents new entries in the constructor cache;
-compatible existing entries can still be reused.
-
-Datetime records retain wall time, `fold`, and fixed-offset timezone names.
-Supported timezones are naive values and exact `datetime.timezone` instances;
-`ZoneInfo` and custom `tzinfo` implementations are rejected because their
-behavior depends on state outside this record format.
-
-Define durable contracts at module scope so a new process can import their
-concrete types. Types reachable through workflow annotations are registered
-automatically, including generic arguments and nested fields. A local
-polymorphic subtype that appears only at runtime cannot be reconstructed in a
-fresh process; move that contract to module scope.
-
-The automatic state codec deliberately refuses values whose complete state is
-not represented by ordinary fields. This includes private fields, excluded
-fields, secrets, custom serializers (including compiled core-schema serializers),
-cached or unknown instance attributes, custom state hooks, and unrecognized
-storage slots. Put such data in an artifact or
-return a separate plain model designed as durable state. Records must use the
-current explicit storage format; there is no legacy reader.
-
-Recorded operation failures retain concrete exception types, native state, and
-stored slot owners. Replay checks their storage contracts before restoring state
-without application constructors. Contract incompatibility is a replay failure;
-`ActivityFailed` is reserved for exception state that cannot be restored safely.
-
-## Source observations
-
-Source fingerprints describe revisions for inspection and optimization; they do
-not gate ordinary replay. They capture bounded Python helper and contract
-sources, including class behavior. Provider installations, external modules,
-environment values, arbitrary closures and receiver state are not frozen.
-
-Executable provenance is a rooted callable graph. Ordered, labeled edges describe
-wrappers, partial bindings, referenced helpers, and class construction. Each
-callable is expanded once per calculation; local references represent recursion
-and shared dependencies. Fingerprinting and source capture share this dependency
-description. Dependencies discovered through owned modules and classes join the
-same bounded traversal.
-
-Each workflow has an application source origin. It follows partials, bound
-methods, and decorators to the application implementation; imported decorators
-and helper bindings do not replace it. That origin selects relative prompt files.
-SDK classification and source discovery use canonical resolved paths, including
-symlinked installations. Source ownership is only a capture boundary, not stored
-value compatibility or a requirement to preserve a directory layout.
-
-Every execution appends start and end revision observations to the journal.
-Inspection derives provenance from the complete history, so A → B → A remains
-mixed. Missing observations remain explicit. Capture failure does not prevent
-ordinary execution; frozen optimizer experiments still require verified source.
-Mixed or unknown histories remain useful diagnostics but cannot establish a
-verified single-revision baseline.
-
-Graph expansion scales with distinct callables and dependency edges, rather than
-the number of paths through shared helpers. Caches belong to one calculation so
-later changes to code and bindings remain visible. The repeatable benchmark in
-`benchmarks/callable_identity.py` measures fingerprinting, the workflow catalog,
-and fake-provider execution and replay separately. Timing measurements complement
-deterministic graph-size regression tests; they are not wall-clock CI thresholds.
-
-An operation that may have started an external effect but has no committed
-outcome is `interrupted`. Botpipe will not infer that the effect failed or rerun
-it. The operator must record the observed response or explicitly authorize a
-retry with `Botpipe.resolve()`.
-
-Provider recovery and manual reconciliation use the same explicit outcomes:
-`Completed(response)`, `Stopped`, `Running`, and `Unknown`. A completed matching
-receipt is authoritative over operator input. Only a confirmed stopped attempt
-without a completed response accepts a manual response or retry authorization.
-Running and unknown attempts remain blocked; a recovery hook returning
-`None` establishes no knowledge of termination. A native launch interrupted
-before its process identity was recorded therefore remains uncertain.
-
-One provider checkpoint model interprets saved state for normal execution,
-recovery, manual reconciliation, and workspace ownership checks. The provider
-lifecycle owns the corresponding decisions; sessions retain the artifact and
-validation work. These are provider-specific rules, not a second control-flow
-language for workflows or a universal state machine for inputs and activities.
-
-| Durable fact | Permitted continuation |
+| Reconciliation result | Action |
 | --- | --- |
-| Preparation began; no dispatch intent exists | Finish preparation before dispatch. |
-| Dispatch intent exists; no response is recorded | Recover the same attempt; uncertainty never authorizes redispatch. |
-| Dispatch was rejected before effects | Finish restoring destinations, then replay the recorded rejection. |
-| A completed response is recorded | Validate and capture that response without another provider call. |
-| A validated value is recorded | Finish capture and the result checkpoint without revalidating. |
-| Output validation failed | Finish rollback before replaying the failure or starting a separate repair operation. |
-| An explicit retry is authorized | Reconcile the previous generation before preparing the next one; repeated authorization does not skip generations. |
+| `Completed` | Adopt the authoritative response; do not redispatch |
+| `Stopped` | Retry automatically only when recorded and current policy permit it; otherwise wait for operator resolution |
+| `Running` | Make a targeted, bounded interrupt/reconciliation attempt; keep the operation unresolved while it may still act |
+| `Unknown` | Keep the operation unresolved until an operator resolves it |
 
-Valid historical provider checkpoints are decoded into this model. Unknown or
-contradictory checkpoint state blocks continuation and does not establish that
-effects stopped. Retry generations remain within the existing operation record;
-validation repair calls and physical dispatches retain their existing identities.
+`Stopped` requires durable quiescence evidence. Before a turn acknowledgement,
+a durable receipt recording failure and `cleanup.status=completed` is sufficient.
+For native history marked failed, interrupted, or cancelled, Botpipe must run
+background-terminal cleanup and then prove through the bounded, paginated list
+that no background terminal remains. A historical terminal status or acceptance
+of the cleanup RPC alone is not proof and remains `Unknown`.
 
-Adapters return `ProviderResponse` with string text, an optional string session
-ID, and plain JSON objects for usage and metadata. Botpipe validates this
-protocol before recording the response. Malformed responses and unexpected
-exceptions after dispatch remain uncertain; they cannot silently coerce durable
-values or establish that external effects stopped.
+A recorded terminal response is validated and captured without redispatch, so
+completed output-repair work can still replay when later policy sets
+`retry_safe=False`. That setting suppresses new automatic retries and new output
+repair dispatches. Automatic and operator-authorized retries are recorded with
+their origin. Cancellation ends the current invocation after bounded cleanup;
+it does not redispatch. A later explicit resume may retry subject to the recorded
+policy and limits.
 
-While a workspace has an unresolved uncertain effect, its durable workspace
-fence blocks a different run from starting there, even when clients choose
-different state directories. Resolve the recorded effect before continuing work
-in that workspace.
+An operator resolves uncertainty with explicit retry, acceptance of the current
+workspace, or failure. A retry never pretends the earlier effects did not happen.
+Accepting captures declared artifacts and still validates their contract.
 
-## Declared output transactions
+## Concurrency
 
-Each provider attempt records exact output destinations and moves their previous
-contents into backups before dispatch. Providers write directly to those paths.
-Botpipe validates the typed response and the complete declared artifact set,
-preflights durable value encoding, and publishes immutable snapshots before
-committing the operation. A saved validated value and capture manifest allow
-recovery to finish that commit without revalidating or redispatching.
-The capture intent records every output's content digest before any snapshot is
-published. Recovery verifies existing snapshots and requires unsnapshotted files
-to still match that intent; edited files cannot silently become provider output.
-If the process stopped before recording an inventory, resume remains interrupted.
-An operator can approve the current files with `resolve(..., artifact_digests=...)`:
-the mapping must name every declared artifact with its SHA-256 digest, or `None`
-for an absent optional artifact. Reconciliation requires completed or confirmed
-stopped effects and records operator provenance. Capture rechecks those digests;
-later edits remain blocked. A provider text receipt alone cannot authenticate
-the files that happened to remain in its workspace.
+A run lock is keyed by journal path and run id and held for execution or
+resolution. Another executor receives `RunBusy` immediately. A workspace writer
+lock is keyed by canonical root and held for a writable provider turn, including
+output capture. It waits only within the operation's timeout, then raises
+`WorkspaceBusy`. Coordination files live in per-user state, outside workspaces.
+Windows and macOS canonical roots are compared without case sensitivity.
 
-When a completed attempt fails output validation, rollback quarantines its
-declared outputs and restores every previous declared file. The rollback journal
-supports interrupted renames and detects conflicting changes. It requires a
-stopped provider; it cannot undo arbitrary repository edits outside the declared
-outputs. Replaying a successful capture reads immutable snapshots and leaves the
-current mutable workspace untouched. Backup and quarantine renames require the
-declared destinations and transaction directory to share a filesystem.
+Conversation turns use the same file-lock primitive, keyed by journal and durable
+session identity. Separate handles for one task or work item therefore serialize
+across threads and processes, including the repair loop and session updates.
+Independent calls (`session=None`) need no conversation lock.
 
-## Run limits
+An unresolved writable operation leaves a small fence next to its workspace
+lock. Other runs trying to write the root receive `WorkspaceUnresolved`, naming
+the run to resolve. Resolving the owning operation clears its fence. Botpipe
+does not clear a fence merely because its owner journal is absent. The explicit
+CLI abandonment path takes the operator's assertion that the old work stopped, checks
+the absent owner journal while holding the workspace lock, and archives a
+receipt before clearing the fence.
 
-The client owns defaults for new runs. Each run persists its own immutable
-`RunLimits`, inherited by its child contexts. Resume can increase that run's
-operation limit or change its per-call timeout without changing client defaults.
-All entry points reject boolean or fractional operation counts, nonfinite
-timeouts, and nonpositive limits. These limits are separate from durable provider
-budgets: resuming does not restart an existing provider-budget deadline.
+Read-only presets do not acquire the writer lock or consult its fence. They may
+observe a concurrent edit in progress. Overlapping roots such as `repo` and
+`repo/sub` are not coordinated. Parallel writers should use separate worktrees.
+Different hosts and containers are not coordinated.
 
-## Operation boundary
+## Process lifecycle
 
-Provider calls, activities, prompt-file reads, human input, worklist snapshots,
-and artifact publication are operations. Runtime integrations can use
-`current_run().operation(...)` for the same durable boundary.
+The app-server runs in a POSIX process group or a Windows Job Object with
+kill-on-close. Cancellation sends `turn/interrupt`, waits up to the configured
+grace period, then attempts to terminate the process group or Job if needed.
+Escalation interrupts all turns sharing that server; each retains its own
+recovery status. Async cancellation waits for the bounded cleanup attempt before
+returning control to the caller. If cleanup cannot confirm that a turn stopped,
+its result is `Unknown` and a writable operation remains fenced.
 
-```python
-@activity(retry_safe=False)
-def create_ticket(title: str) -> dict[str, str]:
-    return remote_api.create_ticket(title)
-```
-
-Activities default to `retry_safe=True`, allowing unfinished calls to execute
-again on resume. Use `retry_safe=False` for operations such as ticket creation
-that require reconciliation before repeating. Exception retries remain opt-in
-through `retries` (default `0`). Automatic retry requires both the saved attempt
-and the current activity to permit it. Changing the flag cannot authorize
-repeating an earlier unsafe attempt. Explicit `resolve(..., retry=True)` remains
-the operator's authorization. This is not an exactly-once guarantee.
-
-## Scopes and concurrency
-
-The root workflow has a scope. Nested workflows and parallel branches derive
-child scopes from deterministic call sites and ordinals. Worklist iteration
-stays in the current scope; `Session.work_item()` derives stable provider
-identity from the worklist and item ID. Each parallel callable receives an
-independent scope, so scheduling order does not change operation identity.
-Concurrent mutation through one shared session is rejected. Parallel provider
-edits require an explicit isolated workspace per branch; read-only sessions may
-share the application workspace.
-
-`parallel()` records the ordered logical identities and explicit bound arguments
-of its prepared branches, along with the settlement mode. Partial bindings retain
-keyword order and serializable callable data; explicit names do not erase those
-bindings. Nonserializable callable objects remain opaque references. Code edits
-do not change that request, while a changed target or durable binding does.
-Branch identity is checked before branch execution. Dynamically created
-callables can only be checked when orchestration reaches that call site;
-run-status bookkeeping may already have been committed by then.
-
-Prompt paths use the branch's application source directory when it has one.
-Branches composed only from SDK callables inherit their parent's source directory;
-the workspace is the fallback for a root without application source. Additional
-executable dependencies do not change this resource origin.
-
-## Inspection
-
-Before a run, inspection reports the callable signature, typed schemas, policy,
-source, and source digest. Python topology is dynamic, so it does not claim to
-enumerate future branches. After a run, inspection adds the operations and edges
-actually observed. A completed run proves only the path taken for those inputs.
-
-Inspection uses one journal snapshot of run, operation, and event records. A
-shared read projection derives artifacts and usage from that snapshot without
-hydrating application result models. Foreign-workspace ownership checks use the
-journal's read-only unresolved-effects query; missing or malformed evidence keeps
-the workspace fenced.
+Codex owns the sandbox for its child commands. Botpipe adds no namespaces.
+Still-attached descendant groups are included in shutdown, with process identities
+checked before signalling. A daemon already detached from the tree is outside
+Botpipe's control, so cleanup cannot guarantee that every escaped process ended.
+Full access and explicitly enabled remote MCP tools have the effects authorized
+by that configuration; filesystem read-only is not remote isolation.

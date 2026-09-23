@@ -28,4 +28,4 @@ Accept with `design_accepted` only if:
 Use `needs_rework` for local design defects.
 Use `needs_replan` if the behavior inventory itself is materially incomplete or wrong.
 
-Always write `design_review.md` with the decision and exact required rework.
+Return the typed decision and exact required rework. Do not edit repository files.

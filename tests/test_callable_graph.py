@@ -281,12 +281,12 @@ def test_paused_parallel_replays_result_after_metaclass_source_edit(tmp_path, ed
     _write(tmp_path / "rootpkg/__init__.py", "")
     _write(
         tmp_path / "rootpkg/workflow.py",
-        "from botpipe import ask, parallel, workflow\n"
+        "from botpipe import ask_human, parallel, workflow\n"
         "from branchpkg.branch import Branch\n"
         "@workflow\n"
         "def job():\n"
         "    answer = parallel(Branch)\n"
-        "    ask('continue?')\n"
+        "    ask_human('continue?')\n"
         "    return answer\n",
     )
     start = _write(

@@ -6,8 +6,9 @@ import argparse
 import dataclasses
 import json
 import sys
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 from .config import ConfigError, load_config
 from .discovery import (
@@ -29,6 +30,13 @@ def build_parser() -> argparse.ArgumentParser:
         prog="botpipe", description="Run and inspect durable Python workflows."
     )
     commands = parser.add_subparsers(dest="command", required=True)
+
+    doctor = commands.add_parser(
+        "doctor",
+        parents=[_client_parser()],
+        help="Check the installed Codex capabilities.",
+    )
+    doctor.set_defaults(handler=_doctor)
 
     workflows = commands.add_parser("workflows", help="Discover and inspect workflows.")
     workflow_commands = workflows.add_subparsers(dest="workflow_command", required=True)
@@ -97,8 +105,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="Explicitly retry the interrupted operation.",
     )
     resolution.add_argument(
+        "--accept",
+        action="store_true",
+        help="Accept the workspace and capture declared outputs.",
+    )
+    resolution.add_argument(
+        "--fail",
+        action="store_true",
+        help="Record the interrupted operation as failed.",
+    )
+    resolution.add_argument(
         "--response",
         help="Record its externally observed JSON response (or plain text).",
+    )
+    resolution.add_argument(
+        "--clear-fence",
+        action="store_true",
+        help=(
+            "Archive the matching workspace fence only when its owner journal is "
+            "gone and you assert the abandoned writer has stopped."
+        ),
     )
     resolve.add_argument(
         "--artifact-digests",
@@ -149,6 +175,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
+    args = None
     try:
         args = parser.parse_args(argv)
         return int(args.handler(args))
@@ -161,9 +188,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     except KeyboardInterrupt:
         print("interrupted", file=sys.stderr)
         return 130
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - CLI boundary reports workflow failures
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_RUNTIME
+    finally:
+        client = getattr(args, "_runtime", None)
+        if client is not None:
+            client.close()
 
 
 def _location_parser() -> argparse.ArgumentParser:
@@ -226,6 +257,49 @@ def _workflows_list(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _doctor(args: argparse.Namespace) -> int:
+    from .locks import canonical_workspace, inspect_workspace_fence
+
+    workspace = canonical_workspace(args.workspace)
+    fence = inspect_workspace_fence(args.workspace)
+    try:
+        with _client(args) as client:
+            capabilities = client.provider.probe()
+    except Exception as exc:  # noqa: BLE001 - retain fence diagnostics on failure
+        _emit(
+            {
+                "workspace": workspace,
+                "workspace_fence": fence,
+                "codex": {"available": False, "error": str(exc)},
+            }
+        )
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_RUNTIME
+    value = (
+        capabilities.to_dict()
+        if hasattr(capabilities, "to_dict")
+        else capabilities
+    )
+    report = dict(value) if isinstance(value, Mapping) else {"capabilities": value}
+    report["workspace"] = workspace
+    report["workspace_fence"] = fence
+    _emit(report)
+    try:
+        require = getattr(capabilities, "require", None)
+        if callable(require):
+            require("run")
+        elif isinstance(value, Mapping):
+            run_status = value.get("presets", {}).get("run")
+            if isinstance(run_status, Mapping) and not run_status.get("available"):
+                raise RuntimeError(
+                    run_status.get("reason") or "Codex run preset is unavailable"
+                )
+    except Exception as exc:  # noqa: BLE001 - doctor reports unusable run support
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_RUNTIME
+    return EXIT_OK
+
+
 def _workflows_show(args: argparse.Namespace) -> int:
     _emit(inspect_workflow(args.workflow, args.workspace))
     return EXIT_OK
@@ -273,8 +347,43 @@ def _answer(args: argparse.Namespace) -> int:
 
 
 def _resolve(args: argparse.Namespace) -> int:
+    if args.clear_fence:
+        from .locks import clear_abandoned_workspace_fence
+
+        incompatible = [
+            option
+            for option, supplied in (
+                ("--config", args.config is not None),
+                ("--state-dir", args.state_dir is not None),
+                ("--provider", args.provider is not None),
+                ("--provider-config", args.provider_config is not None),
+                ("--policy", args.policy is not None),
+                ("--model", args.model is not None),
+                ("--effort", args.effort is not None),
+                ("--max-operations", args.max_operations is not None),
+                ("--timeout", args.timeout is not None),
+                ("--artifact-digests", args.artifact_digests is not None),
+                ("--workflow", args.workflow is not None),
+                ("--no-resume", args.no_resume),
+            )
+            if supplied
+        ]
+        if incompatible:
+            raise ConfigError(
+                "--clear-fence cannot be combined with " + ", ".join(incompatible)
+            )
+        _emit(
+            clear_abandoned_workspace_fence(
+                args.workspace, args.run_id, args.operation_id
+            )
+        )
+        return EXIT_OK
     client = _client(args)
     options = {"retry": args.retry}
+    if args.accept:
+        options["accept"] = True
+    if args.fail:
+        options["fail"] = True
     if args.response is not None:
         # Passing the keyword is significant: JSON null is a valid activity result.
         options["response"] = _json_or_text(args.response)
@@ -283,7 +392,7 @@ def _resolve(args: argparse.Namespace) -> int:
             args.artifact_digests, "--artifact-digests"
         )
     client.resolve(args.run_id, args.operation_id, **options)
-    if args.no_resume:
+    if args.no_resume or args.fail:
         _emit(
             {"run_id": args.run_id, "operation_id": args.operation_id, "resolved": True}
         )
@@ -355,7 +464,8 @@ def _client(args: argparse.Namespace) -> Any:
     kwargs["policy"] = _make_policy(kwargs["policy"])
     from . import Botpipe
 
-    return Botpipe(**kwargs)
+    args._runtime = Botpipe(**kwargs)
+    return args._runtime
 
 
 def _invocation(args: argparse.Namespace) -> tuple[tuple[Any, ...], dict[str, Any]]:

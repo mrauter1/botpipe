@@ -150,13 +150,11 @@ def test_devloop_executes_later_phase_added_by_phase_item_repair(tmp_path):
             )
             _write(request, "gap_report", "No gaps.")
             return "audited"
-        key = next(iter(artifacts))
-        if key == "impl_review" and state["first_implementation_review"]:
+        if data.get("stage") == "implement" and state["first_implementation_review"]:
             state["first_implementation_review"] = False
             review = _review(request, verdict="failed", repair_target="phase_item")
         else:
             review = _review(request)
-        _write(request, key, review)
         return review
 
     with Botpipe(tmp_path, provider=FakeProvider([respond] * 30)) as client:
@@ -175,6 +173,7 @@ def test_code_to_workflow_preserves_verifier_basis_and_build_replan_feedback(tmp
 
     def respond(request):
         artifacts = request.artifacts
+        schema_title = (request.output_schema or {}).get("title")
         if "behavior_inventory" in artifacts:
             _write(
                 request,
@@ -184,8 +183,7 @@ def test_code_to_workflow_preserves_verifier_basis_and_build_replan_feedback(tmp
             _write(request, "behavior_inventory_report", "Observable hello behavior")
             _write(request, "trace_pattern_notes", "No source traces")
             return "distilled"
-        if "behavior_review" in artifacts:
-            _write(request, "behavior_review", "Complete behavior inventory")
+        if schema_title == "BehaviorDistillationPayload":
             return {
                 "verdict": "behavior_distilled",
                 "summary": "Complete",
@@ -196,7 +194,7 @@ def test_code_to_workflow_preserves_verifier_basis_and_build_replan_feedback(tmp
         if "workflow_design" in artifacts:
             state["designs"] += 1
             if state["designs"] == 2:
-                assert _reads(request)["build_review"].read_text() == feedback
+                assert feedback in _reads(request)["build_review"].read_text()
             _write(request, "workflow_design", "Durable workflow design")
             _write(request, "step_contracts", {"functions": ["generated"]})
             _write(request, "prompt_contract_matrix", "Prompt contracts")
@@ -207,13 +205,12 @@ def test_code_to_workflow_preserves_verifier_basis_and_build_replan_feedback(tmp
                 {"coverage": [{"behavior_id": "hello", "status": "covered"}]},
             )
             return "designed"
-        if "design_review" in artifacts:
+        if schema_title == "WorkflowDesignPayload":
             assert {
                 "source_manifest",
                 "behavior_inventory",
                 "behavior_inventory_report",
             } <= _reads(request).keys()
-            _write(request, "design_review", "Design accepted")
             return {
                 "verdict": "design_accepted",
                 "summary": "Covered",
@@ -231,7 +228,7 @@ def test_code_to_workflow_preserves_verifier_basis_and_build_replan_feedback(tmp
             _write(request, "generated_layout", {"files": ["flow.py", "workflow.toml"]})
             _write(request, "validation_report", "Imports and returns hello")
             return "built"
-        assert "build_review" in artifacts
+        assert schema_title == "BuildValidationPayload"
         assert {
             "source_manifest",
             "behavior_inventory",
@@ -241,11 +238,6 @@ def test_code_to_workflow_preserves_verifier_basis_and_build_replan_feedback(tmp
         } <= _reads(request).keys()
         state["build_reviews"] += 1
         verdict = "needs_replan" if state["build_reviews"] == 1 else "build_validated"
-        _write(
-            request,
-            "build_review",
-            feedback if verdict == "needs_replan" else "Accepted",
-        )
         return {
             "verdict": verdict,
             "summary": "Reviewed",
@@ -288,22 +280,23 @@ def test_ralph_item_rework_receives_feedback_and_retains_only_its_own_session(tm
         if "work" in request.artifacts:
             _write(request, "work", work)
             return ProviderResponse("planned", "planner")
-        if "plan_review" in request.artifacts:
-            _write(request, "plan_review", "Accepted")
-            return ProviderResponse('{"verdict":"accepted"}', "plan-reviewer")
+        if request.output_schema and "work.json against" in request.prompt:
+            return ProviderResponse('{"verdict":"accepted"}', None)
         item_id = _input(request)["id"]
-        if "implementation_review" in request.artifacts:
+        if request.output_schema:
             state["reviews"] += 1
             rejected = state["reviews"] == 1
-            assert request.session_id == f"item-{item_id}"
-            _write(
-                request,
-                "implementation_review",
-                "Fix the missing acceptance check" if rejected else "Accepted",
-            )
+            assert request.session_id is None
             return ProviderResponse(
-                json.dumps({"verdict": "needs_rework" if rejected else "accepted"}),
-                f"item-{item_id}",
+                json.dumps(
+                    {
+                        "verdict": "needs_rework" if rejected else "accepted",
+                        "required_changes": (
+                            ["Fix the missing acceptance check"] if rejected else []
+                        ),
+                    }
+                ),
+                None,
             )
         implementation_sessions.append((item_id, request.session_id))
         if item_id == "one" and state["reviews"]:
@@ -391,9 +384,7 @@ def test_devloop_followup_preserves_parent_audit_and_plan_result_paths(tmp_path)
             if parent:
                 _write(request, "revised_request", "repair missing outcome")
             return "audited"
-        report = _review(request)
-        _write(request, next(iter(artifacts)), report)
-        return report
+        return _review(request)
 
     with Botpipe(tmp_path, provider=FakeProvider([respond] * 20)) as client:
         result = client.run(devloop, "parent objective", mode="docloop")

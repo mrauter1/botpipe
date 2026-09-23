@@ -10,7 +10,7 @@ from botpipe.worklists import Selector, Worklist
 
 class RecordedRun:
     def __init__(self, folder, history=None):
-        self.folder = self.workspace = folder
+        self.folder = self.task_folder = self.workspace = folder
         self.scope = "main"
         self.history = history if history is not None else []
         self.index = 0

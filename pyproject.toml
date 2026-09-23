@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "botpipe"
-version = "1.0.0"
-description = "Durable Python workflows for agentic provider harnesses."
+version = "2.0.0"
+description = "Drive Codex from ordinary Python with durable, resumable workflows."
 readme = "README.md"
 requires-python = ">=3.12"
 license = "Apache-2.0"
@@ -26,6 +26,7 @@ classifiers = [
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
@@ -62,7 +63,7 @@ botpipe = [
 labs = ["**/__pycache__/*", "**/*.py[cod]"]
 
 [project.optional-dependencies]
-test = ["pytest>=8,<10", "pytest-asyncio>=0.23"]
+test = ["pytest>=8,<10", "pytest-asyncio>=0.23", "pytest-xdist>=3.6,<4"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

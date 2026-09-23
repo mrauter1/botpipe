@@ -1,11 +1,7 @@
 from __future__ import annotations
 
-import json
-import sys
-
-from botpipe import Botpipe, Policy, Session, provider_budget, workflow
+from botpipe import Botpipe, Provider, provider_budget, workflow
 from botpipe.providers import (
-    CodexProvider,
     FakeProvider,
     ProviderError,
     ProviderResponse,
@@ -26,8 +22,8 @@ def test_nested_budgets_share_one_dispatch_identity_and_replay_emits_none(tmp_pa
         with provider_budget(max_turns=2):
             with provider_budget(max_turns=2):
                 return (
-                    Session()
-                    .run("work", policy=Policy(model="example", effort="high"))
+                    Provider(model="example", effort="high")
+                    .run("work")
                     .value
                 )
 
@@ -65,7 +61,7 @@ def test_nested_budgets_share_one_dispatch_identity_and_replay_emits_none(tmp_pa
 def test_retry_retains_unknown_failed_attempt_instead_of_overwriting_it(tmp_path):
     @workflow
     def work():
-        return Session().run("work").value
+        return Provider().run("work").value
 
     provider = FakeProvider(
         [
@@ -96,7 +92,7 @@ def test_retry_retains_unknown_failed_attempt_instead_of_overwriting_it(tmp_path
 def test_schema_repairs_are_separate_physical_dispatches(tmp_path):
     @workflow
     def work():
-        return Session().run("number", returns=int).value
+        return Provider().run("number", returns=int).value
 
     with Botpipe(
         tmp_path,
@@ -116,34 +112,10 @@ def test_schema_repairs_are_separate_physical_dispatches(tmp_path):
         assert result.usage == {"total_tokens": 12}
 
 
-def test_native_failure_preserves_partial_usage_and_timeout_fact(tmp_path):
-    script = tmp_path / "native.py"
-    script.write_text(
-        "import json,time\nprint(json.dumps({'usage':{'input_tokens':3}}),flush=True)\ntime.sleep(5)\n"
-    )
-
-    @workflow
-    def work():
-        return Session().run("work").value
-
-    with Botpipe(
-        tmp_path, provider=CodexProvider((sys.executable, str(script))), timeout=0.1
-    ) as client:
-        result = client.run(work)
-        assert result.status == "interrupted"
-        record = attempts(client, result.run_id)[0]
-        assert record["outcome"] == "timed_out"
-        assert record["usage_availability"] == "partial"
-        assert record["input_tokens"] == 3
-        assert record["timeout_seconds"] == 0.1
-        receipt = next((result.folder / "receipts").glob("*.json"))
-        assert json.loads(receipt.read_text())["dispatch_id"] == record["dispatch_id"]
-
-
 def test_interrupt_is_recorded_without_inventing_usage(tmp_path):
     @workflow
     def work():
-        return Session().run("work").value
+        return Provider().run("work").value
 
     with Botpipe(tmp_path, provider=FakeProvider([KeyboardInterrupt()])) as client:
         result = client.run(work)

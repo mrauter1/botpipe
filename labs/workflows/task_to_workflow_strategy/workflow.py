@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from botpipe import Session, workflow
+from botpipe import Provider, workflow
 from labs.workflows._shared import (
     LabWorkflowResult,
     ReplanRequired,
@@ -31,8 +31,8 @@ from .params import Params
 @workflow(name="task_to_workflow_strategy", version="2")
 def TaskToWorkflowStrategy(params: Params, request: str = "") -> LabWorkflowResult:
     """Execute the task to workflow strategy evidence workflow."""
-    _producer = Session(key="producer")
-    _verifier = Session(key="verifier")
+    _producer = Provider()
+    _verifier = _producer.with_config(session=None)
     context = {"request": request, "parameters": params.model_dump(mode="json")}
     context["workflow_catalog"] = observe_catalog()
     completed = []

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from botpipe import Session, workflow
+from botpipe import Provider, workflow
 from labs.workflows._shared import (
     LabWorkflowResult,
     ReplanRequired,
@@ -25,8 +25,8 @@ from .params import Params
 @workflow(name="incident_to_hardening_program", version="2")
 def IncidentToHardeningProgram(params: Params, request: str = "") -> LabWorkflowResult:
     """Execute the incident to hardening program evidence workflow."""
-    _producer = Session(key="producer")
-    _verifier = Session(key="verifier")
+    _producer = Provider()
+    _verifier = _producer.with_config(session=None)
     context = {"request": request, "parameters": params.model_dump(mode="json")}
     completed = []
     prior_handles = ()

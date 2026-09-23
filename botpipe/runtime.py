@@ -9,12 +9,11 @@ import functools
 import hashlib
 import inspect
 import json
-import os
 import re
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from enum import Enum
 from pathlib import Path
 from types import MemberDescriptorType
@@ -29,14 +28,20 @@ from .errors import (
     ActivityFailed,
     BotpipeError,
     BudgetExceeded,
+    CancellationRequested,
     InputRequired,
     ReplayMismatch,
-    RunBusy,
     Suspension,
     UncertainOperation,
+    WorkspaceBusy,
+    WorkspaceUnresolved,
 )
-from .journal import Journal, now, workspace_lock
+from .journal import Journal, now
 from .limits import RunLimits
+from .locks import default_state_dir
+from .locks import run_lock as acquire_run_lock
+from .locks import session_lock as acquire_session_lock
+from .locks import workspace_turn as acquire_workspace_turn
 from .models import RunResult
 from .policy import Policy
 from .provenance import SourceContext, capture_workflow_provenance, source_context
@@ -48,12 +53,28 @@ from .provider_checkpoints import (
     RespondedCheckpoint,
     RetryAuthorizedCheckpoint,
 )
-from .recovery import Completed, recover_outcome
+from .recovery import Completed, Running, Unknown, recover_outcome
 
 _CURRENT = contextvars.ContextVar("botpipe_run", default=None)
 _OPERATION = contextvars.ContextVar("botpipe_operation", default=None)
 _ACTIVITY = contextvars.ContextVar("botpipe_activity", default=False)
+_CANCELLATION = contextvars.ContextVar("botpipe_cancellation", default=None)
 _UNSET = object()
+_OPERATOR_FAILURE = "Operation failed by operator resolution"
+
+
+class _CancellationSignal:
+    def __init__(self, parent=None):
+        self._event = threading.Event()
+        self._parent = parent
+
+    def set(self):
+        self._event.set()
+
+    def is_set(self):
+        return self._event.is_set() or (
+            self._parent is not None and self._parent.is_set()
+        )
 
 
 def current_run():
@@ -135,12 +156,18 @@ def _preflight_recorded_contracts(data, operations):
                 _preflight_exception_record(error)
         for record in operations:
             recorded_inputs = codec.decode(record["inputs"])
-            if record["kind"] == "activity":
+            if record["kind"] in {"activity", "provider"}:
                 if not isinstance(recorded_inputs, dict):
-                    raise ReplayMismatch("Recorded activity inputs are malformed")
+                    raise ReplayMismatch(
+                        f"Recorded {record['kind']} inputs are malformed"
+                    )
                 retry_safe = recorded_inputs.pop("retry_safe", None)
-                if type(retry_safe) is not bool:
-                    raise ReplayMismatch("Recorded activity retry safety is malformed")
+                if type(retry_safe) is not bool and not (
+                    record["kind"] == "provider" and retry_safe is None
+                ):
+                    raise ReplayMismatch(
+                        f"Recorded {record['kind']} retry safety is malformed"
+                    )
             expected = _hash(
                 {
                     "kind": record["kind"],
@@ -548,8 +575,17 @@ def _invoke(fn, args, kwargs):
     return value
 
 
+def _cancellation_event():
+    return _CANCELLATION.get()
+
+
 async def _async_call(fn, *args, **kwargs):
-    task = asyncio.create_task(asyncio.to_thread(fn, *args, **kwargs))
+    cancellation = _CancellationSignal(_CANCELLATION.get())
+    token = _CANCELLATION.set(cancellation)
+    try:
+        task = asyncio.create_task(asyncio.to_thread(fn, *args, **kwargs))
+    finally:
+        _CANCELLATION.reset(token)
     cancelled = False
     while True:
         try:
@@ -559,9 +595,17 @@ async def _async_call(fn, *args, **kwargs):
             if task.cancelled():
                 raise
             cancelled = True
+            cancellation.set()
             if task.done():
-                result = task.result()
+                try:
+                    result = task.result()
+                except BaseException as exc:
+                    raise asyncio.CancelledError from exc
                 break
+        except BaseException as exc:
+            if cancelled:
+                raise asyncio.CancelledError from exc
+            raise
     if cancelled:
         raise asyncio.CancelledError
     return result
@@ -976,10 +1020,14 @@ class RunContext:
         fingerprint_inputs = codec.encode(inputs)
         fingerprint = _hash({"kind": kind, "name": name, "inputs": fingerprint_inputs})
         durable_inputs = (
-            {**inputs, "retry_safe": retry_safe} if kind == "activity" else inputs
+            {**inputs, "retry_safe": retry_safe}
+            if kind in {"activity", "provider"}
+            else inputs
         )
         encoded_inputs = (
-            codec.encode(durable_inputs) if kind == "activity" else fingerprint_inputs
+            codec.encode(durable_inputs)
+            if kind in {"activity", "provider"}
+            else fingerprint_inputs
         )
         record = self.journal.get(operation_id)
         if record is not None:
@@ -1002,7 +1050,7 @@ class RunContext:
                     (record.get("response") or {}).get("retry_authorized")
                 )
             automatic_retry = retry_safe
-            if kind == "activity":
+            if kind in {"activity", "provider"}:
                 recorded_inputs = codec.decode(record["inputs"])
                 automatic_retry = (
                     retry_safe
@@ -1136,7 +1184,7 @@ class RunContext:
             raise error
 
 
-def ask(question, *, returns=str):
+def ask_human(question, *, returns=str):
     ctx = current_run()
     codec.preflight(returns, path="$.answer")
     schema = codec.schema_for(returns)
@@ -1247,6 +1295,12 @@ def parallel(*calls, max_workers=None, settle="all"):
     )
 
 
+async def aparallel(*calls, max_workers=None, settle="all"):
+    return await _async_call(
+        parallel, *calls, max_workers=max_workers, settle=settle
+    )
+
+
 class Botpipe:
     def __init__(
         self,
@@ -1258,17 +1312,33 @@ class Botpipe:
         max_operations=1000,
         timeout=3600,
         provider_config=None,
+        workspace_lock_timeout=1.0,
     ):
         from .providers import get_provider
 
         self.workspace = Path(workspace).resolve()
         if not self.workspace.is_dir():
             raise ValueError(f"Workspace is not a directory: {self.workspace}")
+        self.provider_config = dict(provider_config or {})
+        if isinstance(provider, str):
+            from .config import (
+                ConfigError,
+                validate_codex_config,
+                validate_non_secret_settings,
+            )
+
+            if provider != "codex":
+                raise ConfigError("Botpipe 2.0 supports only the codex provider")
+            validate_non_secret_settings(self.provider_config, "codex")
+            validate_codex_config(self.provider_config)
         self.state_dir = (
-            Path(state_dir).resolve() if state_dir else self.workspace / ".botpipe"
+            Path(state_dir).resolve()
+            if state_dir is not None
+            else default_state_dir(self.workspace)
         )
         self.state_dir.mkdir(parents=True, exist_ok=True)
-        self.provider_config = dict(provider_config or {})
+        self._provider_name_arg = provider if isinstance(provider, str) else None
+        self._configured_provider_config = dict(self.provider_config)
         self.provider = (
             get_provider(provider, config=self.provider_config)
             if isinstance(provider, str)
@@ -1280,7 +1350,15 @@ class Botpipe:
             self.provider, "name", type(self.provider).__name__
         )
         self.policy = Policy.resolve(policy)
+        self._configured_policy = self.policy
         self.limits = RunLimits(max_operations, timeout)
+        if (
+            not isinstance(workspace_lock_timeout, (int, float))
+            or isinstance(workspace_lock_timeout, bool)
+            or workspace_lock_timeout < 0
+        ):
+            raise ValueError("workspace_lock_timeout must be nonnegative")
+        self.workspace_lock_timeout = float(workspace_lock_timeout)
         self.journal = Journal(self.state_dir / "state.sqlite3")
 
     @property
@@ -1312,63 +1390,98 @@ class Botpipe:
         return value
 
     def _check_run_configuration(self, data):
-        if (
-            data["provider"] != self.provider_name
-            or data.get("provider_config", {}) != self.provider_config
-        ):
+        if data["provider"] != self.provider_name:
             raise ReplayMismatch(
                 "Provider configuration changed; resume with the recorded provider configuration"
             )
-        if self.policy.to_dict() != data["policy"]:
+        if self._provider_name_arg is not None:
+            self._activate_provider_config(data.get("provider_config", {}))
+            self.policy = Policy.from_dict(data["policy"])
+        elif (
+            data.get("provider_config", {}) != self.provider_config
+            or self.policy.to_dict() != data["policy"]
+        ):
             raise ReplayMismatch("Run policy changed; resume with the recorded policy")
 
+    def _activate_provider_config(self, config):
+        config = dict(config)
+        if config == self.provider_config:
+            return
+        from .config import validate_codex_config, validate_non_secret_settings
+        from .providers import get_provider
+
+        validate_non_secret_settings(config, "codex")
+        validate_codex_config(config)
+        close = getattr(self.provider, "close", None)
+        if callable(close):
+            close()
+        self.provider = get_provider(self._provider_name_arg, config=config)
+        self.provider_config = config
+        self.provider_name = getattr(
+            self.provider, "name", type(self.provider).__name__
+        )
+
+    def _prepare_new_run(self):
+        if self._provider_name_arg is not None:
+            self._activate_provider_config(self._configured_provider_config)
+            self.policy = self._configured_policy
+
+    def run_lock(self, run_id):
+        """Hold the fail-fast execution lock for one journal/run identity."""
+
+        return acquire_run_lock(self.journal.path, run_id)
+
     @contextmanager
-    def _ownership(self, run_id, *, workspace=None):
-        # The workspace fence survives process death and is shared even when
-        # clients use different state directories. A released OS lock does not
-        # prove that an external provider process has stopped editing files.
+    def workspace_turn(
+        self,
+        workspace=None,
+        *,
+        run_id=None,
+        operation_id=None,
+        writable=True,
+        timeout=None,
+    ):
+        """Serialize one writable turn and fence an uncertain dispatch."""
+
+        ctx = _CURRENT.get()
+        if run_id is None:
+            if ctx is None or ctx.client is not self:
+                raise BotpipeError("workspace_turn needs an active run or run_id")
+            run_id = ctx.run_id
         target = self.workspace if workspace is None else Path(workspace).resolve()
-        with workspace_lock(target / ".botpipe-workspace.lock") as handle:
-            handle.seek(0)
-            raw = handle.read().strip()
-            if raw:
-                try:
-                    owner = json.loads(raw)
-                except (ValueError, UnicodeError) as exc:
-                    raise RunBusy(
-                        "Workspace ownership record is unreadable; restore it before continuing"
-                    ) from exc
-                if owner == {"journal": str(self.journal.path), "run_id": run_id}:
-                    # Do not rewrite the only fence while resuming uncertain
-                    # effects. A crash during truncation could erase ownership.
-                    yield
-                    return
-                if owner != {"journal": str(self.journal.path), "run_id": run_id}:
-                    if (
-                        not isinstance(owner, dict)
-                        or not isinstance(owner.get("journal"), str)
-                        or not isinstance(owner.get("run_id"), str)
-                    ):
-                        raise RunBusy(
-                            "Workspace ownership record is unreadable; restore it before continuing"
-                        )
-                    if Journal.foreign_has_unresolved_effects(
-                        owner["journal"], owner["run_id"]
-                    ):
-                        raise RunBusy(
-                            f"Run {owner['run_id']} has unresolved effects; resume or reconcile it first"
-                        )
-            record = json.dumps(
-                {"journal": str(self.journal.path), "run_id": run_id}
-            ).encode()
-            handle.seek(0)
-            handle.truncate()
-            handle.write(record)
-            handle.flush()
-            os.fsync(handle.fileno())
-            yield
+        wait = self.workspace_lock_timeout if timeout is None else timeout
+        with acquire_workspace_turn(
+            target,
+            journal=self.journal.path,
+            run_id=run_id,
+            operation_id=operation_id,
+            timeout=wait,
+            writable=writable,
+            cancellation=_cancellation_event(),
+        ) as turn:
+            try:
+                yield turn
+            except UncertainOperation as exc:
+                unresolved_id = exc.operation_id or operation_id
+                if turn is not None and unresolved_id:
+                    turn.mark_unresolved(unresolved_id)
+                raise
+
+    def clear_workspace_fence(self, workspace, run_id, operation_id=None):
+        target = self.workspace if workspace is None else Path(workspace).resolve()
+        with acquire_workspace_turn(
+            target,
+            journal=self.journal.path,
+            run_id=run_id,
+            operation_id=operation_id,
+            timeout=self.workspace_lock_timeout,
+            writable=True,
+        ) as turn:
+            assert turn is not None
+            return turn.clear(operation_id)
 
     def run(self, definition, *args, task_id=None, run_id=None, **kwargs):
+        self._prepare_new_run()
         definition = self._definition(definition)
         args, kwargs = _validate_args(definition.fn, args, kwargs)
         context = definition._source_context
@@ -1410,7 +1523,7 @@ class Botpipe:
             "created_at": now(),
             "error": None,
         }
-        with self._ownership(run_id):
+        with self.run_lock(run_id):
             data["provenance_start"] = capture_workflow_provenance(
                 definition, self.workspace
             )
@@ -1431,7 +1544,7 @@ class Botpipe:
     def resume(
         self, run_id, *, answer=_UNSET, workflow=None, max_operations=None, timeout=None
     ):
-        with self._ownership(run_id):
+        with self.run_lock(run_id):
             data = self.journal.run(run_id)
             self._check_run_configuration(data)
             operations = self.journal.operations(run_id)
@@ -1553,6 +1666,7 @@ class Botpipe:
         status = "completed"
         value = None
         error = None
+        coordination_error = None
         pending = data.get("pending_input")
         if provenance_start is None:
             provenance_start = capture_workflow_provenance(definition, self.workspace)
@@ -1581,6 +1695,11 @@ class Botpipe:
             error = str(exc)
             pending = None
             encoded = None
+        except CancellationRequested as exc:
+            status = "interrupted"
+            error = str(exc)
+            pending = None
+            encoded = None
         except UncertainOperation as exc:
             status = "interrupted"
             error = str(exc)
@@ -1597,6 +1716,12 @@ class Botpipe:
                 if waiting is None or waiting["status"] != "waiting":
                     pending = None
             encoded = None
+        except (WorkspaceBusy, WorkspaceUnresolved) as exc:
+            status = "interrupted"
+            error = str(exc)
+            pending = None
+            encoded = None
+            coordination_error = exc
         except Exception as exc:
             failure = exc
             try:
@@ -1626,7 +1751,7 @@ class Botpipe:
             "execution_revision",
             {"phase": "end", "provenance": provenance_end},
         )
-        return RunResult(
+        result = RunResult(
             ctx.run_id,
             ctx.task_id,
             status,
@@ -1637,6 +1762,9 @@ class Botpipe:
             ctx.folder,
             usage,
         )
+        if coordination_error is not None:
+            raise coordination_error
+        return result
 
     def _outputs(self, run_id):
         from .read_projection import project_run
@@ -1658,14 +1786,17 @@ class Botpipe:
         operation_id,
         *,
         retry=False,
+        accept=False,
+        fail=False,
         response=_UNSET,
         artifact_digests=None,
     ):
-        if retry and (response is not _UNSET or artifact_digests is not None):
-            raise ValueError("Choose retry=True or a response/artifact reconciliation")
-        if not retry and response is _UNSET and artifact_digests is None:
-            raise ValueError("Choose retry=True, a response, or artifact_digests")
-        with self._ownership(run_id):
+        choices = int(bool(retry)) + int(bool(accept)) + int(bool(fail))
+        if choices > 1 or (retry and (response is not _UNSET or artifact_digests is not None)):
+            raise ValueError("Choose exactly one of retry, accept, or fail")
+        if choices == 0 and response is _UNSET and artifact_digests is None:
+            raise ValueError("Choose retry, accept, fail, a response, or artifact_digests")
+        with self.run_lock(run_id):
             data = self.journal.run(run_id)
             self._check_run_configuration(data)
             operations = self.journal.operations(run_id)
@@ -1673,7 +1804,12 @@ class Botpipe:
             record = self.journal.get(operation_id)
             if record is None or record["run_id"] != run_id:
                 raise KeyError(operation_id)
-            if record["status"] not in ("started", "response"):
+            replaying_failure = (
+                fail
+                and record["status"] == "failed"
+                and self._is_operator_failure(record)
+            )
+            if record["status"] not in ("started", "response") and not replaying_failure:
                 raise ValueError("Only unfinished operations can be reconciled")
             if record["kind"] not in ("provider", "activity"):
                 raise ValueError(
@@ -1683,6 +1819,16 @@ class Botpipe:
                 raise ValueError("Only provider outputs accept artifact reconciliation")
             old = dict(record.get("response") or {})
             source = "operator"
+            if fail and record["kind"] == "activity":
+                self._fail_resolution(
+                    run_id,
+                    operation_id,
+                    record,
+                    source,
+                    clear_fence=False,
+                    already_failed=replaying_failure,
+                )
+                return
             if record["kind"] == "provider":
                 from .providers import ProviderRequest, ProviderResponse
 
@@ -1716,16 +1862,30 @@ class Botpipe:
                     timeout=RunLimits.from_record(data).timeout,
                     attempt=previous + 1,
                     reads=tuple(Path(path) for path in request_data.get("reads", ())),
+                    preset=inputs.get("operation", "run"),
+                    tools=(
+                        None
+                        if inputs.get("tools") is None
+                        else tuple(inputs.get("tools", ()))
+                    ),
+                    instructions=inputs.get("instructions"),
+                    settings=inputs.get("settings", {}),
                 )
 
                 def reconcile_provider():
-                    nonlocal response, retry, source, checkpoint
+                    nonlocal artifact_digests, response, retry, source, checkpoint
                     if isinstance(checkpoint, RespondedCheckpoint):
                         # This journaled response already passed the provider
                         # boundary; it is as authoritative as a recovered receipt.
                         outcome = Completed(checkpoint.response)
                     else:
                         outcome = recover_outcome(self.provider, request)
+                    if isinstance(outcome, Running):
+                        raise BotpipeError(ProviderLifecycle.blocked_message(outcome))
+                    if fail:
+                        # Explicit failure may resolve a stopped or unknowable old
+                        # attempt, but never a turn known to still be active.
+                        return
                     action = ProviderLifecycle.reconciliation_action(outcome)
                     if action is RecoveryAction.USE_RESPONSE:
                         checkpoint = ProviderLifecycle.completed(
@@ -1734,18 +1894,71 @@ class Botpipe:
                         response = checkpoint.response
                         retry = False
                         source = "recovered"
-                    elif action is RecoveryAction.BLOCK:
+                    elif (
+                        isinstance(outcome, Unknown)
+                        and not retry
+                        and not accept
+                        and response is _UNSET
+                    ):
                         raise BotpipeError(ProviderLifecycle.blocked_message(outcome))
-                    if artifact_digests is not None:
-                        from .artifacts import Artifact, ArtifactStore
+                    if accept and response is _UNSET:
+                        if inputs.get("schema") is not None:
+                            raise ValueError(
+                                "Accepting a typed result without a completed turn "
+                                "requires a response matching its output schema"
+                            )
+                        response = ProviderResponse(
+                            "",
+                            session_id=record.get("thread_id") or request.session_id,
+                            metadata={"operator_accepted": True},
+                        )
+                    if response is not _UNSET:
+                        if isinstance(response, dict):
+                            response = ProviderResponse(**response)
+                        if not isinstance(response, ProviderResponse):
+                            raise TypeError(
+                                "Provider reconciliation needs ProviderResponse or its field mapping"
+                            )
+                        if accept and source == "operator":
+                            response = dataclasses.replace(
+                                response,
+                                session_id=(
+                                    response.session_id
+                                    or record.get("thread_id")
+                                    or request.session_id
+                                ),
+                                metadata={**response.metadata, "operator_accepted": True},
+                            )
+                        response.to_record()
+                        if accept and inputs.get("schema") is not None:
+                            from jsonschema import ValidationError as SchemaError
+                            from jsonschema import validate
 
+                            text = response.text.strip()
+                            fenced = re.fullmatch(
+                                r"```(?:json)?\s*\n(.*?)\n```", text, re.DOTALL
+                            )
+                            try:
+                                validate(
+                                    json.loads(fenced.group(1) if fenced else text),
+                                    inputs["schema"],
+                                )
+                            except (ValueError, SchemaError) as exc:
+                                raise ValueError(
+                                    "Accepted response does not match the output schema: "
+                                    f"{exc}"
+                                ) from exc
+                        checkpoint = ProviderLifecycle.completed(checkpoint, response)
+                    from .artifacts import Artifact, ArtifactError, ArtifactStore
+
+                    declarations = tuple(
+                        Artifact.from_record(a) for a in inputs.get("writes", ())
+                    ) if artifact_digests is not None or accept else ()
+                    if artifact_digests is not None or (accept and declarations):
                         if response is _UNSET:
                             raise ValueError(
                                 "Artifact reconciliation also needs the completed or manually supplied response"
                             )
-                        declarations = tuple(
-                            Artifact.from_record(a) for a in inputs.get("writes", ())
-                        )
                         if not declarations:
                             raise ValueError(
                                 "This provider operation has no declared artifacts"
@@ -1753,12 +1966,37 @@ class Botpipe:
                         store = ArtifactStore(
                             request.receipt_dir.parent,
                             workspace=request.workspace,
-                            forbidden_paths=(
-                                self.journal.path,
-                                self.workspace / ".botpipe-workspace.lock",
-                                request.workspace / ".botpipe-workspace.lock",
+                            allowed_roots=(
+                                self.state_dir / "tasks" / data["task_id"],
                             ),
+                            forbidden_paths=(self.journal.path,),
                         )
+                        if accept and artifact_digests is None:
+                            resolution = checkpoint.artifact_resolution
+                            if resolution is not None:
+                                artifact_digests = resolution["digests"]
+                            else:
+                                paths = store.destinations(declarations)
+                                accepted = {}
+                                for declaration in declarations:
+                                    path = paths[declaration.name]
+                                    if not path.exists():
+                                        accepted[declaration.name] = None
+                                        continue
+                                    digest = hashlib.sha256()
+                                    try:
+                                        with path.open("rb") as handle:
+                                            for chunk in iter(
+                                                lambda: handle.read(1024 * 1024), b""
+                                            ):
+                                                digest.update(chunk)
+                                    except OSError as exc:
+                                        raise ArtifactError(
+                                            "Could not inventory accepted artifact: "
+                                            f"{declaration.name}"
+                                        ) from exc
+                                    accepted[declaration.name] = digest.hexdigest()
+                                artifact_digests = accepted
                         artifact_operation = f"{operation_id}:generation:{previous}"
                         if store.has_capture_evidence(artifact_operation):
                             resolution = (
@@ -1774,40 +2012,65 @@ class Botpipe:
                             approved = store.check_capture_digests(
                                 declarations, artifact_digests
                             )
-                            if response is _UNSET:
-                                raise ValueError(
-                                    "Artifact reconciliation also needs a provider response"
-                                )
-                            if not isinstance(response, ProviderResponse):
-                                response = ProviderResponse(**response)
-                            checkpoint = ProviderLifecycle.completed(
-                                checkpoint, response
-                            )
                             checkpoint = ProviderLifecycle.with_artifact_resolution(
                                 checkpoint, approved
                             )
+                    if response is not _UNSET:
+                        # Record the operator's selection before capture, while
+                        # the workspace remains locked and fenced against writers.
+                        _persist_response(
+                            self.journal,
+                            operation_id,
+                            checkpoint.to_record(),
+                            session_key=inputs.get("session"),
+                        )
+                    if accept and declarations:
+                        store.capture(
+                            declarations,
+                            artifact_operation,
+                            recover=True,
+                            expected_digests=artifact_digests,
+                        )
 
                 target = request.workspace.resolve()
-                if target != self.workspace:
-                    with self._ownership(run_id, workspace=target):
-                        reconcile_provider()
-                else:
-                    reconcile_provider()
-
-                if response is not _UNSET:
-                    if isinstance(response, dict):
-                        response = ProviderResponse(**response)
-                    if not isinstance(response, ProviderResponse):
-                        raise TypeError(
-                            "Provider reconciliation needs ProviderResponse or its field mapping"
-                        )
-                    checkpoint = ProviderLifecycle.completed(checkpoint, response)
-                    _persist_response(
-                        self.journal,
-                        operation_id,
-                        checkpoint.to_record(),
-                        session_key=inputs.get("session"),
+                writable = self._operation_is_writable(inputs)
+                session_key = inputs.get("session")
+                recorded_timeout = inputs.get("timeout")
+                session_timeout = (
+                    RunLimits.from_record(data).timeout
+                    if recorded_timeout is None
+                    else recorded_timeout
+                )
+                session_guard = (
+                    acquire_session_lock(
+                        self.journal.path,
+                        session_key,
+                        timeout=session_timeout,
+                        cancellation=_cancellation_event(),
                     )
+                    if session_key is not None
+                    else nullcontext()
+                )
+                with session_guard:
+                    with self.workspace_turn(
+                        target,
+                        run_id=run_id,
+                        operation_id=operation_id,
+                        writable=writable,
+                    ):
+                        reconcile_provider()
+
+                if fail:
+                    self._fail_resolution(
+                        run_id,
+                        operation_id,
+                        record,
+                        source,
+                        clear_fence=writable,
+                        already_failed=replaying_failure,
+                    )
+                    return
+
             elif response is not _UNSET:
                 result = codec.encode(response)
                 _commit_or_confirm(
@@ -1817,6 +2080,8 @@ class Botpipe:
                     {"status": "completed", "result": result},
                     "Resolved activity checkpoint could not be confirmed; inspect it before retrying",
                 )
+            elif accept:
+                raise ValueError("Activity resolution with accept needs a response")
             if retry:
                 # Explicit retry is represented by an authorization marker; the
                 # original intent/identity remains, and adapters keep old receipts.
@@ -1845,9 +2110,84 @@ class Botpipe:
                 },
                 operation_id,
             )
+            if record["kind"] == "provider" and writable:
+                self.clear_workspace_fence(
+                    self._operation_workspace(record), run_id, operation_id
+                )
+
+    def _operation_workspace(self, record):
+        try:
+            inputs = codec.decode(record["inputs"])
+        except (KeyError, TypeError, ValueError):
+            return self.workspace
+        return Path(inputs.get("workspace", self.workspace)).resolve()
+
+    def _fail_resolution(
+        self,
+        run_id,
+        operation_id,
+        record,
+        source,
+        *,
+        clear_fence=True,
+        already_failed=False,
+    ):
+        if not already_failed:
+            failure = _finalize_exception_record(
+                _exception_record(BotpipeError(_OPERATOR_FAILURE))
+            )
+            self.journal.fail(operation_id, failure)
+        self.journal.update_run(
+            run_id,
+            status="failed",
+            error=f"BotpipeError: {_OPERATOR_FAILURE}",
+            pending_input=None,
+            updated_at=now(),
+        )
+        if clear_fence:
+            self.clear_workspace_fence(
+                self._operation_workspace(record), run_id, operation_id
+            )
+        if not any(
+            event["event"] == "operation_reconciled"
+            and event["operation_id"] == operation_id
+            and event["data"].get("failed") is True
+            for event in self.journal.events(run_id)
+        ):
+            self.journal.event(
+                run_id,
+                "operation_reconciled",
+                {
+                    "retry": False,
+                    "accepted": False,
+                    "failed": True,
+                    "source": source,
+                },
+                operation_id,
+            )
+
+    @staticmethod
+    def _is_operator_failure(record):
+        error = record.get("error")
+        return (
+            type(error) is dict
+            and error.get("module") == BotpipeError.__module__
+            and error.get("type") == BotpipeError.__qualname__
+            and error.get("message") == _OPERATOR_FAILURE
+        )
+
+    @staticmethod
+    def _operation_is_writable(inputs):
+        preset = inputs.get("operation", inputs.get("preset"))
+        return preset not in {"query", "generate"}
 
     def close(self):
-        self.journal.close()
+        close = getattr(self.provider, "close", None)
+        try:
+            if callable(close):
+                close()
+        finally:
+            self.journal.close()
 
     def __enter__(self):
         return self

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -8,13 +9,144 @@ from types import SimpleNamespace
 
 import pytest
 
-from botpipe import Botpipe, Policy, Session, provider_budget, workflow
-from botpipe.processes import ProcessContainment
-from botpipe.providers import CodexProvider
+from botpipe.processes import ProcessCleanupError, ProcessContainment
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX process-group behavior")
+def test_posix_zombie_only_group_permission_error_is_quiescent(monkeypatch):
+    from botpipe import processes
+
+    process = SimpleNamespace(pid=321, poll=lambda: 0)
+    containment = ProcessContainment({}, _owned_pid=321, _owned_pgid=321)
+    monkeypatch.setattr(processes.os, "getpgrp", lambda: 1)
+    monkeypatch.setattr(processes.os, "getpgid", lambda _pid: 321)
+    monkeypatch.setattr(
+        processes.os,
+        "killpg",
+        lambda *_args: (_ for _ in ()).throw(PermissionError()),
+    )
+    monkeypatch.setattr(
+        processes.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(stdout="321 321 Z\n"),
+    )
+
+    containment._terminate_posix_group(process, grace_seconds=0)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX process-group behavior")
+def test_posix_live_group_permission_error_is_not_suppressed(monkeypatch):
+    from botpipe import processes
+
+    process = SimpleNamespace(pid=321, poll=lambda: None)
+    containment = ProcessContainment({}, _owned_pid=321, _owned_pgid=321)
+    monkeypatch.setattr(processes.os, "getpgrp", lambda: 1)
+    monkeypatch.setattr(processes.os, "getpgid", lambda _pid: 321)
+    monkeypatch.setattr(
+        processes.os,
+        "killpg",
+        lambda *_args: (_ for _ in ()).throw(PermissionError()),
+    )
+    monkeypatch.setattr(
+        processes.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(stdout="321 321 S\n"),
+    )
+
+    with pytest.raises(PermissionError):
+        containment._terminate_posix_group(process, grace_seconds=0)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX process-group behavior")
+def test_captured_nested_group_is_killed_after_parent_is_reaped(tmp_path):
+    from botpipe.processes import _posix_group_is_quiescent
+
+    marker, pid_file = tmp_path / "escaped", tmp_path / "child.pid"
+    child = (
+        "import pathlib,sys,time;"
+        "pathlib.Path(sys.argv[1]).write_text(str(__import__('os').getpid()));"
+        "time.sleep(1);pathlib.Path(sys.argv[2]).write_text('escaped')"
+    )
+    parent = (
+        "import subprocess,sys,time;"
+        f"subprocess.Popen([sys.executable,'-c',{child!r},sys.argv[1],sys.argv[2]],"
+        "start_new_session=True);time.sleep(10)"
+    )
+    containment = ProcessContainment.create()
+    process = subprocess.Popen(
+        [sys.executable, "-c", parent, str(pid_file), str(marker)],
+        **containment.creation_kwargs,
+    )
+    containment.attach_and_start(process)
+    try:
+        deadline = time.monotonic() + 3
+        while not pid_file.exists() and time.monotonic() < deadline:
+            time.sleep(0.02)
+        assert pid_file.exists()
+        child_pid = int(pid_file.read_text())
+        containment.capture_descendant_groups(process)
+        os.killpg(process.pid, signal.SIGKILL)
+        process.wait(timeout=2)
+
+        containment.ensure_tree_exited(process, grace_seconds=0.1)
+        assert _posix_group_is_quiescent(child_pid)
+        time.sleep(1.1)
+        assert not marker.exists()
+    finally:
+        if process.poll() is None:
+            containment.terminate(process, grace_seconds=0.1)
+        containment.close()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX process-group behavior")
+def test_captured_group_with_reused_witness_is_not_signalled(monkeypatch):
+    from botpipe import processes
+
+    containment = ProcessContainment(
+        {}, _descendant_groups={456: {123: "original-start"}}
+    )
+    monkeypatch.setattr(
+        processes,
+        "_posix_processes",
+        lambda: {123: (1, 456, "S", "replacement-start")},
+    )
+    signals = []
+    monkeypatch.setattr(processes.os, "killpg", lambda pgid, sig: signals.append((pgid, sig)))
+
+    containment._signal_descendant_groups(signal.SIGKILL)
+
+    assert signals == []
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX process-group behavior")
+def test_inspection_failure_still_attempts_group_cleanup_and_is_exposed(monkeypatch):
+    from botpipe import processes
+
+    process = SimpleNamespace(pid=321, poll=lambda: None)
+    containment = ProcessContainment({}, _owned_pid=321, _owned_pgid=321)
+    monkeypatch.setattr(processes.os, "getpgrp", lambda: 1)
+    monkeypatch.setattr(processes.os, "getpgid", lambda _pid: 321)
+    monkeypatch.setattr(
+        processes,
+        "_posix_processes",
+        lambda: (_ for _ in ()).throw(OSError("ps unavailable")),
+    )
+    signals = []
+
+    def missing_group(pgid, sig):
+        signals.append((pgid, sig))
+        raise ProcessLookupError
+
+    monkeypatch.setattr(processes.os, "killpg", missing_group)
+
+    containment.capture_descendant_groups(process)
+    with pytest.raises(ProcessCleanupError, match="ps unavailable"):
+        containment.terminate(process, grace_seconds=0)
+    assert signals == [(321, signal.SIGTERM)]
 
 
 def test_windows_child_is_suspended_until_owned_job_assignment(monkeypatch):
-    import botpipe.processes as processes
+    from botpipe import processes
 
     calls = []
     job = SimpleNamespace(
@@ -36,50 +168,9 @@ def test_windows_child_is_suspended_until_owned_job_assignment(monkeypatch):
     assert calls == [("assign-and-resume", 123), ("terminate", 0), ("close",)]
 
 
-@pytest.mark.skipif(os.name != "posix", reason="POSIX process groups")
-def test_successful_native_leader_cannot_leave_effectful_descendant(tmp_path):
-    marker = tmp_path / "escaped"
-    child = f"import time,pathlib;time.sleep(1);pathlib.Path({str(marker)!r}).write_text('bad')"
-    script = tmp_path / "cli.py"
-    script.write_text(
-        "import subprocess,sys,json\n"
-        f"subprocess.Popen([sys.executable,'-c',{child!r}])\n"
-        "print(json.dumps({'type':'item.completed','item':{'type':'agent_message','text':'done'}}))\n"
-    )
-
-    @workflow
-    def work():
-        return Session().run("work").value
-
-    with Botpipe(
-        tmp_path, provider=CodexProvider((sys.executable, str(script)))
-    ) as client:
-        assert client.run(work).status == "completed"
-    time.sleep(1.1)
-    assert not marker.exists()
-
-
-def test_native_budget_timeout_cannot_be_overridden_by_policy(tmp_path):
-    script = tmp_path / "cli.py"
-    script.write_text("import time;time.sleep(10)\n")
-
-    @workflow
-    def work():
-        with provider_budget(max_turns=1, turn_timeout_seconds=0.05):
-            Session().run("work", policy=Policy(timeout=10))
-
-    started = time.monotonic()
-    with Botpipe(
-        tmp_path, provider=CodexProvider((sys.executable, str(script)))
-    ) as client:
-        result = client.run(work)
-        assert result.status == "interrupted"
-        assert "timed out after 0.05" in result.error
-    assert time.monotonic() - started < 3
-
-
 @pytest.mark.skipif(os.name != "nt", reason="Native Windows Job Object smoke test")
 def test_windows_job_close_terminates_running_descendants(tmp_path):
+    import time
     ready, escaped = tmp_path / "ready", tmp_path / "escaped"
     child = (
         f"import pathlib,time;pathlib.Path({str(ready)!r}).write_text('ready');"

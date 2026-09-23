@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from botpipe import Session, current_run, workflow
+from botpipe import Provider, current_run, workflow
 from labs.workflows._shared import (
     LabWorkflowResult,
     ReplanRequired,
@@ -26,8 +26,8 @@ def CandidateWorkflowToAdaptedExecutionPlan(
     params: Params, request: str = ""
 ) -> LabWorkflowResult:
     """Execute the candidate workflow to adapted execution plan evidence workflow."""
-    _producer = Session(key="producer")
-    _verifier = Session(key="verifier")
+    _producer = Provider()
+    _verifier = _producer.with_config(session=None)
     context = {"request": request, "parameters": params.model_dump(mode="json")}
     context["selected_workflow_contract"] = observe_workflow(params.selected_workflow)
     completed = []

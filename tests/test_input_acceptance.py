@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 from pydantic import BaseModel, Field, field_validator
 
-from botpipe import Botpipe, ask, codec, parallel, workflow
+from botpipe import Botpipe, ask_human, codec, parallel, workflow
 from botpipe.providers import FakeProvider
 
 
@@ -33,7 +33,7 @@ def test_invalid_custom_validator_answer_can_be_corrected(tmp_path):
 
     @workflow
     def gate():
-        return ask("Decision?", returns=Approval)
+        return ask_human("Decision?", returns=Approval)
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(gate)
@@ -85,7 +85,7 @@ class AliasedAnswer(BaseModel):
 def test_sdk_accepts_typed_python_answers(tmp_path, contract, answer):
     @workflow
     def gate():
-        return ask("Answer?", returns=contract)
+        return ask_human("Answer?", returns=contract)
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(gate)
@@ -99,7 +99,7 @@ def test_sdk_accepts_typed_python_answers(tmp_path, contract, answer):
 def test_answer_that_cannot_be_encoded_stays_waiting(tmp_path):
     @workflow
     def gate():
-        return ask("Durable value?", returns=Any)
+        return ask_human("Durable value?", returns=Any)
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(gate)
@@ -124,7 +124,7 @@ def test_unexpected_validator_bug_is_not_reported_as_bad_input(tmp_path):
 
     @workflow
     def gate():
-        return ask("Value?", returns=Broken)
+        return ask_human("Value?", returns=Broken)
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(gate)
@@ -138,7 +138,7 @@ def test_unexpected_validator_bug_is_not_reported_as_bad_input(tmp_path):
 def test_nested_answer_candidate_reaches_only_target_ask(tmp_path):
     @workflow
     def child():
-        return ask("Nested?", returns=int)
+        return ask_human("Nested?", returns=int)
 
     @workflow
     def parent():
@@ -153,10 +153,10 @@ def test_nested_answer_candidate_reaches_only_target_ask(tmp_path):
 
 def test_parallel_answers_are_keyed_to_the_pending_operation(tmp_path):
     def left():
-        return ask("Left?", returns=int)
+        return ask_human("Left?", returns=int)
 
     def right():
-        return ask("Right?", returns=int)
+        return ask_human("Right?", returns=int)
 
     @workflow
     def both():
@@ -179,7 +179,7 @@ def test_answer_can_be_resubmitted_when_acceptance_did_not_commit(
 ):
     @workflow
     def gate():
-        return ask("Approve?")
+        return ask_human("Approve?")
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(gate)
@@ -210,7 +210,7 @@ def test_interruption_before_acceptance_keeps_answer_target(tmp_path):
 
     @workflow
     def gate():
-        return ask("Value?", returns=InterruptOnce)
+        return ask_human("Value?", returns=InterruptOnce)
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(gate)
@@ -238,7 +238,7 @@ def test_accepted_answer_survives_finish_crash_without_revalidation(
 
     @workflow
     def gate():
-        return ask("Number?", returns=Answer)
+        return ask_human("Number?", returns=Answer)
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(gate)
@@ -261,7 +261,7 @@ def test_accepted_answer_survives_finish_crash_without_revalidation(
 def test_lost_acceptance_ack_uses_committed_answer(tmp_path, monkeypatch):
     @workflow
     def gate():
-        return ask("Approve?")
+        return ask_human("Approve?")
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(gate)
@@ -280,7 +280,7 @@ def test_lost_acceptance_ack_uses_committed_answer(tmp_path, monkeypatch):
 def test_stale_pending_metadata_cannot_replace_accepted_answer(tmp_path):
     @workflow
     def gate():
-        return ask("Approve?")
+        return ask_human("Approve?")
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(gate)
@@ -297,7 +297,7 @@ def test_stale_pending_metadata_cannot_replace_accepted_answer(tmp_path):
 def test_unvalidated_answer_checkpoint_is_rejected_without_revalidation(tmp_path):
     @workflow
     def gate():
-        return ask("Approve?")
+        return ask_human("Approve?")
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(gate)
@@ -315,10 +315,10 @@ def test_cli_rejected_answer_is_actionable_and_correctable(tmp_path):
     source = tmp_path / "approval.py"
     source.write_text(
         "from typing import Literal\n"
-        "from botpipe import ask, workflow\n"
+        "from botpipe import ask_human, workflow\n"
         "@workflow\n"
         "def gate():\n"
-        "    return ask('Decision?', returns=Literal['approve', 'reject'])\n"
+        "    return ask_human('Decision?', returns=Literal['approve', 'reject'])\n"
     )
     state = tmp_path / "state"
     env = {

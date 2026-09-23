@@ -7,13 +7,14 @@ fields; callers operate on variants and serialize a complete legal state.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from enum import Enum
-from typing import Any, Mapping
+from typing import Any
 
 from .errors import ReplayMismatch
 from .providers import ProviderResponse
-from .recovery import Completed, RecoveryOutcome, Running, Stopped
+from .recovery import Completed, RecoveryOutcome, Running, Stopped, Unknown
 
 
 class ProviderCheckpointError(ReplayMismatch):
@@ -146,12 +147,20 @@ class ProviderCheckpoint:
                 )
             return PreparingCheckpoint(generation)
         if raw.get("retry_authorized") is True:
-            _only(raw, {"generation", "retry_authorized", "request"})
+            _only(
+                raw,
+                {"generation", "retry_authorized", "retry_origin", "request"},
+            )
             if generation < 1:
                 raise ProviderCheckpointError(
                     "Authorized retry must name a later generation"
                 )
-            return RetryAuthorizedCheckpoint(generation, _request(raw))
+            origin = raw.get("retry_origin")
+            if origin not in {None, "automatic", "operator"}:
+                raise ProviderCheckpointError(
+                    "Provider retry authorization origin is invalid"
+                )
+            return RetryAuthorizedCheckpoint(generation, _request(raw), origin)
         if "retry_authorized" in raw:
             raise ProviderCheckpointError(
                 "Provider retry authorization marker is invalid"
@@ -282,6 +291,8 @@ class IntentCheckpoint(ProviderCheckpoint):
 
 @dataclass(frozen=True, slots=True)
 class RetryAuthorizedCheckpoint(IntentCheckpoint):
+    origin: str | None = None
+
     @property
     def attempt_generation(self) -> int:
         return self.generation - 1
@@ -291,6 +302,7 @@ class RetryAuthorizedCheckpoint(IntentCheckpoint):
             "retry_authorized": True,
             "generation": self.generation,
             "request": dict(self.request),
+            **({"retry_origin": self.origin} if self.origin is not None else {}),
         }
 
 
@@ -373,10 +385,13 @@ class ProviderLifecycle:
     ) -> RecoveryAction:
         if isinstance(outcome, Completed):
             return RecoveryAction.USE_RESPONSE
-        if isinstance(checkpoint, RetryAuthorizedCheckpoint) and isinstance(
-            outcome, Stopped
-        ):
-            return RecoveryAction.START_RETRY
+        if isinstance(checkpoint, RetryAuthorizedCheckpoint):
+            if checkpoint.origin == "operator" and isinstance(
+                outcome, (Stopped, Unknown)
+            ):
+                return RecoveryAction.START_RETRY
+            if checkpoint.origin == "automatic" and isinstance(outcome, Stopped):
+                return RecoveryAction.START_RETRY
         return RecoveryAction.BLOCK
 
     @staticmethod
@@ -401,15 +416,21 @@ class ProviderLifecycle:
         return RecoveryAction.BLOCK
 
     @staticmethod
-    def authorize_retry(checkpoint: ProviderCheckpoint) -> RetryAuthorizedCheckpoint:
+    def authorize_retry(
+        checkpoint: ProviderCheckpoint, *, origin: str = "operator"
+    ) -> RetryAuthorizedCheckpoint:
+        if origin not in {"automatic", "operator"}:
+            raise ValueError("retry origin must be 'automatic' or 'operator'")
         request = checkpoint.request_data
         if request is None or isinstance(checkpoint, NotDispatchedCheckpoint):
             raise ProviderCheckpointError(
                 "This provider checkpoint cannot authorize a retry"
             )
         if isinstance(checkpoint, RetryAuthorizedCheckpoint):
+            if origin == "operator" and checkpoint.origin != "operator":
+                return replace(checkpoint, origin="operator")
             return checkpoint
-        return RetryAuthorizedCheckpoint(checkpoint.generation + 1, request)
+        return RetryAuthorizedCheckpoint(checkpoint.generation + 1, request, origin)
 
     @staticmethod
     def validation_failed(

@@ -32,10 +32,10 @@ def test_operation_owners_relocate_with_explicit_workflow(tmp_path):
     package.mkdir(parents=True)
     (package / "__init__.py").write_text("")
     (package / "workflow.py").write_text(
-        "from botpipe import ask, workflow\n"
+        "from botpipe import ask_human, workflow\n"
         "@workflow\n"
         "def job():\n"
-        "    ask('continue?')\n"
+        "    ask_human('continue?')\n"
         "    return 'done'\n"
     )
     script = code1 / "run.py"

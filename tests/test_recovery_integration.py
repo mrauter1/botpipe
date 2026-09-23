@@ -5,7 +5,13 @@ from copy import deepcopy
 
 import pytest
 
-from botpipe import Artifact, Botpipe, BotpipeError, ReplayMismatch, Session, workflow
+from botpipe import (
+    Artifact,
+    Botpipe,
+    BotpipeError,
+    Provider,
+    workflow,
+)
 from botpipe.providers import (
     FakeProvider,
     ProviderError,
@@ -29,7 +35,7 @@ def test_recovered_completion_overrides_conflicting_operator_response(tmp_path):
 
     @workflow
     def conversation():
-        session = Session()
+        session = Provider()
         return session.run("first").value, session.run("second").value
 
     provider = ReceiptedProvider(
@@ -78,39 +84,38 @@ class _LegacyRecoveryProvider(FakeProvider):
     ids=["none", "provider-error", "interrupted-unknown"],
 )
 @pytest.mark.parametrize("resolution", ["retry", "response"])
-def test_unknown_recovery_blocks_every_resolution_without_changing_journal(
+def test_operator_can_explicitly_resolve_unknown_recovery(
     tmp_path, recovery: object, resolution: str
 ):
     @workflow
     def work():
-        return Session().run("effectful work").value
+        return Provider().run("effectful work").value
 
     provider = _LegacyRecoveryProvider(recovery)
     with Botpipe(tmp_path, provider=provider) as client:
         with pytest.raises(SystemExit):
             client.run(work, run_id="unknown-recovery")
         operation = _provider_operation(client, "unknown-recovery")
-        before = deepcopy(client.journal.get(operation["id"])["response"])
-
-        with pytest.raises(BotpipeError, match="reconciliation is blocked"):
-            if resolution == "retry":
-                client.resolve("unknown-recovery", operation["id"], retry=True)
-            else:
-                client.resolve(
-                    "unknown-recovery",
-                    operation["id"],
-                    response=ProviderResponse("operator claim"),
-                )
-
+        if resolution == "retry":
+            client.resolve("unknown-recovery", operation["id"], retry=True)
+        else:
+            client.resolve(
+                "unknown-recovery",
+                operation["id"],
+                response=ProviderResponse("operator claim"),
+            )
         after = client.journal.get(operation["id"])["response"]
-        assert after == before
-        assert "retry_authorized" not in after
+        if resolution == "retry":
+            assert after["retry_authorized"] is True
+            assert after["generation"] == 1
+        else:
+            assert after["text"] == "operator claim"
 
 
 def test_manual_recovery_uses_timeout_recorded_for_run(tmp_path):
     @workflow
     def work():
-        return Session().run("effectful work").value
+        return Provider().run("effectful work").value
 
     provider = _LegacyRecoveryProvider(None)
     with Botpipe(tmp_path, provider=provider, timeout=7.5) as client:
@@ -119,31 +124,33 @@ def test_manual_recovery_uses_timeout_recorded_for_run(tmp_path):
         operation = _provider_operation(client, "recorded-timeout")
         client.timeout = 90
 
-        with pytest.raises(BotpipeError, match="reconciliation is blocked"):
-            client.resolve("recorded-timeout", operation["id"], retry=True)
+        client.resolve("recorded-timeout", operation["id"], retry=True)
 
         assert provider.recovery_requests[-1].timeout == 7.5
 
 
-def test_known_stopped_attempt_only_reexecutes_after_retry_authorization(tmp_path):
+def test_known_stopped_unsafe_attempt_only_reexecutes_after_retry_authorization(
+    tmp_path,
+):
     @workflow
     def work():
-        return Session().run("effectful work").value
+        return Provider().run("effectful work", retry_safe=False).value
 
     provider = FakeProvider([ProviderError("known synchronous failure"), "done"])
     with Botpipe(tmp_path, provider=provider) as client:
         interrupted = client.run(work, run_id="known-stopped")
         assert interrupted.status == "interrupted"
-        operation = _provider_operation(client, "known-stopped")
         assert len(provider.calls) == 1
 
         still_interrupted = client.resume("known-stopped", workflow=work)
         assert still_interrupted.status == "interrupted"
         assert len(provider.calls) == 1
 
+        operation = _provider_operation(client, "known-stopped")
         client.resolve("known-stopped", operation["id"], retry=True)
         authorized = client.journal.get(operation["id"])["response"]
         assert authorized["retry_authorized"] is True
+        assert authorized["retry_origin"] == "operator"
         assert authorized["generation"] == 1
         assert len(provider.calls) == 1
 
@@ -161,7 +168,7 @@ def test_repeated_live_reconciliation_remains_fenced(tmp_path):
 
     @workflow
     def work():
-        return Session().run("effectful work").value
+        return Provider().run("effectful work").value
 
     provider = LiveProvider([SystemExit("runtime interrupted")])
     with Botpipe(tmp_path, provider=provider) as client:
@@ -178,37 +185,14 @@ def test_repeated_live_reconciliation_remains_fenced(tmp_path):
         assert len(provider.calls) == 1
 
 
-def test_recovery_requires_recorded_provider_configuration(tmp_path):
-    class StoppedProvider(FakeProvider):
-        def recover(self, request: ProviderRequest):
-            return Stopped("attempt is quiescent")
-
-    @workflow
-    def work():
-        return Session().run("effectful work").value
-
-    provider = StoppedProvider([SystemExit("runtime interrupted")])
-    with Botpipe(tmp_path, provider=provider) as client:
-        with pytest.raises(SystemExit):
-            client.run(work, run_id="configuration-fence")
-        operation = _provider_operation(client, "configuration-fence")
-        before = deepcopy(client.journal.get(operation["id"])["response"])
-        client.provider_config = {"changed": True}
-
-        with pytest.raises(ReplayMismatch, match="Provider configuration changed"):
-            client.resolve("configuration-fence", operation["id"], retry=True)
-
-        assert client.journal.get(operation["id"])["response"] == before
-
-
-def test_explicit_unknown_outcome_blocks_manual_response(tmp_path):
+def test_explicit_unknown_outcome_allows_operator_response(tmp_path):
     class UnknownProvider(FakeProvider):
         def recover(self, request: ProviderRequest):
             return Unknown("supervisor state unavailable")
 
     @workflow
     def work():
-        return Session().run("effectful work").value
+        return Provider().run("effectful work").value
 
     provider = UnknownProvider([SystemExit("runtime interrupted")])
     with Botpipe(tmp_path, provider=provider) as client:
@@ -216,12 +200,12 @@ def test_explicit_unknown_outcome_blocks_manual_response(tmp_path):
             client.run(work, run_id="explicit-unknown")
         operation = _provider_operation(client, "explicit-unknown")
 
-        with pytest.raises(BotpipeError, match="supervisor state unavailable"):
-            client.resolve(
-                "explicit-unknown",
-                operation["id"],
-                response=ProviderResponse("operator claim"),
-            )
+        client.resolve(
+            "explicit-unknown",
+            operation["id"],
+            response=ProviderResponse("operator claim"),
+        )
+        assert client.journal.get(operation["id"])["response"]["text"] == "operator claim"
 
 
 def test_manual_response_cancels_pending_retry_without_preparing_new_outputs(tmp_path):
@@ -238,8 +222,8 @@ def test_manual_response_cancels_pending_retry_without_preparing_new_outputs(tmp
 
     @workflow
     def writer():
-        return Session().run(
-            "write", writes=[Artifact.text(destination, required=True)], retries=0
+        return Provider().run(
+            "write", writes=[Artifact.text(destination, required=True)], output_retries=0
         )
 
     provider = StoppedProvider([interrupted])
@@ -267,7 +251,7 @@ def test_manual_response_cancels_pending_retry_without_preparing_new_outputs(tmp
     assert len(provider.calls) == 1
 
 
-@pytest.mark.parametrize("resolution", ["automatic", "authorized_retry", "manual"])
+@pytest.mark.parametrize("resolution", ["automatic", "manual"])
 def test_invalid_completed_response_stays_uncommitted(tmp_path, resolution):
     class MalformedProvider(FakeProvider):
         state = "stopped"
@@ -279,16 +263,14 @@ def test_invalid_completed_response_stays_uncommitted(tmp_path, resolution):
 
     @workflow
     def job():
-        return Session().run("work")
+        return Provider().run("work")
 
     provider = MalformedProvider([KeyboardInterrupt()])
     with Botpipe(tmp_path, provider=provider) as client:
         paused = client.run(job)
         operation = _provider_operation(client, paused.run_id)
-        if resolution == "authorized_retry":
-            client.resolve(paused.run_id, operation["id"], retry=True)
         if resolution == "manual":
-            with pytest.raises(TypeError, match="usage must be a plain JSON object"):
+            with pytest.raises(TypeError, match="usage and metadata must be plain JSON objects"):
                 client.resolve(
                     paused.run_id,
                     operation["id"],

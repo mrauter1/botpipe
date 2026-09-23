@@ -7,7 +7,8 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from botpipe import Artifact, Prompt, Session, activity, current_run, workflow
+from botpipe import Artifact, Prompt, Provider, activity, current_run, workflow
+from botpipe.workflows._reviews import save_review
 
 from .contracts import (
     BehaviorDistillationPayload,
@@ -108,11 +109,11 @@ def code_to_workflow(
     _bootstrap_capture(str(ctx.workspace), str(ctx.folder), name)
     invocation_contract, source_manifest, trace_corpus = _read_specs(ctx.folder)
 
-    behavior_session = Session(key="behavior-producer")
-    behavior_verifier = Session(key="behavior-verifier")
-    authoring_session = Session(key="authoring-producer")
-    design_verifier = Session(key="design-verifier")
-    build_verifier = Session(key="build-verifier")
+    behavior_provider = Provider()
+    behavior_verifier = behavior_provider.with_config(session=None)
+    authoring_provider = Provider()
+    design_verifier = authoring_provider.with_config(session=None)
+    build_verifier = authoring_provider.with_config(session=None)
 
     behavior_inventory = Artifact.json("behavior_inventory.json", required=True)
     behavior_report = Artifact.md(
@@ -123,9 +124,9 @@ def code_to_workflow(
     design_review = Artifact.md("design_review.md", required=True)
     build_review = Artifact.md("build_review.md", required=True)
 
-    behavior_feedback = ()
+    behavior_feedback: tuple[object, ...] = ()
     while True:
-        distilled = behavior_session.run(
+        distilled = behavior_provider.run(
             Prompt.file("prompts/distill_behavior_producer.md"),
             input={"request": request, "generated_workflow_name": name},
             reads=(
@@ -136,7 +137,7 @@ def code_to_workflow(
             ),
             writes=(behavior_inventory, behavior_report, trace_notes),
         )
-        behavior_check = behavior_verifier.run(
+        behavior_check = behavior_verifier.query(
             Prompt.file("prompts/distill_behavior_verifier.md"),
             input={"request": request, "generated_workflow_name": name},
             reads=(
@@ -147,14 +148,16 @@ def code_to_workflow(
                 distilled.artifacts.behavior_inventory_report,
                 distilled.artifacts.trace_pattern_notes,
             ),
-            writes=(behavior_review,),
             returns=BehaviorDistillationPayload,
+        )
+        behavior_review_path = save_review(
+            str(ctx.folder / behavior_review.path), behavior_check.value
         )
         if behavior_check.value.verdict == "behavior_distilled":
             break
-        behavior_feedback = (behavior_check.artifacts.behavior_review,)
+        behavior_feedback = (behavior_review_path,)
 
-    pending_design_feedback: tuple = ()
+    pending_design_feedback: tuple[object, ...] = ()
     while True:
         design_feedback = pending_design_feedback
         pending_design_feedback = ()
@@ -165,7 +168,7 @@ def code_to_workflow(
             prompt_matrix = Artifact.md("prompt_contract_matrix.md", required=True)
             equivalence_plan = Artifact.md("equivalence_plan.md", required=True)
             coverage_map = Artifact.json("coverage_map.json", required=True)
-            designed = authoring_session.run(
+            designed = authoring_provider.run(
                 Prompt.file("prompts/design_recreation_producer.md"),
                 input={"request": request, "generated_workflow_name": name},
                 reads=(
@@ -174,7 +177,7 @@ def code_to_workflow(
                     distilled.artifacts.behavior_inventory,
                     distilled.artifacts.behavior_inventory_report,
                     distilled.artifacts.trace_pattern_notes,
-                    behavior_check.artifacts.behavior_review,
+                    behavior_review_path,
                     *design_feedback,
                 ),
                 writes=(
@@ -185,7 +188,7 @@ def code_to_workflow(
                     coverage_map,
                 ),
             )
-            design_check = design_verifier.run(
+            design_check = design_verifier.query(
                 Prompt.file("prompts/design_recreation_verifier.md"),
                 input={"request": request, "generated_workflow_name": name},
                 reads=(
@@ -194,24 +197,26 @@ def code_to_workflow(
                     distilled.artifacts.behavior_inventory,
                     distilled.artifacts.behavior_inventory_report,
                     distilled.artifacts.trace_pattern_notes,
-                    behavior_check.artifacts.behavior_review,
+                    behavior_review_path,
                     *tuple(designed.artifacts.values()),
                     *design_feedback,
                 ),
-                writes=(design_review,),
                 returns=WorkflowDesignPayload,
+            )
+            design_review_path = save_review(
+                str(ctx.folder / design_review.path), design_check.value
             )
             if design_check.value.verdict == "design_accepted":
                 break
             if design_check.value.verdict == "needs_replan":
                 replan_behavior = True
                 break
-            design_feedback = (design_check.artifacts.design_review,)
+            design_feedback = (design_review_path,)
 
         if replan_behavior:
-            behavior_feedback = (design_check.artifacts.design_review,)
+            behavior_feedback = (design_review_path,)
             while True:
-                distilled = behavior_session.run(
+                distilled = behavior_provider.run(
                     Prompt.file("prompts/distill_behavior_producer.md"),
                     input={"request": request, "generated_workflow_name": name},
                     reads=(
@@ -222,19 +227,21 @@ def code_to_workflow(
                     ),
                     writes=(behavior_inventory, behavior_report, trace_notes),
                 )
-                behavior_check = behavior_verifier.run(
+                behavior_check = behavior_verifier.query(
                     Prompt.file("prompts/distill_behavior_verifier.md"),
                     input={"request": request, "generated_workflow_name": name},
                     reads=tuple(distilled.artifacts.values()),
-                    writes=(behavior_review,),
                     returns=BehaviorDistillationPayload,
+                )
+                behavior_review_path = save_review(
+                    str(ctx.folder / behavior_review.path), behavior_check.value
                 )
                 if behavior_check.value.verdict == "behavior_distilled":
                     break
-                behavior_feedback = (behavior_check.artifacts.behavior_review,)
+                behavior_feedback = (behavior_review_path,)
             continue
 
-        build_feedback = ()
+        build_feedback: tuple[object, ...] = ()
         needs_redesign = False
         while True:
             generated_flow = Artifact.text(
@@ -247,7 +254,7 @@ def code_to_workflow(
             )
             generated_layout = Artifact.json("generated_layout.json", required=True)
             validation_report = Artifact.md("validation_report.md", required=True)
-            built = authoring_session.run(
+            built = authoring_provider.run(
                 Prompt.file("prompts/build_and_validate_producer.md"),
                 input={
                     "request": request,
@@ -261,9 +268,9 @@ def code_to_workflow(
                     distilled.artifacts.behavior_inventory,
                     distilled.artifacts.behavior_inventory_report,
                     distilled.artifacts.trace_pattern_notes,
-                    behavior_check.artifacts.behavior_review,
+                    behavior_review_path,
                     *tuple(designed.artifacts.values()),
-                    design_check.artifacts.design_review,
+                    design_review_path,
                     *build_feedback,
                 ),
                 writes=(
@@ -287,14 +294,16 @@ def code_to_workflow(
                     distilled.artifacts.behavior_inventory,
                     distilled.artifacts.behavior_inventory_report,
                     distilled.artifacts.trace_pattern_notes,
-                    behavior_check.artifacts.behavior_review,
+                    behavior_review_path,
                     *tuple(designed.artifacts.values()),
-                    design_check.artifacts.design_review,
+                    design_review_path,
                     *tuple(built.artifacts.values()),
                     *build_feedback,
                 ),
-                writes=(build_review,),
                 returns=BuildValidationPayload,
+            )
+            build_review_path = save_review(
+                str(ctx.folder / build_review.path), build_check.value
             )
             if build_check.value.verdict == "build_validated":
                 receipt = _publish(str(ctx.workspace), str(ctx.folder), name)
@@ -307,10 +316,10 @@ def code_to_workflow(
                     build_status=build_check.value.verdict,
                 )
             if build_check.value.verdict == "needs_replan":
-                pending_design_feedback = (build_check.artifacts.build_review,)
+                pending_design_feedback = (build_review_path,)
                 needs_redesign = True
                 break
-            build_feedback = (build_check.artifacts.build_review,)
+            build_feedback = (build_review_path,)
         if needs_redesign:
             continue
 

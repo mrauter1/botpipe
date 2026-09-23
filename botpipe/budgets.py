@@ -141,41 +141,63 @@ def provider_budget(*, max_turns, max_seconds=None, turn_timeout_seconds=None):
         # Do not mask a workflow failure with a second exception on cleanup.
 
 
+def _dispatch_limits(provider, configured_timeout, states):
+    from .providers import ProviderPolicyError
+
+    if any(
+        budget.config["max_seconds"] is not None
+        or budget.config["turn_timeout_seconds"] is not None
+        for budget, _state in states
+    ) and getattr(provider, "supports_timeout", False) is not True:
+        raise ProviderPolicyError(
+            "Timed provider budgets require supports_timeout=True: the adapter must "
+            "enforce request.timeout and stop/join all effects before returning"
+        )
+    limits = [configured_timeout]
+    for _budget, state in states:
+        remaining = state["remaining_seconds"]
+        if remaining is not None and remaining <= 0:
+            raise BudgetExceeded("Provider dispatch deadline exhausted")
+        if state["used_turns"] >= state["max_turns"]:
+            raise BudgetExceeded(
+                f"Provider dispatch budget exhausted ({state['used_turns']}/{state['max_turns']} turns)"
+            )
+        limits.extend(
+            value
+            for value in (remaining, state["turn_timeout_seconds"])
+            if value is not None
+        )
+    return limits
+
+
+def dispatch_timeout_ceiling(provider, configured_timeout):
+    """Read the current dispatch time ceiling without consuming a turn."""
+    from .runtime import _CURRENT
+
+    ctx = _CURRENT.get()
+    if ctx is None:
+        return configured_timeout
+    budgets = ctx.provider_budgets
+    if not budgets:
+        return configured_timeout
+    with ctx.journal.transaction() as db:
+        states = [(budget, budget._state(db)) for budget in budgets]
+        limits = _dispatch_limits(provider, configured_timeout, states)
+        for budget, state in states:
+            budget._save(db, state)
+    return min(limits)
+
+
 def reserve_dispatch(provider, configured_timeout, *, dispatch_id, details):
     """Reserve every active limit atomically, immediately before a new effect."""
     from .runtime import _CURRENT
-    from .providers import ProviderPolicyError
-
     ctx = _CURRENT.get()
     budgets = () if ctx is None else ctx.provider_budgets
     if ctx is None:
         return configured_timeout
-    if any(
-        b.config["max_seconds"] is not None
-        or b.config["turn_timeout_seconds"] is not None
-        for b in budgets
-    ):
-        if getattr(provider, "supports_timeout", False) is not True:
-            raise ProviderPolicyError(
-                "Timed provider budgets require supports_timeout=True: the adapter must "
-                "enforce request.timeout and stop/join all effects before returning"
-            )
     with ctx.journal.transaction() as db:
         states = [(budget, budget._state(db)) for budget in budgets]
-        limits = [configured_timeout]
-        for budget, state in states:
-            remaining = state["remaining_seconds"]
-            if remaining is not None and remaining <= 0:
-                raise BudgetExceeded("Provider dispatch deadline exhausted")
-            if state["used_turns"] >= state["max_turns"]:
-                raise BudgetExceeded(
-                    f"Provider dispatch budget exhausted ({state['used_turns']}/{state['max_turns']} turns)"
-                )
-            limits.extend(
-                value
-                for value in (remaining, state["turn_timeout_seconds"])
-                if value is not None
-            )
+        limits = _dispatch_limits(provider, configured_timeout, states)
         reservations = []
         for budget, state in states:
             state["used_turns"] += 1

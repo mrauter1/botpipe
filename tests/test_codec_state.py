@@ -106,6 +106,17 @@ def test_root_model_restoration_can_be_snapshotted_again():
     assert codec.encode(restored) == first
 
 
+def test_native_path_round_trip_uses_concrete_type_identity():
+    value = Path("native/path.txt")
+    assert codec.decode(codec.encode(value)) == value
+
+    class DerivedPath(type(value)):
+        pass
+
+    with pytest.raises(TypeError, match="unsupported durable value"):
+        codec.encode(DerivedPath("derived/path.txt"))
+
+
 def test_optional_generic_secret_contract_is_rejected_even_when_empty():
     class Credentials(BaseModel):
         token: Secret[str] | None = None
@@ -171,7 +182,7 @@ def test_dataclass_restore_does_not_run_constructor_or_default_factory():
 
 def test_repository_dataclasses_and_generated_pydantic_generics_round_trip():
     values = [
-        Policy(model_overrides={"fast": "small"}),
+        Policy(model="small"),
         Result(value=3, artifacts=ArtifactMap()),
         RunResult(run_id="r", task_id="t", status="completed", value=4),
         Box[int](item=5),

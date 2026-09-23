@@ -284,6 +284,7 @@ class ArtifactStore:
         folder: Path | str,
         *,
         workspace: Path | str | None = None,
+        allowed_roots: Sequence[Path | str] = (),
         forbidden_paths: Sequence[Path | str] = (),
     ):
         self.folder = Path(folder).resolve()
@@ -291,6 +292,11 @@ class ArtifactStore:
             Path(workspace).resolve() if workspace is not None else self.folder
         )
         self.root = self.folder / ".artifacts"
+        self.allowed_roots = (
+            self.folder,
+            self.workspace,
+            *(Path(p).resolve() for p in allowed_roots),
+        )
         self.forbidden_paths = tuple(Path(p).resolve() for p in forbidden_paths)
 
     def _destination(self, artifact: Artifact) -> Path:
@@ -299,20 +305,16 @@ class ArtifactStore:
         if ".." in raw.parts:
             raise ArtifactError(f"Artifact path cannot contain '..': {raw}")
         resolved = candidate.resolve()
-        if not (
-            resolved.is_relative_to(self.folder)
-            or resolved.is_relative_to(self.workspace)
-        ):
+        root = next(
+            (root for root in self.allowed_roots if resolved.is_relative_to(root)), None
+        )
+        if root is None:
             raise ArtifactError(f"Artifact path escapes workspace: {raw}")
         # Provider output must be an ordinary file, never a symlink alias to state.
         for parent in (candidate, *candidate.parents):
             if parent.is_symlink():
                 raise ArtifactError(f"Artifact path contains a symlink: {candidate}")
-        relative = (
-            resolved.relative_to(self.folder)
-            if resolved.is_relative_to(self.folder)
-            else resolved.relative_to(self.workspace)
-        )
+        relative = resolved.relative_to(root)
         if any(
             part in {".artifacts", "receipts", ".receipts"} for part in relative.parts
         ):

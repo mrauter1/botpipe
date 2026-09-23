@@ -7,9 +7,8 @@ import pytest
 from botpipe import (
     Artifact,
     Botpipe,
-    BotpipeError,
-    RunBusy,
-    Session,
+    Provider,
+    WorkspaceUnresolved,
     provider_budget,
     workflow,
 )
@@ -31,7 +30,7 @@ def test_committed_finish_with_lost_ack_remains_completed(tmp_path, monkeypatch)
 
     @workflow
     def work():
-        return Session().run(
+        return Provider().run(
             "write", writes=[Artifact.text(destination, required=True)]
         )
 
@@ -69,7 +68,7 @@ def test_committed_provider_response_with_lost_ack_is_not_failed(tmp_path, monke
 
     @workflow
     def work():
-        return Session().run(
+        return Provider().run(
             "write", writes=[Artifact.text(destination, required=True)]
         )
 
@@ -103,7 +102,7 @@ def test_uncommitted_finish_is_not_confirmed_from_writer_connection(
 ):
     @workflow
     def work():
-        return Session().run("work").value
+        return Provider().run("work").value
 
     provider = FakeProvider(["done"])
     with Botpipe(tmp_path, provider=provider) as client:
@@ -153,8 +152,8 @@ def test_interrupted_restore_keeps_foreign_workspace_fenced_until_resume(
     @workflow
     def work():
         with provider_budget(max_turns=1):
-            Session().run("consume budget")
-            return Session().run(
+            Provider().run("consume budget")
+            return Provider().run(
                 "denied",
                 writes=[
                     Artifact.text(first, required=True),
@@ -164,7 +163,7 @@ def test_interrupted_restore_keeps_foreign_workspace_fenced_until_resume(
 
     @workflow
     def unrelated():
-        return "unrelated"
+        return Provider().run("unrelated write").value
 
     provider = FakeProvider(["first response"])
     link = artifacts.os.link
@@ -190,9 +189,9 @@ def test_interrupted_restore_keeps_foreign_workspace_fenced_until_resume(
     with Botpipe(
         tmp_path,
         state_dir=tmp_path / "foreign-state",
-        provider=FakeProvider([]),
+        provider=FakeProvider(["must not dispatch"]),
     ) as foreign:
-        with pytest.raises(RunBusy, match="unresolved effects"):
+        with pytest.raises(WorkspaceUnresolved, match="unresolved"):
             foreign.run(unrelated, run_id="foreign", task_id="foreign")
 
     monkeypatch.setattr(artifacts.os, "link", link)
@@ -209,12 +208,12 @@ def test_interrupted_restore_keeps_foreign_workspace_fenced_until_resume(
     with Botpipe(
         tmp_path,
         state_dir=tmp_path / "foreign-state",
-        provider=FakeProvider([]),
+        provider=FakeProvider(["unrelated"]),
     ) as foreign:
-        assert foreign.run(unrelated, run_id="foreign", task_id="foreign").ok
+        assert foreign.run(unrelated, run_id="foreign-allowed", task_id="foreign").ok
 
 
-def test_policy_error_after_dispatch_remains_unknown_and_fenced(tmp_path):
+def test_policy_error_after_dispatch_requires_explicit_retry(tmp_path):
     destination = tmp_path / "result.txt"
     destination.write_text("before")
 
@@ -222,11 +221,15 @@ def test_policy_error_after_dispatch_remains_unknown_and_fenced(tmp_path):
         request.artifacts["result"].write_text("attempt output")
         raise ProviderPolicyError("policy failure after dispatch")
 
+    def retry(request):
+        request.artifacts["result"].write_text("retry output")
+        return "retry complete"
+
     @workflow
     def work():
-        return Session().run("work", writes=[Artifact.text(destination, required=True)])
+        return Provider().run("work", writes=[Artifact.text(destination, required=True)])
 
-    provider = FakeProvider([effect_then_policy_error])
+    provider = FakeProvider([effect_then_policy_error, retry])
     with Botpipe(tmp_path, provider=provider) as client:
         paused = client.run(work, run_id="post-dispatch-policy", task_id="task")
         operation = _provider_operations(client, paused.run_id)[0]
@@ -234,10 +237,12 @@ def test_policy_error_after_dispatch_remains_unknown_and_fenced(tmp_path):
         assert paused.status == "interrupted"
         assert destination.read_text() == "attempt output"
         assert not operation["response"].get("not_dispatched", False)
-        with pytest.raises(BotpipeError, match="reconciliation is blocked"):
-            client.resolve(paused.run_id, operation["id"], retry=True)
+        silent = client.resume(paused.run_id, workflow=work)
+        assert silent.status == "interrupted"
+        assert len(provider.calls) == 1
+        client.resolve(paused.run_id, operation["id"], retry=True)
         replay = client.resume(paused.run_id, workflow=work)
 
-    assert replay.status == "interrupted"
-    assert destination.read_text() == "attempt output"
-    assert len(provider.calls) == 1
+    assert replay.ok, replay.error
+    assert destination.read_text() == "retry output"
+    assert len(provider.calls) == 2

@@ -1,22 +1,177 @@
 from __future__ import annotations
 
 import hashlib
+import subprocess
+import sys
+import threading
+import time
 
 import pytest
 from pydantic import BaseModel
 
-from botpipe import Artifact, Botpipe, BotpipeError, Session, activity, workflow
-from botpipe.providers import FakeProvider, ProviderInterruptedError, ProviderResponse
+from botpipe import (
+    Artifact,
+    Botpipe,
+    BotpipeError,
+    Provider,
+    Session,
+    activity,
+    parallel,
+    workflow,
+)
+from botpipe.locks import session_lock
+from botpipe.providers import (
+    FakeProvider,
+    ProviderInterruptedError,
+    ProviderResponse,
+    ProviderTimeoutError,
+)
+
+
+def test_distinct_handles_for_same_task_session_serialize_turns(tmp_path):
+    guard = threading.Lock()
+    active = maximum = 0
+
+    def respond(request):
+        nonlocal active, maximum
+        with guard:
+            active += 1
+            maximum = max(maximum, active)
+        time.sleep(0.05)
+        with guard:
+            active -= 1
+        return ProviderResponse("ok", request.session_id or "native-session")
+
+    @workflow
+    def talk():
+        return parallel(
+            lambda: Provider(session=Session.task("shared")).query("first"),
+            lambda: Provider(session=Session.task("shared")).query("second"),
+        )
+
+    provider = FakeProvider([respond, respond])
+    with Botpipe(tmp_path, provider=provider) as client:
+        result = client.run(talk)
+
+    assert result.ok, result.error
+    assert maximum == 1
+    assert [call.session_id for call in provider.calls] == [None, "native-session"]
+
+
+def test_session_lock_serializes_across_processes(monkeypatch, tmp_path):
+    monkeypatch.setenv("BOTPIPE_COORDINATION_DIR", str(tmp_path / "coordination"))
+    journal, ready = tmp_path / "journal.sqlite3", tmp_path / "ready"
+    script = (
+        "import sys\n"
+        "from pathlib import Path\n"
+        "from botpipe.locks import session_lock\n"
+        "with session_lock(sys.argv[1], 'shared', timeout=1):\n"
+        " Path(sys.argv[2]).write_text('ready')\n"
+        " sys.stdin.read(1)\n"
+    )
+    process = subprocess.Popen(
+        [sys.executable, "-c", script, str(journal), str(ready)],
+        stdin=subprocess.PIPE,
+    )
+    try:
+        deadline = time.monotonic() + 5
+        while not ready.exists() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert ready.exists()
+        with pytest.raises(ProviderTimeoutError, match="session"), session_lock(
+            journal, "shared", timeout=0.05
+        ):
+            pass
+    finally:
+        assert process.stdin is not None
+        process.stdin.write(b"x")
+        process.stdin.flush()
+        process.wait(timeout=5)
+
+
+def test_provider_resolution_obeys_cross_process_session_lock(
+    monkeypatch, tmp_path
+):
+    import botpipe.runtime as runtime
+
+    from botpipe import codec
+    from botpipe.recovery import Stopped
+
+    monkeypatch.setenv("BOTPIPE_COORDINATION_DIR", str(tmp_path / "coordination"))
+    recoveries = []
+
+    class InterruptedProvider(FakeProvider):
+        def recover(self, request):
+            recoveries.append(request.operation_id)
+            return Stopped("stopped")
+
+    @workflow
+    def work():
+        return Provider(session=Session.task("shared")).run("work")
+
+    def fail_fast_session_lock(journal, session_key, **options):
+        return session_lock(journal, session_key, **{**options, "timeout": 0})
+
+    provider = InterruptedProvider([SystemExit("interrupted")])
+    with Botpipe(tmp_path, provider=provider) as client:
+        with pytest.raises(SystemExit):
+            client.run(work, run_id="session-resolution")
+        operation = next(
+            row
+            for row in client.journal.operations("session-resolution")
+            if row["kind"] == "provider"
+        )
+        session_key = codec.decode(operation["inputs"])["session"]
+        ready = tmp_path / "resolve-ready"
+        script = (
+            "import sys\n"
+            "from pathlib import Path\n"
+            "from botpipe.locks import session_lock\n"
+            "with session_lock(sys.argv[1], sys.argv[2], timeout=1):\n"
+            " Path(sys.argv[3]).write_text('ready')\n"
+            " sys.stdin.read(1)\n"
+        )
+        process = subprocess.Popen(
+            [
+                sys.executable,
+                "-c",
+                script,
+                str(client.journal.path),
+                session_key,
+                str(ready),
+            ],
+            stdin=subprocess.PIPE,
+        )
+        try:
+            deadline = time.monotonic() + 5
+            while not ready.exists() and time.monotonic() < deadline:
+                time.sleep(0.01)
+            assert ready.exists()
+            # Limit only the contention check, once the other process owns the
+            # real lock. Durable fixture creation has no tiny dispatch deadline.
+            with monkeypatch.context() as patch:
+                patch.setattr(runtime, "acquire_session_lock", fail_fast_session_lock)
+                with pytest.raises(ProviderTimeoutError, match="session"):
+                    client.resolve("session-resolution", operation["id"], retry=True)
+            assert recoveries == []
+        finally:
+            assert process.stdin is not None
+            process.stdin.write(b"x")
+            process.stdin.flush()
+            process.wait(timeout=5)
+
+        client.resolve("session-resolution", operation["id"], retry=True)
+        assert recoveries == [operation["id"]]
 
 
 def test_constructor_sessions_are_independent_and_task_sessions_persist(tmp_path):
     @workflow
     def talk():
-        first, second = Session(), Session()
+        first, second = Provider(), Provider()
         first.run("first")
         second.run("second")
         first.run("continue first")
-        Session.task("persistent").run("task conversation")
+        Provider(session=Session.task("persistent")).run("task conversation")
 
     provider = FakeProvider(
         [
@@ -52,7 +207,7 @@ def test_explicit_retry_recovers_completed_receipt_before_preparing_new_artifact
 
     @workflow
     def report():
-        return Session().run(
+        return Provider().run(
             "report", writes=Artifact.text("report.txt", required=True)
         )
 
@@ -97,7 +252,7 @@ def test_explicit_retry_does_not_remove_files_from_live_provider(tmp_path):
 
     @workflow
     def report():
-        return Session().run(
+        return Provider().run(
             "report", writes=Artifact.text("report.txt", required=True)
         )
 
@@ -125,7 +280,7 @@ def test_repair_usage_is_charged_once_in_results_and_run_totals(tmp_path):
 
     @workflow
     def review():
-        return Session().run("review", returns=Answer)
+        return Provider().run("review", returns=Answer)
 
     provider = FakeProvider(
         [
@@ -175,7 +330,7 @@ def test_inspection_does_not_require_original_result_model_type(tmp_path):
 
     @workflow
     def answer():
-        return Session().run("answer", returns=LocalAnswer)
+        return Provider().run("answer", returns=LocalAnswer)
 
     with Botpipe(tmp_path, provider=FakeProvider(['{"accepted":true}'])) as client:
         result = client.run(answer)
@@ -198,7 +353,7 @@ def test_repeated_retry_authorization_cannot_advance_past_live_attempt(tmp_path)
 
     @workflow
     def report():
-        return Session().run(
+        return Provider().run(
             "report", writes=Artifact.text("report.txt", required=True)
         )
 
@@ -227,7 +382,7 @@ def test_observed_response_cannot_release_a_known_live_provider(tmp_path):
 
     @workflow
     def report():
-        return Session().run("report")
+        return Provider().run("report")
 
     with Botpipe(tmp_path, provider=LiveProvider([KeyboardInterrupt()])) as client:
         paused = client.run(report)

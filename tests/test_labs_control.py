@@ -188,33 +188,6 @@ def test_domain_verifier_contract_repairs_invalid_payload_without_repeating_prod
         assert sum(row["status"] == "failed" for row in operations) == 1
 
 
-def test_optimizer_without_observations_packages_an_explicit_noop(tmp_path):
-    from test_labs import _successful_provider
-
-    from labs.workflows.workflow_run_traces_to_optimization_candidates import (
-        Params as OptimizationParams,
-    )
-    from labs.workflows.workflow_run_traces_to_optimization_candidates import (
-        WorkflowRunTracesToOptimizationCandidates,
-    )
-
-    provider = FakeProvider([_successful_provider] * 8)
-    with Botpipe(tmp_path, provider=provider) as client:
-        result = client.run(
-            WorkflowRunTracesToOptimizationCandidates,
-            OptimizationParams(
-                selected_workflow="release_candidate_to_go_no_go",
-                task_title="Inspect absent observations",
-            ),
-        )
-        assert result.ok, result.error
-        assert result.value.candidate_set.next_action == "collect_evidence"
-        assert result.value.candidate_set.candidates == []
-        assert result.value.review is None
-        assert result.value.provider_budget["used_turns"] == 0
-        assert len(provider.calls) == 0
-
-
 @pytest.mark.parametrize("pause_outcome", ["blocked", "question"])
 def test_missing_prerequisite_pauses_then_resumes_same_phase_with_answer(
     tmp_path, pause_outcome
@@ -258,78 +231,6 @@ def test_missing_prerequisite_pauses_then_resumes_same_phase_with_answer(
         assert len(provider.calls) == 10
         assert "rollback.json" in json.dumps(producer_inputs[1])
         assert len(result.value.phases) == 4
-
-
-def test_optimizer_insufficient_evidence_skips_generation(tmp_path):
-    from test_labs import _successful_provider
-
-    from labs.workflows.workflow_run_traces_to_optimization_candidates import (
-        Params as OptimizationParams,
-    )
-    from labs.workflows.workflow_run_traces_to_optimization_candidates import (
-        WorkflowRunTracesToOptimizationCandidates,
-    )
-
-    def answer(request):
-        response = _successful_provider(request)
-        from test_labs import _accepted_schema
-
-        if (
-            _accepted_schema(request.output_schema or {}).get("title")
-            == "RankTargetsPayload"
-        ):
-            response["next_action"] = "package_only"
-        return response
-
-    with Botpipe(tmp_path, provider=FakeProvider([_release_answer] * 8)) as client:
-        observed = client.run(ReleaseCandidateToGoNoGo, Params(release_name="observed"))
-        assert observed.ok, observed.error
-        client.provider = FakeProvider([answer] * 12)
-        optimized = client.run(
-            WorkflowRunTracesToOptimizationCandidates,
-            OptimizationParams(
-                selected_workflow="release_candidate_to_go_no_go",
-                task_title="Rank thin evidence",
-                run_statuses=["completed"],
-            ),
-        )
-        assert optimized.ok, optimized.error
-        assert optimized.value.candidate_set.next_action == "no_change"
-        assert optimized.value.candidate_set.candidates == []
-        assert optimized.value.provider_budget["used_turns"] == 0
-        assert len(client.provider.calls) == 0
-
-
-def test_optimizer_no_failure_scenarios_skips_failure_specific_passes(tmp_path):
-    from test_labs import _successful_provider
-
-    from labs.workflows.workflow_run_traces_to_optimization_candidates import (
-        Params as OptimizationParams,
-    )
-    from labs.workflows.workflow_run_traces_to_optimization_candidates import (
-        WorkflowRunTracesToOptimizationCandidates,
-    )
-
-    with Botpipe(tmp_path, provider=FakeProvider([_release_answer] * 8)) as client:
-        observed = client.run(ReleaseCandidateToGoNoGo, Params(release_name="observed"))
-        assert observed.ok, observed.error
-        client.provider = FakeProvider([_successful_provider] * 12)
-        optimized = client.run(
-            WorkflowRunTracesToOptimizationCandidates,
-            OptimizationParams(
-                selected_workflow="release_candidate_to_go_no_go",
-                task_title="Inspect reliable execution",
-                run_statuses=["completed"],
-                include_token_optimization=False,
-                include_adversarial_generation=False,
-                include_workflow_level_candidates=False,
-            ),
-        )
-        assert optimized.ok, optimized.error
-        assert optimized.value.candidate_set.next_action == "no_change"
-        assert optimized.value.candidate_set.candidates == []
-        assert optimized.value.provider_budget["used_turns"] == 0
-        assert len(client.provider.calls) == 0
 
 
 def test_security_child_passes_immutable_handles_with_external_state_directory(

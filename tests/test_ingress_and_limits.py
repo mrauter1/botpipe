@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel, model_validator
 
-from botpipe import Botpipe, Session, activity, ask, workflow
+from botpipe import Botpipe, Provider, activity, ask_human, workflow
 from botpipe.config import ConfigError, load_config
 from botpipe.limits import RunLimits
 from botpipe.providers import FakeProvider
@@ -55,7 +55,7 @@ def test_model_input_is_bound_once_and_internal_calls_do_not_revalidate(tmp_path
     @workflow
     def root(value: Input):
         result = child(value)
-        ask("continue?")
+        ask_human("continue?")
         return result
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
@@ -86,7 +86,7 @@ def test_human_answer_checkpoint_skips_validation_after_commit_crash(
 
     @workflow
     def approval():
-        return ask("number?", returns=Answer)
+        return ask_human("number?", returns=Answer)
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(approval)
@@ -151,7 +151,7 @@ def test_fresh_process_resume_registers_input_types_and_preserves_state(
     prefix = (
         "from typing import Generic, TypeVar\n"
         "from pydantic import BaseModel, RootModel\n"
-        "from botpipe import workflow, ask\n"
+        "from botpipe import workflow, ask_human\n"
         "T = TypeVar('T')\n"
         "class Box(BaseModel, Generic[T]):\n"
         "    item: T\n"
@@ -164,7 +164,7 @@ def test_fresh_process_resume_registers_input_types_and_preserves_state(
             "        item: int\n"
             "    @workflow\n"
             "    def echo(value: Input):\n"
-            "        ask('continue?')\n"
+            "        ask_human('continue?')\n"
             "        return value\n"
             "    return echo\n"
             "echo = make()\n"
@@ -181,7 +181,7 @@ def test_fresh_process_resume_registers_input_types_and_preserves_state(
         body = (
             "@workflow\n"
             f"def echo(value: {annotation}):\n"
-            "    ask('continue?')\n"
+            "    ask_human('continue?')\n"
             "    return value\n"
         )
     source = tmp_path / "flow.py"
@@ -219,11 +219,11 @@ def test_fresh_process_resume_registers_input_types_and_preserves_state(
 def test_resumed_limits_are_run_owned_and_inherited_by_children(tmp_path):
     @workflow
     def child():
-        return Session().run("answer").value
+        return Provider().run("answer").value
 
     @workflow
     def parent():
-        ask("continue?")
+        ask_human("continue?")
         return child()
 
     @workflow
@@ -272,7 +272,7 @@ def test_timeout_validation_is_shared(tmp_path, value):
 def test_invalid_resume_limits_leave_record_and_client_unchanged(tmp_path):
     @workflow
     def approval():
-        return ask("continue?")
+        return ask_human("continue?")
 
     with Botpipe(
         tmp_path, provider=FakeProvider([]), max_operations=3, timeout=10
@@ -330,7 +330,7 @@ def test_exception_replay_preserves_slots_without_running_user_init(
         try:
             fail()
         except Failure as error:
-            ask("continue?")
+            ask_human("continue?")
             return error.code, getattr(error, "filename", None)
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:

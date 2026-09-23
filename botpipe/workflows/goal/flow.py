@@ -13,12 +13,14 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from botpipe import (
     Artifact,
     OutputValidationError,
+    Provider,
     Session,
     activity,
-    ask,
+    ask_human,
     current_run,
     workflow,
 )
+from botpipe.workflows._reviews import save_review
 
 GoalStatus = Literal[
     "active", "paused", "blocked", "usage_limited", "budget_limited", "complete"
@@ -341,7 +343,7 @@ def _charge(goal: GoalRecord, subgoal: SubgoalRecord | None, *results: Any) -> N
 
 
 def _goal_turn(
-    session: Session,
+    provider: Provider,
     prompt: str,
     goal_record: GoalRecord,
     plan: SubgoalPlan | None,
@@ -349,11 +351,13 @@ def _goal_turn(
     plan_path: Path,
     *,
     subgoal: SubgoalRecord | None = None,
+    query: bool = False,
     **kwargs: Any,
 ):
     """Persist usage from an exhausted output-contract repair before failing."""
     try:
-        return session.run(prompt, **kwargs)
+        turn = provider.query if query else provider.run
+        return turn(prompt, **kwargs)
     except OutputValidationError as exc:
         tokens = _usage_tokens(getattr(exc, "usage", {}))
         goal_record.tokens_used += tokens
@@ -437,21 +441,21 @@ references, and useful suggested commands. Preserve still-valid completed work w
 
 PLAN_REVIEW = """Independently audit the supplied subgoal plan against the original parent objective and repository.
 Accept only when all requirements are covered, every subgoal is coherent and auditable, and dependencies are acyclic.
-Write plan_audit.md and return a structured accepted or needs_rework verdict."""
+Return a structured accepted or needs_rework verdict without editing files."""
 
 WORK = """Work only on the supplied active subgoal. Reconstruct state from goal.json, subgoals.json, status, prior
 progress, prior audit, repository files, and declared evidence. Implement and validate the subgoal without broadening
 it. Write subgoal_progress.md with changes, evidence, commands, results, remaining work, and blockers."""
 
 VERIFY = """Independently verify only the supplied active subgoal against every verifier criterion. Use current,
-credible evidence and targeted checks. Write subgoal_audit.md. Return complete, continue, needs_rework, or blocked;
+credible evidence and targeted checks. Return complete, continue, needs_rework, or blocked without editing files;
 blocked requires a stable blocker_fingerprint. Do not infer parent-goal completion from this review."""
 
 FINAL = """Prepare a final completion packet for the original parent objective. Use all completed subgoals as
 supporting evidence, inspect the current repository, identify risks and validation, and write goal_summary.md."""
 
 FINAL_VERIFY = """Independently audit the original parent objective requirement by requirement. Completed subgoals
-are supporting evidence only. Write goal_audit.md and return complete, needs_rework with affected subgoal_ids, or
+are supporting evidence only. Return complete, needs_rework with affected subgoal_ids, or
 replan with missing requirements. Require current credible evidence for every completion claim."""
 
 
@@ -531,7 +535,7 @@ def goal(
         return _output(goal_path, plan_path, status_path, final_path, goal_record)
 
     if options.action in {"resume", "edit", "replan"} and goal_record is None:
-        objective_answer = ask(
+        objective_answer = ask_human(
             "No goal exists. What objective should be set?", returns=str
         )
         options = options.model_copy(
@@ -553,7 +557,7 @@ def goal(
         if goal_record.status == "complete":
             return _output(goal_path, plan_path, status_path, final_path, goal_record)
         if options.action == "edit":
-            edited = (options.objective or "").strip() or ask(
+            edited = (options.objective or "").strip() or ask_human(
                 "What is the revised objective?", returns=str
             )
             goal_record.objective = edited
@@ -569,7 +573,7 @@ def goal(
         if options.max_goal_turns is not None:
             goal_record.max_goal_turns = options.max_goal_turns
     elif options.action == "set":
-        requested = (options.objective or "").strip() or ask(
+        requested = (options.objective or "").strip() or ask_human(
             "What objective should this goal pursue?", returns=str
         )
         if (
@@ -577,7 +581,7 @@ def goal(
             and goal_record.status != "complete"
             and not options.replace_existing
         ):
-            replace = ask(
+            replace = ask_human(
                 "An active goal exists. Replace it? Return true or false.", returns=bool
             )
             if not replace:
@@ -620,7 +624,7 @@ def goal(
     goal_audit = Artifact.md(
         str(folder / "goal_audit.md"), name="goal_audit", required=True
     )
-    goal_session = Session.task(key="goal-main")
+    goal_provider = Provider(session=Session.task(key="goal-main"))
     latest_plan_audit = None
     latest_subgoal_audit = None
 
@@ -641,7 +645,7 @@ def goal(
             planning_feedback: tuple[Any, ...] = ()
             while True:
                 proposed = _goal_turn(
-                    goal_session,
+                    goal_provider,
                     PLAN,
                     goal_record,
                     plan,
@@ -668,7 +672,7 @@ def goal(
                         break
                     continue
                 reviewed = _goal_turn(
-                    Session.fresh(),
+                    goal_provider.with_config(session=None),
                     PLAN_REVIEW,
                     goal_record,
                     plan,
@@ -679,15 +683,16 @@ def goal(
                         "plan": candidate.model_dump(mode="json"),
                     },
                     reads=(goal_spec.path, proposed.artifacts.subgoals),
-                    writes=(plan_audit,),
                     returns=PlanDecision,
+                    query=True,
                 )
                 _charge(goal_record, None, reviewed)
+                plan_audit_path = save_review(str(plan_audit.path), reviewed.value)
                 if reviewed.value.verdict == "accepted":
                     plan = candidate
-                    latest_plan_audit = reviewed.artifacts.plan_audit
+                    latest_plan_audit = plan_audit_path
                     break
-                planning_feedback = (reviewed.artifacts.plan_audit,)
+                planning_feedback = (plan_audit_path,)
                 if _limited(goal_record):
                     break
             if plan is None or _limited(goal_record):
@@ -703,7 +708,7 @@ def goal(
 
         if all(item.status == "complete" for item in plan.subgoals):
             summary_turn = _goal_turn(
-                goal_session,
+                goal_provider,
                 FINAL,
                 goal_record,
                 plan,
@@ -738,7 +743,7 @@ def goal(
                     goal_path, plan_path, status_path, final_path, goal_record
                 )
             final_turn = _goal_turn(
-                Session.fresh(),
+                goal_provider.with_config(session=None),
                 FINAL_VERIFY,
                 goal_record,
                 plan,
@@ -755,10 +760,11 @@ def goal(
                     progress.path,
                     subgoal_audit.path,
                 ),
-                writes=(goal_audit,),
                 returns=FinalDecision,
+                query=True,
             )
             _charge(goal_record, None, final_turn)
+            save_review(str(goal_audit.path), final_turn.value)
             decision = final_turn.value
             if decision.verdict == "complete":
                 goal_record.status = "complete"
@@ -824,14 +830,16 @@ def goal(
         selected = _find(plan, goal_record.active_subgoal_id)
         assert selected is not None
         _write_report(str(status_path), _status_text(goal_record, plan))
-        session = Session.task(key=f"goal:{goal_record.goal_id}:{selected.id}")
+        provider = goal_provider.with_config(
+            session=Session.task(key=f"goal:{goal_record.goal_id}:{selected.id}")
+        )
         work_reads: list[Any] = [goal_spec.path, plan_spec.path, status_spec.path]
         if latest_plan_audit is not None:
             work_reads.append(latest_plan_audit)
         if latest_subgoal_audit is not None:
             work_reads.append(latest_subgoal_audit)
         work_turn = _goal_turn(
-            session,
+            provider,
             WORK,
             goal_record,
             plan,
@@ -865,7 +873,7 @@ def goal(
         if latest_subgoal_audit is not None:
             verify_reads.append(latest_subgoal_audit)
         verify_turn = _goal_turn(
-            Session.fresh(),
+            goal_provider.with_config(session=None),
             VERIFY,
             goal_record,
             plan,
@@ -877,16 +885,17 @@ def goal(
                 "subgoal": selected.model_dump(mode="json"),
             },
             reads=tuple(verify_reads),
-            writes=(subgoal_audit,),
             returns=SubgoalDecision,
+            query=True,
         )
         _charge(goal_record, selected, verify_turn)
+        subgoal_audit_path = save_review(str(subgoal_audit.path), verify_turn.value)
         goal_record.turns_completed += 1
         selected.turns_completed += 1
         selected.last_verifier_route = verify_turn.value.verdict
         selected.last_reason = verify_turn.value.reason
         decision = verify_turn.value
-        latest_subgoal_audit = verify_turn.artifacts.subgoal_audit
+        latest_subgoal_audit = subgoal_audit_path
         if decision.verdict == "complete":
             selected.status = "complete"
             selected.completion_summary = decision.completion_summary or decision.reason

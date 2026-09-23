@@ -18,6 +18,16 @@ class Result(Generic[T]):
     artifacts: ArtifactMap
     usage: dict[str, Any] = field(default_factory=dict)
     operation_id: str = ""
+    run_id: str = ""
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class StreamEvent:
+    """One best-effort observation from a live provider turn."""
+
+    type: str
+    data: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

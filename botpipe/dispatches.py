@@ -103,6 +103,7 @@ class Dispatch:
 
     def __init__(self, provider, request):
         from .budgets import reserve_dispatch
+        from .errors import BudgetExceeded
         from .runtime import _CURRENT
 
         self.ctx = _CURRENT.get()
@@ -113,11 +114,13 @@ class Dispatch:
         self._ended_monotonic = None
         self._finished_at = None
         self._finished = False
+        if request.deadline is not None and time.monotonic() >= request.deadline:
+            raise BudgetExceeded("Provider dispatch deadline exhausted")
         effective = request.policy.effective()
         details = {
             "provider": self.provider_name,
             "model": effective.model,
-            "effort": None if effective.effort is None else effective.effort.value,
+            "effort": effective.effort,
             "policy_fingerprint": hashlib.sha256(
                 json.dumps(effective.to_dict(), sort_keys=True).encode()
             ).hexdigest(),

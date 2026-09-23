@@ -12,7 +12,7 @@ import sys
 from datetime import date, datetime, timedelta, timezone
 from enum import CONFORM, EJECT, KEEP, STRICT, Enum, EnumType, Flag
 from inspect import get_annotations, getattr_static
-from pathlib import Path
+from pathlib import Path, PosixPath, WindowsPath
 from types import (
     MappingProxyType,
     MemberDescriptorType,
@@ -1027,7 +1027,7 @@ def _encode(value, path, depth, traversal, contracts):
             if not math.isfinite(value):
                 raise TypeError(f"{path}: non-finite floats are not durable")
             return value
-        if isinstance(value, Path) and type(value).__module__ == "pathlib":
+        if type(value) in (PosixPath, WindowsPath):
             return {"$botpipe": "path", "value": str(value)}
         if type(value) is datetime:
             tz = value.tzinfo

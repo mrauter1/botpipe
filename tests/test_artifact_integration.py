@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from botpipe import Artifact, Botpipe, Session, Worklist, ask, workflow
+from botpipe import Artifact, Botpipe, Provider, Worklist, ask_human, workflow
 from botpipe.providers import FakeProvider
 from botpipe.recovery import Stopped
 
@@ -25,7 +25,7 @@ def test_session_snapshots_raw_binary_reads(tmp_path):
 
     @workflow
     def reader():
-        return Session().run("Read input", reads=["input.bin"]).value
+        return Provider().run("Read input", reads=["input.bin"]).value
 
     provider = FakeProvider([inspect_request])
     with Botpipe(tmp_path, provider=provider) as client:
@@ -40,8 +40,8 @@ def test_completed_raw_read_does_not_require_live_file_on_resume(tmp_path):
 
     @workflow
     def reader():
-        value = Session().run("Read input", reads=["input.txt"]).value
-        ask("Continue?")
+        value = Provider().run("Read input", reads=["input.txt"]).value
+        ask_human("Continue?")
         return value
 
     provider = FakeProvider(["read"])
@@ -65,7 +65,7 @@ def test_capture_published_before_operation_finish_survives_crash(
     @workflow
     def writer():
         return (
-            Session()
+            Provider()
             .run("Write report", writes=[Artifact.text("result.txt", required=True)])
             .artifacts.result
         )
@@ -102,10 +102,10 @@ def test_provider_response_is_recorded_before_artifact_validation(tmp_path):
 
     @workflow
     def writer():
-        return Session().run(
+        return Provider().run(
             "Write JSON",
             writes=[Artifact.json("result.json", required=True)],
-            retries=0,
+            output_retries=0,
         )
 
     with Botpipe(tmp_path, provider=FakeProvider([invalid])) as client:
@@ -128,10 +128,10 @@ def test_explicit_provider_retry_requires_new_artifact_outputs(tmp_path):
 
     @workflow
     def writer():
-        return Session().run(
+        return Provider().run(
             "Write report",
             writes=[Artifact.text("result.txt", required=True)],
-            retries=0,
+            output_retries=0,
         )
 
     provider = ConfirmedStoppedProvider([uncertain, "retry forgot its file"])
@@ -166,14 +166,14 @@ def test_worklist_alias_and_latest_artifact_are_visible_after_resume(tmp_path):
 
     @workflow
     def plan():
-        response = Session().run(
+        response = Provider().run(
             "Create work", writes=[Artifact.json("work.json", required=True)]
         )
         work = Worklist.from_artifact(response.artifacts.work)
         for item in work:
             work.complete(item)
             if item.id == "a":
-                ask("Continue?")
+                ask_human("Continue?")
         return work.artifact
 
     provider = FakeProvider([write_plan])
@@ -217,7 +217,7 @@ def test_raw_read_publication_recovers_before_ledger_finish(tmp_path, monkeypatc
 
     @workflow
     def reader():
-        return Session().run("Read input", reads=["input.txt"]).value
+        return Provider().run("Read input", reads=["input.txt"]).value
 
     provider = FakeProvider([inspect_request])
     with Botpipe(tmp_path, provider=provider) as client:
@@ -258,20 +258,18 @@ def test_parallel_isolated_artifacts_recover_independently(tmp_path, monkeypatch
     def writer():
         return parallel(
             lambda: (
-                Session()
+                Provider(workspace=left)
                 .run(
                     "Write left",
-                    workspace=left,
                     reads=["input.txt"],
                     writes=[Artifact.text("report.txt", required=True)],
                 )
                 .artifacts.report
             ),
             lambda: (
-                Session()
+                Provider(workspace=right)
                 .run(
                     "Write right",
-                    workspace=right,
                     reads=["input.txt"],
                     writes=[Artifact.text("report.txt", required=True)],
                 )
