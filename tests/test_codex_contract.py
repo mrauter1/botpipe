@@ -10,7 +10,6 @@ import asyncio
 import gzip
 import json
 import os
-import re
 import shlex
 import shutil
 import signal
@@ -19,7 +18,6 @@ import threading
 import time
 import uuid
 from contextlib import suppress
-from dataclasses import replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -209,11 +207,18 @@ def native_binary() -> Path:
 @pytest.fixture
 def native(tmp_path: Path):
     binary = native_binary()
+    codex_home = tmp_path / "codex-home"
+    codex_home.mkdir()
+    if os.name == "nt":
+        subprocess.run(
+            [str(binary), "sandbox", "setup", "--elevated", "--current-user",
+             "--codex-home", str(codex_home)],
+            check=True,
+            timeout=120,
+        )
     server = ResponsesFixture()
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
-    codex_home = tmp_path / "codex-home"
-    codex_home.mkdir()
     provider = (
         '{name="Botpipe local fixture", '
         f'base_url="http://127.0.0.1:{server.server_port}/v1", '
@@ -402,12 +407,12 @@ def test_latest_native_default_session_presets_and_read_only_enforcement(native)
     assert enforcement["mcp_servers"] == {}
     assert enforcement["feature_overrides"]
     assert not any(enforcement["feature_overrides"].values())
+    assert enforcement["audit"] == "no-tool-calls-observed"
 
     # Run and query each consume an exec request plus its follow-up; generate
     # needs one response without tools.
     assert len(server.requests) == 5
     assert server.authorizations == [None] * 5
-    assert server.requests[-1].get("tools") == []
     function_outputs = [
         item
         for item in server.requests[3].get("input", [])
@@ -454,17 +459,6 @@ def _process_exists(process_id: int) -> bool:
     return any(not state.lstrip().startswith("Z") for state in result.stdout.splitlines())
 
 
-def _event_strings(value):
-    if isinstance(value, str):
-        yield value
-    elif isinstance(value, dict):
-        for item in value.values():
-            yield from _event_strings(item)
-    elif isinstance(value, (list, tuple)):
-        for item in value:
-            yield from _event_strings(item)
-
-
 def _process_diagnostic(process_id: int) -> str:
     if os.name == "nt":
         return f"Windows process {process_id} is still active"
@@ -504,24 +498,24 @@ def test_latest_native_interruption_cleans_up_long_running_shell_process(
 ) -> None:
     client, server, workspace = native
     marker = f"BOTPIPE_SLEEPER_{uuid.uuid4().hex}"
+    readiness = workspace / f"{marker}.ready"
     if os.name == "nt":
-        command = f'Write-Output "BOTPIPE_READY {marker} $PID"; while ($true) {{}}'
+        windows_ready = str(readiness).replace("'", "''")
+        command = (
+            f"Set-Content -LiteralPath '{windows_ready}' "
+            '-Value "$PID READY" -NoNewline -Encoding ascii; while ($true) {}'
+        )
     else:
-        # Only shell built-ins are needed. This remains running even when the
-        # sandbox deliberately hides /tmp and external interpreter paths.
-        command = f"printf 'BOTPIPE_READY %s\\n' '{marker}'; while :; do :; done"
+        # The file is a readiness barrier, not a namespace-local PID source.
+        command = f"printf %s READY > {shlex.quote(str(readiness))}; while :; do :; done"
     server.queue_exec("native-sleeper", command)
-    events = []
-    call = replace(
-        native_request(
-            workspace,
-            operation_id="native-timeout-cleanup",
-            preset="run",
-            prompt="Run the requested sleeper command.",
-            tools=("shell",),
-            timeout=2,
-        ),
-        on_event=events.append,
+    call = native_request(
+        workspace,
+        operation_id="native-timeout-cleanup",
+        preset="run",
+        prompt="Run the requested sleeper command.",
+        tools=("shell",),
+        timeout=8,
     )
 
     observed: set[int] = set()
@@ -531,17 +525,18 @@ def test_latest_native_interruption_cleans_up_long_running_shell_process(
     cancellation_elapsed = 0.0
 
     def ready_seen() -> bool:
-        return f"BOTPIPE_READY {marker}" in "".join(
-            _event_strings([event.data for event in events])
-        )
-
-    def collect_windows_pid() -> None:
-        event_text = "".join(_event_strings([event.data for event in events]))
-        match = re.search(rf"{marker}\s+(\d+)", event_text)
-        if match is not None:
-            process_id = int(match.group(1))
+        if not readiness.is_file():
+            return False
+        value = readiness.read_text(encoding="ascii")
+        if os.name == "nt":
+            process_text, _, status = value.partition(" ")
+            if status != "READY":
+                return False
+            process_id = int(process_text)
             assert process_id > 1 and process_id not in {os.getpid(), os.getppid()}
             observed.add(process_id)
+            return True
+        return value == "READY"
 
     def survivors() -> set[int]:
         if os.name == "nt":
@@ -560,19 +555,17 @@ def test_latest_native_interruption_cleans_up_long_running_shell_process(
                 "Run the requested sleeper command.",
                 tools=("shell",),
                 timeout=30,
-                on_event=events.append,
             ))
             try:
                 deadline = time.monotonic() + 30
-                while not observed or not ready_seen():
+                while not ready_seen() or not observed:
                     if task.done():
                         print("Native fixture diagnostics:", server.diagnostics())
                         await task
                         pytest.fail("native shell returned before cancellation")
-                    if os.name == "nt":
-                        collect_windows_pid()
                     assert time.monotonic() < deadline, "native shell never started"
                     await asyncio.sleep(0.02)
+                assert survivors(), "native shell exited before cancellation"
                 cancelled_at = time.monotonic()
                 task.cancel()
                 with pytest.raises(asyncio.CancelledError):
@@ -621,10 +614,8 @@ def test_latest_native_interruption_cleans_up_long_running_shell_process(
             monitor_thread.join(timeout=6)
             assert not monitor_thread.is_alive()
     assert not monitor_errors
-    if os.name == "nt":
-        collect_windows_pid()
+    assert ready_seen(), f"native shell never wrote its readiness file: {server.diagnostics()}"
     assert observed, "native shell never appeared in the host process table"
-    assert ready_seen(), f"native shell never emitted its marker: {server.diagnostics()}"
 
     deadline = time.monotonic() + 5
     while survivors() and time.monotonic() < deadline:

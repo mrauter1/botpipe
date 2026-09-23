@@ -202,8 +202,48 @@ def test_generate_has_exact_empty_inventory_and_rejects_disallowed_tool_with_evi
     assert config["features.shell_tool"] is False
     assert config["features.standalone_web_search"] is False
     assert config["features.apps"] is False
+    assert config["tools.experimental_request_user_input.enabled"] is False
+    assert config["tools.update_plan.enabled"] is False
     assert not any(key.startswith("mcp_servers.") for key in config)
     assert thread["params"]["dynamicTools"] == []
+
+
+@pytest.mark.parametrize(
+    ("method", "tool", "params"),
+    [
+        ("turn/plan/updated", "update_plan", {"plan": []}),
+        ("item/tool/requestUserInput", "request_user_input", {"questions": []}),
+        ("item/tool/call", "dynamic", {"tool": "unexpected"}),
+    ],
+)
+def test_generate_audits_control_tools_and_declines_interactive_requests(
+    tmp_path, monkeypatch, method, tool, params
+):
+    from botpipe.codex_appserver import _Turn
+
+    client = adapter(tmp_path)
+    turn = _Turn("thread", "turn", (), None)
+    client._turns[("thread", "turn")] = turn
+    sent = []
+    monkeypatch.setattr(client, "_send", sent.append)
+    event = {
+        "method": method,
+        "params": {"threadId": "thread", "turnId": "turn", **params},
+    }
+    if method.startswith("item/tool/"):
+        event["id"] = 123
+
+    client._receive(event)
+
+    assert isinstance(turn.error, CapabilityError)
+    assert tool in str(turn.error)
+    assert turn.tools_observed
+    assert turn.events[0]["type"] == method
+    if "id" in event:
+        assert sent[0]["id"] == 123
+        assert "error" in sent[0]
+    client._record_event(turn, "error", {"error": "tool stopped"})
+    assert isinstance(turn.error, CapabilityError)
 
 
 def test_query_then_run_resumes_same_native_thread(tmp_path: Path) -> None:

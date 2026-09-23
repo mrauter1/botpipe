@@ -76,6 +76,18 @@ jobs:
           python -m pip install -e '.[test]'
       - name: Record installed version
         run: codex --version
+      - name: Prepare Ubuntu sandbox prerequisites
+        if: runner.os == 'Linux'
+        run: |
+          # Codex uses bwrap from PATH; load Ubuntu's profile without relaxing AppArmor.
+          # https://developers.openai.com/codex/concepts/sandboxing#prerequisites
+          sudo apt-get update
+          sudo apt-get install -y bubblewrap apparmor-profiles apparmor-utils
+          if [ -f /usr/share/apparmor/extra-profiles/bwrap-userns-restrict ]; then
+            sudo install -m 0644 /usr/share/apparmor/extra-profiles/bwrap-userns-restrict /etc/apparmor.d/bwrap-userns-restrict
+          fi
+          sudo apparmor_parser -r /etc/apparmor.d/bwrap-userns-restrict
+          codex sandbox linux /bin/true
       - name: Local fixture contracts
         env:
           BOTPIPE_NATIVE_CODEX: 'codex'

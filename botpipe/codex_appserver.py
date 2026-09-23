@@ -63,6 +63,13 @@ _TOOL_FEATURES = {
     "image_generation": ("image_generation",),
     "collaboration": ("multi_agent",),
     "mcp": ("enable_mcp_apps",),
+    "request_user_input": (),
+    "update_plan": (),
+}
+_TOOL_EVENTS = {
+    "turn/plan/updated": "update_plan",
+    "item/tool/requestUserInput": "request_user_input",
+    "item/tool/call": "dynamic",
 }
 _APPROVAL_REQUESTS = {
     "item/commandExecution/requestApproval",
@@ -209,6 +216,8 @@ def _tool_config(
         {f"features.{name}": enabled for name, enabled in feature_values.items()}
     )
     config["web_search"] = "live" if "web_search" in tools else "disabled"
+    config["tools.experimental_request_user_input.enabled"] = "request_user_input" in tools
+    config["tools.update_plan.enabled"] = "update_plan" in tools
     if not mcp_tools:
         config.update(
             {
@@ -360,6 +369,15 @@ class CodexAppServerAdapter:
                     10,
                 )
                 self._send({"method": "initialized"})
+                if os.name == "nt" and "windowsSandbox/readiness" in capabilities.methods:
+                    readiness = self._rpc("windowsSandbox/readiness", None, 10)
+                    if readiness.get("status") != "ready":
+                        raise CapabilityError(
+                            "Codex Windows sandbox is not ready "
+                            f"({readiness.get('status', 'unknown')}); "
+                            "complete or update Codex's Windows sandbox setup "
+                            "before running Botpipe"
+                        )
                 if "mcpServerStatus/list" in capabilities.methods:
                     inventory = self._rpc(
                         "mcpServerStatus/list",
@@ -433,7 +451,8 @@ class CodexAppServerAdapter:
         method = message.get("method")
         if isinstance(method, str) and request_id is not None:
             self._answer_server_request(request_id, method)
-            return
+            if method not in _TOOL_EVENTS:
+                return
         if not isinstance(method, str):
             return
         params = message.get("params")
@@ -513,6 +532,13 @@ class CodexAppServerAdapter:
         with turn.condition:
             if len(turn.events) < 4096:
                 turn.events.append(event)
+            event_tool = _TOOL_EVENTS.get(method)
+            if event_tool is not None:
+                turn.tools_observed = True
+                if not self._tool_allowed(turn.allowed_tools, event_tool, params):
+                    turn.error = CapabilityError(
+                        f"Codex used disallowed tool {event_tool!r}; evidence: {method}"
+                    )
             item = params.get("item")
             if method in {"item/started", "item/completed"} and isinstance(
                 item, Mapping
@@ -553,7 +579,7 @@ class CodexAppServerAdapter:
                 usage = params.get("tokenUsage") or params.get("usage")
                 if isinstance(usage, Mapping):
                     turn.usage = dict(usage)
-            if method == "error" and not params.get("willRetry"):
+            if method == "error" and not params.get("willRetry") and turn.error is None:
                 turn.error = CodexTurnError(
                     str(params.get("error") or "Codex turn failed")
                 )
@@ -711,6 +737,11 @@ class CodexAppServerAdapter:
                 key.removeprefix("features."): value
                 for key, value in config.items()
                 if key.startswith("features.")
+            },
+            "tool_overrides": {
+                key.removeprefix("tools."): value
+                for key, value in config.items()
+                if key.startswith("tools.")
             },
             "mcp_servers": {
                 key.removeprefix("mcp_servers.").removesuffix(".enabled"): bool(value)

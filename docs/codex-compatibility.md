@@ -30,6 +30,20 @@ established by this rewrite's validation. A later release is accepted on its
 capabilities. A failed cross-version `thread/resume` raises `SessionError`, so a
 workflow can choose a new session. Replayed operations do not require Codex.
 
+Linux needs Codex's [Bubblewrap prerequisites](https://developers.openai.com/codex/concepts/sandboxing#prerequisites),
+including Ubuntu's AppArmor profile where required. Contract CI installs those
+prerequisites and checks the sandbox before running provider turns.
+
+On native Windows, complete Codex's sandbox setup before calling Botpipe. Codex
+recommends `[windows] sandbox = "elevated"`: its offline sandbox user is subject
+to firewall restrictions. The `unelevated` fallback has weaker network isolation;
+Botpipe inherits the selected Codex implementation's limits. See
+[Codex's Windows sandbox documentation](https://developers.openai.com/codex/windows).
+When the installed protocol exposes `windowsSandbox/readiness`, Botpipe checks it
+before dispatch and reports incomplete or outdated setup. Botpipe never performs
+administrator setup on the SDK user's behalf. Windows contract CI provisions the
+elevated sandbox explicitly in its isolated Codex home.
+
 Codex keeps loaded threads subscribed and ignores configuration changes on that
 resume path. When a session's profile changes, Botpipe unsubscribes it before
 resuming the same thread so Codex reloads its configuration and conversation.
@@ -41,6 +55,10 @@ generation restricts configured tools and audits observed tool calls. Ambient
 MCP servers are disabled unless explicitly named. If the installed protocol
 cannot express a restriction, Botpipe reports the missing capability before
 dispatch. It does not silently broaden the requested profile.
+
+Some native core tools remain advertised even with optional features disabled.
+Generation's audit rejects disallowed observed calls, including planning and
+human-input requests; an empty advertised tool inventory is not claimed.
 
 `full-access` inherits no Codex sandbox guarantee. Codex's unrestricted policy
 cannot enforce network off, so full access also requires an explicit network
