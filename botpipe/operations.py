@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 from contextlib import nullcontext
 from dataclasses import replace
 from pathlib import Path
@@ -278,6 +279,20 @@ def execute_provider_operation(
                             checkpoint = replace(checkpoint, restoration_pending=False)
                             ctx.save_response(operation_id, checkpoint.to_record())
 
+                    def record_not_dispatched(kind: str, error: Exception) -> None:
+                        nonlocal checkpoint
+                        checkpoint = NotDispatchedCheckpoint(
+                            generation,
+                            request_data,
+                            True,
+                            kind,
+                            str(error),
+                        )
+                        ctx.save_response(operation_id, checkpoint.to_record())
+                        restore()
+                        if turn is not None:
+                            turn.clear(operation_id)
+
                     if isinstance(checkpoint, NotDispatchedCheckpoint):
                         restore()
                         if turn is not None:
@@ -473,6 +488,25 @@ def execute_provider_operation(
                     else:
                         if authorized or preparing or not recover:
                             try:
+                                from .budgets import dispatch_timeout_ceiling
+
+                                configured_timeout = min(
+                                    request.timeout,
+                                    effective.timeout or request.timeout,
+                                )
+                                ceiling = dispatch_timeout_ceiling(
+                                    ctx.client.provider, configured_timeout
+                                )
+                            except ProviderPolicyError as exc:
+                                record_not_dispatched("policy_error", exc)
+                                raise
+                            except BudgetExceeded as exc:
+                                record_not_dispatched("budget_error", exc)
+                                raise
+                            request = replace(
+                                request, deadline=time.monotonic() + ceiling
+                            )
+                            try:
                                 _preflight_provider(ctx.client.provider, request)
                             except Exception:
                                 restore()
@@ -518,7 +552,17 @@ def execute_provider_operation(
                                     from .dispatches import Dispatch
 
                                     dispatch = Dispatch(ctx.client.provider, request)
-                                    request = replace(request, timeout=dispatch.timeout)
+                                    reserved_deadline = time.monotonic() + dispatch.timeout
+                                    request = replace(
+                                        request,
+                                        timeout=dispatch.timeout,
+                                        deadline=min(
+                                            request.deadline
+                                            if request.deadline is not None
+                                            else reserved_deadline,
+                                            reserved_deadline,
+                                        ),
+                                    )
                                     dispatched = True
                                     dispatch.started()
                                     try:
@@ -554,17 +598,7 @@ def execute_provider_operation(
                                 fresh_response = True
                         except BudgetExceeded as exc:
                             if not dispatched:
-                                checkpoint = NotDispatchedCheckpoint(
-                                    generation,
-                                    request_data,
-                                    True,
-                                    "budget_error",
-                                    str(exc),
-                                )
-                                ctx.save_response(operation_id, checkpoint.to_record())
-                                restore()
-                                if turn is not None:
-                                    turn.clear(operation_id)
+                                record_not_dispatched("budget_error", exc)
                             else:
                                 raise UncertainOperation(
                                     str(exc), operation_id
@@ -582,17 +616,7 @@ def execute_provider_operation(
                                 raise UncertainOperation(
                                     policy_outcome.detail or str(exc), operation_id
                                 ) from exc
-                            checkpoint = NotDispatchedCheckpoint(
-                                generation,
-                                request_data,
-                                True,
-                                "policy_error",
-                                str(exc),
-                            )
-                            ctx.save_response(operation_id, checkpoint.to_record())
-                            restore()
-                            if turn is not None:
-                                turn.clear(operation_id)
+                            record_not_dispatched("policy_error", exc)
                             raise
                         except Exception as exc:
                             raise UncertainOperation(str(exc), operation_id) from exc
@@ -748,14 +772,14 @@ def _start_turn(
 def _preflight_provider(adapter: Any, request: ProviderRequest) -> None:
     """Reject unenforceable requests before reserving or dispatching a turn."""
     validate = getattr(adapter, "validate_request", None)
-    if callable(validate):
-        validate(request)
-    probe = getattr(adapter, "probe", None)
-    if callable(probe):
-        capabilities = probe()
-        require = getattr(capabilities, "require", None)
-        if callable(require):
-            require(request.preset)
+    capabilities = validate(request) if callable(validate) else None
+    if capabilities is None:
+        probe = getattr(adapter, "probe", None)
+        if callable(probe):
+            capabilities = probe()
+    require = getattr(capabilities, "require", None)
+    if callable(require):
+        require(request.preset)
     policy = request.policy.effective()
     if (
         policy.sandbox_mode == SandboxMode.DANGER_FULL_ACCESS

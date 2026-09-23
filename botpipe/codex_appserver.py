@@ -705,7 +705,11 @@ class CodexAppServerAdapter:
     ) -> Any:
         from .providers import ProviderTimeoutError
 
-        deadline = time.monotonic() + request.timeout
+        deadline = (
+            request.deadline
+            if request.deadline is not None
+            else time.monotonic() + request.timeout
+        )
 
         def timed_out() -> ProviderTimeoutError:
             return ProviderTimeoutError(

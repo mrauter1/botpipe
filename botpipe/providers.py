@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import tempfile
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -67,6 +68,7 @@ class ProviderRequest:
         default=None, compare=False, repr=False
     )
     cancel_event: Any | None = field(default=None, compare=False, repr=False)
+    deadline: float | None = field(default=None, compare=False, repr=False)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "workspace", Path(self.workspace))
@@ -85,6 +87,12 @@ class ProviderRequest:
             or self.timeout <= 0
         ):
             raise ValueError("timeout must be greater than zero")
+        if self.deadline is not None and (
+            isinstance(self.deadline, bool)
+            or not isinstance(self.deadline, (int, float))
+            or not math.isfinite(self.deadline)
+        ):
+            raise ValueError("deadline must be finite or None")
         if (
             isinstance(self.attempt, bool)
             or not isinstance(self.attempt, int)
@@ -142,7 +150,7 @@ class Provider(Protocol):
 class Adapter(Protocol):
     name: str
 
-    def probe(self) -> CodexCapabilities: ...
+    def probe(self, *, deadline: float | None = None) -> CodexCapabilities: ...
     def start_turn(
         self,
         request: ProviderRequest,
@@ -275,6 +283,15 @@ class CodexProvider:
 
     def probe(self):
         return self.adapter.probe()
+
+    def validate_request(self, request: ProviderRequest) -> CodexCapabilities:
+        try:
+            capabilities = self.adapter.probe(deadline=request.deadline)
+        except TimeoutError as exc:
+            raise ProviderTimeoutError(
+                f"Codex capability probe timed out (dispatch budget: {request.timeout:g} seconds)"
+            ) from exc
+        return capabilities
 
     def run(self, request: ProviderRequest) -> ProviderResponse:
         path = receipt_path(request)

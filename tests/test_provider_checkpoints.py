@@ -306,9 +306,18 @@ def test_pre_dispatch_checkpoint_ack_loss_never_duplicates_dispatch(
 
 @pytest.mark.parametrize("after_commit", [False, True])
 @pytest.mark.parametrize("transition", ["not_dispatched", "restored"])
+@pytest.mark.parametrize("rejection", ["preview", "reservation"])
 def test_non_dispatch_checkpoint_ack_loss_preserves_restoration_state(
-    tmp_path, monkeypatch, after_commit, transition
+    tmp_path, monkeypatch, after_commit, transition, rejection
 ):
+    if rejection == "reservation":
+        import botpipe.budgets as budgets
+
+        monkeypatch.setattr(
+            budgets,
+            "dispatch_timeout_ceiling",
+            lambda _provider, configured_timeout: configured_timeout,
+        )
     destination = tmp_path / "result.txt"
     destination.write_text("before")
 
@@ -330,14 +339,16 @@ def test_non_dispatch_checkpoint_ack_loss_preserves_restoration_state(
         observations, original = _fail_response_once(
             client, monkeypatch, target, after_commit=after_commit
         )
-        first = client.run(work, run_id=f"{transition}-{after_commit}")
+        first = client.run(
+            work, run_id=f"{rejection}-{transition}-{after_commit}"
+        )
         operation = [
             row
             for row in client.journal.operations(first.run_id)
             if row["kind"] == "provider"
         ][-1]
         monkeypatch.setattr(client.journal, "response", original)
-        if transition == "restored" or after_commit:
+        if rejection == "preview" or transition == "restored" or after_commit:
             result = client.resume(first.run_id, workflow=work)
             operation = client.journal.get(operation["id"])
             assert result.status == "budget_exceeded"
