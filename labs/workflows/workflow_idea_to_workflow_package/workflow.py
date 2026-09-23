@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from botpipe import Session, current_run, workflow
+from botpipe import Provider, current_run, workflow
 from labs.workflows._shared import (
     LabWorkflowResult,
     ReplanRequired,
@@ -32,8 +32,8 @@ def WorkflowIdeaToWorkflowPackage(
     params: Params, request: str = ""
 ) -> LabWorkflowResult:
     """Execute the workflow idea to workflow package evidence workflow."""
-    _producer = Session(key="producer")
-    _verifier = Session(key="verifier")
+    _producer = Provider()
+    _verifier = _producer.with_config(session=None)
     context = {"request": request, "parameters": params.model_dump(mode="json")}
     context["workflow_catalog"] = observe_catalog()
     run = current_run()

@@ -16,4 +16,4 @@ Accept with `behavior_distilled` only if:
 
 Reject with `needs_rework` if coverage is vague, evidence is missing, source areas were skipped without reason, or behavior is confused with private implementation details.
 
-Always write `behavior_review.md` with the decision. Include exact required rework if rejected.
+Return the typed decision. Include exact required rework if rejected. Do not edit repository files.

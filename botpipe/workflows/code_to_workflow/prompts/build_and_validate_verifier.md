@@ -29,4 +29,4 @@ Accept with `build_validated` only if:
 Use `needs_rework` for local generated-file or validation-report defects.
 Use `needs_replan` if the accepted design cannot produce a coherent workflow.
 
-Always write `build_review.md` with the decision and exact required rework.
+Return the typed decision and exact required rework. Do not edit repository files.

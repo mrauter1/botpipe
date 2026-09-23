@@ -207,8 +207,9 @@ def capture_source_manifest(workflow: Callable[..., Any]) -> SourceManifest:
             if parameters
             else None
         )
-        if hasattr(annotation, "model_json_schema"):
-            input_schema = annotation.model_json_schema()
+        model_json_schema = getattr(annotation, "model_json_schema", None)
+        if callable(model_json_schema):
+            input_schema = model_json_schema()
         return_annotation = inspect.formatannotation(
             hints.get("return", signature.return_annotation)
         )
@@ -573,16 +574,25 @@ def _profile_text(item: Mapping[str, Any], field: str) -> str | None:
 
 def _source_call_identity(call: ast.Call) -> tuple[str | None, str]:
     func = call.func
-    if isinstance(func, ast.Name) and func.id in {"ask", "parallel"}:
+    if isinstance(func, ast.Name) and func.id in {"ask_human", "parallel"}:
         return func.id, _keyword_string(call, "name") or func.id
     if isinstance(func, ast.Attribute) and func.attr in {
         "run",
         "arun",
+        "query",
+        "aquery",
+        "generate",
+        "agenerate",
         "operation",
         "scope_call",
     }:
         owner = func.value.id if isinstance(func.value, ast.Name) else func.attr
-        return ("provider" if func.attr in {"run", "arun"} else func.attr), (
+        return (
+            "provider"
+            if func.attr
+            in {"run", "arun", "query", "aquery", "generate", "agenerate"}
+            else func.attr
+        ), (
             _keyword_string(call, "name") or owner
         )
     return None, ""

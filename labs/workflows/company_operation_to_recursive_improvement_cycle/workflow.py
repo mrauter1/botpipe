@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from botpipe import Session, workflow
+from botpipe import Provider, workflow
 from labs.workflows._shared import (
     LabWorkflowResult,
     ReplanRequired,
@@ -28,8 +28,8 @@ def CompanyOperationToRecursiveImprovementCycle(
     params: Params, request: str = ""
 ) -> LabWorkflowResult:
     """Execute the company operation to recursive improvement cycle evidence workflow."""
-    _producer = Session(key="producer")
-    _verifier = Session(key="verifier")
+    _producer = Provider()
+    _verifier = _producer.with_config(session=None)
     context = {"request": request, "parameters": params.model_dump(mode="json")}
     context["workflow_catalog"] = observe_catalog()
     context["observed_company_runs"] = observe_run_history(

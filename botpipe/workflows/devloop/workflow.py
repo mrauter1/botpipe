@@ -8,7 +8,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, ValidationError
 
-from botpipe import Artifact, Session, activity, current_run, workflow
+from botpipe import Artifact, Provider, Session, activity, current_run, workflow
+from botpipe.workflows._reviews import save_review
 
 from .conventions import phase_dir_key
 from .reviews import (
@@ -310,34 +311,34 @@ PLAN_PRODUCER = """Create a strict phased implementation plan for the supplied r
 any feedback artifacts. Write the declared phase_plan JSON. Preserve the supplied task_id and request_snapshot_ref.
 Each planned phase needs bounded scope, earlier-phase dependencies, concrete criteria, deliverables, risks, and rollback."""
 
-PLAN_VERIFIER = """Independently audit the phase plan against the request and repository. Write the declared review
-artifact and return the structured ReviewReport. Cover exactly the supplied criteria and use the supplied review_id."""
+PLAN_VERIFIER = """Independently audit the phase plan against the request and repository. Return the structured
+ReviewReport without editing files. Cover exactly the supplied criteria and use the supplied review_id."""
 
 IMPLEMENT_PRODUCER = """Implement only the supplied active phase. Read the current plan and all review feedback.
 Edit the repository, validate the work, and write concrete implementation notes to the declared artifact."""
 
 IMPLEMENT_VERIFIER = """Independently verify the active phase against every supplied criterion. Inspect repository
-state and current evidence. Write the declared review artifact and return ReviewReport. Set repair_target=phase_item
+state and current evidence. Return ReviewReport without editing files. Set repair_target=phase_item
 only when the phase definition itself must change; otherwise repair_target=candidate."""
 
 PHASE_ITEM_PRODUCER = """Repair the active phase definition after an implementation review found it unexecutable.
 Preserve completed phases, order, and the active phase id. Write the revised phase plan and an item review note."""
 
 PHASE_ITEM_VERIFIER = """Verify that the revised plan preserves completed work and phase identity while making the
-active phase executable. Write the review artifact and return ReviewReport covering the supplied process criteria."""
+active phase executable. Return ReviewReport without editing files and cover the supplied process criteria."""
 
 TEST_PRODUCER = """Test the supplied phase against its acceptance criteria and current implementation. Run suitable
 checks, fix only test-harness defects, and write a test strategy containing commands and observed results."""
 
-TEST_VERIFIER = """Independently verify the phase test evidence against every supplied criterion. Write the review
-artifact and return ReviewReport. Failed implementation behavior requires candidate rework."""
+TEST_VERIFIER = """Independently verify the phase test evidence against every supplied criterion. Return ReviewReport
+without editing files. Failed implementation behavior requires candidate rework."""
 
 AUDIT_PRODUCER = """Perform a final audit of the original request using the completed phase plan and evidence bundle.
 Write audit_result.json, gap_report.md, and revised_request.md. Use passed only when no gaps remain; otherwise write a
 standalone constrained follow-up request and needs_followup. Treat skipped tests/docloop mode as reduced assurance."""
 
 AUDIT_VERIFIER = """Independently verify that audit_result, gap_report, and revised_request accurately reflect the
-request and evidence. A correct needs_followup decision can pass review. Write ReviewReport and cover the supplied
+request and evidence. A correct needs_followup decision can pass review. Return ReviewReport and cover the supplied
 audit-process criteria using the supplied review_id."""
 
 
@@ -375,7 +376,8 @@ def devloop(
         required=True,
     )
 
-    planner, plan_reviewer = Session(key="devloop-plan"), Session.fresh()
+    planner = Provider()
+    plan_reviewer = planner.with_config(session=None)
     plan_feedback: tuple[Any, ...] = ()
     attempt = 0
     while True:
@@ -402,22 +404,22 @@ def devloop(
             continue
         review_id = _review_id("plan", None, attempt)
         criteria = _process_criteria("plan")
-        reviewed = plan_reviewer.run(
+        reviewed = plan_reviewer.query(
             PLAN_VERIFIER,
             input=_review_input(
                 request=request, stage="plan", review_id=review_id, criteria=criteria
             ),
             reads=(planned.artifacts.phase_plan,),
-            writes=(plan_review_spec,),
             returns=ReviewReport,
         )
+        plan_review_path = save_review(str(plan_review_spec.path), reviewed.value)
         review = reviewed.value
         issues = validate_review(review, review_id, criteria)
         if review.verdict == "blocked":
             return _blocked(plan_path, review, document.phases)
         if not issues:
             break
-        plan_feedback = (reviewed.artifacts.plan_review,)
+        plan_feedback = (plan_review_path,)
 
     phases = document.phases
     latest_plan = planned.artifacts.phase_plan
@@ -430,7 +432,8 @@ def devloop(
         document.status = "in_progress"
         _write_json(str(plan_path), document.model_dump(mode="json"))
         phase_dir = phase_dir_key(phase.phase_id)
-        phase_session = Session(key=f"devloop-phase:{phase.phase_id}")
+        phase_provider = planner.with_config(session=Session())
+        phase_verifier = planner.with_config(session=None)
         implementation_feedback: tuple[Any, ...] = ()
         stage_attempt = 0
         phase_done = False
@@ -454,7 +457,7 @@ def devloop(
                 schema=ReviewReport,
                 required=True,
             )
-            implemented = phase_session.run(
+            implemented = phase_provider.run(
                 IMPLEMENT_PRODUCER,
                 input={
                     "request": request,
@@ -465,7 +468,7 @@ def devloop(
                 writes=(notes,),
             )
             review_id = _review_id("implement", phase.phase_id, stage_attempt)
-            checked = phase_session.run(
+            checked = phase_verifier.query(
                 IMPLEMENT_VERIFIER,
                 input=_review_input(
                     request=request,
@@ -475,9 +478,9 @@ def devloop(
                     phase=phase,
                 ),
                 reads=(latest_plan, implemented.artifacts.impl_notes),
-                writes=(impl_review_spec,),
                 returns=ReviewReport,
             )
+            impl_review_path = save_review(str(impl_review_spec.path), checked.value)
             report = checked.value
             issues = validate_review(report, review_id, phase.criteria)
             if report.verdict == "blocked":
@@ -512,7 +515,7 @@ def devloop(
                     item_attempt = 0
                     while True:
                         item_attempt += 1
-                        revised = phase_session.run(
+                        revised = phase_provider.run(
                             PHASE_ITEM_PRODUCER,
                             input={
                                 "request": request,
@@ -520,7 +523,7 @@ def devloop(
                                 "active_phase": _phase_dict(phase),
                                 "plan": document.model_dump(mode="json"),
                             },
-                            reads=(latest_plan, checked.artifacts.impl_review),
+                            reads=(latest_plan, impl_review_path),
                             writes=(plan_spec, item_review),
                         )
                         try:
@@ -570,7 +573,7 @@ def devloop(
                         item_review_id = _review_id(
                             "phase_item", phase.phase_id, item_attempt
                         )
-                        item_checked = phase_session.run(
+                        item_checked = phase_verifier.query(
                             PHASE_ITEM_VERIFIER,
                             input=_review_input(
                                 request=request,
@@ -583,8 +586,10 @@ def devloop(
                                 revised.artifacts.phase_plan,
                                 revised.artifacts.phase_item_review,
                             ),
-                            writes=(item_report_spec,),
                             returns=ReviewReport,
+                        )
+                        item_report_path = save_review(
+                            str(item_report_spec.path), item_checked.value
                         )
                         if item_checked.value.verdict == "blocked":
                             return _blocked(plan_path, item_checked.value, phases)
@@ -596,11 +601,11 @@ def devloop(
                             phase = phases[phase_index]
                             latest_plan = revised.artifacts.phase_plan
                             implementation_feedback = (
-                                item_checked.artifacts.phase_item_review_report,
+                                item_report_path,
                             )
                             break
                     continue
-                implementation_feedback = (checked.artifacts.impl_review,)
+                implementation_feedback = (impl_review_path,)
                 continue
 
             effective_skip = params.skip_test_phase or params.mode == "docloop"
@@ -628,14 +633,14 @@ def devloop(
                 schema=ReviewReport,
                 required=True,
             )
-            tested = phase_session.run(
+            tested = phase_provider.run(
                 TEST_PRODUCER,
                 input={"request": request, "phase": _phase_dict(phase)},
                 reads=(latest_plan, implemented.artifacts.impl_notes),
                 writes=(test_strategy,),
             )
             test_review_id = _review_id("test", phase.phase_id, stage_attempt)
-            test_checked = phase_session.run(
+            test_checked = phase_verifier.query(
                 TEST_VERIFIER,
                 input=_review_input(
                     request=request,
@@ -645,8 +650,10 @@ def devloop(
                     phase=phase,
                 ),
                 reads=(implemented.artifacts.impl_notes, tested.artifacts.test_strat),
-                writes=(test_review_spec,),
                 returns=ReviewReport,
+            )
+            test_review_path = save_review(
+                str(test_review_spec.path), test_checked.value
             )
             if test_checked.value.verdict == "blocked":
                 phase.status = "blocked"
@@ -656,7 +663,7 @@ def devloop(
                 test_checked.value, test_review_id, phase.criteria
             )
             if test_issues:
-                implementation_feedback = (test_checked.artifacts.test_review,)
+                implementation_feedback = (test_review_path,)
                 continue
             phase_done = True
 
@@ -692,12 +699,13 @@ def devloop(
         schema=ReviewReport,
         required=True,
     )
-    audit_session, audit_verifier = Session(key="devloop-audit"), Session.fresh()
+    audit_provider = planner.with_config(session=Session())
+    audit_verifier = planner.with_config(session=None)
     audit_feedback: tuple[Any, ...] = ()
     audit_attempt = 0
     while True:
         audit_attempt += 1
-        produced_audit = audit_session.run(
+        produced_audit = audit_provider.run(
             AUDIT_PRODUCER,
             input={
                 "request": request,
@@ -730,7 +738,7 @@ def devloop(
         ]
         if "revised_request" in produced_audit.artifacts:
             audit_reads.append(produced_audit.artifacts.revised_request)
-        checked_audit = audit_verifier.run(
+        checked_audit = audit_verifier.query(
             AUDIT_VERIFIER,
             input=_review_input(
                 request=request,
@@ -739,14 +747,16 @@ def devloop(
                 criteria=audit_criteria,
             ),
             reads=tuple(audit_reads),
-            writes=(audit_review_spec,),
             returns=ReviewReport,
+        )
+        audit_review_path = save_review(
+            str(audit_review_spec.path), checked_audit.value
         )
         if checked_audit.value.verdict == "blocked":
             return _blocked(plan_path, checked_audit.value, phases)
         if not validate_review(checked_audit.value, audit_review_id, audit_criteria):
             break
-        audit_feedback = (checked_audit.artifacts.audit_review,)
+        audit_feedback = (audit_review_path,)
 
     audit_path = produced_audit.artifacts.audit_result.source_path
     if audit_result.status == "passed":

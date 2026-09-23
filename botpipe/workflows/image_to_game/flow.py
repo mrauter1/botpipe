@@ -8,7 +8,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from botpipe import Artifact, Session, activity, ask, current_run, workflow
+from botpipe import Artifact, Provider, activity, ask_human, current_run, workflow
+from botpipe.workflows._reviews import save_review
 from botpipe.workflows.goal import goal
 
 
@@ -131,7 +132,7 @@ VERIFY_GOAL = """Independently verify goal_input.md against the supplied request
 reference_resolution. Do not visually inspect a selected image. Accept only when the reference mode is sound and all
 required headings and gates are concrete: visual inspection, playable mechanics, complete affordances, no inert
 controls, persistence, validation artifacts, browser interaction audit, screenshots, structured reference comparison,
-acceptance criteria and failure criteria. Write goal_input_audit.md and return the structured verdict."""
+acceptance criteria and failure criteria. Return the structured verdict without editing files."""
 
 
 @workflow(name="image-to-game", version="1")
@@ -144,13 +145,13 @@ def image_to_game(
     ctx = current_run()
     request = (params_message or message or "").strip()
     if not request:
-        request = ask("Describe the browser game to create.", returns=str).strip()
+        request = ask_human("Describe the browser game to create.", returns=str).strip()
 
     candidates = _reference_candidates(str(ctx.workspace), reference_image_path)
     selected: str | None = None
     if reference_image_path:
         if not candidates:
-            replacement = ask(
+            replacement = ask_human(
                 "The supplied reference image was not a readable supported image. Provide a valid path or say prompt-derived.",
                 returns=str,
             ).strip()
@@ -169,7 +170,7 @@ def image_to_game(
     elif len(candidates) == 1:
         selected, mode = candidates[0], "inferred_file"
     elif len(candidates) > 1:
-        choice = ask(
+        choice = ask_human(
             "Multiple reference images were found. Provide the exact image path, or say prompt-derived.",
             returns=str,
         ).strip()
@@ -221,7 +222,8 @@ def image_to_game(
     audit_spec = Artifact.md(
         str(ctx.folder / "goal_input_audit.md"), name="goal_input_audit", required=True
     )
-    builder, verifier = Session(key="goal-builder"), Session.fresh()
+    builder = Provider()
+    verifier = builder.with_config(session=None)
     feedback: tuple[Any, ...] = ()
     while True:
         built = builder.run(
@@ -233,7 +235,7 @@ def image_to_game(
             reads=(input_contract.path, reference_resolution.path, *feedback),
             writes=(goal_input,),
         )
-        checked = verifier.run(
+        checked = verifier.query(
             VERIFY_GOAL,
             input={
                 "source_request": request,
@@ -244,12 +246,12 @@ def image_to_game(
                 reference_resolution.path,
                 built.artifacts.goal_input,
             ),
-            writes=(audit_spec,),
             returns=GoalInputDecision,
         )
+        audit_path = save_review(str(ctx.folder / audit_spec.path), checked.value)
         if checked.value.verdict == "accepted":
             break
-        feedback = (checked.artifacts.goal_input_audit,)
+        feedback = (audit_path,)
 
     child = goal(
         objective=built.artifacts.goal_input.read_text(),
@@ -278,7 +280,7 @@ def image_to_game(
         f"- Goal status: `{child.status}`\n"
         f"- Goal id: `{child.goal_id or 'none'}`\n"
         f"- Goal input: `{built.artifacts.goal_input.source_path}`\n"
-        f"- Goal audit: `{checked.artifacts.goal_input_audit.source_path}`\n"
+        f"- Goal audit: `{audit_path}`\n"
         f"- Child receipt: `{receipt_path}`\n",
     )
     result_status: Literal["complete", "blocked", "budget_limited"] = (

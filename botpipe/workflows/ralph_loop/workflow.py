@@ -4,14 +4,17 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
-from botpipe import Artifact, Session, Worklist, workflow
+from botpipe import Artifact, Provider, Session, Worklist, current_run, workflow
+from botpipe.workflows._reviews import save_review
 
 
 class ReviewDecision(BaseModel):
     model_config = ConfigDict(extra="forbid")
     verdict: Literal["accepted", "needs_rework"]
+    summary: str = ""
+    required_changes: list[str] = Field(default_factory=list)
 
 
 PLAN = """
@@ -41,7 +44,6 @@ Verify the supplied work.json against the original request and repository.
 Accept only if it fully covers the request, is ordered, and each item is
 independently implementable with concrete acceptance checks.
 
-Write plan_review.md with your decision and exact required rework, if any.
 Return a structured object whose verdict is accepted or needs_rework.
 """.strip()
 
@@ -61,9 +63,7 @@ the item payload, repository diff, source, tests, artifacts, and command output.
 Accept only if the item is correctly and completely implemented with no
 remaining gaps against its goal and acceptance checks.
 
-Write implementation_review.md at its declared item-specific path, including
-your decision and exact rework instructions if rejected. Return a structured
-object whose verdict is accepted or needs_rework.
+Return a structured decision with exact rework instructions if rejected.
 """.strip()
 
 
@@ -71,48 +71,51 @@ object whose verdict is accepted or needs_rework.
 def ralph_loop(request: str):
     work = Artifact.json("work.json", required=True)
     plan_review = Artifact.md("plan_review.md", required=True)
-    planner = Session(key="planner")
-    plan_reviewer = Session(key="plan-reviewer")
-    feedback = ()
+    planner = Provider()
+    plan_reviewer = planner.with_config(session=None)
+    feedback: tuple[object, ...] = ()
 
     while True:
         plan = planner.run(PLAN, input=request, reads=feedback, writes=(work,))
-        review = plan_reviewer.run(
+        review = plan_reviewer.query(
             REVIEW_PLAN,
             input=request,
             reads=(plan.artifacts.work,),
-            writes=(plan_review,),
             returns=ReviewDecision,
         )
+        plan_review_path = save_review(str(current_run().folder / plan_review.path), review.value)
         if review.value.verdict == "accepted":
             break
-        feedback = (review.artifacts.plan_review,)
+        feedback = (plan_review_path,)
 
     items = Worklist.from_artifact(plan.artifacts.work, collection="items")
     for item in items:
-        session = Session.work_item(item)
+        provider = planner.with_config(session=Session.work_item(item))
+        reviewer = planner.with_config(session=None)
         item_review = Artifact.md(
             f"items/{item.dir_key}/implementation_review.md",
             required=True,
         )
         feedback = ()
         while True:
-            session.run(
+            provider.run(
                 IMPLEMENT,
                 input=item.payload,
                 reads=(items.artifact, *feedback),
             )
-            review = session.run(
+            review = reviewer.query(
                 REVIEW_IMPLEMENTATION,
                 input=item.payload,
                 reads=(items.artifact,),
-                writes=(item_review,),
                 returns=ReviewDecision,
+            )
+            item_review_path = save_review(
+                str(current_run().folder / item_review.path), review.value
             )
             if review.value.verdict == "accepted":
                 items.complete(item)
                 break
-            feedback = (review.artifacts.implementation_review,)
+            feedback = (item_review_path,)
 
     return items.artifact
 

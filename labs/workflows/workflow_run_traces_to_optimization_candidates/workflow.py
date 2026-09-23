@@ -7,7 +7,7 @@ from dataclasses import asdict
 from botpipe import (
     Artifact,
     Prompt,
-    Session,
+    Provider,
     activity,
     current_run,
     provider_budget,
@@ -183,11 +183,17 @@ def WorkflowRunTracesToOptimizationCandidates(
         turn_timeout_seconds=params.provider_turn_timeout_seconds,
     ) as budget:
         if snapshot.next_action == "propose_changes" and snapshot.shortlist:
-            producer = Session(key="optimizer-producer")
-            verifier = Session.fresh()
+            producer = Provider()
+            verifier = producer.with_config(session=None)
+            proposal_provider = producer.with_config(
+                name="propose evidence-bound candidates", output_retries=2
+            )
+            review_provider = verifier.with_config(
+                name="independently review candidate set", output_retries=2
+            )
             feedback = None
             while True:
-                proposal = producer.run(
+                proposal = proposal_provider.run(
                     Prompt.file("prompts/recommendation_producer.md"),
                     input={
                         "request": request,
@@ -209,8 +215,6 @@ def WorkflowRunTracesToOptimizationCandidates(
                         ),
                     ),
                     returns=CandidateSet,
-                    name="propose evidence-bound candidates",
-                    retries=2,
                 )
                 candidate_set = validate_candidate_set(
                     proposal.value,
@@ -224,7 +228,7 @@ def WorkflowRunTracesToOptimizationCandidates(
                     supporting_content = (
                         proposal.artifacts.workflow_optimization_supporting.read_bytes()
                     )
-                decision = verifier.run(
+                decision = review_provider.query(
                     Prompt.file("prompts/recommendation_verifier.md"),
                     input={
                         "request": request,
@@ -236,8 +240,6 @@ def WorkflowRunTracesToOptimizationCandidates(
                         "max_candidates": params.max_candidates,
                     },
                     returns=CandidateReview,
-                    name="independently review candidate set",
-                    retries=2,
                 )
                 review = validate_candidate_review(
                     decision.value,

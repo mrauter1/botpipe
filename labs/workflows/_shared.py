@@ -14,9 +14,9 @@ from botpipe import (
     Artifact,
     ArtifactHandle,
     Prompt,
-    Session,
+    Provider,
     activity,
-    ask,
+    ask_human,
     current_run,
 )
 
@@ -37,10 +37,7 @@ class LabPhaseDraft(BaseModel):
         return normalized
 
 
-class LabPhaseOutcome(BaseModel):
-    """Typed verifier decision used as the durable control-flow outcome."""
-
-    outcome: Literal["accepted"]
+class _LabPhaseResult(BaseModel):
     summary: str = Field(min_length=1)
     authoritative_artifacts: list[str] = Field(default_factory=list)
     candidate_ids: list[str] = Field(default_factory=list)
@@ -55,7 +52,13 @@ class LabPhaseOutcome(BaseModel):
         return normalized
 
 
-class LabPhaseControl(LabPhaseOutcome):
+class LabPhaseOutcome(_LabPhaseResult):
+    """Typed verifier decision used as the durable control-flow outcome."""
+
+    outcome: Literal["accepted"]
+
+
+class LabPhaseControl(_LabPhaseResult):
     """A nonacceptance decision never requires facts that are still unavailable."""
 
     model_config = ConfigDict(extra="allow")
@@ -293,8 +296,8 @@ def observe_run_history(
 def run_phase(
     *,
     phase: str,
-    producer: Session,
-    verifier: Session,
+    producer: Provider,
+    verifier: Provider,
     producer_prompt: str,
     verifier_prompt: str,
     input: Mapping[str, Any],
@@ -308,21 +311,28 @@ def run_phase(
 
     response_type = returns | LabPhaseControl
     expected = [str(item.name) for item in writes]
+    producer_config: dict[str, Any] = {
+        "name": f"{phase}.produce",
+        "output_retries": 2,
+    }
+    if provider_workspace is not None:
+        producer_config["workspace"] = provider_workspace
+    phase_producer = producer.with_config(**producer_config)
+    phase_verifier = verifier.with_config(
+        name=f"{phase}.verify", output_retries=2
+    )
     feedback: dict[str, Any] | None = None
     previous_handles: tuple[Any, ...] = ()
     while True:
         phase_input = {**dict(input), "phase": phase, "required_artifacts": expected}
         if feedback is not None:
             phase_input["rework_feedback"] = feedback
-        producer_result = producer.run(
+        producer_result = phase_producer.run(
             Prompt.file(producer_prompt),
             input=phase_input,
             reads=tuple(reads) + previous_handles,
             writes=tuple(writes),
             returns=LabPhaseDraft,
-            name=f"{phase}.produce",
-            retries=2,
-            workspace=provider_workspace,
         )
         handles = tuple(producer_result.artifacts.values())
         captured = sorted(producer_result.artifacts.keys())
@@ -331,7 +341,7 @@ def run_phase(
             raise ValueError(
                 f"{phase} did not capture required artifacts: {', '.join(missing)}"
             )
-        verification = verifier.run(
+        verification = phase_verifier.query(
             Prompt.file(verifier_prompt),
             input={
                 **dict(input),
@@ -342,8 +352,6 @@ def run_phase(
             },
             reads=handles,
             returns=response_type,
-            name=f"{phase}.verify",
-            retries=2,
         )
         outcome = verification.value
         unknown = sorted(set(outcome.authoritative_artifacts) - set(captured))
@@ -375,7 +383,7 @@ def run_phase(
                 )
             raise ReplanRequired(replan_target, phase_run)
         if outcome.outcome in {"question", "blocked"}:
-            answer = ask(
+            answer = ask_human(
                 f"{phase}: {outcome.summary}\n"
                 + (
                     outcome.question
@@ -402,8 +410,8 @@ def finish(
     artifact_paths: dict[str, str] = {}
     candidates: list[str] = []
     evidences = [phase.evidence for phase in phases]
-    for phase in evidences:
-        for candidate in phase.candidate_ids:
+    for evidence in evidences:
+        for candidate in evidence.candidate_ids:
             if candidate not in candidates:
                 candidates.append(candidate)
     for phase in phases:
