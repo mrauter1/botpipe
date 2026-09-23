@@ -73,6 +73,7 @@ while True:
         send({"id": request["id"], "result": {"status": "unsubscribed"}})
         continue
     if method in {"thread/start", "thread/resume"}:
+        time.sleep(float(os.environ.get("BOTPIPE_FAKE_THREAD_DELAY", "0")))
         thread_id = request["params"].get("threadId", "thread-fixture")
         send({"id": request["id"], "result": {"thread": {"id": thread_id}}})
         continue
@@ -84,6 +85,7 @@ while True:
         raise AssertionError(f"unexpected method: {method}")
 
     turn_number += 1
+    time.sleep(float(os.environ.get("BOTPIPE_FAKE_TURN_START_DELAY", "0")))
     thread_id = request["params"]["threadId"]
     turn_id = f"turn-{turn_number}"
     if SCENARIO == "stall_turn_start":

@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import hashlib
+import subprocess
+import sys
+import threading
+import time
 
 import pytest
 from pydantic import BaseModel
@@ -12,9 +16,77 @@ from botpipe import (
     Provider,
     Session,
     activity,
+    parallel,
     workflow,
 )
-from botpipe.providers import FakeProvider, ProviderInterruptedError, ProviderResponse
+from botpipe.locks import session_lock
+from botpipe.providers import (
+    FakeProvider,
+    ProviderInterruptedError,
+    ProviderResponse,
+    ProviderTimeoutError,
+)
+
+
+def test_distinct_handles_for_same_task_session_serialize_turns(tmp_path):
+    guard = threading.Lock()
+    active = maximum = 0
+
+    def respond(request):
+        nonlocal active, maximum
+        with guard:
+            active += 1
+            maximum = max(maximum, active)
+        time.sleep(0.05)
+        with guard:
+            active -= 1
+        return ProviderResponse("ok", request.session_id or "native-session")
+
+    @workflow
+    def talk():
+        return parallel(
+            lambda: Provider(session=Session.task("shared")).query("first"),
+            lambda: Provider(session=Session.task("shared")).query("second"),
+        )
+
+    provider = FakeProvider([respond, respond])
+    with Botpipe(tmp_path, provider=provider) as client:
+        result = client.run(talk)
+
+    assert result.ok, result.error
+    assert maximum == 1
+    assert [call.session_id for call in provider.calls] == [None, "native-session"]
+
+
+def test_session_lock_serializes_across_processes(monkeypatch, tmp_path):
+    monkeypatch.setenv("BOTPIPE_COORDINATION_DIR", str(tmp_path / "coordination"))
+    journal, ready = tmp_path / "journal.sqlite3", tmp_path / "ready"
+    script = (
+        "import sys\n"
+        "from pathlib import Path\n"
+        "from botpipe.locks import session_lock\n"
+        "with session_lock(sys.argv[1], 'shared', timeout=1):\n"
+        " Path(sys.argv[2]).write_text('ready')\n"
+        " sys.stdin.read(1)\n"
+    )
+    process = subprocess.Popen(
+        [sys.executable, "-c", script, str(journal), str(ready)],
+        stdin=subprocess.PIPE,
+    )
+    try:
+        deadline = time.monotonic() + 5
+        while not ready.exists() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert ready.exists()
+        with pytest.raises(ProviderTimeoutError, match="session"), session_lock(
+            journal, "shared", timeout=0.05
+        ):
+            pass
+    finally:
+        assert process.stdin is not None
+        process.stdin.write(b"x")
+        process.stdin.flush()
+        process.wait(timeout=5)
 
 
 def test_constructor_sessions_are_independent_and_task_sessions_persist(tmp_path):

@@ -19,6 +19,7 @@ from .errors import (
     WorkspaceBusy,
     WorkspaceUnresolved,
 )
+from .providers import ProviderTimeoutError
 
 
 def _coordination_root() -> Path:
@@ -80,6 +81,9 @@ class _FileMutex:
         error: type[Exception],
         message: str,
         cancellation=None,
+        cancellation_message: str = (
+            "Operation cancelled while waiting for the workspace"
+        ),
     ):
         if timeout < 0:
             raise ValueError("lock timeout must be nonnegative")
@@ -88,6 +92,7 @@ class _FileMutex:
         self.error = error
         self.message = message
         self.cancellation = cancellation
+        self.cancellation_message = cancellation_message
         self._handle = None
 
     def __enter__(self):
@@ -102,9 +107,7 @@ class _FileMutex:
             if self.cancellation is not None and self.cancellation.is_set():
                 self._handle.close()
                 self._handle = None
-                raise CancellationRequested(
-                    "Operation cancelled while waiting for the workspace"
-                )
+                raise CancellationRequested(self.cancellation_message)
             try:
                 self._acquire()
                 return self
@@ -154,6 +157,26 @@ def run_lock(journal: str | os.PathLike[str], run_id: str) -> _FileMutex:
         timeout=0,
         error=RunBusy,
         message=f"Run {run_id} is already executing",
+    )
+
+
+def session_lock(
+    journal: str | os.PathLike[str],
+    session_key: str,
+    *,
+    timeout: float,
+    cancellation=None,
+) -> _FileMutex:
+    """Serialize turns for one durable session in one journal."""
+
+    identity = _digest(_canonical_path(journal), session_key)
+    return _FileMutex(
+        _coordination_root() / "sessions" / f"{identity}.lock",
+        timeout=timeout,
+        error=ProviderTimeoutError,
+        message="Timed out waiting for the session",
+        cancellation=cancellation,
+        cancellation_message="Cancelled while waiting for the session",
     )
 
 
@@ -289,5 +312,6 @@ __all__ = [
     "canonical_workspace",
     "default_state_dir",
     "run_lock",
+    "session_lock",
     "workspace_turn",
 ]

@@ -5,8 +5,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import threading
-import time
 from contextlib import nullcontext
 from dataclasses import replace
 from pathlib import Path
@@ -28,6 +26,7 @@ from .errors import (
     CancellationRequested,
     UncertainOperation,
 )
+from .locks import session_lock
 from .models import Result, StreamEvent
 from .policy import Policy, SandboxMode
 from .prompts import Prompt
@@ -186,18 +185,21 @@ def execute_provider_operation(
         prompt if isinstance(prompt, Prompt) else Prompt.inline(str(prompt))
     ).render(input)
     schema = None if returns is str else codec.schema_for(returns)
-    with ctx._guard:
-        lock = session._turn_lock if session is not None else threading.Lock()
     wait_timeout = timeout if timeout is not None else ctx.limits.timeout
-    deadline = time.monotonic() + wait_timeout
     cancellation = _cancellation_event()
-    while not lock.acquire(timeout=min(0.1, max(0.0, deadline - time.monotonic()))):
-        if cancellation is not None and cancellation.is_set():
-            raise CancellationRequested("Cancelled while waiting for the session")
-        if time.monotonic() >= deadline:
-            raise ProviderTimeoutError("Timed out waiting for the session")
+    lock = (
+        session_lock(
+            ctx.journal.path,
+            session_key,
+            timeout=wait_timeout,
+            cancellation=cancellation,
+        )
+        if session is not None
+        else nullcontext()
+    )
+    lock.__enter__()
     if cancellation is not None and cancellation.is_set():
-        lock.release()
+        lock.__exit__(None, None, None)
         raise CancellationRequested("Cancelled while waiting for the session")
     try:
         feedback = None
@@ -719,7 +721,7 @@ def execute_provider_operation(
                     raise
                 feedback = str(exc)
     finally:
-        lock.release()
+        lock.__exit__(None, None, None)
 
 
 def _start_turn(

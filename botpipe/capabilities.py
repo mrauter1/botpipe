@@ -14,6 +14,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -222,7 +223,17 @@ def _accepts(
     return False
 
 
-def _run(command: Sequence[str], *, env: Mapping[str, str], timeout: float) -> str:
+def _run(
+    command: Sequence[str],
+    *,
+    env: Mapping[str, str],
+    timeout: float,
+    deadline: float | None = None,
+) -> str:
+    if deadline is not None:
+        timeout = min(timeout, deadline - time.monotonic())
+        if timeout <= 0:
+            raise TimeoutError("Codex capability probe timed out")
     try:
         result = subprocess.run(
             command,
@@ -232,6 +243,12 @@ def _run(command: Sequence[str], *, env: Mapping[str, str], timeout: float) -> s
             timeout=timeout,
             env={**os.environ, **env},
         )
+    except subprocess.TimeoutExpired as exc:
+        if deadline is not None:
+            raise TimeoutError("Codex capability probe timed out") from exc
+        raise CapabilityError(
+            f"Codex capability probe failed ({' '.join(command)}): {exc}"
+        ) from exc
     except (OSError, subprocess.SubprocessError) as exc:
         raise CapabilityError(
             f"Codex capability probe failed ({' '.join(command)}): {exc}"
@@ -240,10 +257,12 @@ def _run(command: Sequence[str], *, env: Mapping[str, str], timeout: float) -> s
 
 
 def _feature_inventory(
-    executable: str, env: Mapping[str, str]
+    executable: str, env: Mapping[str, str], deadline: float | None = None
 ) -> tuple[dict[str, Any], ...]:
     try:
-        output = _run((executable, "features", "list"), env=env, timeout=10)
+        output = _run(
+            (executable, "features", "list"), env=env, timeout=10, deadline=deadline
+        )
     except CapabilityError:
         return ()
     features: list[dict[str, Any]] = []
@@ -267,6 +286,7 @@ def probe_codex(
     *,
     env: Mapping[str, str] | None = None,
     state_dir: Path | None = None,
+    deadline: float | None = None,
 ) -> CodexCapabilities:
     """Probe one installed executable, caching by resolved path, size and mtime."""
     environment = {str(k): str(v) for k, v in (env or {}).items()}
@@ -296,10 +316,12 @@ def probe_codex(
     except (OSError, ValueError, KeyError, TypeError):
         pass
 
-    version = _run((str(path), "--version"), env=environment, timeout=10).strip()
+    version = _run(
+        (str(path), "--version"), env=environment, timeout=10, deadline=deadline
+    ).strip()
     if not version:
         raise CapabilityError("Codex --version returned no version")
-    features = _feature_inventory(str(path), environment)
+    features = _feature_inventory(str(path), environment, deadline)
     with tempfile.TemporaryDirectory(prefix="botpipe-codex-schema-") as temporary:
         root = Path(temporary)
         _run(
@@ -313,6 +335,7 @@ def probe_codex(
             ),
             env=environment,
             timeout=30,
+            deadline=deadline,
         )
         try:
             protocol_bytes = (

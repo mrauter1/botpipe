@@ -291,7 +291,9 @@ class CodexAppServerAdapter:
         self._mcp_servers: frozenset[str] = frozenset()
         self._closed = False
 
-    def probe(self) -> CodexCapabilities:
+    def probe(self, *, deadline: float | None = None) -> CodexCapabilities:
+        if deadline is not None and time.monotonic() >= deadline:
+            raise TimeoutError("Codex capability probe timed out")
         if self._injected_capabilities:
             assert self._capabilities is not None
             return self._capabilities
@@ -313,20 +315,26 @@ class CodexAppServerAdapter:
                     self._containment.close()
                 self._process, self._containment = None, None
             self._capabilities = probe_codex(
-                self.executable, env=self.env, state_dir=self.state_dir
+                self.executable,
+                env=self.env,
+                state_dir=self.state_dir,
+                deadline=deadline,
             )
             self._probe_stat = current
         assert self._capabilities is not None
         return self._capabilities
 
-    def _start(self) -> None:
-        with self._startup_lock:
+    def _start(self, *, deadline: float | None = None) -> None:
+        lock_timeout = -1 if deadline is None else max(0.0, deadline - time.monotonic())
+        if not self._startup_lock.acquire(timeout=lock_timeout):
+            raise TimeoutError("Codex initialization timed out")
+        try:
             with self._lock:
                 if self._closed:
                     raise RuntimeError("Codex adapter is closed")
                 if self._process is not None and self._process.poll() is None:
                     return
-                capabilities = self.probe()
+                capabilities = self.probe(deadline=deadline)
                 if self._containment is not None:
                     self._containment.close()
                     self._containment = None
@@ -367,10 +375,13 @@ class CodexAppServerAdapter:
                         "capabilities": {"experimentalApi": True},
                     },
                     10,
+                    deadline=deadline,
                 )
                 self._send({"method": "initialized"})
                 if os.name == "nt" and "windowsSandbox/readiness" in capabilities.methods:
-                    readiness = self._rpc("windowsSandbox/readiness", None, 10)
+                    readiness = self._rpc(
+                        "windowsSandbox/readiness", None, 10, deadline=deadline
+                    )
                     if readiness.get("status") != "ready":
                         raise CapabilityError(
                             "Codex Windows sandbox is not ready "
@@ -383,6 +394,7 @@ class CodexAppServerAdapter:
                         "mcpServerStatus/list",
                         {"limit": 1000, "detail": "toolsAndAuthOnly"},
                         10,
+                        deadline=deadline,
                     )
                     self._mcp_servers = frozenset(
                         str(item["name"])
@@ -393,6 +405,8 @@ class CodexAppServerAdapter:
             except BaseException:
                 self._kill_transport(CodexProtocolError("Codex initialization failed"))
                 raise
+        finally:
+            self._startup_lock.release()
 
     def _read_stderr(self, process: subprocess.Popen[bytes]) -> None:
         if process.stderr is None:
@@ -644,6 +658,8 @@ class CodexAppServerAdapter:
         params: Any,
         timeout: float,
         cancel_event: Any | None = None,
+        *,
+        deadline: float | None = None,
     ) -> dict[str, Any]:
         response_queue: queue.Queue[Any] = queue.Queue(maxsize=1)
         with self._lock:
@@ -651,12 +667,16 @@ class CodexAppServerAdapter:
             request_id = self._next_id
             self._pending[request_id] = response_queue
         try:
+            if deadline is not None and time.monotonic() >= deadline:
+                raise TimeoutError(f"Codex RPC {method} timed out before dispatch")
             self._send({"id": request_id, "method": method, "params": params})
-            deadline = time.monotonic() + timeout
+            rpc_deadline = time.monotonic() + timeout
+            if deadline is not None:
+                rpc_deadline = min(rpc_deadline, deadline)
             while True:
                 if cancel_event is not None and cancel_event.is_set():
                     raise _RpcCancelled(f"Codex RPC {method} was cancelled")
-                remaining = deadline - time.monotonic()
+                remaining = rpc_deadline - time.monotonic()
                 if remaining <= 0:
                     raise TimeoutError(f"Codex RPC {method} timed out")
                 try:
@@ -683,7 +703,27 @@ class CodexAppServerAdapter:
     def start_turn(
         self, request: Any, on_event: Callable[[Any], None] | None = None
     ) -> Any:
-        capabilities = self.probe()
+        from .providers import ProviderTimeoutError
+
+        deadline = time.monotonic() + request.timeout
+
+        def timed_out() -> ProviderTimeoutError:
+            return ProviderTimeoutError(
+                f"Codex turn timed out (dispatch budget: {request.timeout:g} seconds)"
+            )
+
+        def remaining(limit: float | None = None) -> float:
+            value = deadline - time.monotonic()
+            if limit is not None:
+                value = min(limit, value)
+            if value <= 0:
+                raise timed_out()
+            return value
+
+        try:
+            capabilities = self.probe(deadline=deadline)
+        except TimeoutError as exc:
+            raise timed_out() from exc
         capabilities.require(request.preset)
         if request.tools is not None:
             unclassified = capabilities.item_types - _PASSIVE_ITEMS - _TOOL_ITEMS.keys()
@@ -692,7 +732,10 @@ class CodexAppServerAdapter:
                     "Codex protocol exposes unclassified turn items under a tool allowlist: "
                     + ", ".join(sorted(unclassified))
                 )
-        self._start()
+        try:
+            self._start(deadline=deadline)
+        except TimeoutError as exc:
+            raise timed_out() from exc
         config = _tool_config(request, capabilities, self._mcp_servers)
         sandbox_name, sandbox_policy = _sandbox(request)
         profile_hash = _profile_hash(request, config)
@@ -771,18 +814,24 @@ class CodexAppServerAdapter:
                     "tools": list(request.tools) if request.tools is not None else None,
                 }
             )
+        remaining()
         thread_id = request.session_id
         outer_lock: threading.RLock | None = None
         if thread_id is not None:
             outer_lock = self._thread_locks.setdefault(thread_id, threading.RLock())
-            outer_lock.acquire()
+            if not outer_lock.acquire(timeout=remaining()):
+                raise timed_out()
         if thread_id is None:
             dynamic_tools: list[dict[str, Any]] = []
-            result = self._rpc(
-                "thread/start",
-                {**common, "ephemeral": False, "dynamicTools": dynamic_tools},
-                min(10, request.timeout),
-            )
+            try:
+                result = self._rpc(
+                    "thread/start",
+                    {**common, "ephemeral": False, "dynamicTools": dynamic_tools},
+                    remaining(10),
+                    deadline=deadline,
+                )
+            except TimeoutError as exc:
+                raise timed_out() from exc
         else:
             try:
                 previous_profile = self._thread_profiles.get(thread_id)
@@ -796,13 +845,19 @@ class CodexAppServerAdapter:
                     self._rpc(
                         "thread/unsubscribe",
                         {"threadId": thread_id},
-                        min(10, request.timeout),
+                        remaining(10),
+                        deadline=deadline,
                     )
                 result = self._rpc(
                     "thread/resume",
                     {**common, "threadId": thread_id},
-                    min(10, request.timeout),
+                    remaining(10),
+                    deadline=deadline,
                 )
+            except TimeoutError as exc:
+                assert outer_lock is not None
+                outer_lock.release()
+                raise timed_out() from exc
             except CodexProtocolError as exc:
                 assert outer_lock is not None
                 outer_lock.release()
@@ -828,7 +883,8 @@ class CodexAppServerAdapter:
         thread_id = actual_thread
         if outer_lock is None:
             outer_lock = self._thread_locks.setdefault(thread_id, threading.RLock())
-            outer_lock.acquire()
+            if not outer_lock.acquire(timeout=remaining()):
+                raise timed_out()
         self._thread_profiles[thread_id] = profile_hash
         try:
             if request.on_checkpoint is not None:
@@ -841,6 +897,7 @@ class CodexAppServerAdapter:
                         "enforcement": enforcement,
                     }
                 )
+            remaining()
         except BaseException:
             outer_lock.release()
             raise
@@ -887,8 +944,9 @@ class CodexAppServerAdapter:
                 started = self._rpc(
                     "turn/start",
                     params,
-                    min(10, request.timeout),
+                    remaining(10),
                     request.cancel_event,
+                    deadline=deadline,
                 )
                 turn_value = started.get("turn")
                 turn_id = (
@@ -923,7 +981,7 @@ class CodexAppServerAdapter:
                     from .providers import ProviderTimeoutError
 
                     raise ProviderTimeoutError(
-                        f"Codex turn start timed out after {min(10, request.timeout):g} seconds"
+                        f"Codex turn start timed out (dispatch budget: {request.timeout:g} seconds)"
                     ) from exc
                 raise
             turn = _Turn(
@@ -938,7 +996,6 @@ class CodexAppServerAdapter:
                 early = self._orphan_events.pop((thread_id, turn_id), ())
             for method, event_params in early:
                 self._record_event(turn, method, event_params)
-            deadline = time.monotonic() + request.timeout
             try:
                 with turn.condition:
                     while not turn.completed and turn.error is None:

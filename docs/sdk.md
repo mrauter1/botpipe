@@ -99,3 +99,6 @@ isolation. Botpipe records these mechanisms honestly.
 
 Direct calls are one-operation durable runs, visible through `botpipe runs` and
 recoverable through `resume` and `resolve`, just like workflow operations.
+
+Each Codex dispatch shares one timeout budget across capability probing, startup,
+thread setup, and execution. Cancellation cleanup has its own bounded grace period.

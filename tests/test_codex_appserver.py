@@ -399,6 +399,105 @@ def test_turn_start_ack_timeout_kills_unknown_dispatched_turn_tree(
     assert not marker.exists(), "pre-acknowledgement turn survived RPC timeout"
 
 
+def test_probe_subprocess_uses_remaining_dispatch_budget(monkeypatch) -> None:
+    import subprocess
+    from botpipe import capabilities
+
+    timeouts = []
+
+    def stall(command, **kwargs):
+        timeouts.append(kwargs["timeout"])
+        raise subprocess.TimeoutExpired(command, kwargs["timeout"])
+
+    monkeypatch.setattr(capabilities.subprocess, "run", stall)
+    with pytest.raises(TimeoutError, match="probe timed out"):
+        capabilities._run(
+            ["codex", "--version"], env={}, timeout=30,
+            deadline=time.monotonic() + 0.25,
+        )
+    assert 0 < timeouts[0] <= 0.25
+
+
+def test_setup_and_turn_start_share_one_timeout_budget(tmp_path: Path) -> None:
+    client = adapter(
+        tmp_path,
+        BOTPIPE_FAKE_THREAD_DELAY="0.18",
+        BOTPIPE_FAKE_TURN_START_DELAY="0.18",
+    )
+    client._start()
+    try:
+        with pytest.raises(ProviderTimeoutError, match="turn start"):
+            client.start_turn(request(tmp_path, timeout=0.25))
+    finally:
+        client.close()
+
+    assert any(item.get("method") == "turn/start" for item in transcript(tmp_path))
+
+
+def test_expired_setup_budget_prevents_thread_dispatch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import botpipe.codex_appserver as appserver
+
+    original = appserver._tool_config
+
+    def delayed_setup(*args, **kwargs):
+        time.sleep(0.12)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(appserver, "_tool_config", delayed_setup)
+    client = adapter(tmp_path)
+    client._start()
+    try:
+        with pytest.raises(ProviderTimeoutError, match="timed out"):
+            client.start_turn(request(tmp_path, timeout=0.05))
+    finally:
+        client.close()
+
+    assert not any(
+        item.get("method") in {"thread/start", "turn/start"}
+        for item in transcript(tmp_path)
+    )
+
+
+def test_expired_thread_checkpoint_releases_session_lock(tmp_path: Path) -> None:
+    client = adapter(tmp_path)
+    client._start()
+
+    def delay_thread_bound(checkpoint: dict) -> None:
+        if checkpoint.get("status") == "thread_bound":
+            time.sleep(0.08)
+
+    first = replace(
+        request(tmp_path, timeout=0.05), on_checkpoint=delay_thread_bound
+    )
+    responses = []
+    errors: list[BaseException] = []
+
+    def resume() -> None:
+        try:
+            responses.append(
+                client.start_turn(
+                    request(tmp_path, session_id="thread-fixture", timeout=1)
+                )
+            )
+        except BaseException as exc:
+            errors.append(exc)
+
+    worker = threading.Thread(target=resume, daemon=True)
+    try:
+        with pytest.raises(ProviderTimeoutError):
+            client.start_turn(first)
+        worker.start()
+        worker.join(timeout=2)
+    finally:
+        client.close()
+
+    assert not worker.is_alive(), "expired request retained the session lock"
+    assert not errors
+    assert responses[0].text == "fixture answer"
+
+
 @pytest.mark.asyncio
 async def test_sdk_async_cancel_waits_for_pre_ack_turn_tree_cleanup(
     tmp_path: Path,
@@ -489,7 +588,7 @@ def test_probe_rejects_missing_required_method_before_dispatch(
     executable.write_bytes(b"probe identity")
     appserver_started = tmp_path / "appserver-started"
 
-    def fake_run(command, *, env, timeout):
+    def fake_run(command, *, env, timeout, deadline=None):
         if command[-1] == "--version":
             return "codex-cli fixture\n"
         if tuple(command[-2:]) == ("features", "list"):

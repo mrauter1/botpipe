@@ -73,6 +73,11 @@ output capture. It waits only within the operation's timeout, then raises
 `WorkspaceBusy`. Coordination files live in per-user state, outside workspaces.
 Windows and macOS canonical roots are compared without case sensitivity.
 
+Conversation turns use the same file-lock primitive, keyed by journal and durable
+session identity. Separate handles for one task or work item therefore serialize
+across threads and processes, including the repair loop and session updates.
+Independent calls (`session=None`) need no conversation lock.
+
 An unresolved writable operation leaves a small fence next to its workspace
 lock. Other runs trying to write the root receive `WorkspaceUnresolved`, naming
 the run to resolve. Resolving the owning operation clears its fence.
