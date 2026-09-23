@@ -20,17 +20,17 @@ def test_parallel_prompt_uses_nearest_application_source(tmp_path, nested, callb
     (tmp_path / "application/prompt.md").write_text("application prompt")
     (tmp_path / "child/prompt.md").write_text("child prompt")
     expression = (
-        'lambda: session.run(Prompt.file("prompt.md"), policy=policy)'
+        'lambda: session.run(Prompt.file("prompt.md"), sandbox="read-only")'
         if callback == "lambda"
-        else 'partial(session.run, Prompt.file("prompt.md"), policy=policy)'
+        else 'partial(session.run, Prompt.file("prompt.md"), sandbox="read-only")'
     )
     body = (
         "from functools import partial\n"
-        "from botpipe import Policy, Prompt, Session, parallel, workflow\n"
+        "from botpipe import Policy, Prompt, Provider, Session, parallel, workflow\n"
         "@workflow\n"
         "def job():\n"
-        "    session = Session()\n"
-        "    policy = Policy(sandbox_mode='read_only')\n"
+        "    session = Provider()\n"
+        ""
         f"    return parallel({expression})[0].value\n"
     )
     source = "child" if nested else "application"

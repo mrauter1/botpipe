@@ -10,7 +10,6 @@ from pathlib import Path
 
 import pytest
 
-from botpipe.journal import workspace_lock
 from botpipe_optimizer.execution_trees import (
     allocate_owned_directory,
     assert_execution_arm_unchanged,
@@ -18,7 +17,6 @@ from botpipe_optimizer.execution_trees import (
     cleanup_owned_directory,
     materialize_execution_arm,
     snapshot_execution_arm,
-    verify_frozen_execution_tree,
 )
 from botpipe_optimizer.processes import run_bounded_process
 from botpipe_optimizer.surface_identity import (
@@ -112,35 +110,6 @@ def test_t04_execution_arm_detects_new_file_and_source_anchor_drift(
             owned_parent=frozen.owned_parent,
             ownership_token=frozen.ownership_token,
         )
-
-
-def test_execution_tree_ignores_workspace_fence_while_owned(tmp_path: Path) -> None:
-    source = tmp_path / "source"
-    source.mkdir()
-    (source / "workflow.py").write_text("VALUE = 1\n", encoding="utf-8")
-    lock_name = ".botpipe-workspace.lock"
-    with workspace_lock(source / lock_name) as fence:
-        fence.seek(0)
-        fence.write(b"first owner")
-        fence.flush()
-        frozen = capture_execution_tree(source, tmp_path / "staging")
-        try:
-            assert not (frozen.root / lock_name).exists()
-            assert [record["path"] for record in frozen.source_records] == [
-                "workflow.py"
-            ]
-            assert lock_name in frozen.manifest["boundary"]["exclusions"]
-            fence.seek(0)
-            fence.truncate()
-            fence.write(b"next owner")
-            fence.flush()
-            verify_frozen_execution_tree(frozen)
-        finally:
-            cleanup_owned_directory(
-                frozen.root,
-                owned_parent=frozen.owned_parent,
-                ownership_token=frozen.ownership_token,
-            )
 
 
 def test_validation_entrypoint_rejects_forged_surface_id_before_launch(

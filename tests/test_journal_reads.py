@@ -33,34 +33,6 @@ def _begin(journal, *, run_id="run", operation_id="op", kind="activity"):
     )
 
 
-def _provider_journal(tmp_path, response, *, writes, capsule=False):
-    path = tmp_path / "provider.sqlite3"
-    inputs = {"$botpipe": "dict", "value": {"writes": writes}}
-    if capsule:
-        inputs = {
-            "$botpipe": "capsule",
-            "version": 1,
-            "sources": {},
-            "value": inputs,
-        }
-    journal = Journal(path)
-    journal.create_run(_run_record())
-    journal.begin(
-        operation_id="op",
-        run_id="run",
-        scope="root",
-        ordinal=0,
-        kind="provider",
-        name="turn",
-        fingerprint="fingerprint",
-        inputs=inputs,
-        limit=10,
-    )
-    journal.response("op", response)
-    journal.close()
-    return path
-
-
 def test_snapshot_reads_run_operations_and_events_as_one_projection(tmp_path):
     journal = Journal(tmp_path / "state.sqlite3")
     try:
@@ -106,48 +78,6 @@ def test_read_only_snapshot_does_not_create_or_mutate_foreign_journal(tmp_path):
 
     assert snapshot.run["run_id"] == "run"
     assert path.read_bytes() == before
-    missing = tmp_path / "missing.sqlite3"
-    assert Journal.foreign_has_unresolved_effects(missing, "run") is True
-    assert not missing.exists()
-
-
-def test_foreign_malformed_journal_is_conservatively_fenced(tmp_path):
-    path = tmp_path / "malformed.sqlite3"
-    path.write_bytes(b"not a sqlite database")
-
-    assert Journal.foreign_has_unresolved_effects(path, "run") is True
-    assert path.read_bytes() == b"not a sqlite database"
-
-
-@pytest.mark.parametrize(
-    "metadata",
-    [[], {"run_id": "different", "status": "running"}],
-)
-def test_foreign_run_metadata_must_match_journal_identity(tmp_path, metadata):
-    path = tmp_path / "foreign.sqlite3"
-    journal = Journal(path)
-    journal.create_run(_run_record())
-    with journal.transaction() as db:
-        db.execute("UPDATE runs SET metadata=? WHERE id='run'", (json.dumps(metadata),))
-    journal.close()
-
-    assert Journal.foreign_has_unresolved_effects(path, "run") is True
-
-
-def test_unknown_effect_checkpoint_status_is_conservatively_fenced():
-    assert Journal._has_unresolved_effects(
-        ({"kind": "provider", "status": "future-checkpoint"},)
-    )
-
-
-def test_provider_writes_are_read_from_encoded_mapping_inputs():
-    without_writes = {"$botpipe": "dict", "value": {"writes": []}}
-    with_writes = {"$botpipe": "dict", "value": {"writes": [{}]}}
-
-    assert Journal._provider_has_writes(without_writes) is False
-    assert Journal._provider_has_writes(with_writes) is True
-    with pytest.raises(ValueError, match="writes declaration"):
-        Journal._provider_has_writes({"$botpipe": "dict", "value": {}})
 
 
 @pytest.mark.parametrize(
@@ -167,125 +97,6 @@ def test_provider_writes_are_read_from_encoded_mapping_inputs():
 def test_artifact_inspection_rejects_malformed_plain_wrappers(encoded):
     with pytest.raises(TypeError):
         _inspection_value(encoded)
-
-
-def test_unfinished_activity_remains_fenced_regardless_of_provider_flags(tmp_path):
-    path = tmp_path / "activity.sqlite3"
-    journal = Journal(path)
-    journal.create_run(_run_record())
-    _begin(journal)
-    journal.response("op", {"not_dispatched": True, "restoration_pending": True})
-    journal.close()
-    assert Journal.foreign_has_unresolved_effects(path, "run") is True
-
-    journal = Journal(path)
-    journal.response("op", {"not_dispatched": True, "restoration_pending": False})
-    journal.close()
-    assert Journal.foreign_has_unresolved_effects(path, "run") is True
-
-
-def test_responded_provider_without_writes_releases_foreign_fence(tmp_path):
-    path = _provider_journal(
-        tmp_path,
-        {
-            "text": "done",
-            "session_id": None,
-            "usage": {},
-            "metadata": {},
-            "request": {},
-            "generation": 0,
-        },
-        writes=[],
-    )
-
-    assert Journal.foreign_has_unresolved_effects(path, "run") is False
-
-
-def test_responded_provider_with_capsuled_writes_remains_fenced(tmp_path):
-    path = _provider_journal(
-        tmp_path,
-        {
-            "text": "done",
-            "session_id": None,
-            "usage": {},
-            "metadata": {},
-            "request": {},
-            "generation": 0,
-        },
-        writes=[{"name": "report"}],
-        capsule=True,
-    )
-
-    assert Journal.foreign_has_unresolved_effects(path, "run") is True
-
-
-@pytest.mark.parametrize(
-    "response",
-    [
-        {"request": {}, "generation": 0, "unknown": True},
-        {"not_dispatched": False, "request": {}, "generation": 0},
-    ],
-)
-def test_malformed_provider_checkpoint_remains_fenced(tmp_path, response):
-    path = _provider_journal(tmp_path, response, writes=[])
-
-    assert Journal.foreign_has_unresolved_effects(path, "run") is True
-
-
-def test_missing_provider_writes_declaration_remains_fenced(tmp_path):
-    path = _provider_journal(
-        tmp_path,
-        {"request": {}, "generation": 0},
-        writes=[],
-    )
-    journal = Journal(path)
-    with journal.transaction() as db:
-        db.execute(
-            "UPDATE operations SET inputs=? WHERE id='op'",
-            (json.dumps({"$botpipe": "dict", "value": {}}),),
-        )
-    journal.close()
-
-    assert Journal.foreign_has_unresolved_effects(path, "run") is True
-
-
-def test_restored_nondispatched_provider_releases_foreign_fence(tmp_path):
-    path = _provider_journal(
-        tmp_path,
-        {
-            "request": {},
-            "generation": 0,
-            "not_dispatched": True,
-            "restoration_pending": False,
-            "budget_error": "budget exhausted",
-        },
-        writes=[{"name": "report"}],
-    )
-
-    assert Journal.foreign_has_unresolved_effects(path, "run") is False
-
-
-@pytest.mark.parametrize("writes", [[], [{"name": "report"}]])
-def test_foreign_provider_reads_encoded_declared_outputs(tmp_path, writes):
-    from botpipe import codec
-
-    path = _provider_journal(
-        tmp_path,
-        {"request": {}, "generation": 0, "text": "done"},
-        writes=writes,
-    )
-    inputs = codec.encode({"writes": writes})
-    journal = Journal(path)
-    try:
-        with journal.transaction() as db:
-            db.execute(
-                "UPDATE operations SET inputs=? WHERE id='op'",
-                (json.dumps(inputs),),
-            )
-    finally:
-        journal.close()
-
-    assert Journal.foreign_has_unresolved_effects(path, "run") is bool(writes)
 
 
 def test_plain_value_inspection_does_not_resolve_types(monkeypatch):

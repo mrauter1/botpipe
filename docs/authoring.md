@@ -1,113 +1,98 @@
-# Authoring workflows
+# Authoring durable workflows
 
-A workflow is an ordinary sync or async Python function decorated with
-`@workflow`.
-
-```python
-from botpipe import Session, ask, workflow
-
-
-@workflow(name="release", version="2")
-def release(version: str) -> str:
-    review = Session.task("review").run(
-        "Review this release candidate.", input={"version": version}
-    )
-    if review.value != "approved":
-        reason = ask("Why should this release proceed?", returns=str)
-        return f"held: {reason}"
-    return "approved"
-```
-
-Use normal Python for decisions and loops. Do not model routes, transitions, or
-mutable workflow state separately.
-
-## Inputs and returns
-
-Use annotations. Pydantic models, dataclasses, paths, and JSON-compatible
-collections make the durable contract explicit. CLI invocation validates inputs
-before a run starts.
+A workflow is an ordinary Python function decorated with `@workflow`. Call it
+through `Botpipe.run` or the CLI to create a durable execution. Its ordinary
+loops and conditionals decide what happens next.
 
 ```python
-class Change(BaseModel):
-    request: str
-    test_command: str = "pytest -q"
+from pydantic import BaseModel
+from botpipe import Botpipe, Provider, workflow
+
+class Verdict(BaseModel):
+    accepted: bool
+    notes: str = ""
 
 @workflow
-async def implement(change: Change) -> Report: ...
+def improve(request: str):
+    coder = Provider()
+    notes = ""
+    while True:
+        coder.run("Implement the request.", input={"request": request, "notes": notes})
+        review = coder.query("Review the implementation.", returns=Verdict)
+        if review.value.accepted:
+            return review.value
+        notes = review.value.notes
 ```
 
-You may edit activities, helpers, and workflow implementations between executions.
-Completed operations replay their saved outcomes; future work uses current code.
-Keep the recorded operation sequence, logical identities, and inputs consistent.
-Stored values must still match their type and field-layout contracts. A completed
-run always returns its saved result without executing the workflow again.
+Provider construction binds lazily to the active runtime. Use `with_config` for
+role instructions, models and session choices. A provider continues one
+conversation by default; `session=None` means independent turns.
 
-## Sessions
+## Effects and human input
 
-`Session()` creates a workflow-scoped conversation. `Session.task(key)` persists
-continuity for a task, while `Session.work_item(item, key)` isolates continuity
-per durable work item. `Session.fresh()` explicitly starts without prior provider
-conversation.
+Every material effect or observation belongs in a provider call, activity,
+human input operation or nested workflow. Code outside those boundaries reruns
+on resume.
 
 ```python
-session = Session.task("implementation")
-plan = session.run("Inspect the repository and make a plan.", returns=Plan)
-done = session.run("Implement the plan and run its checks.", input=plan.value)
+from pathlib import Path
+from botpipe import activity, ask_human
+
+@activity
+def save_review(path: str, text: str) -> str:
+    Path(path).write_text(text, encoding="utf-8")
+    return path
+
+@activity(retry_safe=False)
+def charge_customer(customer: str) -> str:
+    # Call a service with application-specific reconciliation.
+    raise NotImplementedError
 ```
 
-Provider operations on one mutable session are serialized. Give independent
-parallel branches separate sessions.
-
-## Prompts and effects
-
-Plain strings are inline prompts. Use `Prompt.file(path)` for a source-controlled
-prompt relative to the workflow file. Templates render with strict Jinja rules.
-
-Declare provider-written outputs with `writes=` and material inputs with
-`reads=`. Use `@activity` for other external I/O. This keeps replay honest: a
-filesystem read, HTTP request, subprocess, random value, or clock value that can
-change workflow behavior belongs behind an operation.
+Activities default to `retry_safe=True` and no exception retries. Completed
+activities replay. An interrupted unsafe activity requires resolution.
+`ask_human(question, returns=Model)` validates, journals and replays its typed
+answer; a missing answer suspends the run.
 
 ## Artifacts and worklists
 
-```python
-report = Artifact.md("reports/final.md", required=True)
-result = Session.task().run("Write the final report.", writes=(report,))
-print(result.artifacts.report.read_text())
-```
+Declare files with `Artifact.json`, `Artifact.md` or another constructor. Pass
+`writes=(artifact,)` to `run`, then use `result.artifacts.name` to access the
+immutable captured version. Required/optional files, schema validation, digest
+checks and versioned capture retain their normal semantics. Passing an artifact
+handle through `reads` gives the next call the immutable input.
 
-Captured artifacts are immutable snapshots. `source_path` identifies the
-provider destination; `path` identifies the durable snapshot.
+Reviews should use `query` with a typed verdict. If a review file is required,
+save the validated result in an activity. Read-only presets cannot declare
+writes. Repair turns run on the same thread and count against budgets. A
+validation failure does not roll back repository edits.
 
-`Worklist.from_artifact()` snapshots its selected items before iteration.
-Resume uses that historical selection even if the live source later changes.
-Completing an item produces a new logical artifact version.
+`Worklist.from_artifact(handle, collection="items")` produces durable items.
+`Session.work_item(item)` preserves a conversation for that item across resume.
+Call `items.complete(item)` after its acceptance condition is satisfied. See the
+packaged `ralph_loop` for the complete plan, review, implement and review cycle.
 
-## Nested and parallel work
+## Parallel and nested work
 
-Call a decorated workflow normally to create a durable child. Use
-`parallel(lambda: ..., lambda: ...)` for independent work; results retain input
-order. Shared-workspace parallel sessions must be read-only. Give an editing
-branch its own `Session.run(..., workspace=isolated_path)`, separate session, and
-non-conflicting output paths.
+Calling another decorated workflow creates a journaled child scope. Use
+`parallel` or `aparallel` to run independent callables. Each branch needs a
+separate session. Writers using the same canonical workspace serialize; use
+separate worktrees for independent parallel edits.
 
-## Human input and interruption
+Read-only calls may observe another writer mid-edit. A read declaration records
+its captured input, but does not restrict everything Codex may inspect in the
+workspace. Do not use a read-only review as a substitute for source isolation
+when a stable tree is required.
 
-`ask(question, returns=Type)` pauses with `awaiting_input`. Resume through the
-SDK or CLI with a typed answer. The answer is validated against `Type` before it
-is recorded. A rejected answer leaves the same request pending and includes a
-`diagnostic` in `pending_input`, so it can be corrected with another resume.
-Activities default to `retry_safe=True`, so unfinished calls can run again on
-resume. Use `@activity(retry_safe=False)` when repeating a call requires an
-explicit decision. An uncertain activity with that setting pauses as
-`interrupted`; inspect it and call `resolve(..., retry=True)` or
-`resolve(..., response=value)` explicitly. Completed calls reuse their saved
-outcomes in either case.
+## Resume and limits
 
-If a provider completed before its artifact inventory was saved, inspect its
-declared files and approve their exact contents before resuming. For example,
-`client.resolve(run_id, operation_id, artifact_digests={"report": digest})`
-accepts the inspected SHA-256 digest for `report`. Include every declared name;
-use `None` only for an absent optional artifact. The CLI equivalent is
-`botpipe resolve RUN OP --artifact-digests '{"report":"<sha256>"}'`.
-This records operator provenance and does not bypass a running or unknown writer.
+`runtime.resume(run_id)` replays completed operations before continuing. Prompt,
+input, read digest, output schema or effective-configuration changes at a
+completed operation fail as a replay mismatch. Compatible source-edit checks
+allow changes that do not alter already committed operation contracts.
+
+Budget scopes, operation limits and deadlines apply during execution. Every
+repair dispatch counts; adopting a recovered response does not dispatch again.
+A writable turn with an uncertain outcome suspends until recovery or explicit
+`resolve`. Query and generation retry interrupted turns automatically; opt-in
+remote tools should be chosen with that retry behavior in mind.

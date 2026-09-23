@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from botpipe import Botpipe, activity, ask, workflow
+from botpipe import Botpipe, activity, ask_human, workflow
 from botpipe.errors import ActivityFailed
 from botpipe.providers import FakeProvider
 
@@ -17,7 +17,7 @@ def test_wait_input_lost_ack_keeps_authoritative_waiting_checkpoint(
 ):
     @workflow
     def approval():
-        return ask("approve?", returns=bool)
+        return ask_human("approve?", returns=bool)
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         wait_input = client.journal.wait_input
@@ -51,7 +51,7 @@ def test_builtin_oserror_replay_preserves_native_unset_state(tmp_path):
         try:
             fail()
         except OSError as error:
-            ask("continue?")
+            ask_human("continue?")
             return str(error), error.args, error.filename
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
@@ -79,7 +79,7 @@ def test_unsupported_exception_state_falls_back_on_initial_and_replay(tmp_path):
         try:
             fail()
         except ActivityFailed as error:
-            ask("continue?")
+            ask_human("continue?")
             return str(error)
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:

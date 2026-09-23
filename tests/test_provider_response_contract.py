@@ -4,9 +4,9 @@ from copy import deepcopy
 
 import pytest
 
-from botpipe import Botpipe, BotpipeError, Session, workflow
+from botpipe import Botpipe, Provider, workflow
 from botpipe.providers import FakeProvider, ProviderRequest, ProviderResponse
-from botpipe.recovery import Completed, Stopped
+from botpipe.recovery import Stopped
 
 
 def _provider_operation(client: Botpipe, run_id: str) -> dict:
@@ -28,7 +28,7 @@ def _provider_operation(client: Botpipe, run_id: str) -> dict:
 def test_malformed_provider_response_remains_uncertain(tmp_path, response):
     @workflow
     def work():
-        return Session().run("effectful work").value
+        return Provider().run("effectful work").value
 
     provider = FakeProvider([response])
     with Botpipe(tmp_path, provider=provider) as client:
@@ -41,30 +41,6 @@ def test_malformed_provider_response_remains_uncertain(tmp_path, response):
     assert len(provider.calls) == 1
 
 
-def test_malformed_completed_recovery_cannot_become_durable_response(tmp_path):
-    class RecoveringProvider(FakeProvider):
-        def recover(self, request: ProviderRequest):
-            return Completed(ProviderResponse(123))  # type: ignore[arg-type]
-
-    @workflow
-    def work():
-        return Session().run("effectful work").value
-
-    provider = RecoveringProvider(
-        [SystemExit("provider response was not checkpointed")]
-    )
-    with Botpipe(tmp_path, provider=provider) as client:
-        with pytest.raises(SystemExit):
-            client.run(work, run_id="invalid-recovery")
-        operation = _provider_operation(client, "invalid-recovery")
-        before = deepcopy(operation["response"])
-
-        with pytest.raises(BotpipeError, match="reconciliation is blocked"):
-            client.resolve("invalid-recovery", operation["id"], retry=True)
-
-        assert client.journal.get(operation["id"])["response"] == before
-
-
 def test_manual_provider_response_is_validated_before_checkpoint(tmp_path):
     class StoppedProvider(FakeProvider):
         def recover(self, request: ProviderRequest):
@@ -72,7 +48,7 @@ def test_manual_provider_response_is_validated_before_checkpoint(tmp_path):
 
     @workflow
     def work():
-        return Session().run("effectful work").value
+        return Provider().run("effectful work").value
 
     provider = StoppedProvider([SystemExit("provider response was not checkpointed")])
     with Botpipe(tmp_path, provider=provider) as client:
@@ -97,7 +73,7 @@ def test_arbitrary_provider_exception_after_dispatch_is_uncertain(tmp_path):
 
     @workflow
     def work():
-        return Session().run("effectful work").value
+        return Provider().run("effectful work").value
 
     provider = FakeProvider([fail_after_effects])
     with Botpipe(tmp_path, provider=provider) as client:

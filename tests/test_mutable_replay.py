@@ -11,7 +11,7 @@ from botpipe import (
     ReplayMismatch,
     Workflow,
     activity,
-    ask,
+    ask_human,
     codec,
     parallel,
     workflow,
@@ -45,7 +45,7 @@ def test_activity_body_can_change_while_completed_outcome_replays(tmp_path):
 
     @workflow(name="mutable-job")
     def first():
-        return original(3), ask("Continue?")
+        return original(3), ask_human("Continue?")
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(first, run_id="mutable-activity")
@@ -58,7 +58,7 @@ def test_activity_body_can_change_while_completed_outcome_replays(tmp_path):
 
         @workflow(name="mutable-job")
         def second():
-            return revised(3), ask("Continue?")
+            return revised(3), ask_human("Continue?")
 
         resumed = client.resume(paused.run_id, workflow=second, answer="yes")
 
@@ -75,7 +75,7 @@ def test_activity_argument_change_is_a_replay_mismatch(tmp_path):
     @workflow(name="mutable-job")
     def first():
         calculate(1)
-        return ask("Continue?")
+        return ask_human("Continue?")
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(first, run_id="changed-argument")
@@ -83,7 +83,7 @@ def test_activity_argument_change_is_a_replay_mismatch(tmp_path):
         @workflow(name="mutable-job")
         def second():
             calculate(2)
-            return ask("Continue?")
+            return ask_human("Continue?")
 
         resumed = client.resume(paused.run_id, workflow=second, answer="yes")
 
@@ -102,7 +102,7 @@ def test_activity_keyword_order_change_rejects_before_answer(tmp_path):
     @workflow(name="activity-keyword-order-job")
     def first():
         calculate(left=1, right=2)
-        return ask("Continue?")
+        return ask_human("Continue?")
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(first, run_id="activity-keyword-order")
@@ -112,7 +112,7 @@ def test_activity_keyword_order_change_rejects_before_answer(tmp_path):
         @workflow(name="activity-keyword-order-job")
         def second():
             calculate(right=2, left=1)
-            return ask("Continue?")
+            return ask_human("Continue?")
 
         replayed = client.resume(paused.run_id, workflow=second, answer="yes")
 
@@ -134,7 +134,7 @@ def test_activity_keyword_order_unchanged_resumes_successfully(tmp_path):
     @workflow(name="same-activity-keyword-order-job")
     def first():
         calculate(left=1, right=2)
-        return ask("Continue?")
+        return ask_human("Continue?")
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(first, run_id="same-activity-keyword-order")
@@ -142,7 +142,7 @@ def test_activity_keyword_order_unchanged_resumes_successfully(tmp_path):
         @workflow(name="same-activity-keyword-order-job")
         def second():
             calculate(left=1, right=2)
-            return ask("Continue?")
+            return ask_human("Continue?")
 
         replayed = client.resume(paused.run_id, workflow=second, answer="yes")
 
@@ -156,7 +156,7 @@ def test_child_keyword_order_change_rejects_before_answer_and_effects(tmp_path):
 
     @workflow(name="keyword-child")
     def child(**values):
-        answer = ask("Continue?")
+        answer = ask_human("Continue?")
         effects.append((tuple(values), answer))
         return answer
 
@@ -294,7 +294,7 @@ def test_parallel_partial_code_changes_replay_but_binding_changes_do_not(tmp_pat
     @workflow(name="parallel-job")
     def job():
         result = parallel(selected)
-        ask("Continue?")
+        ask_human("Continue?")
         return result
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
@@ -324,7 +324,7 @@ def test_pending_parallel_partial_binding_change_is_rejected(tmp_path):
     @workflow(name="parallel-job")
     def job():
         parallel(selected)
-        return ask("Continue?")
+        return ask_human("Continue?")
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(job, run_id="parallel-binding")
@@ -339,7 +339,7 @@ def test_pending_partial_preserves_explicit_callable_data_state(tmp_path, monkey
     calls = []
 
     def branch(callback):
-        ask("Continue?")
+        ask_human("Continue?")
         return callback()
 
     selected = partial(branch, _BoundCallback(1))
@@ -377,7 +377,7 @@ def test_pending_partial_preserves_explicit_callable_data_state(tmp_path, monkey
 
 def test_pending_partial_keyword_order_change_is_rejected(tmp_path):
     def branch(**values):
-        ask("Continue?")
+        ask_human("Continue?")
         return list(values)
 
     selected = partial(branch, left=1, right=2)
@@ -401,7 +401,7 @@ def test_pending_partial_keyword_order_change_is_rejected(tmp_path):
 
 def test_named_partial_child_retains_bound_inputs(tmp_path):
     def branch(value):
-        ask("Continue?")
+        ask_human("Continue?")
         return value
 
     selected = Workflow(partial(branch, 1), name="bound")
@@ -425,7 +425,7 @@ def test_named_partial_child_retains_bound_inputs(tmp_path):
 
 def test_partial_opaque_and_workflow_callbacks_remain_logical_references(tmp_path):
     def branch(callback):
-        ask("Continue?")
+        ask_human("Continue?")
         return callback()
 
     @workflow(name="bound-child")
@@ -463,7 +463,7 @@ def test_recorded_inputs_must_match_their_replay_fingerprint(tmp_path):
     @workflow(name="integrity-job")
     def job():
         calculate(1)
-        return ask("Continue?")
+        return ask_human("Continue?")
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(job, run_id="input-integrity")
@@ -495,7 +495,7 @@ def test_reducing_activity_retries_cannot_abandon_later_history(tmp_path):
     @workflow(name="retry-count-job")
     def first():
         initially_flaky()
-        return ask("Continue?")
+        return ask_human("Continue?")
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(first, run_id="reduced-retries")
@@ -509,7 +509,7 @@ def test_reducing_activity_retries_cannot_abandon_later_history(tmp_path):
         @workflow(name="retry-count-job")
         def second():
             revised()
-            return ask("Continue?")
+            return ask_human("Continue?")
 
         replayed = client.resume(paused.run_id, workflow=second, answer="yes")
 
@@ -535,7 +535,7 @@ def test_exception_slot_layout_is_verified_before_resume(tmp_path):
         try:
             fails()
         except SlottedFailure:
-            return ask("Continue?")
+            return ask_human("Continue?")
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(job, run_id="slot-layout")

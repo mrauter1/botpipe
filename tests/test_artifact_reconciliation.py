@@ -5,7 +5,14 @@ import json
 
 import pytest
 
-from botpipe import Artifact, Botpipe, BotpipeError, Session, workflow
+from botpipe import (
+    Artifact,
+    ArtifactError,
+    Botpipe,
+    BotpipeError,
+    Provider,
+    workflow,
+)
 from botpipe.artifacts import ArtifactStore
 from botpipe.providers import FakeProvider, ProviderResponse
 from botpipe.recovery import Running, Unknown
@@ -36,7 +43,7 @@ def test_interrupted_initial_capture_requires_explicit_file_identity(
 
     @workflow
     def job():
-        return Session().run(
+        return Provider().run(
             "write",
             writes=[Artifact.text(destination, required=True), Artifact.text(optional)],
         )
@@ -52,7 +59,7 @@ def test_interrupted_initial_capture_requires_explicit_file_identity(
         monkeypatch.setattr(artifacts, "_validate", crash)
         first = client.run(job)
         assert first.status == "interrupted"
-        assert not list(tmp_path.rglob("capture.pending.json"))
+        assert not list(first.folder.rglob("capture.pending.json"))
         monkeypatch.setattr(artifacts, "_validate", original)
         destination.write_text("operator selected replacement")
         resumed = client.resume(first.run_id, workflow=job)
@@ -100,7 +107,7 @@ def test_interrupted_initial_capture_requires_explicit_file_identity(
         )
         assert "optional" not in complete.value.artifacts
         assert len(provider.calls) == 1
-        intent = json.loads(next(tmp_path.rglob("capture.pending.json")).read_text())
+        intent = json.loads(next(first.folder.rglob("capture.pending.json")).read_text())
         assert intent["source"] == "operator"
 
 
@@ -120,10 +127,10 @@ def test_reconciled_invalid_artifact_is_validated_during_capture_and_repaired(
 
     @workflow
     def job():
-        return Session().run(
+        return Provider().run(
             "write",
             writes=[Artifact.json(destination, required=True)],
-            retries=1,
+            output_retries=1,
         )
 
     capture = ArtifactStore.capture
@@ -138,8 +145,8 @@ def test_reconciled_invalid_artifact_is_validated_during_capture_and_repaired(
         )
         first = client.run(job, run_id="invalid-before-capture")
         assert first.status == "interrupted"
-        assert not list(tmp_path.rglob("capture.json"))
-        assert not list(tmp_path.rglob("capture.pending.json"))
+        assert not list(first.folder.rglob("capture.json"))
+        assert not list(first.folder.rglob("capture.pending.json"))
 
         monkeypatch.setattr(ArtifactStore, "capture", capture)
         operation = _provider_row(client, first.run_id)
@@ -150,7 +157,7 @@ def test_reconciled_invalid_artifact_is_validated_during_capture_and_repaired(
         )
         assert destination.read_text() == "not json"
         assert client.journal.get(operation["id"])["status"] == "response"
-        assert not list(tmp_path.rglob("capture.json"))
+        assert not list(first.folder.rglob("capture.json"))
 
         resumed = client.resume(first.run_id, workflow=job)
 
@@ -170,7 +177,7 @@ def test_adopted_files_must_still_match_when_resume_runs(tmp_path, monkeypatch):
 
     @workflow
     def job():
-        return Session().run(
+        return Provider().run(
             "write", writes=[Artifact.text(destination, required=True)]
         )
 
@@ -191,29 +198,30 @@ def test_adopted_files_must_still_match_when_resume_runs(tmp_path, monkeypatch):
         resumed = client.resume(first.run_id, workflow=job)
         assert resumed.status == "interrupted"
         assert "changed after operator approval" in resumed.error
-        assert not list(tmp_path.rglob("capture.pending.json"))
+        assert not list(first.folder.rglob("capture.pending.json"))
 
 
 @pytest.mark.parametrize("outcome", [Unknown("unknown writer"), Running("live writer")])
 def test_artifact_reconciliation_cannot_bypass_writer_safety(tmp_path, outcome):
-    class Provider(FakeProvider):
+    class RecoveryProvider(FakeProvider):
         def recover(self, request):
             return outcome
 
     @workflow
     def job():
-        return Session().run(
+        return Provider().run(
             "write", writes=[Artifact.text("result.txt", required=True)]
         )
 
     with Botpipe(
-        tmp_path, provider=Provider([SystemExit("interrupted dispatch")])
+        tmp_path, provider=RecoveryProvider([SystemExit("interrupted dispatch")])
     ) as client:
         with pytest.raises(SystemExit):
             client.run(job, run_id="uncertain")
         row = _provider_row(client, "uncertain")
         before = row["response"]
-        with pytest.raises(BotpipeError, match="reconciliation is blocked"):
+        failure = BotpipeError if isinstance(outcome, Running) else ArtifactError
+        with pytest.raises(failure):
             client.resolve(
                 "uncertain",
                 row["id"],
@@ -228,7 +236,7 @@ def test_optional_absence_is_durable_after_inventory(tmp_path, monkeypatch):
 
     @workflow
     def job():
-        return Session().run("optional", writes=[Artifact.text(destination)])
+        return Provider().run("optional", writes=[Artifact.text(destination)])
 
     capture = ArtifactStore.capture
 
@@ -249,7 +257,7 @@ def test_optional_absence_is_durable_after_inventory(tmp_path, monkeypatch):
 def test_no_write_response_can_recover_without_capture_inventory(tmp_path, monkeypatch):
     @workflow
     def job():
-        return Session().run("text only")
+        return Provider().run("text only")
 
     capture = ArtifactStore.capture
     with Botpipe(tmp_path, provider=FakeProvider(["done"])) as client:
@@ -278,7 +286,7 @@ def test_approved_artifact_drift_cannot_trigger_output_repair(
 
     @workflow
     def job():
-        return Session().run(
+        return Provider().run(
             "write", writes=[Artifact.json(destination, required=True)]
         )
 
@@ -305,7 +313,7 @@ def test_approved_artifact_drift_cannot_trigger_output_repair(
         assert resumed.status == "interrupted", resumed.error
         assert client.journal.get(row["id"])["status"] == "response"
         assert len(provider.calls) == 1
-        assert not list(tmp_path.rglob("rollback.json"))
+        assert not list(first.folder.rglob("rollback.json"))
         if mutation == "invalid_json":
             assert destination.read_text() == "no longer JSON"
         else:

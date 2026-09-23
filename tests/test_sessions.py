@@ -5,18 +5,26 @@ import hashlib
 import pytest
 from pydantic import BaseModel
 
-from botpipe import Artifact, Botpipe, BotpipeError, Session, activity, workflow
+from botpipe import (
+    Artifact,
+    Botpipe,
+    BotpipeError,
+    Provider,
+    Session,
+    activity,
+    workflow,
+)
 from botpipe.providers import FakeProvider, ProviderInterruptedError, ProviderResponse
 
 
 def test_constructor_sessions_are_independent_and_task_sessions_persist(tmp_path):
     @workflow
     def talk():
-        first, second = Session(), Session()
+        first, second = Provider(), Provider()
         first.run("first")
         second.run("second")
         first.run("continue first")
-        Session.task("persistent").run("task conversation")
+        Provider(session=Session.task("persistent")).run("task conversation")
 
     provider = FakeProvider(
         [
@@ -52,7 +60,7 @@ def test_explicit_retry_recovers_completed_receipt_before_preparing_new_artifact
 
     @workflow
     def report():
-        return Session().run(
+        return Provider().run(
             "report", writes=Artifact.text("report.txt", required=True)
         )
 
@@ -97,7 +105,7 @@ def test_explicit_retry_does_not_remove_files_from_live_provider(tmp_path):
 
     @workflow
     def report():
-        return Session().run(
+        return Provider().run(
             "report", writes=Artifact.text("report.txt", required=True)
         )
 
@@ -125,7 +133,7 @@ def test_repair_usage_is_charged_once_in_results_and_run_totals(tmp_path):
 
     @workflow
     def review():
-        return Session().run("review", returns=Answer)
+        return Provider().run("review", returns=Answer)
 
     provider = FakeProvider(
         [
@@ -175,7 +183,7 @@ def test_inspection_does_not_require_original_result_model_type(tmp_path):
 
     @workflow
     def answer():
-        return Session().run("answer", returns=LocalAnswer)
+        return Provider().run("answer", returns=LocalAnswer)
 
     with Botpipe(tmp_path, provider=FakeProvider(['{"accepted":true}'])) as client:
         result = client.run(answer)
@@ -198,7 +206,7 @@ def test_repeated_retry_authorization_cannot_advance_past_live_attempt(tmp_path)
 
     @workflow
     def report():
-        return Session().run(
+        return Provider().run(
             "report", writes=Artifact.text("report.txt", required=True)
         )
 
@@ -227,7 +235,7 @@ def test_observed_response_cannot_release_a_known_live_provider(tmp_path):
 
     @workflow
     def report():
-        return Session().run("report")
+        return Provider().run("report")
 
     with Botpipe(tmp_path, provider=LiveProvider([KeyboardInterrupt()])) as client:
         paused = client.run(report)

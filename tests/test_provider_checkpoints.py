@@ -6,7 +6,7 @@ from pydantic import BaseModel, model_validator
 from botpipe import (
     Artifact,
     Botpipe,
-    Session,
+    Provider,
     UncertainOperation,
     provider_budget,
     workflow,
@@ -28,7 +28,6 @@ from botpipe.provider_checkpoints import (
 )
 from botpipe.providers import FakeProvider, ProviderError, ProviderResponse
 from botpipe.recovery import Completed, Running, Stopped, Unknown
-
 
 REQUEST = {
     "session_id": None,
@@ -189,14 +188,24 @@ def test_retry_generation_is_idempotent_and_completed_receipt_wins():
     assert recovered.response is receipt
 
 
-@pytest.mark.parametrize("outcome", [Running("live"), Unknown("unknown")])
-def test_running_and_unknown_block_both_recovery_paths(outcome):
+def test_running_attempt_blocks_both_recovery_paths():
     authorized = RetryAuthorizedCheckpoint(1, REQUEST)
     assert (
-        ProviderLifecycle.recovery_action(authorized, outcome) is RecoveryAction.BLOCK
+        ProviderLifecycle.recovery_action(authorized, Running("live"))
+        is RecoveryAction.BLOCK
     )
-    assert ProviderLifecycle.reconciliation_action(outcome) is RecoveryAction.BLOCK
-    assert "blocked" in ProviderLifecycle.blocked_message(outcome)
+    assert (
+        ProviderLifecycle.reconciliation_action(Running("live"))
+        is RecoveryAction.BLOCK
+    )
+
+
+def test_authorized_unknown_attempt_may_start_explicit_retry():
+    authorized = RetryAuthorizedCheckpoint(1, REQUEST)
+    assert (
+        ProviderLifecycle.recovery_action(authorized, Unknown("unknown"))
+        is RecoveryAction.START_RETRY
+    )
 
 
 def test_only_stopped_authorized_attempt_may_start_retry():
@@ -220,7 +229,7 @@ def test_only_stopped_authorized_attempt_may_start_retry():
 def test_malformed_checkpoint_does_not_fail_operation_or_redispatch(tmp_path):
     @workflow
     def work():
-        return Session().run("effectful work")
+        return Provider().run("effectful work")
 
     provider = FakeProvider([KeyboardInterrupt("crash after dispatch")])
     with Botpipe(tmp_path, provider=provider) as client:
@@ -266,7 +275,7 @@ def test_pre_dispatch_checkpoint_ack_loss_never_duplicates_dispatch(
 ):
     @workflow
     def work():
-        return Session().run("work").value
+        return Provider().run("work").value
 
     def target(record):
         if transition == "preparing":
@@ -306,8 +315,8 @@ def test_non_dispatch_checkpoint_ack_loss_preserves_restoration_state(
     @workflow
     def work():
         with provider_budget(max_turns=1):
-            Session().run("consume budget")
-            return Session().run(
+            Provider().run("consume budget")
+            return Provider().run(
                 "denied", writes=Artifact.text(destination, required=True)
             )
 
@@ -368,7 +377,7 @@ def test_output_error_checkpoint_ack_loss_has_no_duplicate_dispatch(
 
     @workflow
     def work():
-        return Session().run("work", returns=Answer, retries=0)
+        return Provider().run("work", returns=Answer, output_retries=0)
 
     provider = FakeProvider(['{"accepted": true}'])
     with Botpipe(tmp_path, provider=provider) as client:
@@ -403,7 +412,7 @@ def test_retry_authorization_ack_loss_never_skips_generation(
 ):
     @workflow
     def work():
-        return Session().run("work").value
+        return Provider().run("work").value
 
     provider = FakeProvider([ProviderError("stopped"), "done"])
     with Botpipe(tmp_path, provider=provider) as client:

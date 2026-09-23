@@ -22,6 +22,10 @@ def _write(request, name: str, value) -> None:
         path.write_text(json.dumps(value), encoding="utf-8")
 
 
+def _input(request):
+    return json.JSONDecoder().raw_decode(request.prompt.split("\n\nInput:\n", 1)[1])[0]
+
+
 def _review(review_id: str, criteria: list[str], verdict: str = "passed", **extra):
     return {
         "review_id": review_id,
@@ -70,15 +74,12 @@ def test_ralph_loop_replans_then_completes_real_worklist(tmp_path: Path) -> None
         return "planned"
 
     def reject(request):
-        _write(request, "plan_review", "needs rework\n")
         return {"verdict": "needs_rework"}
 
     def accept_plan(request):
-        _write(request, "plan_review", "accepted\n")
         return {"verdict": "accepted"}
 
     def accept_item(request):
-        _write(request, "implementation_review", "accepted\n")
         return {"verdict": "accepted"}
 
     provider = FakeProvider(
@@ -91,14 +92,21 @@ def test_ralph_loop_replans_then_completes_real_worklist(tmp_path: Path) -> None
     assert result.status == "completed"
     assert result.value.read_json()["items"][0]["status"] == "completed"
     assert len(provider.calls) == 6
+    assert [call.preset for call in provider.calls] == [
+        "run",
+        "query",
+        "run",
+        "query",
+        "run",
+        "query",
+    ]
+    assert all(not call.artifacts for call in provider.calls if call.preset == "query")
 
 
 def test_devloop_docloop_runs_phase_repair_free_path_and_final_audit(
     tmp_path: Path,
 ) -> None:
-    request_ref = str(
-        tmp_path / ".botpipe" / "tasks" / "dev" / "runs" / "run" / "request.md"
-    )
+    request_ref = ""
     phase_plan = {
         "version": 1,
         "task_id": "dev",
@@ -121,12 +129,12 @@ def test_devloop_docloop_runs_phase_repair_free_path_and_final_audit(
     }
 
     def plan_turn(req):
-        _write(req, "phase_plan", phase_plan)
+        value = {**phase_plan, "request_snapshot_ref": _input(req)["request_snapshot_ref"]}
+        _write(req, "phase_plan", value)
         return "planned"
 
     def plan_review(req):
         value = _review("plan:root:1", ["request_coverage", "executable_plan"])
-        _write(req, "plan_review", value)
         return value
 
     def implement(req):
@@ -136,7 +144,6 @@ def test_devloop_docloop_runs_phase_repair_free_path_and_final_audit(
 
     def implementation_review(req):
         value = _review("implement:p1:1", ["P1"])
-        _write(req, "impl_review", value)
         return value
 
     def audit(req):
@@ -146,7 +153,7 @@ def test_devloop_docloop_runs_phase_repair_free_path_and_final_audit(
             {
                 "version": 1,
                 "task_id": "dev",
-                "request_snapshot_ref": request_ref,
+                "request_snapshot_ref": _input(req)["request_snapshot_ref"],
                 "status": "passed",
                 "summary": "documentation is complete",
                 "gaps": [],
@@ -161,7 +168,6 @@ def test_devloop_docloop_runs_phase_repair_free_path_and_final_audit(
             "audit:root:1",
             ["grounded_audit", "consistent_findings", "actionable_followup"],
         )
-        _write(req, "audit_review", value)
         return value
 
     provider = FakeProvider(
@@ -175,10 +181,7 @@ def test_devloop_docloop_runs_phase_repair_free_path_and_final_audit(
     assert result.value.status == "passed"
     assert result.value.completed_phases == ["p1"]
     strategy = (
-        tmp_path
-        / ".botpipe"
-        / "tasks"
-        / "dev"
+        Path(result.value.phase_plan_path).parent.parent
         / "test"
         / "phases"
         / "p1"
@@ -191,9 +194,7 @@ def test_devloop_docloop_runs_phase_repair_free_path_and_final_audit(
 def test_devloop_repairs_phase_item_and_records_skipped_followup(
     tmp_path: Path,
 ) -> None:
-    request_ref = str(
-        tmp_path / ".botpipe" / "tasks" / "repair" / "runs" / "run" / "request.md"
-    )
+    request_ref = ""
     base = {
         "version": 1,
         "task_id": "repair",
@@ -216,12 +217,12 @@ def test_devloop_repairs_phase_item_and_records_skipped_followup(
     }
 
     def plan(req):
-        _write(req, "phase_plan", base)
+        value = {**base, "request_snapshot_ref": _input(req)["request_snapshot_ref"]}
+        _write(req, "phase_plan", value)
         return "planned"
 
     def plan_review(req):
         value = _review("plan:root:1", ["request_coverage", "executable_plan"])
-        _write(req, "plan_review", value)
         return value
 
     def implementation(req):
@@ -232,11 +233,11 @@ def test_devloop_repairs_phase_item_and_records_skipped_followup(
         value = _review(
             "implement:p1:1", ["P1"], verdict="failed", repair_target="phase_item"
         )
-        _write(req, "impl_review", value)
         return value
 
     def revise_phase(req):
         revised = json.loads(json.dumps(base))
+        revised["request_snapshot_ref"] = _input(req)["plan"]["request_snapshot_ref"]
         revised["status"] = "in_progress"
         revised["phases"][0]["status"] = "in_progress"
         revised["phases"][0]["objective"] = "build with the missing detail"
@@ -246,12 +247,10 @@ def test_devloop_repairs_phase_item_and_records_skipped_followup(
 
     def accept_phase(req):
         value = _review("phase_item:p1:1", ["bounded_repair", "executable_item"])
-        _write(req, "phase_item_review_report", value)
         return value
 
     def accept_impl(req):
         value = _review("implement:p1:2", ["P1"])
-        _write(req, "impl_review", value)
         return value
 
     def audit(req):
@@ -261,7 +260,7 @@ def test_devloop_repairs_phase_item_and_records_skipped_followup(
             {
                 "version": 1,
                 "task_id": "repair",
-                "request_snapshot_ref": request_ref,
+                "request_snapshot_ref": _input(req)["request_snapshot_ref"],
                 "status": "needs_followup",
                 "summary": "validation remains",
                 "gaps": [
@@ -284,7 +283,6 @@ def test_devloop_repairs_phase_item_and_records_skipped_followup(
             "audit:root:1",
             ["grounded_audit", "consistent_findings", "actionable_followup"],
         )
-        _write(req, "audit_review", value)
         return value
 
     provider = FakeProvider(
@@ -318,11 +316,7 @@ def test_devloop_repairs_phase_item_and_records_skipped_followup(
 
 def _goal_provider(tmp_path: Path, task_id: str) -> FakeProvider:
     def plan(req):
-        goal_payload = json.loads(
-            (
-                tmp_path / ".botpipe" / "tasks" / task_id / "goal" / "goal.json"
-            ).read_text()
-        )
+        goal_payload = _input(req)["goal"]
         _write(
             req,
             "subgoals",
@@ -348,7 +342,6 @@ def _goal_provider(tmp_path: Path, task_id: str) -> FakeProvider:
         return "planned"
 
     def plan_review(req):
-        _write(req, "plan_audit", "accepted\n")
         return {"verdict": "accepted", "coverage_summary": "covered", "risks": []}
 
     def work(req):
@@ -356,7 +349,6 @@ def _goal_provider(tmp_path: Path, task_id: str) -> FakeProvider:
         return "worked"
 
     def verify(req):
-        _write(req, "subgoal_audit", "# Audit\n\nComplete.\n")
         return {
             "verdict": "complete",
             "reason": "criterion proven",
@@ -370,7 +362,6 @@ def _goal_provider(tmp_path: Path, task_id: str) -> FakeProvider:
         return "summarized"
 
     def final(req):
-        _write(req, "goal_audit", "# Final audit\n\nComplete.\n")
         return {
             "verdict": "complete",
             "reason": "objective proven",
@@ -426,11 +417,7 @@ def test_goal_budget_counts_provider_contract_repair_attempts(tmp_path: Path) ->
         return ProviderResponse("bad", usage={"input_tokens": 3, "output_tokens": 3})
 
     def repaired(req):
-        goal_payload = json.loads(
-            (
-                tmp_path / ".botpipe" / "tasks" / "repair-budget" / "goal" / "goal.json"
-            ).read_text()
-        )
+        goal_payload = _input(req)["goal"]
         _write(
             req,
             "subgoals",
@@ -470,7 +457,6 @@ def test_goal_marks_repeated_identical_blocker_terminal(tmp_path: Path) -> None:
         return "blocked"
 
     def blocked(req):
-        _write(req, "subgoal_audit", "same blocker\n")
         return {
             "verdict": "blocked",
             "reason": "external dependency",
@@ -497,7 +483,6 @@ def test_image_to_game_builds_goal_and_runs_child(tmp_path: Path) -> None:
         return "built"
 
     def reject(req):
-        _write(req, "goal_input_audit", "needs rework\n")
         return {
             "verdict": "needs_rework",
             "reference_mode": "provided_file",
@@ -507,7 +492,6 @@ def test_image_to_game_builds_goal_and_runs_child(tmp_path: Path) -> None:
         }
 
     def verify(req):
-        _write(req, "goal_input_audit", "accepted\n")
         return {
             "verdict": "accepted",
             "reference_mode": "provided_file",
@@ -549,7 +533,6 @@ def test_code_to_workflow_runs_distill_design_build_and_publication(
         return "distilled"
 
     def distill_review(req):
-        _write(req, "behavior_review", "accepted\n")
         return {
             "verdict": "behavior_distilled",
             "summary": "covered",
@@ -571,7 +554,6 @@ def test_code_to_workflow_runs_distill_design_build_and_publication(
         return "designed"
 
     def design_review(req):
-        _write(req, "design_review", "accepted\n")
         return {
             "verdict": "design_accepted",
             "summary": "sound",
@@ -592,7 +574,6 @@ def test_code_to_workflow_runs_distill_design_build_and_publication(
         return "built"
 
     def build_review(req):
-        _write(req, "build_review", "accepted\n")
         return {
             "verdict": "build_validated",
             "summary": "valid",

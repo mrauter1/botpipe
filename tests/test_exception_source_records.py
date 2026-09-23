@@ -167,7 +167,7 @@ def test_fresh_process_enum_presentations_do_not_change_storage(tmp_path):
     initial_source = (
         "from enum import Flag\n"
         "from pathlib import Path\n"
-        "from botpipe import activity, ask, workflow\n"
+        "from botpipe import activity, ask_human, workflow\n"
         "class Permission(Flag):\n"
         "    READ = 1\n"
         "    WRITE = 2\n"
@@ -185,7 +185,7 @@ def test_fresh_process_enum_presentations_do_not_change_storage(tmp_path):
         "@workflow\n"
         "def job():\n"
         "    result = produce()\n"
-        "    ask('continue?')\n"
+        "    ask_human('continue?')\n"
         "    return result\n"
     )
     module.write_text(initial_source)

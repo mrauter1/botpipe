@@ -408,6 +408,8 @@ def test_release_workflow_runs_staged_typed_outcomes_and_captures_artifacts(tmp_
         name: str(handle.path) for name, handle in result.value.artifacts.items()
     }
     assert all(phase.outcome == "accepted" for phase in result.value.phases)
+    assert [call.preset for call in provider.calls] == ["run", "query"] * 4
+    assert all(not call.artifacts for call in provider.calls if call.preset == "query")
     inspection = Botpipe(tmp_path, provider=FakeProvider([])).inspect("staged")
     provider_operations = [
         item for item in inspection["operations"] if item["kind"] == "provider"

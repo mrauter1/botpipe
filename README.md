@@ -1,185 +1,124 @@
 # Botpipe
 
-Botpipe runs ordinary Python functions as durable agent workflows. The function
-owns control flow; Botpipe records provider calls, activities, nested workflows,
-human input, artifacts, and their outcomes so a resumed run reuses completed
-work.
+Drive Codex from ordinary Python, and resume long work without paying for
+completed turns twice.
 
-> **Invariant:** Python owns control flow. Every material observation or external
-> effect goes through a recorded Botpipe operation.
+```python
+from botpipe import Provider
+p = Provider()
+print(p.generate("Explain what a database index is.").value)
+```
+
+Python owns control flow. Providers perform work, sessions carry conversation
+history, and the runtime records operations and their outcomes.
 
 ## Install
 
-Botpipe requires Python 3.12 or newer.
+Use Python 3.12 or 3.13 and an installed, authenticated Codex CLI:
 
 ```bash
 pip install -e .
+botpipe doctor
 ```
 
-The default provider is Codex CLI. Select a different installed provider with
-`Botpipe(provider=...)`, `--provider`, or `botpipe.toml`.
+Botpipe uses `codex app-server`. It probes the installed binary instead of
+pinning a version. Codex manages authentication; Botpipe does not read or store
+credentials. Version 2.0 supports Codex on Linux, macOS and Windows.
 
-## A real workflow
-
-The packaged Ralph loop is ordinary Python. This is its current workflow body;
-the prompt constants and typed review contract live beside it in the same
-module.
+## One primitive, two presets
 
 ```python
-from botpipe import Artifact, Botpipe, Session, Worklist, workflow
-from botpipe.workflows.ralph_loop.workflow import (
-    IMPLEMENT,
-    PLAN,
-    REVIEW_IMPLEMENTATION,
-    REVIEW_PLAN,
-    ReviewDecision,
-)
+from pydantic import BaseModel
+from botpipe import Artifact, Codex
 
+class Modules(BaseModel):
+    modules: list[str]
 
-@workflow(name="ralph_loop", version="1")
-def ralph_loop(request: str):
-    work = Artifact.json("work.json", required=True)
-    plan_review = Artifact.md("plan_review.md", required=True)
-    planner = Session(key="planner")
-    plan_reviewer = Session(key="plan-reviewer")
-    feedback = ()
-
-    while True:
-        plan = planner.run(PLAN, input=request, reads=feedback, writes=(work,))
-        review = plan_reviewer.run(
-            REVIEW_PLAN,
-            input=request,
-            reads=(plan.artifacts.work,),
-            writes=(plan_review,),
-            returns=ReviewDecision,
-        )
-        if review.value.verdict == "accepted":
-            break
-        feedback = (review.artifacts.plan_review,)
-
-    items = Worklist.from_artifact(plan.artifacts.work, collection="items")
-    for item in items:
-        session = Session.work_item(item)
-        item_review = Artifact.md(
-            f"items/{item.dir_key}/implementation_review.md",
-            required=True,
-        )
-        feedback = ()
-        while True:
-            session.run(
-                IMPLEMENT,
-                input=item.payload,
-                reads=(items.artifact, *feedback),
-            )
-            review = session.run(
-                REVIEW_IMPLEMENTATION,
-                input=item.payload,
-                reads=(items.artifact,),
-                writes=(item_review,),
-                returns=ReviewDecision,
-            )
-            if review.value.verdict == "accepted":
-                items.complete(item)
-                break
-            feedback = (review.artifacts.implementation_review,)
-
-    return items.artifact
-
-
-result = Botpipe(workspace=".").run(
-    ralph_loop,
-    "Add CSV export support and cover it with tests.",
-    task_id="csv-export",
-)
-print(result.status, result.run_id)
+p = Codex(workspace=".")
+answer = p.generate("Explain dependency inversion.")
+facts = p.query("Which modules import the journal?", returns=Modules)
+report = Artifact.md("report.md", required=True)
+change = p.run("Add CSV export, tests, and a report.", writes=(report,))
 ```
 
-Strings are inline prompts. `Prompt.file("review.md")` loads a file relative to
-the workflow source. Jinja rendering is strict and receives the operation input
-and run information.
+| Call | Sandbox | Network | Tools | Interrupted effects |
+| --- | --- | --- | --- | --- |
+| `run` | Workspace write | Off by default | Codex defaults | Require reconciliation |
+| `query` | Read only | Off | Codex tools; ambient MCP off | Retry automatically |
+| `generate` | Read only | Off | None by default | Retry automatically |
 
-## Command line
+`generate(allowed_tools=("shell",))` opts into named tools. Restrictions use
+Codex configuration and its sandbox, followed by an audit of observed tool
+calls. Every result records the mechanisms used. Botpipe does not replace
+Codex's tools or claim stronger isolation than Codex provides.
 
-Workflow references may be catalog names, `package.module:function`, or
-`path/to/file.py:function`.
+Reusing `p` continues one conversation. `p.with_config(instructions="Review carefully.")`
+shares that conversation; pass `session=Session()` for a separate one or
+`session=None` for independent calls. Each call is durable, including calls
+outside a workflow.
 
-```bash
-botpipe workflows list --workspace .
-botpipe workflows show my_package.flow:fix_issue --workspace .
+## Ordinary Python workflows
 
-botpipe run my_package.flow:fix_issue \
-  --input '{"request":{"issue":"CSV export loses UTF-8 characters"}}' \
-  --task-id csv-utf8 --workspace .
+```python
+from botpipe import Botpipe, Provider, ask_human, workflow
 
-botpipe runs list --status awaiting_input --workspace .
-botpipe runs show RUN_ID --workspace .
-botpipe runs logs RUN_ID --workspace .
-botpipe resume RUN_ID --answer 'yes' --workspace .
+@workflow
+def implement(request: str):
+    coder = Provider()
+    plan = coder.query("Propose a concise implementation plan.", input=request)
+    approved = ask_human(plan.value + "\nProceed?", returns=bool)
+    if approved:
+        return coder.run(request).value
+    return "Declined"
 
-# An uncertain external effect is never retried silently.
-botpipe resolve RUN_ID OPERATION_ID --retry --workspace .
-# Or record the response that actually occurred, then resume.
-botpipe resolve RUN_ID OPERATION_ID --response '{"id":"remote-42"}' --workspace .
+with Botpipe(workspace=".") as runtime:
+    result = runtime.run(implement, "Add CSV export and tests.")
+    print(result.status, result.run_id)
 ```
 
-The familiar plain request form remains available for a workflow whose first
-parameter is a string:
+Loops, conditionals, activities, nested workflows, worklists, `parallel` and
+`aparallel` use the same durable journal. Completed operations replay recorded
+results. An interrupted writable provider turn stays unresolved until its
+outcome is recovered or an operator resolves it.
 
 ```bash
-botpipe run ralph_loop "Implement CSV export and test it" --workspace .
+botpipe workflows list
+botpipe run ralph_loop "Add CSV export and tests"
+botpipe runs list
+botpipe runs show RUN_ID
+botpipe resume RUN_ID
+botpipe resolve RUN_ID OPERATION_ID --retry
+botpipe resolve RUN_ID OPERATION_ID --accept
+botpipe resolve RUN_ID OPERATION_ID --fail
 ```
 
 ## Configuration
 
-Botpipe reads `botpipe.toml`, `.botpipe.toml`, or `[tool.botpipe]` in
-`pyproject.toml`. Explicit CLI options win.
-
 ```toml
-provider = "codex"
-max_operations = 500
-timeout = 1800
+# botpipe.toml
+default_provider = "codex"
 
-[provider_config]
-command = ["codex", "exec"]
-
-[policy]
-model = "gpt-5.5"
-effort = "high"
-sandbox_mode = "workspace_write"
-network = "none"
+[codex]
+path = "codex"
+model = "gpt-5.4"
+effort = "medium"
+sandbox = "workspace-write"
+network = false
+interrupt_grace_seconds = 10
 ```
 
-Provider policies describe intended and enforceable access. A provider must
-reject controls it cannot honor; Botpipe does not turn a prompt instruction into
-a security boundary.
+Per-call settings override derived configuration, constructor settings, file
+settings, then built-in defaults. An enclosing workflow's policy is a ceiling.
+Full access must be explicitly requested.
 
-## Durable behavior
+## Documentation
 
-- `@workflow` wraps sync or async functions. Calling another decorated workflow
-  creates a durable child scope.
-- `Session.run()` records a provider operation. The same mutable session is
-  serialized; use separate sessions for parallel work.
-- `@activity` records custom Python I/O and defaults to `retry_safe=True`, so
-  unfinished calls can run again on resume. Set `retry_safe=False` to require
-  explicit operator reconciliation before repeating an interrupted call.
-- `ask()` records a typed human-input request. Resume with an answer.
-- `parallel()` gives every callable a stable independent scope and preserves
-  result order.
-- Completed outcomes are immutable. Resume matches operation identity and
-  inputs and checks stored-data contracts. Code edits are allowed: future work
-  uses current code, while completed runs return their saved results.
-- Botpipe provides durable replay, not an exactly-once claim for external
-  systems.
+- [SDK](docs/sdk.md): presets, sessions, typed results, events and configuration.
+- [Authoring](docs/authoring.md): durable functions, artifacts, loops and recovery.
+- [CLI](docs/cli.md): execution, inspection, resolution and doctor.
+- [Architecture](docs/architecture.md): journal, adapter, locks and process lifecycle.
+- [Migration](docs/migration.md): the 1.x to 2.0 changes.
+- [Codex compatibility](docs/codex-compatibility.md): capabilities and validation.
+- [Optimizer](docs/optimizer.md): packaged optimization workflows.
 
-See [Authoring](docs/authoring.md), [SDK](docs/sdk.md),
-[Architecture](docs/architecture.md), [CLI](docs/cli.md), the
-[Optimizer guide](docs/optimizer.md), and the
-[major-version migration guide](docs/migration.md).
-
-## Development
-
-```bash
-python -m pytest -q
-```
-
-Botpipe is licensed under Apache-2.0.
+Version 1.x journals are rejected untouched. Use a new state directory for 2.0.

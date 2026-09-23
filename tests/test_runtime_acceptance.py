@@ -12,10 +12,11 @@ from pydantic import BaseModel
 from botpipe import (
     Artifact,
     Botpipe,
-    RunBusy,
-    Session,
+    Provider,
+    WorkspaceBusy,
+    WorkspaceUnresolved,
     activity,
-    ask,
+    ask_human,
     parallel,
     workflow,
 )
@@ -59,7 +60,7 @@ def test_saved_provider_response_survives_process_restart_before_completion(
 
     @workflow
     def report():
-        return Session().run(
+        return Provider().run(
             "prepare report",
             returns=Decision,
             writes=[Artifact.text("report.txt", required=True)],
@@ -157,7 +158,7 @@ def test_explicit_retry_of_interrupted_unsafe_activity_is_recorded_and_replayed_
 def test_provider_reconciliation_preserves_session_for_following_turn(tmp_path):
     @workflow
     def conversation():
-        session = Session()
+        session = Provider()
         first = session.run("first").value
         second = session.run("second").value
         return first, second
@@ -195,7 +196,7 @@ def test_nested_input_rebuilds_locals_without_repeating_completed_effects(tmp_pa
     @workflow
     def child():
         before = remember("child-before")
-        approved = ask("Approve?", returns=bool)
+        approved = ask_human("Approve?", returns=bool)
         return before, approved, remember("child-after")
 
     @workflow
@@ -237,7 +238,7 @@ def test_parallel_completed_branch_is_not_repeated_when_other_branch_pauses(tmp_
 
     def review():
         before = effect("review-started")
-        return before, ask("Review note?")
+        return before, ask_human("Review note?")
 
     @workflow
     def job():
@@ -286,7 +287,7 @@ def test_version_change_does_not_invalidate_recorded_effects(tmp_path):
     @workflow(version="1")
     def versioned():
         effect()
-        return ask("Continue?")
+        return ask_human("Continue?")
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(versioned)
@@ -308,7 +309,7 @@ def test_replay_rejects_changed_operation_even_when_mutable_closure_changed(tmp_
     @workflow
     def job():
         effect(settings["label"])
-        return ask("Continue?")
+        return ask_human("Continue?")
 
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         result = client.run(job)
@@ -331,7 +332,7 @@ def test_async_children_activities_and_provider_turns_replay_under_arun(tmp_path
     @workflow
     async def child():
         count = await record()
-        reply = await Session().arun("report")
+        reply = await Provider().arun("report")
         return count, reply.value
 
     @workflow
@@ -353,7 +354,7 @@ def test_async_children_activities_and_provider_turns_replay_under_arun(tmp_path
 def test_validation_repair_uses_new_recorded_turn_and_survives_replay(tmp_path):
     @workflow
     def typed():
-        return Session().run("decide", returns=Decision).value
+        return Provider().run("decide", returns=Decision).value
 
     provider = FakeProvider(
         [ProviderResponse("invalid JSON", "dialogue"), {"accepted": True}]
@@ -405,11 +406,11 @@ def test_unresolved_provider_fences_entire_workspace_across_runs(
 ):
     @workflow
     def interrupted():
-        return Session().run("edit workspace").value
+        return Provider().run("edit workspace").value
 
     @workflow
     def replacement():
-        return Session().run("more edits").value
+        return Provider().run("more edits").value
 
     with Botpipe(
         tmp_path, provider=FakeProvider([SystemExit("orphan may be editing")])
@@ -419,7 +420,7 @@ def test_unresolved_provider_fences_entire_workspace_across_runs(
         state_dir = tmp_path / "different-state" if different_state_dir else None
         provider = FakeProvider(["replacement complete"])
         with Botpipe(tmp_path, provider=provider, state_dir=state_dir) as other:
-            with pytest.raises(RunBusy, match="unresolved"):
+            with pytest.raises(WorkspaceUnresolved, match="unresolved"):
                 other.run(replacement, run_id="replacement-blocked")
             assert provider.calls == []
             operation = next(
@@ -453,7 +454,7 @@ def test_repeated_async_cancellation_waits_until_effectful_worker_finishes(tmp_p
 
     @workflow
     def job():
-        return Session().run("work").value
+        return Provider().run("work").value
 
     async def scenario(client):
         task = asyncio.create_task(client.arun(job, run_id="cancelled-client"))
@@ -541,13 +542,13 @@ def test_alternate_provider_workspace_excludes_independent_clients(
     @workflow
     def owner():
         def edit():
-            return Session().run("edit alternate target", workspace=target).value
+            return Provider(workspace=target).run("edit alternate target").value
 
         return parallel(edit) if parallel_branch else edit()
 
     @workflow
     def contender():
-        return Session().run("edit direct target").value
+        return Provider().run("edit direct target").value
 
     other_provider = FakeProvider(["must not dispatch"])
     with (
@@ -558,7 +559,7 @@ def test_alternate_provider_workspace_excludes_independent_clients(
             running = executor.submit(first.run, owner)
             try:
                 assert entered.wait(2), "owner did not dispatch"
-                with pytest.raises(RunBusy):
+                with pytest.raises(WorkspaceBusy):
                     other.run(contender)
                 assert other_provider.calls == []
             finally:
@@ -574,11 +575,11 @@ def test_interrupted_alternate_workspace_remains_fenced_after_owner_exits(tmp_pa
 
     @workflow
     def owner():
-        return Session().run("edit alternate target", workspace=target).value
+        return Provider(workspace=target).run("edit alternate target").value
 
     @workflow
     def contender():
-        return Session().run("edit direct target").value
+        return Provider().run("edit direct target").value
 
     with Botpipe(
         origin, provider=FakeProvider([SystemExit("provider may still own target")])
@@ -587,7 +588,7 @@ def test_interrupted_alternate_workspace_remains_fenced_after_owner_exits(tmp_pa
             first.run(owner, run_id="alternate-owner")
         other_provider = FakeProvider(["after reconciliation"])
         with Botpipe(target, provider=other_provider) as other:
-            with pytest.raises(RunBusy, match="unresolved"):
+            with pytest.raises(WorkspaceUnresolved, match="unresolved"):
                 other.run(contender)
             assert other_provider.calls == []
             operation = next(

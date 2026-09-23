@@ -171,7 +171,7 @@ def test_dataclass_restore_does_not_run_constructor_or_default_factory():
 
 def test_repository_dataclasses_and_generated_pydantic_generics_round_trip():
     values = [
-        Policy(model_overrides={"fast": "small"}),
+        Policy(model="small"),
         Result(value=3, artifacts=ArtifactMap()),
         RunResult(run_id="r", task_id="t", status="completed", value=4),
         Box[int](item=5),

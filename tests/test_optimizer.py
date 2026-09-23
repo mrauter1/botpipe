@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-from botpipe import Botpipe, Policy, Session, current_run, workflow
+from botpipe import Botpipe, Provider, current_run, workflow
 from botpipe.journal import JournalSnapshot
 from botpipe.providers import FakeProvider, ProviderResponse
 from botpipe.read_projection import project_run
@@ -261,7 +261,7 @@ def test_legacy_report_labels_counts_and_generic_duration_without_cost_or_latenc
 def test_source_manifest_marks_unvisited_dynamic_paths_without_scoring_them():
     def example(flag: bool):
         if flag:
-            worker.run("do work", name="conditional")  # noqa: F821
+            worker.run("do work")  # noqa: F821
         return "done"
 
     example.name = "example"
@@ -270,10 +270,21 @@ def test_source_manifest_marks_unvisited_dynamic_paths_without_scoring_them():
 
     assert manifest.topology_dynamic is True
     assert manifest.branch_lines
-    assert any(site.name == "conditional" for site in manifest.sites)
+    assert any(site.name == "worker" for site in manifest.sites)
     assert report.observation_absent is True
     assert report.candidates == ()
     assert report.unseen_declared_paths
+
+
+def test_source_manifest_recognizes_provider_first_presets():
+    def example():
+        provider.run("edit")  # noqa: F821
+        provider.query("review")  # noqa: F821
+        provider.generate("draft")  # noqa: F821
+
+    manifest = capture_source_manifest(example)
+
+    assert [site.kind for site in manifest.sites] == ["provider"] * 3
 
 
 def test_candidate_validation_rejects_fabricated_evidence():
@@ -299,12 +310,12 @@ def test_optimizer_consumes_real_journaled_typed_outcome_and_usage(tmp_path):
 
     @workflow(name="observed")
     def observed():
-        session = Session()
-        return session.run(
+        provider = Provider().with_config(
+            model="profile-model", effort="high", name="decide"
+        )
+        return provider.run(
             "decide",
             returns=Decision,
-            name="decide",
-            policy=Policy(model="profile-model", effort="high"),
         ).value
 
     provider = FakeProvider(
