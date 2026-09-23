@@ -87,7 +87,7 @@ jobs:
             sudo install -m 0644 /usr/share/apparmor/extra-profiles/bwrap-userns-restrict /etc/apparmor.d/bwrap-userns-restrict
           fi
           sudo apparmor_parser -r /etc/apparmor.d/bwrap-userns-restrict
-          codex sandbox linux /bin/true
+          codex sandbox /bin/true
       - name: Local fixture contracts
         env:
           BOTPIPE_NATIVE_CODEX: 'codex'

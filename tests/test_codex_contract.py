@@ -421,7 +421,7 @@ def test_latest_native_default_session_presets_and_read_only_enforcement(native)
     ]
     assert len(function_outputs) == 1
     output = function_outputs[0]["output"].lower()
-    assert any(word in output for word in ("denied", "read-only", "permission")), output
+    assert any(word in output for word in ("denied", "read-only", "permission", "not permitted")), output
     report.write_text("later workspace edit", encoding="utf-8")
     assert default.artifacts.report.read_text() == "native artifact"
 
