@@ -11,7 +11,7 @@ from botpipe.capabilities import CapabilityError, CapabilityStatus, CodexCapabil
 from botpipe.codex_appserver import CodexAppServerAdapter
 from botpipe.policy import NetworkMode, Policy, SandboxMode
 from botpipe.providers import CodexProvider, ProviderRequest, receipt_path
-from botpipe.recovery import Completed, Unknown, recover_outcome
+from botpipe.recovery import Completed, Stopped, Unknown, recover_outcome
 
 
 def capabilities() -> CodexCapabilities:
@@ -61,7 +61,9 @@ def interrupted_request(tmp_path: Path, *, preset: str = "generate") -> Provider
     return request
 
 
-def history_adapter(monkeypatch: pytest.MonkeyPatch, *, tools: bool):
+def history_adapter(
+    monkeypatch: pytest.MonkeyPatch, *, tools: bool, status: str = "completed"
+):
     adapter = CodexAppServerAdapter("unused", capabilities=capabilities())
     calls = []
 
@@ -71,7 +73,7 @@ def history_adapter(monkeypatch: pytest.MonkeyPatch, *, tools: bool):
         if tools:
             items.insert(0, {"type": "commandExecution", "id": "forbidden-command"})
         return {
-            "thread": {"turns": [{"id": "turn", "status": "completed", "items": items}]}
+            "thread": {"turns": [{"id": "turn", "status": status, "items": items}]}
         }
 
     monkeypatch.setattr(adapter, "_start", lambda: None)
@@ -79,11 +81,12 @@ def history_adapter(monkeypatch: pytest.MonkeyPatch, *, tools: bool):
     return adapter, calls
 
 
+@pytest.mark.parametrize("status", ["completed", "failed", "interrupted", "cancelled"])
 def test_recovered_disallowed_tool_is_terminal_and_keeps_evidence(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, status
 ):
     request = interrupted_request(tmp_path)
-    adapter, calls = history_adapter(monkeypatch, tools=True)
+    adapter, calls = history_adapter(monkeypatch, tools=True, status=status)
     provider = CodexProvider(adapter=adapter)
 
     for _ in range(2):
@@ -95,6 +98,23 @@ def test_recovered_disallowed_tool_is_terminal_and_keeps_evidence(
     assert receipt["status"] == "failed" and receipt["policy_error"] is True
     assert receipt["enforcement"]["audit"] == "tool-policy-violation"
     assert receipt["audit"][0]["data"]["item"]["id"] == "forbidden-command"
+
+
+@pytest.mark.parametrize("status", ["failed", "interrupted", "cancelled"])
+def test_recovered_clean_terminal_turn_is_stopped_with_audit(
+    tmp_path, monkeypatch, status
+):
+    request = interrupted_request(tmp_path)
+    adapter, calls = history_adapter(monkeypatch, tools=False, status=status)
+
+    outcome = recover_outcome(CodexProvider(adapter=adapter), request)
+
+    assert isinstance(outcome, Stopped)
+    assert calls == ["thread/resume", "thread/read"]
+    receipt = json.loads(receipt_path(request).read_text())
+    assert receipt["status"] == "turn_acknowledged"
+    assert receipt["enforcement"]["audit"] == "no-tool-calls-observed"
+    assert receipt["audit"][0]["data"]["item"]["type"] == "agentMessage"
 
 
 def test_recovered_safe_result_keeps_audit_and_original_enforcement(
@@ -114,9 +134,12 @@ def test_recovered_safe_result_keeps_audit_and_original_enforcement(
     assert metadata["audit"][0]["data"]["item"]["type"] == "agentMessage"
 
 
-def test_recovered_run_policy_violation_remains_unresolved(tmp_path, monkeypatch):
+@pytest.mark.parametrize("status", ["completed", "failed", "interrupted", "cancelled"])
+def test_recovered_run_policy_violation_remains_unresolved(
+    tmp_path, monkeypatch, status
+):
     request = interrupted_request(tmp_path, preset="run")
-    adapter, _ = history_adapter(monkeypatch, tools=True)
+    adapter, _ = history_adapter(monkeypatch, tools=True, status=status)
     outcome = recover_outcome(CodexProvider(adapter=adapter), request)
 
     assert isinstance(outcome, Unknown)

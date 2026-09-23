@@ -1117,53 +1117,53 @@ class CodexAppServerAdapter:
         if match is None:
             return "unknown", None
         status = match.get("status")
-        if status == "completed":
-            recovered = _Turn(thread_id, turn_id, request.tools, None)
-            for item in match.get("items", ()):
-                if isinstance(item, Mapping):
-                    self._record_event(
-                        recovered,
-                        "item/completed",
-                        {"threadId": thread_id, "turnId": turn_id, "item": dict(item)},
-                    )
-            checkpoint = request.checkpoint or {}
-            enforcement = dict(checkpoint.get("enforcement") or {})
-            enforcement["audit"] = (
-                "tool-policy-violation"
-                if isinstance(recovered.error, CapabilityError)
-                else "tool-calls-observed"
-                if recovered.tools_observed
-                else "no-tool-calls-observed"
-            )
-            evidence = {"enforcement": enforcement, "audit": recovered.events}
-            if request.on_checkpoint is not None:
-                request.on_checkpoint(evidence)
-            if recovered.error is not None:
-                raise recovered.error
-            if not recovered.messages:
-                return "unknown", None
-            from .providers import ProviderResponse
-
-            return "completed", ProviderResponse(
-                recovered.messages[-1],
-                thread_id,
-                {},
-                {
-                    "provider": "codex",
-                    "codex_version": enforcement.get(
-                        "codex_version", capabilities.version
-                    ),
-                    "thread_id": thread_id,
-                    "turn_id": turn_id,
-                    "recovered": True,
-                    **evidence,
-                },
-            )
         if status in {"inProgress", "running", "pending"}:
             return "running", None
-        if status in {"failed", "interrupted", "cancelled"}:
+        if status not in {"completed", "failed", "interrupted", "cancelled"}:
+            return "unknown", None
+        recovered = _Turn(thread_id, turn_id, request.tools, None)
+        for item in match.get("items", ()):
+            if isinstance(item, Mapping):
+                self._record_event(
+                    recovered,
+                    "item/completed",
+                    {"threadId": thread_id, "turnId": turn_id, "item": dict(item)},
+                )
+        checkpoint = request.checkpoint or {}
+        enforcement = dict(checkpoint.get("enforcement") or {})
+        enforcement["audit"] = (
+            "tool-policy-violation"
+            if isinstance(recovered.error, CapabilityError)
+            else "tool-calls-observed"
+            if recovered.tools_observed
+            else "no-tool-calls-observed"
+        )
+        evidence = {"enforcement": enforcement, "audit": recovered.events}
+        if request.on_checkpoint is not None:
+            request.on_checkpoint(evidence)
+        if recovered.error is not None:
+            raise recovered.error
+        if status != "completed":
             return "stopped", None
-        return "unknown", None
+        if not recovered.messages:
+            return "unknown", None
+        from .providers import ProviderResponse
+
+        return "completed", ProviderResponse(
+            recovered.messages[-1],
+            thread_id,
+            {},
+            {
+                "provider": "codex",
+                "codex_version": enforcement.get(
+                    "codex_version", capabilities.version
+                ),
+                "thread_id": thread_id,
+                "turn_id": turn_id,
+                "recovered": True,
+                **evidence,
+            },
+        )
 
     def interrupt(self, thread_id: str, turn_id: str) -> None:
         self._rpc(
