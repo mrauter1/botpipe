@@ -1,9 +1,13 @@
 # Command line
 
-`botpipe doctor` reports the installed Codex version, required and optional
-capabilities, probe identity, preset availability, and the selected workspace's
-fence state. A missing required capability exits nonzero with its name. Include
-this output in compatibility bug reports. Probing does not need a model turn or
+`botpipe doctor` prints JSON containing the resolved Codex executable and
+version, probe hash, methods and feature inventory, derived capability flags,
+preset availability, the canonical workspace, and its fence state. A probe
+failure still prints the workspace and fence plus `codex.available: false`, then
+exits 1. An unavailable `run` preset also exits 1; unavailable optional presets
+remain visible without making doctor fail. Include the JSON and stderr in a
+compatibility report. Probing runs `codex --version`, `codex features list`, and
+app-server schema generation; it does not start a model turn or require model
 credentials. Use `--workspace PATH` to inspect the exact workspace in question.
 
 ```bash
@@ -25,6 +29,8 @@ botpipe runs logs RUN_ID
 botpipe runs logs RUN_ID --operations
 botpipe resume RUN_ID
 botpipe resume RUN_ID --answer 'true'
+# Equivalent spelling for a scalar answer:
+botpipe answer RUN_ID 'true'
 ```
 
 Direct Provider calls appear in the same run list and use the same recovery
@@ -42,7 +48,10 @@ botpipe resolve RUN_ID OPERATION_ID --accept
 botpipe resolve RUN_ID OPERATION_ID --fail
 ```
 
-`--no-resume` records a resolution without continuing execution. For an activity
+Exactly one of `--retry`, `--accept`, `--fail`, `--response` and
+`--clear-fence` can be supplied. With none of the first four, `resolve` performs
+the normal recovery decision. `--no-resume` records a resolution without
+continuing execution. For an activity
 with an externally observed return value, use `--response JSON_OR_TEXT`; JSON
 `null` is a valid value. Artifact reconciliation can supply an explicit
 `--artifact-digests` JSON object when required.
@@ -76,12 +85,18 @@ automatically.
 
 ## Configuration
 
-`--workspace`, `--config`, `--state-dir`, `--model`, `--effort`,
-`--max-operations` and `--timeout` select execution settings. Configuration can
-come from `botpipe.toml`, `.botpipe.toml`, `botpipe.json` or `[tool.botpipe]`.
-`BOTPIPE_CONFIG` selects an explicit file. Workspace-relative paths use the
-chosen workspace. A relative `[codex].path` containing a directory component
-uses the configuration file's directory; a bare `codex` is located on `PATH`.
+Commands that construct a runtime accept `--workspace`, `--config`,
+`--state-dir`, `--provider`, `--provider-config JSON`, `--policy JSON_OR_FILE`,
+`--model`, `--effort`, `--max-operations` and `--timeout`. `--model` and
+`--effort` are policy overrides. `--policy` accepts a JSON object or a JSON/TOML
+file; `--provider-config` accepts a JSON object. Botpipe 2.0 rejects any provider
+other than `codex`.
+
+Configuration can come from `botpipe.toml`, `.botpipe.toml`, `botpipe.json`, or
+`[tool.botpipe]` in `pyproject.toml`. `BOTPIPE_CONFIG` selects an explicit file.
+A relative `state_dir` is resolved from the chosen workspace. A relative
+`[codex].path` containing a directory component is resolved from the
+configuration file's directory; a bare `codex` is located on `PATH`.
 
 ```toml
 default_provider = "codex"
@@ -97,6 +112,11 @@ network = false
 retry_safe = true
 interrupt_grace_seconds = 10
 ```
+
+The `[codex]` table also accepts `instructions`, `tools`, `timeout`,
+`output_retries`, `name`, and non-secret `settings`. CLI execution limits
+(`max_operations` and the top-level `timeout`) are distinct from
+`[codex].timeout`, which limits a provider call.
 
 Codex is the only provider in 2.0. Model names are passed through. There is no
 version allowlist. Existing 1.x journals are rejected untouched; choose a new

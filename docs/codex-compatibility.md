@@ -28,12 +28,14 @@ versions do not veto the installation. A changed probe hash or derived execution
 profile remains audit evidence rather than a durable replay-identity veto; a
 capability actually required by the next dispatch is still enforced.
 
-The earliest installation checked during this rewrite is **Codex 0.156.0**.
-This is a measured compatibility reference, not a hard-coded minimum. Earlier
-versions may work if they expose the required capabilities; they have not been
-established by this rewrite's validation. A later release is accepted on its
-capabilities. A failed cross-version `thread/resume` raises `SessionError`, so a
-workflow can choose a new session. Replayed operations do not require Codex.
+**Codex 0.156.0 is the earliest recorded measured reference for this rewrite.**
+It is neither a minimum nor a claim about the current latest release. The CI
+configuration installs the floating `@openai/codex@latest` tag and prints the
+resolved version in each job, but the repository does not record that changing
+version as a compatibility floor. Earlier versions are unverified and work only
+if the capability probe accepts them; later versions are evaluated the same way.
+A failed cross-version `thread/resume` raises `SessionError`, so a workflow can
+choose a new session. Replayed operations do not require Codex.
 
 Linux needs Codex's [Bubblewrap prerequisites](https://developers.openai.com/codex/concepts/sandboxing#prerequisites),
 including Ubuntu's AppArmor profile where required. Contract CI installs those
@@ -97,11 +99,17 @@ reconciliation.
 
 The deterministic suite uses fake adapters and recorded app-server behavior,
 without a Codex installation, model credentials or network access. Required CI
-contract jobs install `@openai/codex@latest` on Linux, macOS and Windows and use
-a local Responses fixture to exercise the protocol and sandbox. The nightly
-schedule runs the same contracts to detect new-release incompatibility.
+contract jobs install the then-current `@openai/codex@latest` on Linux, macOS and
+Windows, record its version, and use a local Responses fixture to exercise the
+protocol and sandbox. Pull requests, pushes to `main`, manual runs, and the
+nightly schedule run these contracts against whatever version `latest` resolves
+to at that time.
 
 Local fixture evidence verifies transport and effects handling. It does not
-establish authenticated model behavior. **Before tagging 2.0.0, run each preset
-against a real model with credentials on each supported platform.** Record the
-Codex version and doctor output alongside those release results.
+establish authentication, a live model response, hosted tool behavior, or a
+real cross-version resume. Those claims require credentialed smoke tests. Before
+tagging 2.0.0, run `run`, `query`, and `generate` against a real model on each
+supported platform and record the exact `codex --version`, `botpipe doctor`
+output, preset inputs, and results. Until that evidence exists, describe 0.156.0
+as the measured reference and the CI target as floating latest, not as a verified
+minimum or verified current-latest release.

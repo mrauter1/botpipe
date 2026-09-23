@@ -1,8 +1,9 @@
 # Provider SDK
 
-`Provider()` selects Codex through `default_provider`; `Codex()` selects it
-explicitly. Construction performs no I/O. The first call loads configuration,
-opens the durable runtime and probes Codex. Model names pass through unchanged.
+`Provider()` uses the configured provider (Codex is the only provider in 2.0),
+while `Codex()` selects it explicitly. Construction performs no I/O. The first
+call loads configuration and starts the runtime. Both classes support `with`
+blocks and `close()`.
 
 ## Operations
 
@@ -12,16 +13,13 @@ retry_safe=None, on_event=None)` is the execution primitive. `None` inherits
 configuration. The default sandbox is `workspace-write`, with network disabled,
 and `retry_safe` defaults to `True`.
 
-`query` fixes `sandbox="read-only"`, `network=False` and `writes=()`.
-`generate` fixes those same values and takes `allowed_tools=()` instead of
-`tools`. Supplying a fixed argument raises `TypeError`, even when its value
-matches the preset. Use `run` for different settings.
+`query` is read-only with network disabled and accepts `tools=`. `generate` has
+the same sandbox and network policy but uses `allowed_tools=()`; its empty
+default disables tools. Neither preset accepts `writes`, `sandbox`, or `network`.
+Use `run` when you need those controls.
 
-All three presets, including `query` and `generate`, accept `retry_safe`; their
-async forms `arun`, `aquery` and `agenerate` have the same semantics. Cancelling
-an async call waits for the bounded interrupt and cleanup attempt before raising
-`CancelledError`. Cancellation ends that invocation and never redispatches on
-its own. The default interrupt grace period is ten seconds.
+All three methods accept `timeout`, `output_retries`, `retry_safe`, and
+`on_event`. Their async forms are `arun`, `aquery`, and `agenerate`.
 
 ```python
 from pydantic import BaseModel
@@ -36,23 +34,19 @@ result = reviewer.query("Review the current diff.", returns=Review)
 print(result.value.accepted, result.value.notes)
 ```
 
-Typed results use Codex's `outputSchema` when available and a prompt schema
-otherwise. Botpipe always validates the result locally. A validation failure
-gets up to `output_retries` additional turns (default two), on the same thread.
-Repairs count against budgets. A completed turn advances conversation history
-even when its output fails validation. `retry_safe=False` suppresses new repair
-turns as well as recovery retries. It does not discard a repair response that
-was already completed and can be adopted during replay.
+Botpipe validates typed results locally. A validation failure gets up to
+`output_retries` additional turns (default two) in the same conversation.
+Repairs count against provider budgets. Set `retry_safe=False` when repeating an
+operation could duplicate an external effect; this also prevents Botpipe from
+starting a new output-repair turn.
 
-`retry_safe=True` permits repetition; it does not prove that a prompt or tool is
-idempotent. After an interrupted attempt, Botpipe adopts `Completed`, retries
-automatically only after confirmed `Stopped`, makes a targeted bounded interrupt
-attempt for `Running`, and leaves `Unknown` unresolved. Use `False` for
-nonrepeatable external effects. `Stopped` requires durable evidence that cleanup
-completed; a historical interrupted status or acceptance of a native cleanup
-request alone remains `Unknown`. A later user-initiated resume can retry subject
-to the recorded policy and remaining limits. Retry evidence records whether the
-origin was automatic or operator-authorized.
+When Codex supports `outputSchema`, Botpipe sends it natively; otherwise it adds
+the schema to the prompt. Local validation runs in both cases.
+
+`retry_safe=True` permits repetition; it does not make an operation idempotent.
+After interruption, Botpipe adopts a completed result when it can, retries only
+after confirming the old attempt stopped, and otherwise leaves the operation
+unresolved for operator action.
 
 ## Sessions and roles
 
@@ -60,8 +54,8 @@ origin was automatic or operator-authorized.
 2. Reusing a provider continues its Codex thread.
 3. `with_config` shares the session unless `session=` is supplied.
 4. `session=None` makes a call independent.
-5. Within workflows, `Session.task(key)` and `Session.work_item(item)` create
-   durable scoped identities that survive resume.
+5. Within workflows, `Session.task(key)` creates a task-scoped identity and
+   `Session.work_item(item)` creates one for a `WorkItem`; both survive resume.
 
 ```python
 from botpipe import Provider, Session
@@ -71,56 +65,56 @@ planner = base.with_config(instructions="Plan small, reviewable changes.")
 reviewer = base.with_config(instructions="Find correctness defects.", session=Session())
 ```
 
-`with_config` returns an immutable variant. Supported fields are `instructions`,
-`model`, `effort`, `workspace`, `sandbox`, `network`, `tools`, `timeout`,
-`output_retries`, `retry_safe`, `name`, `settings` and `session`. The same
-setting can come from construction, `with_config`, an individual call, or the
-`[codex]` TOML table, with per-call values taking precedence. A role can tighten
-an enclosing run's permissions; it cannot widen them. Settings are validated
-non-secret Codex configuration overrides. Never put credentials in a prompt or
-durable configuration.
+`with_config` returns a variant without changing the original. It accepts
+`instructions`, `model`, `effort`, `workspace`, `sandbox`, `network`, `tools`,
+`timeout`, `output_retries`, `retry_safe`, `name`, `settings`, and `session`.
+`settings` accepts validated, non-secret Codex configuration overrides.
+Unless `session=` is supplied, the variant shares both the runtime and
+conversation with its parent. Per-call settings override provider settings,
+which override the `[codex]` table. An enclosing workflow policy remains a
+ceiling: a provider call may tighten it but cannot widen it.
 
-Turns sharing a session are serialized. Parallel branches use separate
-sessions. A session can mix presets because sandbox policy is set for each turn.
-Tool configuration applies to the Codex thread. A changed tool profile causes
-an unsubscribe/resume of the same history; an installation that cannot enforce
-that transition fails before dispatch with a capability error.
+The provider `timeout` setting (and `[codex].timeout`) limits one provider call.
+The top-level `timeout` in `botpipe.toml` separately supplies the default
+provider-dispatch and session-wait bound.
+
+Turns sharing a session are serialized. Give parallel branches separate
+sessions. A conversation can mix presets; each turn gets the policy of the
+method used for that turn. Changing its tool profile requires Codex to resume
+the same history with the new profile; Botpipe fails before dispatch if the
+installed Codex cannot enforce that transition.
 
 ## Results, artifacts and events
 
-`Result[T]` exposes `value`, `artifacts`, `usage`, `operation_id`, `run_id` and
-`metadata`. Metadata includes Codex version, thread and turn ids, probe hash,
-tool evidence and the enforcement record. Replays return the recorded result
-without locating or invoking Codex.
+`Result[T]` exposes `value`, `artifacts`, `usage`, `operation_id`, `run_id`, and
+`metadata`. Codex results include identifiers and enforcement evidence in
+`metadata`. Replays return the recorded result without invoking Codex again.
 
-Declare output files with `Artifact.json`, `Artifact.md`, or another artifact
-constructor, then pass them in `writes` to `run`. Captured versions are immutable
-and content checked. Required files and schema constraints are validated before
-commit. Botpipe does not roll back repository edits after a validation failure.
+Declare output files with `Artifact.json`, `Artifact.md`, `Artifact.text`, or
+`Artifact.raw`, then pass them in `writes` to `run`. A required file or JSON
+schema is validated before the operation completes. The returned artifact is a
+content-checked snapshot; Botpipe does not roll back other workspace edits after
+validation failure.
 
-`on_event` receives `StreamEvent(type, data)`. Notifications are best effort and
-are not journaled as callbacks. Callback exceptions do not change the operation
-outcome. Replaying a call emits one `replayed` event. Durable tool evidence is
-recorded separately from the callback.
+`on_event` receives `StreamEvent(type, data)`. Notifications are best effort;
+callback exceptions do not change the operation outcome. Replay emits one
+`replayed` event. Durable evidence is recorded separately from callbacks.
 
 ## Enforcement boundaries
 
 Approval policy is always `never`. Query and generation disable ambient MCP
-servers unless explicitly named in their tool allowlist. For a tool allowlist,
-Botpipe disables discovered tool-enabling features it knows how to control and
-leaves unrelated or unknown feature flags alone. It audits notifications; an
-unlisted observed tool call fails with `CapabilityError` and retains its
-evidence. The audit detects a violation but cannot undo a remote effect.
+servers unless their tools are explicitly allowed. For an explicit tool
+allowlist, Botpipe uses Codex controls and audits observed calls. An unlisted
+observed tool call fails and keeps its evidence. Detection cannot undo an effect
+that already occurred.
 
-The read-only and network-off settings govern commands within Codex's sandbox;
-they are not a guarantee about opted-in remote MCP servers or web tools. Opting
-into such a tool authorizes its possible remote effects. Workspace-write allows
-the workspace, declared artifact parents, and Codex's native temporary roots.
-`run(sandbox="full-access")` supplies no filesystem isolation. Botpipe records
-these mechanisms honestly.
+Read-only and network-off settings govern commands in Codex's sandbox; they do
+not prevent remote effects from a tool you explicitly allow. Workspace-write
+permits the workspace, declared artifact parents, and Codex's temporary roots.
+`run(sandbox="full-access")` supplies no filesystem isolation.
 
 Direct calls are one-operation durable runs, visible through `botpipe runs` and
 recoverable through `resume` and `resolve`, just like workflow operations.
 
-Each Codex dispatch shares one timeout budget across capability probing, startup,
-thread setup, and execution. Cancellation cleanup has its own bounded grace period.
+The call timeout covers setup as well as execution. Async cancellation performs
+a bounded interrupt and cleanup attempt before the task finishes cancelling.

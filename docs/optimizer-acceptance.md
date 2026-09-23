@@ -21,13 +21,13 @@ wheel/sdist, and full-suite jobs.
 | T11 | `test_optimizer_ranks_only_observed_operations_and_preserves_evidence`; `test_source_manifest_marks_unvisited_dynamic_paths_without_scoring_them` | Filters and denominators use observed operations; source is not execution proof. |
 | T12 | objective eligibility/ranking tests in `tests/test_optimizer.py`; `test_top_k_is_one_global_cap_over_unique_steps_not_profile_strata` | Reliability, token, and additive provider-dispatch-second ranking are reconstructible with one literal-burden shortlist cap and no per-profile allocation. |
 | T13 | `test_candidate_validation_rejects_fabricated_evidence`; `test_v2_evidence_and_candidate_bytes_are_bounded_and_identities_are_verified`; strict handoff tests | Invented citations, identities, deterministic facts, and unsupported kinds are rejected. |
-| T14 | `test_v2_no_eligible_evidence_uses_zero_provider_turns`; `test_v2_eligible_evidence_uses_one_producer_and_independent_verifier` | No evidence means zero provider calls; normal evidence means one proposal and fresh independent review. |
+| T14 | `test_improvement_without_eligible_evidence_uses_zero_provider_turns`; `test_rejected_proposal_never_edits_a_candidate`; `test_independent_review_can_reject_a_candidate_that_passes_checks` | No evidence means zero provider calls; eligible evidence produces a proposal and fresh independent reviews before editing or accepting a candidate. |
 | T15 | all `tests/test_budgets.py` cases | Repairs and manual retries consume turns; children/parallel branches share atomic limits; resume preserves the non-extending deadline. |
 | T16 | execution-isolation T16 tests; `tests/test_processes.py` | File/tree/log bounds and timeout/cancellation terminate owned descendants on supported platforms. |
 | T17 | paired protocol-failure, frozen-evaluator, invalid-result, and paired-resume tests | Invalid identity, case coverage, metrics, output, or frozen bytes cannot produce improvement. |
 | T18 | paired comparison, stochastic-scope, noncomparable-environment, and per-arm budget tests | Improvement/regression/tie/guardrail states use one symmetric frozen plan and never auto-promote. |
 | T19 | `test_t19_cleanup_refuses_unowned_overlapping_and_wrong_marker_paths`; `test_publication_rejects_symlinked_generation_root_before_writes`; publication generation failure tests; callable/eval-manifest validation tests | Unsafe ownership paths, interrupted publication, and invalid eval input leave unrelated or prior accepted data untouched. |
-| T20 | `test_refinement_requires_one_complete_input_form`; `test_handoff_and_eval_suite_identities_are_exact`; `test_strict_optimizer_receipt_routes_candidate_kind` | Both refinement input forms, evaluation-case routing, and strict receipts stay coherent. Deprecated aliases and packaged-import smoke remain release gates. |
+| T20 | `test_eval_selection_requires_complete_receipt_identity`; `test_handoff_and_eval_suite_identities_are_exact`; `test_strict_optimizer_receipt_routes_candidate_kind` | Evaluation-case consumers require complete receipt identity, preserve exact handoff identities, and route strict receipts by candidate kind. Packaged-import smoke remains a release gate. |
 
 Focused helper tests are insufficient by themselves. Final verification must
 also exercise the default optimizer workflow, strict receipt loading through
@@ -35,5 +35,5 @@ also exercise the default optimizer workflow, strict receipt loading through
 subprocesses, resume behavior, and packaged imports. A passing contract proves
 integrity and bounded behavior; it does not prove that a recommendation improves
 an unseen workload. Recommendation receipts therefore remain
-`improvement = not_evaluated` unless refinement completes a valid paired
-comparison.
+`improvement = not_evaluated` unless the optional evaluator completes a valid
+paired comparison.

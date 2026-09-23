@@ -29,7 +29,10 @@ In `botpipe.toml`, use `default_provider = "codex"` and a `[codex]` table with
 `interrupt_grace_seconds`. `retry_safe` is also available at provider
 construction, through `with_config`, per call, and on every async form. Run
 `botpipe doctor --workspace PATH` to inspect installed capabilities and the
-workspace fence. Codex is not pinned.
+workspace fence. Codex is not pinned: 0.156.0 is a recorded measured reference,
+not a minimum, while CI tests the floating `@openai/codex@latest` resolved by
+each job. A real credentialed smoke test is still required to establish live
+model behavior for a release.
 
 **1.x journals cannot be opened by 2.0.** They are rejected untouched; there is
 no migration. Finish existing work with 1.x or start in a new state directory.
@@ -48,3 +51,17 @@ and archive a receipt under the workspace lock.
 
 The provider-first experimental API's `decide`, streaming iterators, exact argv
 grants and non-Codex constructors are not included. Progress uses `on_event`.
+
+CLI run inspection is now keyed by one `RUN_ID`:
+
+```bash
+botpipe runs show RUN_ID
+botpipe runs logs RUN_ID          # one JSON event per line
+botpipe runs logs RUN_ID --operations
+botpipe resume RUN_ID --answer-file answer.json
+```
+
+`botpipe logs RUN_ID` remains an alias for `botpipe runs logs RUN_ID`, and
+`botpipe answer RUN_ID VALUE` is the scalar-answer spelling of resume. For a
+non-importable file workflow, add `--workflow path/to/file.py:function` when
+resuming or resolving it.

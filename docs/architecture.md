@@ -11,13 +11,19 @@ events. The 2.0 schema adds Codex thread and turn identifiers, the preset,
 enforcement record and probe hash. Opening a 1.x journal fails without migrating
 or modifying it.
 
-An operation is identified by run, scope and position. Its fingerprint includes
-the prompt, input, read digests, output schema and resolved user configuration.
-Probe hashes and other discovered installation/profile facts remain audit
-evidence; a change in those observations alone is not a durable identity veto.
-A committed operation replays its result. A different durable fingerprint at a
-committed position fails before dispatch. Existing compatible source-edit checks
-remain part of workflow resume.
+An operation is identified by run, scope and position. Provider-operation inputs
+include the prompt, input, read digests, output schema and resolved user
+configuration. Probe hashes and other discovered installation/profile facts
+remain audit evidence; a change in those observations alone is not a durable
+identity veto. A committed operation replays its result. A different durable
+fingerprint at a committed position fails before dispatch.
+
+Workflow and operation callable identities deliberately omit source text.
+Captured source hashes and manifests are provenance evidence, not replay keys.
+Edited orchestration may resume when it consumes the same recorded operations in
+the same scopes and order with matching durable inputs; an inserted, removed,
+reordered or changed operation fails replay. Completed child workflows replay as
+one child operation without re-entering the child body.
 
 A provider intent precedes dispatch. A terminal response is recorded before
 output validation and immutable artifact capture. This ordering lets recovery
@@ -25,12 +31,13 @@ adopt completed work without another model call, including after interruption
 between response and capture. Repairs are additional recorded, budgeted attempts
 on the same thread. Recovery itself does not consume a dispatch budget.
 
-Activities, provider turns, human answers, nested workflows, parallel branches
-and worklist updates use the same operation journal. Activities and provider
-turns default to `retry_safe=True`. This flag permits repetition; it does not
-establish that the operation is idempotent. Provider recovery also confirms that
-the prior turn stopped before automatically dispatching a replacement.
-Nonrepeatable external effects must use `retry_safe=False`.
+Activities, provider turns, human answers, nested workflows, parallel branches,
+session bindings and worklist updates use the same operation journal and share
+the run operation limit. Activities and provider turns default to
+`retry_safe=True`. This flag permits repetition; it does not establish that the
+operation is idempotent. Provider recovery also confirms that the prior turn
+stopped before automatically dispatching a replacement. Nonrepeatable external
+effects must use `retry_safe=False`.
 
 ## Codex adapter
 
@@ -63,6 +70,12 @@ profile: when it changes, Botpipe unsubscribes the idle thread and resumes the
 same history with the new configuration. If the installed Codex cannot perform
 that transition, the call fails before dispatch.
 
+A provider lazily creates a run-scoped session; providers derived with
+`with_config` share it unless the session is replaced. `Session.task(key)` is
+stable across runs of one task, `Session.work_item(item, key)` is stable for a
+selected work item, and `session=None` creates independent turns. Durable session
+locks serialize use of one session across threads and processes.
+
 ## Recovery
 
 | Reconciliation result | Action |
@@ -87,6 +100,13 @@ their origin. Cancellation ends the current invocation after bounded cleanup;
 it does not redispatch. A later explicit resume may retry subject to the recorded
 policy and limits.
 
+The run operation limit applies atomically across nested and parallel scopes and
+can only be increased on resume. The run timeout supplies the default provider
+dispatch and session-lock wait bound; it is not an overall deadline for workflow
+Python. Workspace-lock waits have a separate default below. Durable
+provider-budget deadlines retain their original deadline across suspension and
+resume, and nested provider budgets all apply.
+
 An operator resolves uncertainty with explicit retry, acceptance of the current
 workspace, or failure. A retry never pretends the earlier effects did not happen.
 Accepting captures declared artifacts and still validates their contract.
@@ -96,8 +116,9 @@ Accepting captures declared artifacts and still validates their contract.
 A run lock is keyed by journal path and run id and held for execution or
 resolution. Another executor receives `RunBusy` immediately. A workspace writer
 lock is keyed by canonical root and held for a writable provider turn, including
-output capture. It waits only within the operation's timeout, then raises
-`WorkspaceBusy`. Coordination files live in per-user state, outside workspaces.
+output capture. Its wait uses `Botpipe(workspace_lock_timeout=...)` (default one
+second), or the provider call's `timeout` when set, then raises `WorkspaceBusy`.
+Coordination files live in per-user state, outside workspaces.
 Windows and macOS canonical roots are compared without case sensitivity.
 
 Conversation turns use the same file-lock primitive, keyed by journal and durable

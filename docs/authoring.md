@@ -26,7 +26,8 @@ def improve(request: str):
 
 Provider construction binds lazily to the active runtime. Use `with_config` for
 role instructions, models, recovery policy and session choices. A provider
-continues one conversation by default; `session=None` means independent turns.
+continues one conversation by default, and providers derived from it share that
+session unless it is replaced. `session=None` means independent turns.
 `retry_safe` can be set at construction, with `with_config`, per call, or in the
 `[codex]` configuration table.
 
@@ -78,14 +79,20 @@ repair. If a review file is required, save the validated result in an activity.
 Read-only presets cannot declare writes. Repair turns run on the same thread and
 count against budgets. A validation failure does not roll back repository edits.
 
-`Worklist.from_artifact(handle, collection="items")` produces durable items.
-`Session.work_item(item)` preserves a conversation for that item across resume.
-Call `items.complete(item)` after its acceptance condition is satisfied. See the
-packaged `ralph_loop` for the complete plan, review, implement and review cycle.
+`Worklist.from_artifact(handle, collection="items")` snapshots the selected
+items durably. The same original selection is visited on every resume, including
+items already completed, so workflow control flow and operations replay in the
+same order. `Session.work_item(item)` preserves a conversation for that item
+across runs of the same task. Call `items.complete(item)` after its acceptance
+condition is satisfied; it publishes a new immutable artifact handle and updates
+`items.artifact`. See the packaged `ralph_loop` for the complete plan, review,
+implement and review cycle.
 
 ## Parallel and nested work
 
-Calling another decorated workflow creates a journaled child scope. Use
+Calling another decorated workflow records a child operation and runs it in a
+child scope. A completed child replays as a unit. Child operations share the
+parent run's operation budget, timeout defaults and provider budgets. Use
 `parallel` or `aparallel` to run independent callables. Each branch needs a
 separate session. Writers using the same canonical workspace serialize; use
 separate worktrees for independent parallel edits.
@@ -99,11 +106,21 @@ when a stable tree is required.
 
 `runtime.resume(run_id)` replays completed operations before continuing. Prompt,
 input, read digest, output schema or effective-configuration changes at a
-completed operation fail as a replay mismatch. Compatible source-edit checks
-allow changes that do not alter already committed operation contracts.
+completed operation fail as a replay mismatch. Workflow callable identity is
+source-free; source hashes are provenance evidence, not a resume veto. Source
+edits are therefore compatible only when execution still reaches and consumes
+the recorded operations in the same scopes and order with matching contracts.
+Returning early, inserting an operation before a recorded one, or changing one
+of those contracts fails replay.
 
-Budget scopes, operation limits and deadlines apply during execution. Every
-repair dispatch counts; adopting a recovered response does not dispatch again.
+The run's `max_operations` counts journaled operations across child and parallel
+scopes. It may be increased, but not decreased, on resume. The run `timeout` is
+the default bound for provider dispatches and session-lock waits, not a
+wall-clock deadline for arbitrary workflow Python. Workspace-lock waits instead
+default to `Botpipe(workspace_lock_timeout=1)` unless the provider call sets
+`timeout`. Use `provider_budget(max_seconds=...)` for a durable provider
+deadline. Nested budget scopes all apply. Every repair dispatch counts against
+provider budgets; adopting a recovered response does not dispatch again.
 Recovery adopts `Completed`, retries automatically only after confirmed
 `Stopped` when both recorded and current policy allow it, makes a bounded
 targeted interrupt attempt for `Running`, and leaves `Unknown` unresolved until
