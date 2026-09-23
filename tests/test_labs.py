@@ -4,6 +4,8 @@ import json
 import re
 import sys
 
+import pytest
+
 from botpipe import Botpipe
 from botpipe.discovery import discover_workflows, resolve_workflow
 from botpipe.providers import FakeProvider
@@ -369,18 +371,69 @@ def _schema_value(schema, root):
     return "value"
 
 
-def test_every_labs_manifest_discovers_and_resolves_one_durable_function():
+LAB_SCENARIOS = {
+    "candidate_workflow_to_adapted_execution_plan": {
+        "selected_workflow": "release_candidate_to_go_no_go",
+        "task_title": "Adapt release review",
+    },
+    "company_operation_to_recursive_improvement_cycle": {
+        "task_title": "Improve operations"
+    },
+    "incident_to_hardening_program": {"incident_title": "Checkout outage"},
+    "investigation_request_to_evidence_pack": {
+        "investigation_title": "Readiness evidence",
+        "investigation_kind": "release_readiness",
+    },
+    "release_candidate_to_go_no_go": {"release_name": "2026.10"},
+    "security_finding_to_verified_remediation": {
+        "finding_title": "Authorization bypass",
+        "finding_source": "internal_review",
+    },
+    "task_to_candidate_workflow_set": {"task_title": "Recover a delivery"},
+    "task_to_workflow_strategy": {"task_title": "Choose a delivery workflow"},
+    "workflow_and_eval_to_refined_workflow_package": {
+        "selected_workflow": "release_candidate_to_go_no_go",
+        "task_title": "Refine release review",
+        "evaluation_summary_path": "evaluation-summary.json",
+        "evaluation_findings_path": "evaluation-findings.json",
+        "target_test_argv": [sys.executable, "-c", "pass"],
+    },
+    "workflow_idea_to_workflow_package": {
+        "package_name": "customer_escalation",
+        "workflow_kind": "end_to_end",
+    },
+    "workflow_package_to_composable_building_blocks": {
+        "selected_workflow": "release_candidate_to_go_no_go",
+        "task_title": "Decompose release review",
+        "target_test_argv": [sys.executable, "-c", "pass"],
+    },
+    "workflow_portfolio_to_operating_system": {
+        "task_title": "Govern workflow portfolio"
+    },
+    "workflow_run_history_to_failure_modes": {
+        "selected_workflow": "release_candidate_to_go_no_go",
+        "task_title": "Diagnose release review",
+    },
+    "workflow_run_traces_to_optimization_candidates": {
+        "selected_workflow": "release_candidate_to_go_no_go",
+        "task_title": "Optimize release review",
+    },
+    "workflow_to_eval_suite": {
+        "selected_workflow": "release_candidate_to_go_no_go",
+        "task_title": "Evaluate release review",
+    },
+}
+
+
+def test_labs_discovery_matches_behavioral_scenarios():
     entries = [
         entry
         for entry in discover_workflows(".", include_labs=True)
         if entry.source_kind == "labs"
     ]
-    assert len(entries) == 15
-    assert len({entry.name for entry in entries}) == 15
-    for entry in entries:
-        resolved = resolve_workflow(entry.name, ".")
-        assert resolved.name == entry.name
-        assert callable(resolved)
+    names = [entry.name for entry in entries]
+    assert len(names) == len(set(names))
+    assert set(names) == set(LAB_SCENARIOS)
 
 
 def test_release_workflow_runs_staged_typed_outcomes_and_captures_artifacts(tmp_path):
@@ -418,95 +471,38 @@ def test_release_workflow_runs_staged_typed_outcomes_and_captures_artifacts(tmp_
     assert all(item["status"] == "completed" for item in provider_operations)
 
 
-def test_all_labs_workflows_complete_staged_fake_provider_runs(tmp_path):
-    invocation_parameters = {
-        "candidate_workflow_to_adapted_execution_plan": {
-            "selected_workflow": "release_candidate_to_go_no_go",
-            "task_title": "Adapt release review",
-        },
-        "company_operation_to_recursive_improvement_cycle": {
-            "task_title": "Improve operations"
-        },
-        "incident_to_hardening_program": {"incident_title": "Checkout outage"},
-        "investigation_request_to_evidence_pack": {
-            "investigation_title": "Readiness evidence",
-            "investigation_kind": "release_readiness",
-        },
-        "release_candidate_to_go_no_go": {"release_name": "2026.10"},
-        "security_finding_to_verified_remediation": {
-            "finding_title": "Authorization bypass",
-            "finding_source": "internal_review",
-        },
-        "task_to_candidate_workflow_set": {"task_title": "Recover a delivery"},
-        "task_to_workflow_strategy": {"task_title": "Choose a delivery workflow"},
-        "workflow_and_eval_to_refined_workflow_package": {
-            "selected_workflow": "release_candidate_to_go_no_go",
-            "task_title": "Refine release review",
-            "evaluation_summary_path": "evaluation-summary.json",
-            "evaluation_findings_path": "evaluation-findings.json",
-            "target_test_argv": [sys.executable, "-c", "pass"],
-        },
-        "workflow_idea_to_workflow_package": {
-            "package_name": "customer_escalation",
-            "workflow_kind": "end_to_end",
-        },
-        "workflow_package_to_composable_building_blocks": {
-            "selected_workflow": "release_candidate_to_go_no_go",
-            "task_title": "Decompose release review",
-            "target_test_argv": [sys.executable, "-c", "pass"],
-        },
-        "workflow_portfolio_to_operating_system": {
-            "task_title": "Govern workflow portfolio"
-        },
-        "workflow_run_history_to_failure_modes": {
-            "selected_workflow": "release_candidate_to_go_no_go",
-            "task_title": "Diagnose release review",
-        },
-        "workflow_run_traces_to_optimization_candidates": {
-            "selected_workflow": "release_candidate_to_go_no_go",
-            "task_title": "Optimize release review",
-        },
-        "workflow_to_eval_suite": {
-            "selected_workflow": "release_candidate_to_go_no_go",
-            "task_title": "Evaluate release review",
-        },
-    }
-    entries = [
-        entry
-        for entry in discover_workflows(".", include_labs=True)
-        if entry.source_kind == "labs"
-    ]
-    assert {entry.name for entry in entries} == set(invocation_parameters)
-
-    for entry in entries:
-        function = resolve_workflow(entry.name, ".")
-        module = __import__(function.__module__, fromlist=["Params"])
-        params = module.Params(**invocation_parameters[entry.name])
-        workspace = tmp_path / entry.name
-        workspace.mkdir()
-        (workspace / "README.md").write_text("# Test workspace\n", encoding="utf-8")
-        if entry.name == "workflow_and_eval_to_refined_workflow_package":
-            (workspace / "evaluation-summary.json").write_text(
-                json.dumps({"selected_workflow_name": "release_candidate_to_go_no_go"}),
-                encoding="utf-8",
-            )
-            (workspace / "evaluation-findings.json").write_text(
-                "# Evaluation findings\n\nNo blocking regression.\n",
-                encoding="utf-8",
-            )
-        provider = FakeProvider([_successful_provider] * 64)
-        result = Botpipe(workspace, provider=provider).run(
-            function,
-            params,
-            request=f"Staged smoke for {entry.name}",
-            task_id="staged",
-            run_id="run",
+@pytest.mark.parametrize("workflow_name", sorted(LAB_SCENARIOS))
+def test_lab_workflow_completes_with_captured_outputs(tmp_path, workflow_name):
+    function = resolve_workflow(workflow_name, ".")
+    module = __import__(function.__module__, fromlist=["Params"])
+    params = module.Params(**LAB_SCENARIOS[workflow_name])
+    workspace = tmp_path / workflow_name
+    workspace.mkdir()
+    (workspace / "README.md").write_text("# Test workspace\n", encoding="utf-8")
+    if workflow_name == "workflow_and_eval_to_refined_workflow_package":
+        (workspace / "evaluation-summary.json").write_text(
+            json.dumps({"selected_workflow_name": "release_candidate_to_go_no_go"}),
+            encoding="utf-8",
         )
-        assert result.ok, f"{entry.name}: {result.error}"
-        assert result.value.workflow_name == entry.name
-        if entry.name == "workflow_run_traces_to_optimization_candidates":
-            assert result.value.candidate_set.next_action == "collect_evidence"
-            assert result.value.provider_budget["used_turns"] == 0
-        else:
-            assert result.value.phases
-            assert all(phase.outcome == "accepted" for phase in result.value.phases)
+        (workspace / "evaluation-findings.json").write_text(
+            "# Evaluation findings\n\nNo blocking regression.\n",
+            encoding="utf-8",
+        )
+    provider = FakeProvider([_successful_provider] * 64)
+    result = Botpipe(workspace, provider=provider).run(
+        function,
+        params,
+        request=f"Staged smoke for {workflow_name}",
+        task_id="staged",
+        run_id="run",
+    )
+    assert result.ok, f"{workflow_name}: {result.error}"
+    assert result.value.workflow_name == workflow_name
+    if workflow_name == "workflow_run_traces_to_optimization_candidates":
+        assert result.value.candidate_set.next_action == "collect_evidence"
+        assert result.value.provider_budget["used_turns"] == 0
+    else:
+        assert result.value.phases
+        assert all(phase.outcome == "accepted" for phase in result.value.phases)
+        assert set(result.value.artifact_names) == set(result.value.artifacts)
+        assert all(handle.path.is_file() for handle in result.value.artifacts.values())

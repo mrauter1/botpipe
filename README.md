@@ -135,6 +135,7 @@ Full access must be explicitly requested.
 - [Architecture](docs/architecture.md): journal, adapter, locks and process lifecycle.
 - [Migration](docs/migration.md): the 1.x to 2.0 changes.
 - [Codex compatibility](docs/codex-compatibility.md): capabilities and validation.
+- [Testing](docs/testing.md): behavioral coverage, parallel runs and CI timings.
 - [Optimizer](docs/optimizer.md): packaged optimization workflows.
 
 Version 1.x journals are rejected untouched. Use a new state directory for 2.0.

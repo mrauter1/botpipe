@@ -63,7 +63,7 @@ botpipe = [
 labs = ["**/__pycache__/*", "**/*.py[cod]"]
 
 [project.optional-dependencies]
-test = ["pytest>=8,<10", "pytest-asyncio>=0.23"]
+test = ["pytest>=8,<10", "pytest-asyncio>=0.23", "pytest-xdist>=3.6,<4"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -28,10 +28,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
       - name: Install package and checks
         run: python -m pip install -e '.[test]' build mypy
       - name: Deterministic runtime and workflow suite
-        run: python -m pytest -q -o faulthandler_timeout=60
+        # Bound concurrency: these tests launch their own processes and use real durable stores.
+        run: python -m pytest -q -n 2 --dist worksteal --durations=30 -o faulthandler_timeout=60
       - name: Check public types
         run: python -m mypy --strict --follow-imports=silent tests/typecheck/provider_sdk.py
       - name: Build distributions
@@ -67,6 +70,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -91,4 +96,4 @@ jobs:
       - name: Local fixture contracts
         env:
           BOTPIPE_NATIVE_CODEX: 'codex'
-        run: python -m pytest -q tests/test_codex_contract.py -o faulthandler_timeout=60
+        run: python -m pytest -q tests/test_codex_contract.py --durations=10 -o faulthandler_timeout=60
