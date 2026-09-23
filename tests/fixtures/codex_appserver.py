@@ -90,7 +90,7 @@ while True:
         # The native turn may already be executing even though its RPC response
         # was lost. With no turn id available, only transport-tree teardown can
         # establish quiescence.
-        spawn_descendant()
+        spawn_descendant(new_session=True)
         while True:
             time.sleep(60)
     send(
@@ -101,7 +101,9 @@ while True:
     )
 
     if SCENARIO == "stall_tree":
-        spawn_descendant()
+        # Match Codex's native sandbox helper: it has its own process group and
+        # is reparented when app-server teardown wins the interruption race.
+        spawn_descendant(new_session=True)
         continue
     if SCENARIO == "native_background":
         background_child = spawn_descendant(new_session=True)

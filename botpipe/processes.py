@@ -6,8 +6,40 @@ import os
 import signal
 import subprocess
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
+
+
+def _posix_processes() -> dict[int, tuple[int, int, str, str]]:
+    """Return pid -> (ppid, pgid, state, stable process identity)."""
+
+    snapshot = subprocess.run(
+        ["ps", "-axo", "pid=,ppid=,pgid=,stat=,lstart="],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=0.5,
+    )
+    processes = {}
+    for line in snapshot.stdout.splitlines():
+        fields = line.split(None, 4)
+        if len(fields) != 5:
+            continue
+        try:
+            pid, ppid, pgid = map(int, fields[:3])
+        except ValueError:
+            continue
+        identity = fields[4]
+        if os.path.exists(f"/proc/{pid}/stat"):
+            try:
+                # Linux field 22 is the kernel start tick and survives renames.
+                with open(f"/proc/{pid}/stat", "rb") as proc_stat:
+                    tail = proc_stat.read().rsplit(b") ", 1)[1]
+                identity = f"linux:{tail.split()[19].decode('ascii')}"
+            except (OSError, IndexError, UnicodeDecodeError):
+                continue
+        processes[pid] = (ppid, pgid, fields[3], identity)
+    return processes
 
 
 def _posix_group_is_quiescent(process_group: int) -> bool:
@@ -42,6 +74,7 @@ class ProcessContainment:
     _windows_job: WindowsJobObject | None = None
     _owned_pid: int | None = None
     _owned_pgid: int | None = None
+    _descendant_groups: dict[int, dict[int, str]] = field(default_factory=dict)
 
     @classmethod
     def create(cls) -> ProcessContainment:
@@ -75,13 +108,76 @@ class ProcessContainment:
         self._owned_pid = process.pid
         self._owned_pgid = process_group
 
+    def capture_descendant_groups(self, process: subprocess.Popen[bytes]) -> None:
+        """Remember attached descendant groups before native cleanup reparents them."""
+
+        if (
+            os.name != "posix"
+            or process.pid != self._owned_pid
+            or process.poll() is not None
+        ):
+            return
+        try:
+            if os.getpgid(process.pid) != self._owned_pgid:
+                return
+        except ProcessLookupError:
+            return
+        try:
+            processes = _posix_processes()
+        except (OSError, subprocess.SubprocessError):
+            return
+        descendants = {process.pid}
+        changed = True
+        while changed:
+            changed = False
+            for pid, (ppid, _pgid, _state, _identity) in processes.items():
+                if pid not in descendants and ppid in descendants:
+                    descendants.add(pid)
+                    changed = True
+        for pid in descendants - {process.pid}:
+            _ppid, pgid, state, identity = processes[pid]
+            if pgid != self._owned_pgid and state[:1] not in {"X", "Z"}:
+                self._descendant_groups.setdefault(pgid, {})[pid] = identity
+
+    def _signal_descendant_groups(self, sig: signal.Signals) -> None:
+        if not self._descendant_groups:
+            return
+        try:
+            processes = _posix_processes()
+        except (OSError, subprocess.SubprocessError):
+            return
+        finished = set()
+        for pgid, witnesses in self._descendant_groups.items():
+            # A live member with the captured start identity prevents signalling
+            # a group whose numeric ID was reused after cleanup.
+            if not any(
+                pid in processes
+                and processes[pid][1] == pgid
+                and processes[pid][2][:1] not in {"X", "Z"}
+                and processes[pid][3] == identity
+                for pid, identity in witnesses.items()
+            ):
+                finished.add(pgid)
+                continue
+            try:
+                os.killpg(pgid, sig)
+            except ProcessLookupError:
+                finished.add(pgid)
+            else:
+                if sig == signal.SIGKILL:
+                    finished.add(pgid)
+        for pgid in finished:
+            self._descendant_groups.pop(pgid, None)
+
     def terminate(
         self, process: subprocess.Popen[bytes], *, grace_seconds: float = 10.0
     ) -> None:
         if process.pid != self._owned_pid:
             raise RuntimeError("refusing to terminate an unregistered process")
         if os.name == "posix":
+            self._signal_descendant_groups(signal.SIGTERM)
             self._terminate_posix_group(process, grace_seconds=grace_seconds)
+            self._signal_descendant_groups(signal.SIGKILL)
             return
         assert self._windows_job is not None
         self._windows_job.terminate(1)
@@ -100,6 +196,7 @@ class ProcessContainment:
             assert self._windows_job is not None
             self._windows_job.terminate(0)
             return
+        self._signal_descendant_groups(signal.SIGTERM)
         process_group = self._owned_pgid
         if (
             process_group is None
@@ -113,13 +210,16 @@ class ProcessContainment:
             try:
                 os.killpg(process_group, 0)
             except ProcessLookupError:
+                self._signal_descendant_groups(signal.SIGKILL)
                 return
             except PermissionError:
                 if _posix_group_is_quiescent(process_group):
+                    self._signal_descendant_groups(signal.SIGKILL)
                     return
                 raise
             time.sleep(0.02)
         self._terminate_posix_group(process, grace_seconds=grace_seconds)
+        self._signal_descendant_groups(signal.SIGKILL)
 
     def _terminate_posix_group(
         self, process: subprocess.Popen[bytes], *, grace_seconds: float

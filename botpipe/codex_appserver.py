@@ -1116,6 +1116,9 @@ class CodexAppServerAdapter:
         )
 
     def _stop_turn(self, turn: _Turn, reason: str) -> None:
+        if self._process is not None and self._containment is not None:
+            self._containment.capture_descendant_groups(self._process)
+        cleanup_deadline = time.monotonic() + self.interrupt_grace_seconds
         try:
             self.interrupt(turn.thread_id, turn.turn_id)
         except Exception:  # noqa: BLE001,S110 - escalation below is authoritative
@@ -1125,7 +1128,7 @@ class CodexAppServerAdapter:
         self._kill_transport(
             CodexTurnError(reason),
             grace_seconds=0.1,
-            cleanup_seconds=self.interrupt_grace_seconds,
+            cleanup_seconds=max(0.0, cleanup_deadline - time.monotonic()),
         )
 
     def _fail_transport(
@@ -1154,6 +1157,8 @@ class CodexAppServerAdapter:
         cleanup_seconds: float = 0.1,
     ) -> None:
         process, containment = self._process, self._containment
+        if process is not None and containment is not None:
+            containment.capture_descendant_groups(process)
         if process is not None and process.poll() is None:
             deadline = time.monotonic() + cleanup_seconds
             if (
@@ -1184,6 +1189,8 @@ class CodexAppServerAdapter:
             # The cleanup RPC acknowledges acceptance before native jobs exit.
             while process.poll() is None and time.monotonic() < deadline:
                 time.sleep(max(0.0, min(0.02, deadline - time.monotonic())))
+            if containment is not None:
+                containment.capture_descendant_groups(process)
         self._fail_transport(error)
         if process is not None and containment is not None:
             if process.poll() is None:

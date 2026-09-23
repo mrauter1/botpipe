@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import os
+import signal
 import subprocess
 import sys
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -53,6 +55,67 @@ def test_posix_live_group_permission_error_is_not_suppressed(monkeypatch):
 
     with pytest.raises(PermissionError):
         containment._terminate_posix_group(process, grace_seconds=0)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX process-group behavior")
+def test_captured_nested_group_is_killed_after_parent_is_reaped(tmp_path):
+    from botpipe.processes import _posix_group_is_quiescent
+
+    marker, pid_file = tmp_path / "escaped", tmp_path / "child.pid"
+    child = (
+        "import pathlib,sys,time;"
+        "pathlib.Path(sys.argv[1]).write_text(str(__import__('os').getpid()));"
+        "time.sleep(1);pathlib.Path(sys.argv[2]).write_text('escaped')"
+    )
+    parent = (
+        "import subprocess,sys,time;"
+        f"subprocess.Popen([sys.executable,'-c',{child!r},sys.argv[1],sys.argv[2]],"
+        "start_new_session=True);time.sleep(10)"
+    )
+    containment = ProcessContainment.create()
+    process = subprocess.Popen(
+        [sys.executable, "-c", parent, str(pid_file), str(marker)],
+        **containment.creation_kwargs,
+    )
+    containment.attach_and_start(process)
+    try:
+        deadline = time.monotonic() + 3
+        while not pid_file.exists() and time.monotonic() < deadline:
+            time.sleep(0.02)
+        assert pid_file.exists()
+        child_pid = int(pid_file.read_text())
+        containment.capture_descendant_groups(process)
+        os.killpg(process.pid, signal.SIGKILL)
+        process.wait(timeout=2)
+
+        containment.ensure_tree_exited(process, grace_seconds=0.1)
+        assert _posix_group_is_quiescent(child_pid)
+        time.sleep(1.1)
+        assert not marker.exists()
+    finally:
+        if process.poll() is None:
+            containment.terminate(process, grace_seconds=0.1)
+        containment.close()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX process-group behavior")
+def test_captured_group_with_reused_witness_is_not_signalled(monkeypatch):
+    from botpipe import processes
+
+    containment = ProcessContainment(
+        {}, _descendant_groups={456: {123: "original-start"}}
+    )
+    monkeypatch.setattr(
+        processes,
+        "_posix_processes",
+        lambda: {123: (1, 456, "S", "replacement-start")},
+    )
+    signals = []
+    monkeypatch.setattr(processes.os, "killpg", lambda pgid, sig: signals.append((pgid, sig)))
+
+    containment._signal_descendant_groups(signal.SIGKILL)
+
+    assert signals == []
 
 
 def test_windows_child_is_suspended_until_owned_job_assignment(monkeypatch):

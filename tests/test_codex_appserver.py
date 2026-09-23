@@ -427,6 +427,10 @@ async def test_sdk_async_cancel_waits_for_pre_ack_turn_tree_cleanup(
         await asyncio.wait_for(task, timeout=3)
     # Returning cancellation is the quiescence boundary: a delayed editor must
     # already be dead and cannot mutate the workspace afterward.
+    if os.name == "posix":
+        from botpipe.processes import _posix_group_is_quiescent
+
+        assert _posix_group_is_quiescent(int(pid_file.read_text()))
     await asyncio.sleep(1.1)
     assert not marker.exists(), "SDK cancellation returned while editing continued"
     client.close()

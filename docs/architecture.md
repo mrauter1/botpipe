@@ -91,6 +91,7 @@ interrupts all turns sharing that server; each retains its own recovery status.
 Async cancellation waits for cleanup before returning control to the caller.
 
 Codex owns the sandbox for its child commands. Botpipe adds no namespaces.
-A descendant that deliberately escapes the process group is outside Botpipe's
-control. Full access and explicitly enabled remote MCP tools have the effects
+Still-attached descendant groups are included in shutdown, with process identities
+checked before signalling. A daemon already detached from the tree is outside
+Botpipe's control. Full access and explicitly enabled remote MCP tools have the effects
 authorized by that configuration; filesystem read-only is not remote isolation.
