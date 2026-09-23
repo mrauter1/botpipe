@@ -12,6 +12,7 @@ Run `botpipe doctor` to check the installation that will execute your work.
 | Per-turn `sandboxPolicy` | Every provider call | CapabilityError before dispatch |
 | `turn/interrupt` | Every provider call | CapabilityError before dispatch |
 | `outputSchema` | Optional | Embed schema in prompt; validate and repair locally |
+| `thread/unsubscribe` | Changing a loaded thread's configuration | CapabilityError before dispatch; unchanged calls still work |
 | Tool-feature configuration | Read-only presets | Affected preset unavailable |
 | Ambient MCP disablement | Read-only presets | Affected preset unavailable |
 
@@ -28,6 +29,10 @@ versions may work if they expose the required capabilities; they have not been
 established by this rewrite's validation. A later release is accepted on its
 capabilities. A failed cross-version `thread/resume` raises `SessionError`, so a
 workflow can choose a new session. Replayed operations do not require Codex.
+
+Codex keeps loaded threads subscribed and ignores configuration changes on that
+resume path. When a session's profile changes, Botpipe unsubscribes it before
+resuming the same thread so Codex reloads its configuration and conversation.
 
 ## Enforcement
 

@@ -278,6 +278,7 @@ class CodexAppServerAdapter:
             tuple[str, str], list[tuple[str, dict[str, Any]]]
         ] = {}
         self._thread_locks: dict[str, Any] = {}
+        self._thread_profiles: dict[str, str] = {}
         self._mcp_servers: frozenset[str] = frozenset()
         self._closed = False
 
@@ -321,6 +322,7 @@ class CodexAppServerAdapter:
                     self._containment.close()
                     self._containment = None
                 self._orphan_events.clear()
+                self._thread_profiles.clear()
                 containment = ProcessContainment.create()
                 try:
                     process = subprocess.Popen(
@@ -752,6 +754,19 @@ class CodexAppServerAdapter:
             )
         else:
             try:
+                previous_profile = self._thread_profiles.get(thread_id)
+                if previous_profile is not None and previous_profile != profile_hash:
+                    if "thread/unsubscribe" not in capabilities.methods:
+                        raise CapabilityError(
+                            "thread/unsubscribe is required to change a loaded thread's configuration"
+                        )
+                    # Codex ignores resume config while a thread has subscribers.
+                    # Detach this idle session so resume reloads the same history.
+                    self._rpc(
+                        "thread/unsubscribe",
+                        {"threadId": thread_id},
+                        min(10, request.timeout),
+                    )
                 result = self._rpc(
                     "thread/resume",
                     {**common, "threadId": thread_id},
@@ -783,6 +798,7 @@ class CodexAppServerAdapter:
         if outer_lock is None:
             outer_lock = self._thread_locks.setdefault(thread_id, threading.RLock())
             outer_lock.acquire()
+        self._thread_profiles[thread_id] = profile_hash
         try:
             if request.on_checkpoint is not None:
                 request.on_checkpoint(
@@ -986,6 +1002,7 @@ class CodexAppServerAdapter:
         try:
             with self._thread_locks.setdefault(thread_id, threading.RLock()):
                 self._rpc("thread/resume", common, min(10, request.timeout))
+                self._thread_profiles.setdefault(thread_id, "")
                 result = self._rpc(
                     "thread/read",
                     {"threadId": thread_id, "includeTurns": True},

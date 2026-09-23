@@ -5,6 +5,7 @@ import json
 import sys
 import threading
 import time
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -57,7 +58,7 @@ def capabilities(*, output_schema: bool = True) -> CodexCapabilities:
         version="codex-cli contract-fixture",
         identity="fixture-probe-hash",
         methods=frozenset(
-            {"initialize", "thread/start", "thread/resume", "turn/start", "turn/interrupt"}
+            {"initialize", "thread/start", "thread/resume", "thread/unsubscribe", "turn/start", "turn/interrupt"}
         ),
         features=(
             {"name": "apps", "stage": "stable", "enabled": True},
@@ -219,6 +220,7 @@ def test_query_then_run_resumes_same_native_thread(tmp_path: Path) -> None:
     calls = transcript(tmp_path)
     assert [item["method"] for item in calls if item["method"].startswith("thread/")] == [
         "thread/start",
+        "thread/unsubscribe",
         "thread/resume",
     ]
     resume = next(item for item in calls if item["method"] == "thread/resume")
@@ -228,6 +230,30 @@ def test_query_then_run_resumes_same_native_thread(tmp_path: Path) -> None:
         "readOnly",
         "workspaceWrite",
     ]
+
+
+def test_unchanged_thread_profile_needs_no_unsubscribe_but_changes_require_it(
+    tmp_path: Path,
+) -> None:
+    client = adapter(tmp_path)
+    client._capabilities = replace(
+        capabilities(), methods=capabilities().methods - {"thread/unsubscribe"}
+    )
+    try:
+        first = client.start_turn(request(tmp_path, preset="query", tools=()))
+        second = client.start_turn(
+            request(tmp_path, preset="query", tools=(), session_id=first.session_id)
+        )
+        with pytest.raises(CapabilityError, match="thread/unsubscribe"):
+            client.start_turn(request(tmp_path, session_id=second.session_id))
+    finally:
+        client.close()
+
+    calls = transcript(tmp_path)
+    assert [item["method"] for item in calls if item["method"].startswith("thread/")] == [
+        "thread/start", "thread/resume",
+    ]
+    assert sum(item["method"] == "turn/start" for item in calls) == 2
 
 
 @pytest.mark.parametrize("cancel", [False, True], ids=["timeout", "cancellation"])

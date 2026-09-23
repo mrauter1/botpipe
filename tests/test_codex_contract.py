@@ -57,6 +57,20 @@ class ResponsesFixture(ThreadingHTTPServer):
         assert self._next_function is None
         self._next_function = (call_id, command)
 
+    def diagnostics(self) -> str:
+        return json.dumps([
+            {
+                "tools": [
+                    {"name": tool.get("name", tool.get("type")),
+                     "arguments": sorted(tool.get("parameters", {}).get("properties", {}))}
+                    for tool in request.get("tools", [])
+                ],
+                "outputs": [item for item in request.get("input", [])
+                            if item.get("type") == "function_call_output"],
+            }
+            for request in self.requests
+        ], indent=2)
+
 
 class ResponsesHandler(BaseHTTPRequestHandler):
     def log_message(self, *_args) -> None:
@@ -324,6 +338,9 @@ def test_latest_native_default_session_presets_and_read_only_enforcement(native)
         ):
             pytest.skip(f"host cannot start the native Codex sandbox: {exc}")
         raise
+    finally:
+        if not report.exists():
+            print("Native fixture diagnostics:", server.diagnostics())
     assert default.value == NativeAnswer(ok=True)
     assert report.read_text(encoding="utf-8") == "native artifact"
     assert default.artifacts.report.read_text() == "native artifact"
@@ -488,11 +505,11 @@ def test_latest_native_interruption_cleans_up_long_running_shell_process(
     client, server, workspace = native
     marker = f"BOTPIPE_SLEEPER_{uuid.uuid4().hex}"
     if os.name == "nt":
-        command = f'Write-Output "{marker} $PID"; while ($true) {{}}'
+        command = f'Write-Output "BOTPIPE_READY {marker} $PID"; while ($true) {{}}'
     else:
         # Only shell built-ins are needed. This remains running even when the
         # sandbox deliberately hides /tmp and external interpreter paths.
-        command = f"printf '%s\\n' '{marker}'; while :; do :; done"
+        command = f"printf 'BOTPIPE_READY %s\\n' '{marker}'; while :; do :; done"
     server.queue_exec("native-sleeper", command)
     events = []
     call = replace(
@@ -512,6 +529,11 @@ def test_latest_native_interruption_cleans_up_long_running_shell_process(
     stop_monitor = threading.Event()
     remaining_at_return: set[int] | None = None
     cancellation_elapsed = 0.0
+
+    def ready_seen() -> bool:
+        return f"BOTPIPE_READY {marker}" in "".join(
+            _event_strings([event.data for event in events])
+        )
 
     def collect_windows_pid() -> None:
         event_text = "".join(_event_strings([event.data for event in events]))
@@ -542,8 +564,9 @@ def test_latest_native_interruption_cleans_up_long_running_shell_process(
             ))
             try:
                 deadline = time.monotonic() + 30
-                while not observed:
+                while not observed or not ready_seen():
                     if task.done():
+                        print("Native fixture diagnostics:", server.diagnostics())
                         await task
                         pytest.fail("native shell returned before cancellation")
                     if os.name == "nt":
@@ -580,6 +603,7 @@ def test_latest_native_interruption_cleans_up_long_running_shell_process(
         if interruption == "timeout":
             with pytest.raises(ProviderTimeoutError):
                 _start_or_skip_local_sandbox(client, call)
+                print("Native fixture diagnostics:", server.diagnostics())
         else:
             try:
                 asyncio.run(cancel_public_call())
@@ -600,6 +624,7 @@ def test_latest_native_interruption_cleans_up_long_running_shell_process(
     if os.name == "nt":
         collect_windows_pid()
     assert observed, "native shell never appeared in the host process table"
+    assert ready_seen(), f"native shell never emitted its marker: {server.diagnostics()}"
 
     deadline = time.monotonic() + 5
     while survivors() and time.monotonic() < deadline:

@@ -50,6 +50,9 @@ while True:
     if method == "mcpServerStatus/list":
         send({"id": request["id"], "result": {"data": []}})
         continue
+    if method == "thread/unsubscribe":
+        send({"id": request["id"], "result": {"status": "unsubscribed"}})
+        continue
     if method in {"thread/start", "thread/resume"}:
         thread_id = request["params"].get("threadId", "thread-fixture")
         send({"id": request["id"], "result": {"thread": {"id": thread_id}}})
