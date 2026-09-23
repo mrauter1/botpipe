@@ -535,7 +535,7 @@ def test_alternate_provider_workspace_excludes_independent_clients(
 
     def hold_target(request):
         entered.set()
-        assert release.wait(5), "test did not release provider"
+        assert release.wait(15), "test did not release provider"
         (request.workspace / "effect.txt").write_text("first owner's effect")
         return "edited"
 
@@ -558,13 +558,15 @@ def test_alternate_provider_workspace_excludes_independent_clients(
         with ThreadPoolExecutor(max_workers=1) as executor:
             running = executor.submit(first.run, owner)
             try:
-                assert entered.wait(2), "owner did not dispatch"
+                # Workflow/source and journal setup can be slow on hosted Windows.
+                # This watchdog is separate from the contention behavior below.
+                assert entered.wait(10), "owner did not dispatch"
                 with pytest.raises(WorkspaceBusy):
                     other.run(contender)
                 assert other_provider.calls == []
             finally:
                 release.set()
-                result = running.result(timeout=5)
+                result = running.result(timeout=10)
             assert result.ok, result.error
 
 
