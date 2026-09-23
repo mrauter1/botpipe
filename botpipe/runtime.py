@@ -2037,6 +2037,7 @@ class Botpipe:
                         operation_id,
                         record,
                         source,
+                        clear_fence=writable,
                         already_failed=replaying_failure,
                     )
                     return
@@ -2080,7 +2081,7 @@ class Botpipe:
                 },
                 operation_id,
             )
-            if record["kind"] == "provider":
+            if record["kind"] == "provider" and writable:
                 self.clear_workspace_fence(
                     self._operation_workspace(record), run_id, operation_id
                 )

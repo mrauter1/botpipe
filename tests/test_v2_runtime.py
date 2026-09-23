@@ -615,3 +615,59 @@ def test_fail_resolution_replays_fence_cleanup_after_hard_crash(tmp_path, monkey
             run_id="another-run", operation_id="another-operation", timeout=0
         ):
             pass
+
+
+@pytest.mark.parametrize("preset", ["query", "generate"])
+@pytest.mark.parametrize("resolution", ["retry", "accept", "fail"])
+def test_read_only_resolution_ignores_unrelated_writer_fence(
+    tmp_path, monkeypatch, preset, resolution
+):
+    from botpipe import Botpipe, Provider, workflow
+    from botpipe.providers import FakeProvider
+
+    _coordination(monkeypatch, tmp_path)
+
+    @workflow
+    def writer():
+        return Provider(session=None).run("write")
+
+    @workflow
+    def reader():
+        provider = Provider(session=None)
+        return getattr(provider, preset)("read")
+
+    provider = FakeProvider(
+        [SystemExit("writer interrupted"), SystemExit("reader interrupted")]
+    )
+    with Botpipe(tmp_path, provider=provider) as client:
+        with pytest.raises(SystemExit, match="writer interrupted"):
+            client.run(writer, run_id="fenced-writer")
+        with pytest.raises(SystemExit, match="reader interrupted"):
+            client.run(reader, run_id=f"{preset}-{resolution}")
+
+        operation = next(
+            row
+            for row in client.journal.operations(f"{preset}-{resolution}")
+            if row["kind"] == "provider"
+        )
+        client.resolve(
+            f"{preset}-{resolution}",
+            operation["id"],
+            **{resolution: True},
+        )
+
+        resolved = client.journal.get(operation["id"])
+        if resolution == "retry":
+            assert resolved["response"]["retry_authorized"] is True
+        elif resolution == "accept":
+            assert resolved["response"]["metadata"]["operator_accepted"] is True
+        else:
+            assert resolved["status"] == "failed"
+
+        with pytest.raises(WorkspaceUnresolved, match="fenced-writer"):
+            with client.workspace_turn(
+                run_id="another-writer",
+                operation_id="another-operation",
+                timeout=0,
+            ):
+                pass
