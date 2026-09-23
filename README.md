@@ -14,7 +14,8 @@ history, and the runtime records operations and their outcomes.
 
 ## Install
 
-Use Python 3.12 or 3.13 and an installed, authenticated Codex CLI:
+From a Botpipe checkout, use Python 3.12 or 3.13 and an installed, authenticated
+Codex CLI:
 
 ```bash
 pip install -e .
@@ -44,10 +45,11 @@ change = p.run("Add CSV export, tests, and a report.", writes=(report,))
 | Call | Sandbox | Network | Tools | Recovery default |
 | --- | --- | --- | --- | --- |
 | `run` | Workspace write | Off by default | Codex defaults | Retry after confirmed stop |
-| `query` | Read only | Off | Codex tools; ambient MCP off | Retry after confirmed stop |
+| `query` | Read only | Off | Codex defaults, without ambient MCP | Retry after confirmed stop |
 | `generate` | Read only | Off | None by default | Retry after confirmed stop |
 
-`generate(allowed_tools=("shell",))` opts into named tools. Restrictions use
+`query(tools=("shell",))` and `generate(allowed_tools=("shell",))` select an
+explicit tool allowlist. Restrictions use
 Codex configuration and its sandbox, followed by an audit of observed tool
 calls. Every result records the mechanisms used. Botpipe does not replace
 Codex's tools or claim stronger isolation than Codex provides. Read-only and
@@ -64,10 +66,10 @@ and a currently `Running` turn receives only a targeted bounded interrupt and
 reconciliation attempt. A historical interrupted status or acceptance of a
 native cleanup request does not confirm a stop without durable cleanup evidence.
 
-Reusing `p` continues one conversation. `p.with_config(instructions="Review carefully.")`
-shares that conversation; pass `session=Session()` for a separate one or
-`session=None` for independent calls. Each call is durable, including calls
-outside a workflow.
+Reusing `p` continues one conversation. A variant made with
+`p.with_config(instructions="Review carefully.")` shares that conversation;
+pass `session=Session()` for a separate conversation or `session=None` for an
+independent call. Each call is durable, including calls outside a workflow.
 
 ## Ordinary Python workflows
 
@@ -123,9 +125,13 @@ retry_safe = true
 interrupt_grace_seconds = 10
 ```
 
-Per-call settings override derived configuration, constructor settings, file
-settings, then built-in defaults. An enclosing workflow's policy is a ceiling.
-Full access must be explicitly requested.
+Model names pass through to Codex, so replace the example model with one your
+installation supports. Per-call settings override constructor settings, which
+override file settings and built-in defaults. An enclosing workflow's policy is
+a ceiling. Full access must be explicitly requested.
+
+`[codex].timeout` limits one provider call. The separate top-level `timeout`
+provides the default provider-dispatch and session-wait bound.
 
 ## Documentation
 

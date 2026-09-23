@@ -21,10 +21,12 @@ tables, transition objects, graph compilation, or mutable workflow-state models.
 
 ## Choose the operation boundary
 
-Use `Session.run` or `Session.arun` for provider work. Use `@activity` for custom
-I/O such as an API call, subprocess, clock, random source, or material file read.
-Use `ask` for typed human input. Use `current_run().operation` only when building
-a lower-level integration.
+Use `Provider.run` or `Provider.arun` for provider work that may edit its
+workspace, and `Provider.query` or `Provider.aquery` for read-only review. Pass a
+`Session` to the provider or to an individual call when conversation continuity
+matters. Use `@activity` for custom I/O such as an API call, subprocess, clock,
+random source, or material file read. Use `ask_human` for typed human input. Use
+`current_run().operation` only when building a lower-level integration.
 
 An activity with uncertain external effects should keep `retry_safe=False`.
 Interrupted work then requires explicit operator reconciliation. Never describe
@@ -50,10 +52,12 @@ selection, so do not reselect items from a changed live file on resume.
 
 Use one session for consecutive calls that benefit from provider conversation
 continuity. Use `Session.task(key)` for task continuity and
-`Session.work_item(item, key)` for per-item continuity. Use `Session.fresh()` for
-independent review. Parallel branches need separate sessions. They may share the
-application workspace only for read-only provider work; editing branches require
-explicit, isolated `workspace=` paths and distinct artifact destinations.
+`Session.work_item(item, key)` for per-item continuity. Use a new `Session()` for
+an independent run-scoped conversation, commonly by deriving a provider with
+`provider.with_config(session=Session())`. Parallel branches need separate
+sessions. They may share the application workspace only for read-only provider
+work; editing branches require explicit, isolated `workspace=` paths and
+distinct artifact destinations.
 
 ## Validate
 

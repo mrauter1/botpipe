@@ -17,7 +17,8 @@ workspace and journal; durable writes and process containment stay enabled.
 CI runs the full suite on Linux, macOS and Windows with Python 3.12 and 3.13.
 Native Codex contracts run separately and serially on each platform. Dependency
 downloads are cached; installed environments, test results and Codex binaries are
-not cached. Codex contract jobs still install the latest stable release.
+not cached. Codex contract jobs resolve the floating `@openai/codex@latest` tag
+on each job; record the installed version when diagnosing a failure.
 
 Prefer observable contracts: validated values and captured artifacts, replay
 without repeated effects, refused unsafe recovery, workspace exclusion, process
