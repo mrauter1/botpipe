@@ -79,10 +79,11 @@ The top-level `timeout` in `botpipe.toml` separately supplies the default
 provider-dispatch and session-wait bound.
 
 Turns sharing a session are serialized. Give parallel branches separate
-sessions. A conversation can mix presets; each turn gets the policy of the
-method used for that turn. Changing its tool profile requires Codex to resume
-the same history with the new profile; Botpipe fails before dispatch if the
-installed Codex cannot enforce that transition.
+sessions; writable calls with distinct sessions may run concurrently in the same
+repository. A conversation can mix presets; each turn gets the policy of the
+method used for that turn. Changing its tool profile requires Codex to resume the
+same history with the new profile; Botpipe fails before dispatch if the installed
+Codex cannot enforce that transition.
 
 ## Results, artifacts and events
 
@@ -93,8 +94,11 @@ installed Codex cannot enforce that transition.
 Declare output files with `Artifact.json`, `Artifact.md`, `Artifact.text`, or
 `Artifact.raw`, then pass them in `writes` to `run`. A required file or JSON
 schema is validated before the operation completes. The returned artifact is a
-content-checked snapshot; Botpipe does not roll back other workspace edits after
-validation failure.
+content-checked immutable snapshot of that file. The current file may already
+have existed and still be captured when valid; Botpipe does not claim exclusive
+writer attribution or an atomic repository snapshot. It does not prepare,
+backup, restore, or roll back workspace files. A retry runs against current
+state.
 
 `on_event` receives `StreamEvent(type, data)`. Notifications are best effort;
 callback exceptions do not change the operation outcome. Replay emits one
@@ -118,3 +122,5 @@ recoverable through `resume` and `resolve`, just like workflow operations.
 
 The call timeout covers setup as well as execution. Async cancellation performs
 a bounded interrupt and cleanup attempt before the task finishes cancelling.
+Escalation on the shared app-server may interrupt sibling turns; each affected
+operation is reconciled separately from durable evidence.

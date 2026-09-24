@@ -21,10 +21,11 @@ not cached. Codex contract jobs resolve the floating `@openai/codex@latest` tag
 on each job; record the installed version when diagnosing a failure.
 
 Prefer observable contracts: validated values and captured artifacts, replay
-without repeated effects, refused unsafe recovery, workspace exclusion, process
-termination, and working installed packages. Exercise real persistence and real
-child processes where those are the behavior under test. Use controlled clocks
-for deadline arithmetic rather than short sleeps.
+without repeated effects, refused unsafe recovery, concurrent writers with
+distinct sessions, same-session serialization, per-operation reconciliation,
+process termination, and working installed packages. Exercise real persistence
+and real child processes where those are the behavior under test. Use controlled
+clocks for deadline arithmetic rather than short sleeps.
 
 Lab scenarios are individual parametrized tests. Discovery must match the
 scenario inventory so a new lab cannot silently miss behavioral coverage. Prompt

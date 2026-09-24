@@ -87,13 +87,14 @@ verified local teardown. Native history marked failed, interrupted, or cancelled
 is `Stopped` only after background cleanup and a bounded, paginated inventory
 proves empty. The historical status or successful cleanup RPC by itself is not
 proof. Missing support, nonempty inventory, timeout, or inspection error yields
-`Unknown`; writable work remains fenced. Native `Completed` history can still be
-adopted when terminal items pass the tool audit and an assistant message supplies
-the response, even if cleanup evidence is incomplete.
+`Unknown`; the affected operation remains unresolved. Native `Completed` history
+can still be adopted when terminal items pass the tool audit and an assistant
+message supplies the response, even if cleanup evidence is incomplete.
 A daemon already detached from the process tree is outside Botpipe's containment,
 so Botpipe cannot guarantee that every escaped daemon ended. Killing a shared
-app-server interrupts its other active turns too; each remains subject to
-reconciliation.
+app-server may interrupt its other active turns too. Botpipe does not claim
+independent cancellation: cleanup evidence for every affected operation is
+reconciled as `Completed`, `Stopped`, or `Unknown`.
 
 ## Validation and release gate
 

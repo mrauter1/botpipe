@@ -98,27 +98,24 @@ completed output-repair work can still replay when later policy sets
 repair dispatches. Automatic and operator-authorized retries are recorded with
 their origin. Cancellation ends the current invocation after bounded cleanup;
 it does not redispatch. A later explicit resume may retry subject to the recorded
-policy and limits.
+policy and limits. Retries operate on the repository's current state.
 
 The run operation limit applies atomically across nested and parallel scopes and
 can only be increased on resume. The run timeout supplies the default provider
 dispatch and session-lock wait bound; it is not an overall deadline for workflow
-Python. Workspace-lock waits have a separate default below. Durable
-provider-budget deadlines retain their original deadline across suspension and
-resume, and nested provider budgets all apply.
+Python. Durable provider-budget deadlines retain their original deadline across
+suspension and resume, and nested provider budgets all apply.
 
 An operator resolves uncertainty with explicit retry, acceptance of the current
 workspace, or failure. A retry never pretends the earlier effects did not happen.
-Accepting captures declared artifacts and still validates their contract.
+Accepting validates and captures the current declared artifact files. A valid
+file may have existed before the attempt; capture does not establish exclusive
+writer attribution.
 
 ## Concurrency
 
 A run lock is keyed by journal path and run id and held for execution or
-resolution. Another executor receives `RunBusy` immediately. A workspace writer
-lock is keyed by canonical root and held for a writable provider turn, including
-output capture. Its wait uses `Botpipe(workspace_lock_timeout=...)` (default one
-second), or the provider call's `timeout` when set, then raises `WorkspaceBusy`.
-Coordination files live in per-user state, outside workspaces.
+resolution. Another executor receives `RunBusy` immediately.
 Windows and macOS canonical roots are compared without case sensitivity.
 
 Conversation turns use the same file-lock primitive, keyed by journal and durable
@@ -126,18 +123,17 @@ session identity. Separate handles for one task or work item therefore serialize
 across threads and processes, including the repair loop and session updates.
 Independent calls (`session=None`) need no conversation lock.
 
-An unresolved writable operation leaves a small fence next to its workspace
-lock. Other runs trying to write the root receive `WorkspaceUnresolved`, naming
-the run to resolve. Resolving the owning operation clears its fence. Botpipe
-does not clear a fence merely because its owner journal is absent. The explicit
-CLI abandonment path takes the operator's assertion that the old work stopped, checks
-the absent owner journal while holding the workspace lock, and archives a
-receipt before clearing the fence.
+Distinct sessions may dispatch writable turns against the same canonical
+workspace at the same time, across threads and processes. An unresolved writable
+operation remains governed by its own operation and run recovery state; it does
+not create a global workspace reservation. Read-only calls and writers may
+observe concurrent edits. Use separate worktrees when an application needs
+source isolation.
 
-Read-only presets do not acquire the writer lock or consult its fence. They may
-observe a concurrent edit in progress. Overlapping roots such as `repo` and
-`repo/sub` are not coordinated. Parallel writers should use separate worktrees.
-Different hosts and containers are not coordinated.
+The workspace is shared mutable state, not a Botpipe transaction boundary.
+Botpipe does not prepare, move, back up, restore, or roll back workspace files,
+and does not take an atomic repository snapshot. Declared output capture
+validates and stores immutable versions of the current files only.
 
 ## Process lifecycle
 
@@ -146,8 +142,11 @@ kill-on-close. Cancellation sends `turn/interrupt`, waits up to the configured
 grace period, then attempts to terminate the process group or Job if needed.
 Escalation interrupts all turns sharing that server; each retains its own
 recovery status. Async cancellation waits for the bounded cleanup attempt before
-returning control to the caller. If cleanup cannot confirm that a turn stopped,
-its result is `Unknown` and a writable operation remains fenced.
+returning control to the caller. Because the server is shared, cancellation may
+interrupt sibling operations; Botpipe does not promise independent cancellation.
+Cleanup evidence is reconciled for each affected operation as `Completed`,
+`Stopped`, or `Unknown`. An unconfirmed stop remains `Unknown` for that operation
+and run.
 
 Codex owns the sandbox for its child commands. Botpipe adds no namespaces.
 Still-attached descendant groups are included in shutdown, with process identities

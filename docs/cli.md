@@ -2,13 +2,13 @@
 
 `botpipe doctor` prints JSON containing the resolved Codex executable and
 version, probe hash, methods and feature inventory, derived capability flags,
-preset availability, the canonical workspace, and its fence state. A probe
-failure still prints the workspace and fence plus `codex.available: false`, then
-exits 1. An unavailable `run` preset also exits 1; unavailable optional presets
-remain visible without making doctor fail. Include the JSON and stderr in a
-compatibility report. Probing runs `codex --version`, `codex features list`, and
-app-server schema generation; it does not start a model turn or require model
-credentials. Use `--workspace PATH` to inspect the exact workspace in question.
+preset availability, and the canonical workspace. A probe failure still prints
+the workspace plus `codex.available: false`, then exits 1. An unavailable `run`
+preset also exits 1; unavailable optional presets remain visible without making
+doctor fail. Include the JSON and stderr in a compatibility report. Probing runs
+`codex --version`, `codex features list`, and app-server schema generation; it
+does not start a model turn or require model credentials. Use `--workspace PATH`
+to inspect the exact workspace in question.
 
 ```bash
 botpipe doctor --workspace .
@@ -48,40 +48,25 @@ botpipe resolve RUN_ID OPERATION_ID --accept
 botpipe resolve RUN_ID OPERATION_ID --fail
 ```
 
-Exactly one of `--retry`, `--accept`, `--fail`, `--response` and
-`--clear-fence` can be supplied. With none of the first four, `resolve` performs
-the normal recovery decision. `--no-resume` records a resolution without
-continuing execution. For an activity
+Exactly one of `--retry`, `--accept`, `--fail` and `--response` can be supplied.
+With none of them, `resolve` performs the normal recovery decision. `--no-resume`
+records a resolution without continuing execution. For an activity
 with an externally observed return value, use `--response JSON_OR_TEXT`; JSON
 `null` is a valid value. Artifact reconciliation can supply an explicit
 `--artifact-digests` JSON object when required.
 
-`--accept` captures declared artifacts immediately, before releasing the workspace
-fence. Later edits cannot change the accepted versions. If an interrupted turn
-has no answer, string results become an empty string; typed results require an
-explicit provider response whose `text` matches the recorded output schema,
-for example `--response '{"text":"{\"ok\":true}"}'`.
+`--accept` validates and captures the current declared artifact files
+immediately. A valid file that existed before the attempt may be accepted;
+Botpipe does not attribute it exclusively to that writer. Later edits cannot
+change the captured versions. If an interrupted turn has no answer, string
+results become an empty string; typed results require an explicit provider
+response whose `text` matches the recorded output schema, for example
+`--response '{"text":"{\"ok\":true}"}'`.
 
 A second process executing the same run receives `RunBusy`. An unresolved
-workspace fence names the run that must be resolved before other runs write
-that root. Query and generation remain available.
-
-If the owner journal is gone and normal resolution is impossible, the operator
-can explicitly abandon the matching fence after independently confirming that
-the old work has stopped:
-
-```bash
-botpipe resolve RUN_ID OPERATION_ID --clear-fence --workspace PATH
-```
-
-`--clear-fence` is the operator's assertion that the abandoned work is stopped.
-It does not create or open a runtime journal. Under the workspace mutex, Botpipe
-requires the exact workspace, run, and operation identifiers; refuses an
-existing or unverifiable owner journal; and atomically archives the fence as a
-timestamped `.cleared.*.json` receipt beside it. The JSON output records the
-workspace, owner identifiers, journal and fence paths, receipt path, cleared
-status, and operator assertion. A missing owner journal never clears a fence
-automatically.
+operation remains unresolved for that operation and run, but it does not block
+other runs from writing the same workspace. Parallel writable calls may share a
+repository when they use distinct sessions; turns sharing a session serialize.
 
 ## Configuration
 
