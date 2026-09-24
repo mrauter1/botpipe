@@ -1352,7 +1352,7 @@ class Botpipe:
         folder = Path(folder)
         return (
             folder / "ledger.jsonl", folder / "input.json", folder / "request.md",
-            folder / "operations", self.state_dir / "sessions",
+            folder / "operations", folder / "payloads", self.state_dir / "sessions",
         )
 
     @property

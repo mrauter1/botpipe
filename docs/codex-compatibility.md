@@ -52,9 +52,21 @@ administrator setup on the SDK user's behalf. Windows contract CI provisions the
 elevated sandbox explicitly in its isolated Codex home.
 
 Codex keeps loaded threads subscribed and ignores configuration changes on that
-resume path. Sandbox policy is sent with each turn. Tool configuration belongs
-to the thread, so when a session's tool profile changes Botpipe unsubscribes it
-before resuming the same thread and history with the new configuration.
+resume path. Botpipe resumes an unchanged loaded thread without unsubscribing,
+which preserves yielded background terminals between ordinary successful turns.
+Sandbox policy is sent with each turn. Tool configuration belongs to the thread,
+so when a session's tool profile changes Botpipe unsubscribes it before resuming
+the same thread and history with the new configuration. Native Codex may reap
+that thread's yielded background terminals during this required reload; finish
+them first or use another logical session when changing the tool profile.
+
+Codex 0.156.1 also holds an [exclusive cross-process writer lease](https://github.com/openai/codex/blob/rust-v0.156.1/codex-rs/rollout/src/writer_lock.rs)
+for each loaded thread. Another app-server process can resume that thread after the prior owner
+closes, but cannot take over while the first owner remains live. The protocol at
+that version has no immediate thread-unload operation: `thread/unsubscribe`
+removes the subscription and schedules delayed unloading, so it is not a live
+handoff primitive. Botpipe does not bypass that native lease or broker writer
+ownership between processes.
 
 ## Enforcement
 

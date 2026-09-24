@@ -435,7 +435,7 @@ def test_latest_native_default_session_presets_and_read_only_enforcement(native)
     assert default.artifacts.report.read_text() == "native artifact"
 
 
-def test_latest_native_background_continuity_and_cross_process_refresh(native) -> None:
+def test_latest_native_background_continuity_between_same_profile_turns(native) -> None:
     client, server, workspace = native
     marker = workspace / "between-turn-background.txt"
     readiness = workspace / "between-turn-background.ready"
@@ -482,11 +482,11 @@ def test_latest_native_background_continuity_and_cross_process_refresh(native) -
             native_request(
                 workspace,
                 operation_id="native-background-second",
-                preset="generate",
+                preset="run",
                 prompt=(
                     "continuity-marker-second: return the fixed response without tools."
                 ),
-                tools=(),
+                tools=("shell",),
                 session_id=started.session_id,
             ),
         )
@@ -498,56 +498,109 @@ def test_latest_native_background_continuity_and_cross_process_refresh(native) -
         while not marker.exists() and time.monotonic() < deadline:
             time.sleep(0.02)
         assert marker.read_text(encoding="utf-8") == "alive"
-
-        other_process = CodexAppServerAdapter(
-            client.command,
-            env=client.env,
-            state_dir=client.state_dir,
-            interrupt_grace_seconds=client.interrupt_grace_seconds,
-        )
-        try:
-            external = _start_or_skip_local_sandbox(
-                other_process,
-                native_request(
-                    workspace,
-                    operation_id="native-external-process",
-                    preset="query",
-                    prompt=(
-                        "continuity-marker-external: return the fixed response without tools."
-                    ),
-                    tools=(),
-                    session_id=started.session_id,
-                ),
-            )
-            refreshed = _start_or_skip_local_sandbox(
-                client,
-                native_request(
-                    workspace,
-                    operation_id="native-original-process-refresh",
-                    preset="generate",
-                    prompt=(
-                        "continuity-marker-refresh: return the fixed response without tools."
-                    ),
-                    tools=(),
-                    session_id=started.session_id,
-                ),
-            )
-        finally:
-            other_process.close()
-        assert external.session_id == refreshed.session_id == started.session_id
-        wire_inputs = [json.dumps(request.get("input", [])) for request in server.requests]
-        external_wire = next(
-            value for value in wire_inputs if "continuity-marker-external" in value
-        )
-        refreshed_wire = next(
-            value for value in wire_inputs if "continuity-marker-refresh" in value
-        )
-        assert "continuity-marker-first" in external_wire
-        assert "continuity-marker-second" in external_wire
-        assert "continuity-marker-external" in refreshed_wire
     finally:
         if not marker.exists():
             print("Native fixture diagnostics:", server.diagnostics())
+
+
+def test_latest_native_cross_process_reacquires_after_owner_closes(native) -> None:
+    client, server, workspace = native
+    started = _start_or_skip_local_sandbox(
+        client,
+        native_request(
+            workspace,
+            operation_id="native-owner-before-close",
+            preset="query",
+            prompt="continuity-marker-before-close: return the fixed response.",
+            tools=(),
+        ),
+    )
+    client.close()
+
+    next_process = CodexAppServerAdapter(
+        client.command,
+        env=client.env,
+        state_dir=client.state_dir,
+        interrupt_grace_seconds=client.interrupt_grace_seconds,
+    )
+    try:
+        resumed = _start_or_skip_local_sandbox(
+            next_process,
+            native_request(
+                workspace,
+                operation_id="native-owner-after-close",
+                preset="query",
+                prompt="continuity-marker-after-close: return the fixed response.",
+                tools=(),
+                session_id=started.session_id,
+            ),
+        )
+    finally:
+        next_process.close()
+
+    assert resumed.session_id == started.session_id
+    wire_inputs = [json.dumps(request.get("input", [])) for request in server.requests]
+    resumed_wire = next(
+        value for value in wire_inputs if "continuity-marker-after-close" in value
+    )
+    assert "continuity-marker-before-close" in resumed_wire
+
+
+def test_latest_native_live_cross_process_handoff(native) -> None:
+    """Acceptance: another runtime must observe history while the owner is live."""
+    client, server, workspace = native
+    started = _start_or_skip_local_sandbox(
+        client,
+        native_request(
+            workspace,
+            operation_id="native-live-owner",
+            preset="query",
+            prompt="continuity-marker-live-owner: return the fixed response.",
+            tools=(),
+        ),
+    )
+    other_process = CodexAppServerAdapter(
+        client.command,
+        env=client.env,
+        state_dir=client.state_dir,
+        interrupt_grace_seconds=client.interrupt_grace_seconds,
+    )
+    try:
+        external = _start_or_skip_local_sandbox(
+            other_process,
+            native_request(
+                workspace,
+                operation_id="native-live-handoff",
+                preset="query",
+                prompt="continuity-marker-live-handoff: return the fixed response.",
+                tools=(),
+                session_id=started.session_id,
+            ),
+        )
+        refreshed = _start_or_skip_local_sandbox(
+            client,
+            native_request(
+                workspace,
+                operation_id="native-live-owner-refresh",
+                preset="query",
+                prompt="continuity-marker-live-refresh: return the fixed response.",
+                tools=(),
+                session_id=started.session_id,
+            ),
+        )
+    finally:
+        other_process.close()
+
+    assert external.session_id == refreshed.session_id == started.session_id
+    wire_inputs = [json.dumps(request.get("input", [])) for request in server.requests]
+    external_wire = next(
+        value for value in wire_inputs if "continuity-marker-live-handoff" in value
+    )
+    refreshed_wire = next(
+        value for value in wire_inputs if "continuity-marker-live-refresh" in value
+    )
+    assert "continuity-marker-live-owner" in external_wire
+    assert "continuity-marker-live-handoff" in refreshed_wire
 
 
 def _process_exists(process_id: int) -> bool:

@@ -123,7 +123,8 @@ recoverable through `resume` and `resolve`, just like workflow operations.
 The call timeout covers setup as well as execution. Async cancellation performs
 a bounded interrupt and cleanup attempt before the task finishes cancelling.
 Within a runtime, each logical session owns its app-server process, so escalation
-is targeted to that conversation. Another process reacquires the same durable
-session with its own process and resumes the bound native thread. Calls sharing
-the session serialize and are reconciled from their durable attempt evidence;
-unrelated sessions keep their own processes.
+is targeted to that conversation. Calls sharing the session serialize and are
+reconciled from their durable attempt evidence; unrelated sessions keep their
+own processes. Codex 0.156.1 keeps an exclusive writer lease while a thread is
+loaded. Close the current provider or runtime before handing that durable session
+to another process; the next runtime can then resume the bound native thread.

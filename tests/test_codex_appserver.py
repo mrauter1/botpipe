@@ -407,7 +407,7 @@ def test_query_then_run_resumes_same_native_thread(tmp_path: Path) -> None:
     ]
 
 
-def test_same_profile_refreshes_loaded_thread_before_resume(tmp_path: Path) -> None:
+def test_same_profile_resumes_without_unloading_background_state(tmp_path: Path) -> None:
     client = adapter(tmp_path)
     try:
         first = client.start_turn(request(tmp_path, preset="query", tools=()))
@@ -422,7 +422,6 @@ def test_same_profile_refreshes_loaded_thread_before_resume(tmp_path: Path) -> N
         item["method"] for item in calls if item["method"].startswith("thread/")
     ] == [
         "thread/start",
-        "thread/unsubscribe",
         "thread/resume",
     ]
 
@@ -1021,6 +1020,108 @@ def test_cleanup_failure_checkpoints_every_affected_turn(tmp_path: Path) -> None
     for recorded in updates.values():
         assert recorded[-1]["cleanup"]["status"] == "incomplete"
         assert "process inspection unavailable" in recorded[-1]["cleanup"]["error"]
+
+
+def test_close_retries_incomplete_process_tree_verification(tmp_path: Path) -> None:
+    class FakeProcess:
+        pid = 123
+
+        def __init__(self) -> None:
+            self.alive = True
+
+        def poll(self):
+            return None if self.alive else 0
+
+        def wait(self, *, timeout):
+            return 0
+
+    class FlakyContainment:
+        def __init__(self) -> None:
+            self.verifications = 0
+            self.closes = 0
+
+        def capture_descendant_groups(self, _process):
+            pass
+
+        def terminate(self, process, *, grace_seconds):
+            process.alive = False
+
+        def ensure_tree_exited(self, _process, *, grace_seconds):
+            self.verifications += 1
+            if self.verifications == 1:
+                raise RuntimeError("cleanup temporarily unverified")
+
+        def close(self):
+            self.closes += 1
+
+    client = adapter(tmp_path)
+    process = FakeProcess()
+    containment = FlakyContainment()
+    client._process = process  # type: ignore[assignment]
+    client._containment = containment  # type: ignore[assignment]
+
+    with pytest.raises(CodexProtocolError, match="cleanup temporarily unverified"):
+        client.close()
+    assert containment.closes == 0
+
+    client.close()
+    assert containment.verifications >= 3
+    assert containment.closes == 1
+    client.close()
+    assert containment.closes == 1
+
+
+def test_close_retries_rejected_cleanup_checkpoint(tmp_path: Path) -> None:
+    from botpipe.codex_appserver import _Turn
+
+    class FakeProcess:
+        pid = 123
+
+        def __init__(self) -> None:
+            self.alive = True
+
+        def poll(self):
+            return None if self.alive else 0
+
+        def wait(self, *, timeout):
+            return 0
+
+    class Containment:
+        def capture_descendant_groups(self, _process):
+            pass
+
+        def terminate(self, process, *, grace_seconds):
+            process.alive = False
+
+        def ensure_tree_exited(self, _process, *, grace_seconds):
+            pass
+
+        def close(self):
+            pass
+
+    completed_attempts = 0
+
+    def checkpoint(update: dict) -> None:
+        nonlocal completed_attempts
+        if update.get("cleanup", {}).get("status") == "completed":
+            completed_attempts += 1
+            if completed_attempts == 1:
+                raise RuntimeError("ledger temporarily unavailable")
+
+    client = adapter(tmp_path)
+    process = FakeProcess()
+    turn = _Turn(
+        "thread", "turn", None, None, checkpoint, process=process  # type: ignore[arg-type]
+    )
+    client._process = process  # type: ignore[assignment]
+    client._containment = Containment()  # type: ignore[assignment]
+    client._turns[(turn.thread_id, turn.turn_id)] = turn
+
+    with pytest.raises(CodexProtocolError, match="ledger temporarily unavailable"):
+        client.close()
+    client.close()
+
+    assert completed_attempts == 2
 
 
 @pytest.mark.skipif(os.name != "posix", reason="detached POSIX process groups")

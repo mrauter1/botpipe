@@ -81,9 +81,11 @@ repair; another run cannot silently continue that conversation.
 Within a runtime, each logical session owns one lazy `codex app-server` adapter.
 Independent calls use an operation-owned adapter. Calls sharing a session
 serialize under a lock keyed by the state root and canonical session identity,
-including across runs and processes. A second process that reacquires the session
-uses its own adapter and resumes the bound native thread. Distinct sessions use
-distinct app-server processes and may run concurrently.
+including across runs and processes. Same-profile turns remain subscribed so
+native background work can continue. Codex 0.156.1 retains an exclusive writer
+lease for that loaded thread, so cross-process handoff requires closing the
+current adapter before the next runtime resumes the bound thread. Distinct
+sessions use distinct app-server processes and may run concurrently.
 
 `Provider.with_config` shares its parent's session unless `session=` replaces it.
 `Session.task(key)` is stable across runs for one task, `Session.work_item(item,

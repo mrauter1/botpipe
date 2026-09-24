@@ -166,19 +166,13 @@ def _plain(value: Any, *, label: str) -> Any:
 
 
 def _profile_hash(request: Any, config: Mapping[str, Any]) -> str:
-    policy = (
-        request.policy.effective()
-        if hasattr(request.policy, "effective")
-        else request.policy
-    )
-    policy_value = policy.to_dict() if hasattr(policy, "to_dict") else {}
+    # Only values applied while starting/resuming the thread belong here.
+    # Preset, sandboxPolicy, effort and outputSchema are applied per turn and
+    # must not force a reload that would reap a yielded background terminal.
     value = {
         "workspace": str(Path(request.workspace).resolve()),
-        "policy": policy_value,
-        "preset": request.preset,
-        "tools": request.tools,
+        "model": getattr(request.policy, "model", None),
         "instructions": request.instructions,
-        "output_schema": request.output_schema,
         "config": config,
     }
     return hashlib.sha256(
@@ -361,10 +355,14 @@ class CodexAppServerAdapter:
         self._transport_cleanup_results: weakref.WeakKeyDictionary[
             subprocess.Popen[bytes], str | None
         ] = weakref.WeakKeyDictionary()
+        self._cleanup_checkpoint_failures: weakref.WeakSet[
+            subprocess.Popen[bytes]
+        ] = weakref.WeakSet()
         self._pre_exit_captured: weakref.WeakSet[subprocess.Popen[bytes]] = (
             weakref.WeakSet()
         )
         self._closed = False
+        self._cleanup_complete = False
 
     def probe(self, *, deadline: float | None = None) -> CodexCapabilities:
         if deadline is not None and time.monotonic() >= deadline:
@@ -429,7 +427,11 @@ class CodexAppServerAdapter:
                         recorded = self._transport_cleanup_results.get(
                             previous_process, _CLOSED
                         )
-                        if recorded is _CLOSED or recorded is None:
+                        if (
+                            recorded is _CLOSED
+                            or recorded is None
+                            or previous_process in self._cleanup_checkpoint_failures
+                        ):
                             raise
                 capabilities = self.probe(deadline=deadline)
                 if self._containment is not None:
@@ -983,14 +985,16 @@ class CodexAppServerAdapter:
             else:
                 try:
                     previous_profile = self._thread_profiles.get(thread_id)
-                    if (
+                    refresh_loaded = (
                         previous_profile is not None
+                        and previous_profile != profile_hash
+                    )
+                    if (
+                        refresh_loaded
                         and "thread/unsubscribe" in capabilities.methods
                     ):
-                        # A durable session can be advanced by another runtime
-                        # while this process is idle.  Refresh every subscribed
-                        # thread before resume so cached profile/subscription
-                        # state cannot hide intervening turns.
+                        # A loaded thread needs resubscription only when its
+                        # thread-level configuration changed.
                         self._rpc(
                             "thread/unsubscribe",
                             {"threadId": thread_id},
@@ -998,12 +1002,12 @@ class CodexAppServerAdapter:
                             deadline=deadline,
                         )
                     elif (
-                        previous_profile is not None
-                        and previous_profile != profile_hash
+                        refresh_loaded
                         and "thread/unsubscribe" not in capabilities.methods
                     ):
                         raise CapabilityError(
-                            "thread/unsubscribe is required to change a loaded thread's configuration"
+                            "thread/unsubscribe is required to change a loaded "
+                            "thread's configuration"
                         )
                     result = self._rpc(
                         "thread/resume",
@@ -1434,16 +1438,20 @@ class CodexAppServerAdapter:
         cleanup_uncertain: str | None = None
         try:
             previous_profile = self._thread_profiles.get(thread_id)
-            if previous_profile is not None and "thread/unsubscribe" in capabilities.methods:
+            refresh_loaded = (
+                previous_profile is not None and previous_profile != profile_hash
+            )
+            if refresh_loaded and "thread/unsubscribe" in capabilities.methods:
                 self._rpc(
                     "thread/unsubscribe",
                     {"threadId": thread_id},
                     remaining(10),
                     deadline=deadline,
                 )
-            elif previous_profile is not None and previous_profile != profile_hash:
+            elif refresh_loaded:
                 raise CapabilityError(
-                    "thread/unsubscribe is required to change a loaded thread's configuration"
+                    "thread/unsubscribe is required to change a loaded thread's "
+                    "configuration"
                 )
             self._rpc("thread/resume", common, remaining(10), deadline=deadline)
             self._thread_profiles[thread_id] = profile_hash
@@ -1713,6 +1721,7 @@ class CodexAppServerAdapter:
         grace_seconds: float = 0.1,
         cleanup_seconds: float = 0.1,
         expected_process: subprocess.Popen[bytes] | None = None,
+        retry_incomplete: bool = False,
     ) -> None:
         # Stopping a turn stops its session app-server because Codex can keep
         # background terminals alive after turn interruption.  Serialize that
@@ -1740,7 +1749,11 @@ class CodexAppServerAdapter:
                 if prior_cleanup is not None:
                     raise CodexProtocolError(prior_cleanup)
                 return
-            if prior_cleanup is not _CLOSED:
+            retry_recorded_failure = retry_incomplete and prior_cleanup not in (
+                _CLOSED,
+                None,
+            )
+            if prior_cleanup is not _CLOSED and not retry_recorded_failure:
                 if prior_cleanup is not None:
                     raise CodexProtocolError(prior_cleanup)
                 return
@@ -1836,6 +1849,8 @@ class CodexAppServerAdapter:
                         )
                     if process is not None:
                         self._transport_cleanup_results[process] = str(failure)
+                    if process is not None and checkpoint_errors:
+                        self._cleanup_checkpoint_failures.add(process)
                     self._fail_transport(failure, process=process)
                     raise failure
                 if process is not None:
@@ -1853,8 +1868,16 @@ class CodexAppServerAdapter:
                         "app-server process-tree cleanup completed but its checkpoint failed: "
                         + "; ".join(str(exc) for exc in checkpoint_errors)
                     )
+                    if process is not None:
+                        # The process tree is clean, but close is not complete
+                        # until the owning ledger accepts that evidence. Retain
+                        # the transport so a later close retries the callback.
+                        self._transport_cleanup_results[process] = str(failure)
+                        self._cleanup_checkpoint_failures.add(process)
                     self._fail_transport(failure, process=process)
                     raise failure
+                if process is not None:
+                    self._cleanup_checkpoint_failures.discard(process)
                 # Wake RPC and turn waiters only after containment and its
                 # checkpoints are durable; returning is the quiescence boundary.
                 self._fail_transport(error, process=process)
@@ -1866,34 +1889,40 @@ class CodexAppServerAdapter:
                         self._tearing_down_process = process
 
     def close(self) -> None:
-        with self._lock:
-            if self._closed:
-                return
-            self._closed = True
-        cleanup_error: BaseException | None = None
-        try:
-            self._kill_transport(CodexProtocolError("Codex adapter closed"))
-        except BaseException as exc:
-            cleanup_error = exc
-        process, containment = self._process, self._containment
-        if process is not None:
+        with self._transport_cleanup_lock:
+            with self._lock:
+                if self._cleanup_complete:
+                    return
+                self._closed = True
+            cleanup_error: BaseException | None = None
             try:
-                process.wait(timeout=1)
-            except subprocess.TimeoutExpired:
+                self._kill_transport(
+                    CodexProtocolError("Codex adapter closed"),
+                    retry_incomplete=True,
+                )
+            except BaseException as exc:
+                cleanup_error = exc
+            process, containment = self._process, self._containment
+            if process is not None:
+                try:
+                    process.wait(timeout=1)
+                except subprocess.TimeoutExpired:
+                    if containment is not None:
+                        try:
+                            containment.terminate(process, grace_seconds=0.1)
+                        except BaseException as exc:
+                            cleanup_error = cleanup_error or exc
                 if containment is not None:
                     try:
-                        containment.terminate(process, grace_seconds=0.1)
+                        containment.ensure_tree_exited(process, grace_seconds=0.1)
                     except BaseException as exc:
                         cleanup_error = cleanup_error or exc
+            if cleanup_error is not None:
+                raise cleanup_error
             if containment is not None:
-                try:
-                    containment.ensure_tree_exited(process, grace_seconds=0.1)
-                except BaseException as exc:
-                    cleanup_error = cleanup_error or exc
-        if containment is not None:
-            containment.close()
-        if cleanup_error is not None:
-            raise cleanup_error
+                containment.close()
+            with self._lock:
+                self._cleanup_complete = True
 
     def __enter__(self) -> Self:
         return self

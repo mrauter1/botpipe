@@ -286,6 +286,7 @@ class ArtifactStore:
             "input.json",
             "request.md",
             "operations",
+            "payloads",
             ".artifacts",
         }
 
