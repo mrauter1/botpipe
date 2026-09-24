@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import sqlite3
 import subprocess
 import sys
@@ -11,15 +10,9 @@ from pathlib import Path
 
 import pytest
 
-from botpipe.errors import RunBusy, WorkspaceBusy, WorkspaceUnresolved
+from botpipe.errors import RunBusy
 from botpipe.journal import Journal
-from botpipe.locks import (
-    clear_abandoned_workspace_fence,
-    inspect_workspace_fence,
-    run_lock,
-    workspace_fence_path,
-    workspace_turn,
-)
+from botpipe.locks import run_lock
 from botpipe.processes import ProcessContainment
 from botpipe.runtime import _async_call
 
@@ -164,349 +157,6 @@ def test_empty_lock_file_contention_reports_run_busy(monkeypatch, tmp_path):
         pass
 
 
-def test_unresolved_fence_blocks_other_operations_but_not_readers(
-    monkeypatch, tmp_path
-):
-    _coordination(monkeypatch, tmp_path)
-    journal = tmp_path / "journal.sqlite3"
-    workspace = tmp_path / "workspace"
-    workspace.mkdir()
-
-    with workspace_turn(
-        workspace,
-        journal=journal,
-        run_id="run-1",
-        operation_id="op-1",
-        timeout=0,
-    ) as turn:
-        assert turn is not None
-        turn.mark_unresolved("op-1")
-
-    with workspace_turn(
-        workspace,
-        journal=journal,
-        run_id="another-run",
-        operation_id="op-2",
-        timeout=0,
-        writable=False,
-    ) as reader:
-        assert reader is None
-
-    with pytest.raises(WorkspaceUnresolved, match="run-1") as blocked:
-        with workspace_turn(
-            workspace,
-            journal=journal,
-            run_id="run-1",
-            operation_id="op-2",
-            timeout=0,
-        ):
-            pass
-    message = str(blocked.value)
-    assert f"workspace={turn.workspace!r}" in message
-    assert "run_id='run-1'" in message
-    assert "operation_id='op-1'" in message
-    assert f"journal={turn.owner['journal']!r}" in message
-    assert f"fence_path={str(workspace_fence_path(workspace))!r}" in message
-
-    with workspace_turn(
-        workspace,
-        journal=journal,
-        run_id="run-1",
-        operation_id="op-1",
-        timeout=0,
-    ) as owner:
-        assert owner is not None and owner.clear("op-1")
-
-
-def test_workspace_fence_is_shared_across_journals(monkeypatch, tmp_path):
-    _coordination(monkeypatch, tmp_path)
-    workspace = tmp_path / "workspace"
-    workspace.mkdir()
-    first = tmp_path / "first" / "state.sqlite3"
-    second = tmp_path / "second" / "state.sqlite3"
-
-    with workspace_turn(
-        workspace,
-        journal=first,
-        run_id="first",
-        operation_id="effect",
-        timeout=0,
-    ) as turn:
-        assert turn is not None
-        turn.mark_unresolved("effect")
-
-    with pytest.raises(WorkspaceUnresolved, match="first"), workspace_turn(
-        workspace,
-        journal=second,
-        run_id="second",
-        operation_id="write",
-        timeout=0,
-    ):
-        pass
-
-
-@pytest.mark.parametrize("failure", ["permission", "encoding"])
-def test_unreadable_fence_keeps_writer_blocked_with_diagnostics(
-    monkeypatch, tmp_path, failure
-):
-    _coordination(monkeypatch, tmp_path)
-    path = workspace_fence_path(tmp_path)
-    path.parent.mkdir(parents=True)
-    path.write_bytes(b"\xff")
-    if failure == "permission":
-        read_text = Path.read_text
-
-        def unreadable(self, *args, **kwargs):
-            if self == path:
-                raise PermissionError("fence denied")
-            return read_text(self, *args, **kwargs)
-
-        monkeypatch.setattr(Path, "read_text", unreadable)
-    with pytest.raises(WorkspaceUnresolved) as error, workspace_turn(
-        tmp_path,
-        journal=tmp_path / "journal.sqlite3",
-        run_id="writer",
-        operation_id="write",
-        timeout=0,
-    ):
-        pass
-    assert repr(str(path)) in str(error.value)
-    assert "unreadable" in str(error.value)
-    assert path.read_bytes() == b"\xff"
-
-
-def test_workspace_writer_timeout_is_bounded_across_processes(monkeypatch, tmp_path):
-    _coordination(monkeypatch, tmp_path)
-    workspace, ready = tmp_path / "workspace", tmp_path / "ready"
-    workspace.mkdir()
-    script = (
-        "import sys\n"
-        "from pathlib import Path\n"
-        "from botpipe.locks import workspace_turn\n"
-        "with workspace_turn(sys.argv[1], journal=sys.argv[2], run_id='held', "
-        "operation_id='held-op', timeout=0):\n"
-        " Path(sys.argv[3]).write_text('ready')\n"
-        " sys.stdin.read(1)\n"
-    )
-    process = subprocess.Popen(
-        [
-            sys.executable,
-            "-c",
-            script,
-            str(workspace),
-            str(tmp_path / "held.sqlite3"),
-            str(ready),
-        ],
-        stdin=subprocess.PIPE,
-    )
-    try:
-        _wait_for(ready)
-        started = time.monotonic()
-        with pytest.raises(WorkspaceBusy), workspace_turn(
-            workspace,
-            journal=tmp_path / "waiting.sqlite3",
-            run_id="waiting",
-            operation_id="waiting-op",
-            timeout=0.05,
-        ):
-            pass
-        assert time.monotonic() - started < 1
-    finally:
-        assert process.stdin is not None
-        process.stdin.write(b"x")
-        process.stdin.flush()
-        process.wait(timeout=5)
-
-
-def test_workspace_fence_survives_hard_process_exit(monkeypatch, tmp_path):
-    _coordination(monkeypatch, tmp_path)
-    workspace, ready = tmp_path / "workspace", tmp_path / "ready"
-    workspace.mkdir()
-    first = tmp_path / "first.sqlite3"
-    script = (
-        "import sys,time\n"
-        "from pathlib import Path\n"
-        "from botpipe.locks import workspace_turn\n"
-        "with workspace_turn(sys.argv[1], journal=sys.argv[2], run_id='crashed', "
-        "operation_id='effect', timeout=0) as turn:\n"
-        " turn.mark_unresolved('effect')\n"
-        " Path(sys.argv[3]).write_text('ready')\n"
-        " time.sleep(60)\n"
-    )
-    process = subprocess.Popen(
-        [sys.executable, "-c", script, str(workspace), str(first), str(ready)]
-    )
-    try:
-        _wait_for(ready)
-        process.kill()
-        process.wait(timeout=5)
-        with pytest.raises(WorkspaceUnresolved, match="crashed"), workspace_turn(
-            workspace,
-            journal=tmp_path / "second.sqlite3",
-            run_id="second",
-            operation_id="write",
-            timeout=0.2,
-        ):
-            pass
-    finally:
-        if process.poll() is None:
-            process.kill()
-            process.wait(timeout=5)
-
-
-def test_abandoned_fence_release_archives_exact_record(monkeypatch, tmp_path):
-    _coordination(monkeypatch, tmp_path)
-    workspace = tmp_path / "workspace"
-    workspace.mkdir()
-    journal = tmp_path / "missing" / "state.sqlite3"
-    with workspace_turn(
-        workspace,
-        journal=journal,
-        run_id="abandoned",
-        operation_id="effect",
-        timeout=0,
-    ) as turn:
-        assert turn is not None
-        turn.mark_unresolved("effect")
-
-    fence_path = workspace_fence_path(workspace)
-    original = fence_path.read_bytes()
-    result = clear_abandoned_workspace_fence(workspace, "abandoned", "effect")
-
-    assert result["workspace"] == turn.workspace
-    assert result["journal"] == turn.owner["journal"]
-    assert result["fence_path"] == str(fence_path)
-    assert result["cleared"] is True
-    assert not fence_path.exists()
-    assert Path(result["receipt_path"]).read_bytes() == original
-    assert inspect_workspace_fence(workspace)["status"] == "clear"
-    assert not journal.exists()
-
-
-@pytest.mark.parametrize(
-    "mismatch", ["run", "operation", "workspace", "missing-workspace"]
-)
-def test_abandoned_fence_release_rejects_wrong_owner(
-    monkeypatch, tmp_path, mismatch
-):
-    _coordination(monkeypatch, tmp_path)
-    workspace = tmp_path / "workspace"
-    workspace.mkdir()
-    journal = tmp_path / "missing.sqlite3"
-    with workspace_turn(
-        workspace,
-        journal=journal,
-        run_id="owner-run",
-        operation_id="owner-operation",
-        timeout=0,
-    ) as turn:
-        assert turn is not None
-        turn.mark_unresolved("owner-operation")
-    fence_path = workspace_fence_path(workspace)
-    if mismatch in {"workspace", "missing-workspace"}:
-        record = json.loads(fence_path.read_text(encoding="utf-8"))
-        if mismatch == "workspace":
-            record["workspace"] = str((tmp_path / "other-workspace").resolve())
-        else:
-            del record["workspace"]
-        fence_path.write_text(json.dumps(record), encoding="utf-8")
-
-    run_id = "other-run" if mismatch == "run" else "owner-run"
-    operation_id = (
-        "other-operation" if mismatch == "operation" else "owner-operation"
-    )
-    with pytest.raises(WorkspaceUnresolved, match="does not match"):
-        clear_abandoned_workspace_fence(workspace, run_id, operation_id)
-    assert fence_path.exists()
-
-
-def test_abandoned_fence_release_refuses_existing_owner_journal(
-    monkeypatch, tmp_path
-):
-    _coordination(monkeypatch, tmp_path)
-    workspace = tmp_path / "workspace"
-    workspace.mkdir()
-    journal = tmp_path / "state.sqlite3"
-    journal.write_bytes(b"existing journal")
-    with workspace_turn(
-        workspace,
-        journal=journal,
-        run_id="recoverable",
-        operation_id="effect",
-        timeout=0,
-    ) as turn:
-        assert turn is not None
-        turn.mark_unresolved("effect")
-
-    with pytest.raises(WorkspaceUnresolved, match="normal run resolution"):
-        clear_abandoned_workspace_fence(workspace, "recoverable", "effect")
-    assert workspace_fence_path(workspace).exists()
-
-
-def test_abandoned_fence_release_rejects_relative_journal_identity(
-    monkeypatch, tmp_path
-):
-    _coordination(monkeypatch, tmp_path)
-    workspace = tmp_path / "workspace"
-    workspace.mkdir()
-    with workspace_turn(
-        workspace,
-        journal=tmp_path / "missing.sqlite3",
-        run_id="abandoned",
-        operation_id="effect",
-        timeout=0,
-    ) as turn:
-        assert turn is not None
-        turn.mark_unresolved("effect")
-    fence_path = workspace_fence_path(workspace)
-    record = json.loads(fence_path.read_text(encoding="utf-8"))
-    record["journal"] = "moved-or-malformed.sqlite3"
-    fence_path.write_text(json.dumps(record), encoding="utf-8")
-
-    with pytest.raises(WorkspaceUnresolved, match="valid absolute"):
-        clear_abandoned_workspace_fence(workspace, "abandoned", "effect")
-    assert fence_path.exists()
-
-
-def test_abandoned_fence_release_refuses_active_writer(monkeypatch, tmp_path):
-    _coordination(monkeypatch, tmp_path)
-    workspace, ready = tmp_path / "workspace", tmp_path / "ready"
-    workspace.mkdir()
-    journal = tmp_path / "missing.sqlite3"
-    with workspace_turn(
-        workspace,
-        journal=journal,
-        run_id="abandoned",
-        operation_id="effect",
-        timeout=0,
-    ) as turn:
-        assert turn is not None
-        turn.mark_unresolved("effect")
-    script = (
-        "import sys\n"
-        "from pathlib import Path\n"
-        "from botpipe.locks import workspace_turn\n"
-        "with workspace_turn(sys.argv[1], journal=sys.argv[2], run_id='abandoned', "
-        "operation_id='effect', timeout=0):\n"
-        " Path(sys.argv[3]).write_text('ready')\n"
-        " sys.stdin.read(1)\n"
-    )
-    process = subprocess.Popen(
-        [sys.executable, "-c", script, str(workspace), str(journal), str(ready)],
-        stdin=subprocess.PIPE,
-    )
-    try:
-        _wait_for(ready)
-        with pytest.raises(WorkspaceBusy, match="busy"):
-            clear_abandoned_workspace_fence(workspace, "abandoned", "effect")
-        assert workspace_fence_path(workspace).exists()
-    finally:
-        assert process.stdin is not None
-        process.stdin.write(b"x")
-        process.stdin.flush()
-        process.wait(timeout=5)
-
-
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX process groups")
 def test_process_containment_cleans_up_descendants_after_leader_exit(tmp_path):
     marker = tmp_path / "escaped"
@@ -563,13 +213,16 @@ async def test_outer_cancellation_reaches_nested_provider_worker(tmp_path):
     import asyncio
     from contextlib import suppress
 
-    from botpipe import Botpipe, Provider, workflow
+    from botpipe import Artifact, Botpipe, Provider, workflow
     from botpipe.providers import FakeProvider, ProviderInterruptedError
 
     loop = asyncio.get_running_loop()
     entered, cleaned = asyncio.Event(), threading.Event()
+    destination = tmp_path / "partial.txt"
+    destination.write_text("before")
 
     def blocking(request):
+        destination.write_text("partial work")
         loop.call_soon_threadsafe(entered.set)
         deadline = time.monotonic() + 30
         while not request.cancel_event.is_set() and time.monotonic() < deadline:
@@ -580,7 +233,7 @@ async def test_outer_cancellation_reaches_nested_provider_worker(tmp_path):
 
     @workflow
     async def work():
-        await Provider().arun("wait")
+        await Provider().arun("wait", writes=(Artifact.text(destination),))
 
     with Botpipe(tmp_path, provider=FakeProvider([blocking])) as client:
         task = asyncio.create_task(client.arun(work))
@@ -592,6 +245,7 @@ async def test_outer_cancellation_reaches_nested_provider_worker(tmp_path):
             with pytest.raises(asyncio.CancelledError):
                 await asyncio.wait_for(task, 30)
             assert cleaned.is_set()
+            assert destination.read_text() == "partial work"
         finally:
             task.cancel()
             with suppress(asyncio.CancelledError):
@@ -688,10 +342,6 @@ def test_accept_unresolved_turn_adopts_workspace_and_keeps_thread(tmp_path, outc
         if outcome == "running":
             with pytest.raises(BotpipeError, match="still running"):
                 client.resolve("accept-unresolved", operation["id"], accept=True)
-            with pytest.raises(WorkspaceUnresolved), client.workspace_turn(
-                run_id="other-run", operation_id="other-operation", timeout=0
-            ):
-                pass
             return
 
         client.resolve("accept-unresolved", operation["id"], accept=True)
@@ -712,15 +362,11 @@ def test_accept_typed_unresolved_turn_requires_valid_response(tmp_path, sandbox)
     from botpipe.providers import FakeProvider, ProviderResponse
     from botpipe.recovery import Unknown
 
-    locked_recoveries = []
+    recoveries = []
 
     class InterruptedProvider(FakeProvider):
         def recover(self, request):
-            with pytest.raises(WorkspaceBusy), client.workspace_turn(
-                run_id="other-run", operation_id="other-operation", timeout=0
-            ):
-                pass
-            locked_recoveries.append(request.operation_id)
+            recoveries.append(request.operation_id)
             return Unknown()
 
     @workflow
@@ -747,7 +393,7 @@ def test_accept_typed_unresolved_turn_requires_valid_response(tmp_path, sandbox)
         client.resolve(
             "accept-typed", operation["id"], accept=True, response=ProviderResponse("7")
         )
-        assert locked_recoveries == [operation["id"]] * 3
+        assert recoveries == [operation["id"]] * 3
         resumed = client.resume("accept-typed", workflow=work)
         assert resumed.ok, resumed.error
         assert resumed.value.value == 7
@@ -785,67 +431,46 @@ def test_accept_checkpoints_selection_before_capture(tmp_path, monkeypatch):
             assert saved["artifact_resolution"]["digests"] == {
                 "accepted": hashlib.sha256(b"accepted").hexdigest()
             }
-            with pytest.raises(WorkspaceBusy), client.workspace_turn(
-                run_id="other-run", operation_id="other-operation", timeout=0
-            ):
-                pass
             raise SystemExit("before capture")
 
         monkeypatch.setattr(ArtifactStore, "capture", crash)
         with pytest.raises(SystemExit, match="before capture"):
             client.resolve("accept-crash", operation["id"], accept=True)
-        with pytest.raises(WorkspaceUnresolved), client.workspace_turn(
-            run_id="other-run", operation_id="other-operation", timeout=0
-        ):
-            pass
         monkeypatch.setattr(ArtifactStore, "capture", capture)
         resumed = client.resume("accept-crash", workflow=work)
         assert resumed.ok, resumed.error
         assert resumed.value.artifacts.accepted.read_text() == "accepted"
 
 
-def test_fail_resolution_replays_fence_cleanup_after_hard_crash(tmp_path, monkeypatch):
+def test_fail_resolution_is_repeatable_and_preserves_workspace(tmp_path):
     from botpipe import Botpipe, Provider, workflow
     from botpipe.providers import FakeProvider
+
+    destination = tmp_path / "partial.txt"
+    def interrupted(request):
+        destination.write_text("partial work")
+        raise SystemExit("lost after dispatch")
 
     @workflow
     def work():
         return Provider().run("write")
 
-    with Botpipe(
-        tmp_path, provider=FakeProvider([SystemExit("lost after dispatch")])
-    ) as client:
+    with Botpipe(tmp_path, provider=FakeProvider([interrupted])) as client:
         with pytest.raises(SystemExit):
-            client.run(work, run_id="fail-cleanup")
+            client.run(work, run_id="fail")
         operation = next(
-            row
-            for row in client.journal.operations("fail-cleanup")
+            row for row in client.journal.operations("fail")
             if row["kind"] == "provider"
         )
-
-        clear = client.clear_workspace_fence
-        monkeypatch.setattr(
-            client,
-            "clear_workspace_fence",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(
-                SystemExit("crash before fence cleanup")
-            ),
-        )
-        with pytest.raises(SystemExit, match="fence cleanup"):
-            client.resolve("fail-cleanup", operation["id"], fail=True)
+        client.resolve("fail", operation["id"], fail=True)
+        client.resolve("fail", operation["id"], fail=True)
         assert client.journal.get(operation["id"])["status"] == "failed"
-
-        monkeypatch.setattr(client, "clear_workspace_fence", clear)
-        client.resolve("fail-cleanup", operation["id"], fail=True)
-        with client.workspace_turn(
-            run_id="another-run", operation_id="another-operation", timeout=0
-        ):
-            pass
+        assert destination.read_text() == "partial work"
 
 
-@pytest.mark.parametrize("preset", ["query", "generate"])
+@pytest.mark.parametrize("preset", ["run", "query", "generate"])
 @pytest.mark.parametrize("resolution", ["retry", "accept", "fail"])
-def test_read_only_resolution_ignores_unrelated_writer_fence(
+def test_resolution_is_independent_of_an_unrelated_interrupted_writer(
     tmp_path, monkeypatch, preset, resolution
 ):
     from botpipe import Botpipe, Provider, workflow
@@ -863,11 +488,11 @@ def test_read_only_resolution_ignores_unrelated_writer_fence(
         return getattr(provider, preset)("read")
 
     provider = FakeProvider(
-        [SystemExit("writer interrupted"), SystemExit("reader interrupted")]
+        [SystemExit("writer interrupted"), SystemExit("reader interrupted"), "unrelated"]
     )
     with Botpipe(tmp_path, provider=provider) as client:
         with pytest.raises(SystemExit, match="writer interrupted"):
-            client.run(writer, run_id="fenced-writer")
+            client.run(writer, run_id="interrupted-writer")
         with pytest.raises(SystemExit, match="reader interrupted"):
             client.run(reader, run_id=f"{preset}-{resolution}")
 
@@ -890,10 +515,9 @@ def test_read_only_resolution_ignores_unrelated_writer_fence(
         else:
             assert resolved["status"] == "failed"
 
-        with pytest.raises(WorkspaceUnresolved, match="fenced-writer"):
-            with client.workspace_turn(
-                run_id="another-writer",
-                operation_id="another-operation",
-                timeout=0,
-            ):
-                pass
+        assert client.run(writer, run_id="another-writer").ok
+        original = next(
+            row for row in client.journal.operations("interrupted-writer")
+            if row["kind"] == "provider"
+        )
+        assert original["status"] == "response"

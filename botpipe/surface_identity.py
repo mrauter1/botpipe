@@ -329,7 +329,7 @@ def derive_workflow_surface_manifest(
                         f"workflow surface contains a symlink: {parent / name}"
                     )
             for name in sorted(files):
-                if name == ".botpipe-workspace.lock" or name.endswith((".pyc", ".pyo")):
+                if name.endswith((".pyc", ".pyo")):
                     continue
                 paths.append((parent / name).relative_to(root).as_posix())
     return derive_surface_manifest(

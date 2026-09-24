@@ -22,7 +22,6 @@ from .artifacts import (
     ArtifactStore,
 )
 from .errors import (
-    BotpipeError,
     BudgetExceeded,
     CancellationRequested,
     UncertainOperation,
@@ -35,7 +34,6 @@ from .provider_checkpoints import (
     EmptyCheckpoint,
     IntentCheckpoint,
     NotDispatchedCheckpoint,
-    PreparingCheckpoint,
     ProviderCheckpoint,
     ProviderLifecycle,
     RecoveryAction,
@@ -101,14 +99,6 @@ def execute_provider_operation(
     target = Path(workspace).resolve() if workspace is not None else ctx.workspace
     if not target.is_dir():
         raise ValueError(f"Provider workspace is not a directory: {target}")
-    if (
-        ctx.parallel_branch
-        and effective.sandbox_mode != SandboxMode.READ_ONLY
-        and target == ctx.workspace
-    ):
-        raise BotpipeError(
-            "Parallel editing requires a separate workspace= for each branch; use read_only for shared-workspace reviews"
-        )
     if isinstance(writes, Artifact):
         writes = (writes,)
     writes = tuple(writes)
@@ -116,7 +106,7 @@ def execute_provider_operation(
         raise TypeError("writes must contain Artifact declarations")
     if writes and effective.sandbox_mode == SandboxMode.READ_ONLY:
         raise ProviderPolicyError(
-            "read_only cannot create artifacts; use a writable isolated workspace for parallel outputs"
+            "read_only cannot declare output artifacts; use run with a writable sandbox"
         )
     store = ArtifactStore(
         ctx.folder,
@@ -124,8 +114,6 @@ def execute_provider_operation(
         allowed_roots=(ctx.task_folder,),
         forbidden_paths=(
             ctx.client.journal.path,
-            ctx.workspace / ".botpipe-workspace.lock",
-            target / ".botpipe-workspace.lock",
         ),
     )
     read_store = ArtifactStore(
@@ -133,7 +121,6 @@ def execute_provider_operation(
         workspace=ctx.workspace,
         forbidden_paths=(
             ctx.client.journal.path,
-            ctx.workspace / ".botpipe-workspace.lock",
         ),
     )
     if isinstance(reads, ArtifactHandle):
@@ -240,515 +227,431 @@ def execute_provider_operation(
                 checkpoint = ProviderCheckpoint.from_record(row.get("response"))
                 generation = checkpoint.generation
                 authorized = isinstance(checkpoint, RetryAuthorizedCheckpoint)
-                prepared_generation = checkpoint.attempt_generation
-                artifact_operation = f"{operation_id}:generation:{prepared_generation}"
+                prior_generation = checkpoint.attempt_generation
+                artifact_operation = f"{operation_id}:generation:{prior_generation}"
 
-                if isinstance(checkpoint, EmptyCheckpoint):
-                    store.destinations(writes)
-                writable_turn = operation == "run"
-                turn_context = (
-                    ctx.client.workspace_turn(
-                        target,
-                        run_id=ctx.run_id,
-                        operation_id=operation_id,
-                        writable=True,
-                        timeout=timeout,
+                def record_not_dispatched(kind: str, error: Exception) -> None:
+                    nonlocal checkpoint
+                    checkpoint = NotDispatchedCheckpoint(
+                        generation,
+                        request_data,
+                        kind,
+                        str(error),
                     )
-                    if writable_turn
-                    else nullcontext(None)
-                )
-                with turn_context as turn:
-                    if turn is not None:
-                        turn.mark_unresolved(operation_id)
+                    ctx.save_response(operation_id, checkpoint.to_record())
 
-                    def rollback():
-                        try:
-                            store.rollback(artifact_operation)
-                        except (OSError, ArtifactError) as exc:
-                            raise UncertainOperation(
-                                f"Artifact rollback is incomplete; resume after resolving the conflict: {exc}",
-                                operation_id,
-                            ) from exc
+                if isinstance(checkpoint, NotDispatchedCheckpoint):
+                    if checkpoint.error_kind == "policy_error":
+                        raise ProviderPolicyError(checkpoint.error)
+                    raise BudgetExceeded(checkpoint.error)
 
-                    def restore():
-                        try:
-                            store.restore(artifact_operation)
-                        except (OSError, ArtifactError) as exc:
-                            raise UncertainOperation(
-                                f"Artifact restoration is incomplete; resume after resolving the conflict: {exc}",
-                                operation_id,
-                            ) from exc
-                        nonlocal checkpoint
-                        if (
-                            isinstance(checkpoint, NotDispatchedCheckpoint)
-                            and checkpoint.restoration_pending
-                        ):
-                            checkpoint = replace(checkpoint, restoration_pending=False)
-                            ctx.save_response(operation_id, checkpoint.to_record())
-
-                    def record_not_dispatched(kind: str, error: Exception) -> None:
-                        nonlocal checkpoint
-                        checkpoint = NotDispatchedCheckpoint(
-                            generation,
-                            request_data,
-                            True,
-                            kind,
-                            str(error),
-                        )
-                        ctx.save_response(operation_id, checkpoint.to_record())
-                        restore()
-                        if turn is not None:
-                            turn.clear(operation_id)
-
-                    if isinstance(checkpoint, NotDispatchedCheckpoint):
-                        restore()
-                        if turn is not None:
-                            turn.clear(operation_id)
-                        if checkpoint.error_kind == "policy_error":
-                            raise ProviderPolicyError(checkpoint.error)
-                        raise BudgetExceeded(checkpoint.error)
-
-                    if isinstance(checkpoint, ValidationFailedCheckpoint):
-                        if turn is not None:
-                            turn.clear(operation_id)
-                        error = checkpoint.output_error
-                        failure = (
-                            OutputValidationError if error["retryable"] else TypeError
-                        )
-                        raise failure(error["message"])
-                    if isinstance(checkpoint, ValidatedCheckpoint):
-                        try:
-                            captured = store.captured(artifact_operation)
-                        except (OSError, ArtifactError) as exc:
-                            raise UncertainOperation(
-                                f"Artifact capture needs recovery: {exc}", operation_id
-                            ) from exc
-                        if captured is not None:
-                            if turn is not None:
-                                turn.clear(operation_id)
-                            if event_callback is not None:
-                                event_callback(
-                                    StreamEvent(
-                                        "replayed", {"operation_id": operation_id}
-                                    )
-                                )
-                            return Result(
-                                codec.decode(checkpoint.validated_value),
-                                captured,
-                                checkpoint.response.usage,
-                                operation_id,
-                                ctx.run_id,
-                                checkpoint.response.metadata,
-                            )
-                    preparing = isinstance(
-                        checkpoint, (EmptyCheckpoint, PreparingCheckpoint)
+                if isinstance(checkpoint, ValidationFailedCheckpoint):
+                    error = checkpoint.output_error
+                    failure = (
+                        OutputValidationError if error["retryable"] else TypeError
                     )
-                    if isinstance(checkpoint, EmptyCheckpoint):
-                        # Validate paths before any destination can move. This
-                        # marker proves a resumed preparation has not dispatched.
-                        store.destinations(writes)
-                        checkpoint = PreparingCheckpoint(generation)
-                        ctx.save_response(operation_id, checkpoint.to_record())
+                    raise failure(error["message"])
+                if isinstance(checkpoint, ValidatedCheckpoint):
                     try:
-                        destinations = (
-                            store.destinations(writes)
-                            if authorized
-                            else store.prepare(writes, artifact_operation)
-                        )
+                        captured = store.captured(artifact_operation)
                     except (OSError, ArtifactError) as exc:
                         raise UncertainOperation(
-                            f"Artifact preparation is incomplete; resume after resolving the conflict: {exc}",
-                            operation_id,
+                            f"Artifact capture needs recovery: {exc}", operation_id
                         ) from exc
-                    complete_prompt = rendered
-                    if input is not None:
-                        serial = (
-                            input.model_dump(mode="json")
-                            if hasattr(input, "model_dump")
-                            else input
-                        )
-                        complete_prompt += "\n\nInput:\n" + _json(serial)
-                    if handles:
-                        complete_prompt += (
-                            "\n\nRead these immutable input artifacts:\n"
-                            + _json(
-                                [
-                                    {
-                                        "name": h.name,
-                                        "path": str(h.path),
-                                        "kind": h.kind,
-                                    }
-                                    for h in handles
-                                ]
+                    if captured is not None:
+                        if event_callback is not None:
+                            event_callback(
+                                StreamEvent(
+                                    "replayed", {"operation_id": operation_id}
+                                )
                             )
-                        )
-                    if writes:
-                        complete_prompt += (
-                            "\n\nWrite the declared artifacts to these exact paths. Required files must be created in this turn:\n"
-                            + _json(
-                                [
-                                    {**a.to_record(), "path": str(destinations[a.name])}
-                                    for a in writes
-                                ]
-                            )
-                        )
-                    if schema is not None:
-                        complete_prompt += (
-                            "\n\nReturn only JSON matching this schema:\n"
-                            + _json(schema)
-                        )
-                    if feedback:
-                        complete_prompt += (
-                            "\n\nRepair the previous output contract failure and produce all required files again:\n"
-                            + feedback
-                        )
-                    binding = ctx.journal.session(session_key) or {}
-                    request_data = checkpoint.request_data or {
-                        "session_id": (
-                            repair_thread_id
-                            if session is None
-                            else binding.get("session_id")
-                        ),
-                        "receipt_dir": str(ctx.folder / "receipts"),
-                        "prompt": complete_prompt,
-                        "artifacts": {
-                            name: str(path) for name, path in destinations.items()
-                        },
-                        "reads": [str(handle.path) for handle in handles],
-                    }
-
-                    def save_provider_metadata(update):
-                        ctx.journal.provider_metadata(
+                        return Result(
+                            codec.decode(checkpoint.validated_value),
+                            captured,
+                            checkpoint.response.usage,
                             operation_id,
-                            thread_id=update.get("session_id"),
-                            turn_id=update.get("turn_id"),
-                            preset=update.get("preset"),
-                            enforcement=update.get("enforcement"),
-                            probe_hash=update.get("probe_hash"),
+                            ctx.run_id,
+                            checkpoint.response.metadata,
                         )
-
-                    request = ProviderRequest(
-                        operation_id=operation_id,
-                        prompt=complete_prompt,
-                        workspace=target,
-                        session_id=(
-                            row.get("thread_id") or request_data.get("session_id")
-                        ),
-                        output_schema=schema,
-                        policy=effective,
-                        artifacts=destinations,
-                        receipt_dir=ctx.folder / "receipts",
-                        timeout=(
-                            min(ctx.limits.timeout, timeout)
-                            if timeout is not None
-                            else ctx.limits.timeout
-                        ),
-                        attempt=prepared_generation + 1,
-                        reads=tuple(handle.path for handle in handles),
-                        preset=operation,
-                        tools=None if tools is None else tuple(tools),
-                        instructions=instructions,
-                        settings=dict(settings or {}),
-                        cancel_event=_cancellation_event(),
-                        on_event=event_callback,
-                        on_checkpoint=save_provider_metadata,
+                fresh_attempt = isinstance(checkpoint, EmptyCheckpoint)
+                try:
+                    store.check_legacy_operation(artifact_operation)
+                    destinations = store.destinations(writes)
+                except (OSError, ArtifactError) as exc:
+                    if fresh_attempt:
+                        raise
+                    raise UncertainOperation(
+                        f"Artifact destinations need reconciliation: {exc}",
+                        operation_id,
+                    ) from exc
+                complete_prompt = rendered
+                if input is not None:
+                    serial = (
+                        input.model_dump(mode="json")
+                        if hasattr(input, "model_dump")
+                        else input
                     )
-                    recovery_outcome = None
-                    if (
-                        recover
-                        and not authorized
-                        and not preparing
-                        and not isinstance(checkpoint, RespondedCheckpoint)
-                    ):
-                        recovery_outcome = recover_outcome(
-                            ctx.client.provider, request
+                    complete_prompt += "\n\nInput:\n" + _json(serial)
+                if handles:
+                    complete_prompt += (
+                        "\n\nRead these immutable input artifacts:\n"
+                        + _json(
+                            [
+                                {
+                                    "name": h.name,
+                                    "path": str(h.path),
+                                    "kind": h.kind,
+                                }
+                                for h in handles
+                            ]
                         )
-                        action = ProviderLifecycle.recovery_action(
-                            checkpoint, recovery_outcome
+                    )
+                if writes:
+                    complete_prompt += (
+                        "\n\nWrite the declared artifacts to these exact paths. Required files must exist and satisfy their declared schemas when captured:\n"
+                        + _json(
+                            [
+                                {**a.to_record(), "path": str(destinations[a.name])}
+                                for a in writes
+                            ]
                         )
-                        if action is RecoveryAction.USE_RESPONSE:
-                            checkpoint = ProviderLifecycle.completed(
-                                checkpoint, recovery_outcome.response
-                            )
-                            ctx.save_response(
-                                operation_id,
-                                checkpoint.to_record(),
-                                session_key=session_key,
-                            )
-                        elif isinstance(recovery_outcome, Stopped) and allow_retry:
-                            if cancellation is not None and cancellation.is_set():
-                                raise CancellationRequested(
-                                    "Cancelled before provider retry"
-                                )
-                            checkpoint = ProviderLifecycle.authorize_retry(
-                                checkpoint, origin="automatic"
-                            )
-                            ctx.save_response(operation_id, checkpoint.to_record())
-                            generation = checkpoint.generation
-                            authorized = True
-                        else:
-                            raise UncertainOperation(
-                                recovery_outcome.detail
-                                or "Provider intent has no durable response; reconcile before retrying",
-                                operation_id,
-                            )
-                    if authorized:
-                        # Reconcile before touching destinations: the previous
-                        # process may still be writing them, or its completed
-                        # response may already be recoverable from a receipt.
-                        outcome = recovery_outcome or recover_outcome(
-                            ctx.client.provider, request
+                    )
+                if schema is not None:
+                    complete_prompt += (
+                        "\n\nReturn only JSON matching this schema:\n"
+                        + _json(schema)
+                    )
+                if feedback:
+                    complete_prompt += (
+                        "\n\nRepair the previous output contract failure using the current workspace:\n"
+                        + feedback
+                    )
+                binding = ctx.journal.session(session_key) or {}
+                request_data = checkpoint.request_data or {
+                    "session_id": (
+                        repair_thread_id
+                        if session is None
+                        else binding.get("session_id")
+                    ),
+                    "receipt_dir": str(ctx.folder / "receipts"),
+                    "prompt": complete_prompt,
+                    "artifacts": {
+                        name: str(path) for name, path in destinations.items()
+                    },
+                    "reads": [str(handle.path) for handle in handles],
+                }
+
+                def save_provider_metadata(update):
+                    ctx.journal.provider_metadata(
+                        operation_id,
+                        thread_id=update.get("session_id"),
+                        turn_id=update.get("turn_id"),
+                        preset=update.get("preset"),
+                        enforcement=update.get("enforcement"),
+                        probe_hash=update.get("probe_hash"),
+                    )
+
+                request = ProviderRequest(
+                    operation_id=operation_id,
+                    prompt=complete_prompt,
+                    workspace=target,
+                    session_id=(
+                        row.get("thread_id") or request_data.get("session_id")
+                    ),
+                    output_schema=schema,
+                    policy=effective,
+                    artifacts=destinations,
+                    receipt_dir=ctx.folder / "receipts",
+                    timeout=(
+                        min(ctx.limits.timeout, timeout)
+                        if timeout is not None
+                        else ctx.limits.timeout
+                    ),
+                    attempt=prior_generation + 1,
+                    reads=tuple(handle.path for handle in handles),
+                    preset=operation,
+                    tools=None if tools is None else tuple(tools),
+                    instructions=instructions,
+                    settings=dict(settings or {}),
+                    cancel_event=_cancellation_event(),
+                    on_event=event_callback,
+                    on_checkpoint=save_provider_metadata,
+                )
+                recovery_outcome = None
+                if (
+                    recover
+                    and not authorized
+                    and not fresh_attempt
+                    and not isinstance(checkpoint, RespondedCheckpoint)
+                ):
+                    recovery_outcome = recover_outcome(
+                        ctx.client.provider, request
+                    )
+                    action = ProviderLifecycle.recovery_action(
+                        checkpoint, recovery_outcome
+                    )
+                    if action is RecoveryAction.USE_RESPONSE:
+                        checkpoint = ProviderLifecycle.completed(
+                            checkpoint, recovery_outcome.response
                         )
-                        action = ProviderLifecycle.recovery_action(checkpoint, outcome)
-                        if action is RecoveryAction.USE_RESPONSE:
-                            generation = prepared_generation
-                            checkpoint = ProviderLifecycle.completed(
-                                checkpoint, outcome.response
+                        ctx.save_response(
+                            operation_id,
+                            checkpoint.to_record(),
+                            session_key=session_key,
+                        )
+                    elif isinstance(recovery_outcome, Stopped) and allow_retry:
+                        if cancellation is not None and cancellation.is_set():
+                            raise CancellationRequested(
+                                "Cancelled before provider retry"
                             )
-                            ctx.save_response(
-                                operation_id,
-                                checkpoint.to_record(),
-                                session_key=session_key,
-                            )
-                        elif action is RecoveryAction.START_RETRY:
-                            if (
-                                checkpoint.origin == "automatic"
-                                and not allow_retry
-                            ):
-                                raise UncertainOperation(
-                                    "Automatic provider retry safety was tightened; "
-                                    "operator reconciliation is required",
-                                    operation_id,
-                                )
-                            if cancellation is not None and cancellation.is_set():
-                                raise CancellationRequested(
-                                    "Cancelled before provider retry"
-                                )
-                            rollback()
-                            artifact_operation = (
-                                f"{operation_id}:generation:{generation}"
-                            )
-                            try:
-                                destinations = store.prepare(writes, artifact_operation)
-                            except (OSError, ArtifactError) as exc:
-                                raise UncertainOperation(
-                                    f"Artifact preparation is incomplete; resume after resolving the conflict: {exc}",
-                                    operation_id,
-                                ) from exc
-                            request = replace(
-                                request, artifacts=destinations, attempt=generation + 1
-                            )
-                        else:
-                            raise UncertainOperation(
-                                outcome.detail
-                                or "Provider is not confirmed stopped; retry is blocked",
-                                operation_id,
-                            )
-                    if isinstance(checkpoint, RespondedCheckpoint):
-                        response = checkpoint.response
+                        checkpoint = ProviderLifecycle.authorize_retry(
+                            checkpoint, origin="automatic"
+                        )
+                        ctx.save_response(operation_id, checkpoint.to_record())
+                        generation = checkpoint.generation
+                        authorized = True
                     else:
-                        if authorized or preparing or not recover:
-                            try:
-                                from .budgets import dispatch_timeout_ceiling
-
-                                configured_timeout = min(
-                                    request.timeout,
-                                    effective.timeout or request.timeout,
-                                )
-                                ceiling = dispatch_timeout_ceiling(
-                                    ctx.client.provider, configured_timeout
-                                )
-                            except ProviderPolicyError as exc:
-                                record_not_dispatched("policy_error", exc)
-                                raise
-                            except BudgetExceeded as exc:
-                                record_not_dispatched("budget_error", exc)
-                                raise
-                            request = replace(
-                                request, deadline=time.monotonic() + ceiling
-                            )
-                            try:
-                                _preflight_provider(ctx.client.provider, request)
-                            except Exception:
-                                restore()
-                                if turn is not None:
-                                    turn.clear(operation_id)
-                                raise
-                            checkpoint = IntentCheckpoint(generation, request_data)
-                            ctx.save_response(
+                        raise UncertainOperation(
+                            recovery_outcome.detail
+                            or "Provider intent has no durable response; reconcile before retrying",
+                            operation_id,
+                        )
+                if authorized:
+                    # Reconcile before another dispatch: the prior turn may
+                    # still be acting or have a completed response to adopt.
+                    outcome = recovery_outcome or recover_outcome(
+                        ctx.client.provider, request
+                    )
+                    action = ProviderLifecycle.recovery_action(checkpoint, outcome)
+                    if action is RecoveryAction.USE_RESPONSE:
+                        generation = prior_generation
+                        checkpoint = ProviderLifecycle.completed(
+                            checkpoint, outcome.response
+                        )
+                        ctx.save_response(
+                            operation_id,
+                            checkpoint.to_record(),
+                            session_key=session_key,
+                        )
+                    elif action is RecoveryAction.START_RETRY:
+                        if (
+                            checkpoint.origin == "automatic"
+                            and not allow_retry
+                        ):
+                            raise UncertainOperation(
+                                "Automatic provider retry safety was tightened; "
+                                "operator reconciliation is required",
                                 operation_id,
-                                checkpoint.to_record(),
                             )
-                        dispatched = False
+                        if cancellation is not None and cancellation.is_set():
+                            raise CancellationRequested(
+                                "Cancelled before provider retry"
+                            )
+                        artifact_operation = f"{operation_id}:generation:{generation}"
+                        store.check_legacy_operation(artifact_operation)
+                        request = replace(
+                            request, artifacts=destinations, attempt=generation + 1
+                        )
+                    else:
+                        raise UncertainOperation(
+                            outcome.detail
+                            or "Provider is not confirmed stopped; retry is blocked",
+                            operation_id,
+                        )
+                if isinstance(checkpoint, RespondedCheckpoint):
+                    response = checkpoint.response
+                else:
+                    if authorized or fresh_attempt or not recover:
                         try:
-                            if not getattr(
-                                ctx.client.provider, "_reserves_dispatch", False
-                            ):
-                                from .dispatches import Dispatch
+                            from .budgets import dispatch_timeout_ceiling
 
-                                dispatch = Dispatch(ctx.client.provider, request)
-                                reserved_deadline = time.monotonic() + dispatch.timeout
-                                request = replace(
-                                    request,
-                                    timeout=dispatch.timeout,
-                                    deadline=min(
-                                        request.deadline
-                                        if request.deadline is not None
-                                        else reserved_deadline,
-                                        reserved_deadline,
-                                    ),
-                                )
-                                dispatched = True
-                                dispatch.started()
-                                try:
-                                    response = _start_turn(
-                                        ctx.client.provider, request, event_callback
-                                    )
-                                    if not isinstance(response, ProviderResponse):
-                                        raise TypeError(
-                                            "Provider returned an invalid response object"
-                                        )
-                                    response.to_record()
-                                except BaseException as exc:
-                                    dispatch.finish(
-                                        "timed_out"
-                                        if isinstance(exc, ProviderTimeoutError)
-                                        else "failed"
-                                        if isinstance(exc, Exception)
-                                        else "interrupted",
-                                        usage=getattr(exc, "usage", None),
-                                        error=exc,
-                                    )
-                                    raise
-                                dispatch.finish(
-                                    "completed"
-                                    if isinstance(response, ProviderResponse)
-                                    else "failed",
-                                    usage=getattr(response, "usage", None),
-                                )
-                            else:
+                            configured_timeout = min(
+                                request.timeout,
+                                effective.timeout or request.timeout,
+                            )
+                            ceiling = dispatch_timeout_ceiling(
+                                ctx.client.provider, configured_timeout
+                            )
+                        except ProviderPolicyError as exc:
+                            record_not_dispatched("policy_error", exc)
+                            raise
+                        except BudgetExceeded as exc:
+                            record_not_dispatched("budget_error", exc)
+                            raise
+                        request = replace(
+                            request, deadline=time.monotonic() + ceiling
+                        )
+                        _preflight_provider(ctx.client.provider, request)
+                        store.destinations(writes, create_parents=True)
+                        checkpoint = IntentCheckpoint(generation, request_data)
+                        ctx.save_response(
+                            operation_id,
+                            checkpoint.to_record(),
+                        )
+                    dispatched = False
+                    try:
+                        if not getattr(
+                            ctx.client.provider, "_reserves_dispatch", False
+                        ):
+                            from .dispatches import Dispatch
+
+                            dispatch = Dispatch(ctx.client.provider, request)
+                            reserved_deadline = time.monotonic() + dispatch.timeout
+                            request = replace(
+                                request,
+                                timeout=dispatch.timeout,
+                                deadline=min(
+                                    request.deadline
+                                    if request.deadline is not None
+                                    else reserved_deadline,
+                                    reserved_deadline,
+                                ),
+                            )
+                            dispatched = True
+                            dispatch.started()
+                            try:
                                 response = _start_turn(
                                     ctx.client.provider, request, event_callback
                                 )
-                            fresh_response = True
-                        except BudgetExceeded as exc:
-                            if not dispatched:
-                                record_not_dispatched("budget_error", exc)
-                            else:
-                                raise UncertainOperation(
-                                    str(exc), operation_id
-                                ) from exc
-                            raise
-                        except ProviderPolicyError as exc:
-                            if dispatched:
-                                policy_outcome = recover_outcome(
-                                    ctx.client.provider, request
+                                if not isinstance(response, ProviderResponse):
+                                    raise TypeError(
+                                        "Provider returned an invalid response object"
+                                    )
+                                response.to_record()
+                            except BaseException as exc:
+                                dispatch.finish(
+                                    "timed_out"
+                                    if isinstance(exc, ProviderTimeoutError)
+                                    else "failed"
+                                    if isinstance(exc, Exception)
+                                    else "interrupted",
+                                    usage=getattr(exc, "usage", None),
+                                    error=exc,
                                 )
-                                if isinstance(policy_outcome, Stopped):
-                                    if turn is not None:
-                                        turn.clear(operation_id)
-                                    raise
-                                raise UncertainOperation(
-                                    policy_outcome.detail or str(exc), operation_id
-                                ) from exc
-                            record_not_dispatched("policy_error", exc)
-                            raise
-                        except Exception as exc:
-                            raise UncertainOperation(str(exc), operation_id) from exc
-                        if not isinstance(response, ProviderResponse):
-                            raise UncertainOperation(
-                                "Provider returned an invalid response; reconcile its effects",
-                                operation_id,
+                                raise
+                            dispatch.finish(
+                                "completed"
+                                if isinstance(response, ProviderResponse)
+                                else "failed",
+                                usage=getattr(response, "usage", None),
                             )
-                        try:
-                            response.to_record()
-                        except (ValueError, TypeError, RecursionError) as exc:
+                        else:
+                            response = _start_turn(
+                                ctx.client.provider, request, event_callback
+                            )
+                        fresh_response = True
+                    except BudgetExceeded as exc:
+                        if not dispatched:
+                            record_not_dispatched("budget_error", exc)
+                        else:
                             raise UncertainOperation(
-                                f"Provider returned an invalid response: {exc}",
-                                operation_id,
+                                str(exc), operation_id
                             ) from exc
-                        checkpoint = RespondedCheckpoint(
-                            generation, request_data, response
-                        )
-                        ctx.save_response(
+                        raise
+                    except ProviderPolicyError as exc:
+                        if dispatched:
+                            policy_outcome = recover_outcome(
+                                ctx.client.provider, request
+                            )
+                            if isinstance(policy_outcome, Stopped):
+                                raise
+                            raise UncertainOperation(
+                                policy_outcome.detail or str(exc), operation_id
+                            ) from exc
+                        record_not_dispatched("policy_error", exc)
+                        raise
+                    except Exception as exc:
+                        raise UncertainOperation(str(exc), operation_id) from exc
+                    if not isinstance(response, ProviderResponse):
+                        raise UncertainOperation(
+                            "Provider returned an invalid response; reconcile its effects",
                             operation_id,
-                            checkpoint.to_record(),
-                            session_key=session_key,
                         )
                     try:
-                        if isinstance(checkpoint, ValidatedCheckpoint):
-                            value = codec.decode(checkpoint.validated_value)
-                        elif returns is str:
-                            value = response.text
-                        else:
-                            text = response.text.strip()
-                            fenced = re.fullmatch(
-                                r"```(?:json)?\s*\n(.*?)\n```", text, re.DOTALL
-                            )
-                            value = TypeAdapter(returns).validate_json(
-                                fenced.group(1) if fenced else text
-                            )
-                        if not isinstance(checkpoint, ValidatedCheckpoint):
-                            # Persist normalized state before capture. Recovery
-                            # can finish the same result without rerunning hooks.
-                            value_record = codec.encode(value)
-                            codec.encode(
-                                Result(
-                                    value, ArtifactMap(), response.usage, operation_id
-                                )
-                            )
-                            checkpoint = ValidatedCheckpoint(
-                                generation=checkpoint.generation,
-                                request=checkpoint.request,
-                                response=checkpoint.response,
-                                artifact_resolution=checkpoint.artifact_resolution,
-                                validated_value=value_record,
-                            )
-                            ctx.save_response(
-                                operation_id,
-                                checkpoint.to_record(),
-                                session_key=session_key,
-                            )
-                        artifacts = store.capture(
-                            writes,
-                            artifact_operation,
-                            recover=not fresh_response,
-                            expected_digests=(checkpoint.artifact_resolution or {}).get(
-                                "digests"
-                            ),
+                        response.to_record()
+                    except (ValueError, TypeError, RecursionError) as exc:
+                        raise UncertainOperation(
+                            f"Provider returned an invalid response: {exc}",
+                            operation_id,
+                        ) from exc
+                    checkpoint = RespondedCheckpoint(
+                        generation, request_data, response
+                    )
+                    ctx.save_response(
+                        operation_id,
+                        checkpoint.to_record(),
+                        session_key=session_key,
+                    )
+                try:
+                    if isinstance(checkpoint, ValidatedCheckpoint):
+                        value = codec.decode(checkpoint.validated_value)
+                    elif returns is str:
+                        value = response.text
+                    else:
+                        text = response.text.strip()
+                        fenced = re.fullmatch(
+                            r"```(?:json)?\s*\n(.*?)\n```", text, re.DOTALL
                         )
-                        if turn is not None:
-                            turn.clear(operation_id)
-                    except (ValueError, TypeError) as exc:
-                        retryable = isinstance(exc, ValueError)
-                        checkpoint = ProviderLifecycle.validation_failed(
-                            checkpoint,
-                            message=str(exc),
-                            retryable=retryable,
+                        value = TypeAdapter(returns).validate_json(
+                            fenced.group(1) if fenced else text
+                        )
+                    if not isinstance(checkpoint, ValidatedCheckpoint):
+                        # Persist normalized state before capture. Recovery
+                        # can finish the same result without rerunning hooks.
+                        value_record = codec.encode(value)
+                        codec.encode(
+                            Result(
+                                value, ArtifactMap(), response.usage, operation_id
+                            )
+                        )
+                        checkpoint = ValidatedCheckpoint(
+                            generation=checkpoint.generation,
+                            request=checkpoint.request,
+                            response=checkpoint.response,
+                            artifact_resolution=checkpoint.artifact_resolution,
+                            validated_value=value_record,
                         )
                         ctx.save_response(
                             operation_id,
                             checkpoint.to_record(),
                             session_key=session_key,
                         )
-                        if turn is not None:
-                            turn.clear(operation_id)
-                        if retryable:
-                            raise OutputValidationError(str(exc)) from exc
-                        raise
-                    except OSError as exc:
-                        raise UncertainOperation(
-                            f"Artifact publication is incomplete; resume to finish it: {exc}",
-                            operation_id,
-                        ) from exc
-                    return Result(
-                        value,
-                        artifacts,
-                        response.usage,
-                        operation_id,
-                        ctx.run_id,
-                        response.metadata,
+                    artifacts = store.capture(
+                        writes,
+                        artifact_operation,
+                        recover=not fresh_response,
+                        expected_digests=(checkpoint.artifact_resolution or {}).get(
+                            "digests"
+                        ),
                     )
+                except (ValueError, TypeError) as exc:
+                    retryable = isinstance(exc, ValueError)
+                    checkpoint = ProviderLifecycle.validation_failed(
+                        checkpoint,
+                        message=str(exc),
+                        retryable=retryable,
+                    )
+                    ctx.save_response(
+                        operation_id,
+                        checkpoint.to_record(),
+                        session_key=session_key,
+                    )
+                    if retryable:
+                        raise OutputValidationError(str(exc)) from exc
+                    raise
+                except OSError as exc:
+                    raise UncertainOperation(
+                        f"Artifact publication is incomplete; resume to finish it: {exc}",
+                        operation_id,
+                    ) from exc
+                return Result(
+                    value,
+                    artifacts,
+                    response.usage,
+                    operation_id,
+                    ctx.run_id,
+                    response.metadata,
+                )
 
             replay_id = f"{ctx.run_id}:{ctx.scope}:{ctx.ordinal}"
             replay_record = ctx.journal.get(replay_id)
@@ -803,9 +706,7 @@ def execute_provider_operation(
                     next_checkpoint = ProviderCheckpoint.from_record(
                         next_record.get("response")
                     )
-                    if isinstance(
-                        next_checkpoint, (EmptyCheckpoint, PreparingCheckpoint)
-                    ):
+                    if isinstance(next_checkpoint, EmptyCheckpoint):
                         raise
                 feedback = str(exc)
     finally:

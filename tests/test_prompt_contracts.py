@@ -44,14 +44,12 @@ def _read_artifacts(request) -> dict[str, Path]:
 
 
 def _write_artifacts(request) -> dict[str, Path]:
-    section = request.prompt.split(
-        "\n\nWrite the declared artifacts to these exact paths. "
-        "Required files must be created in this turn:\n",
-        1,
-    )[1]
+    # Check the actual artifact contract without pinning explanatory wording.
+    sections = request.prompt.split("\n\n")
+    section = next(part for part in sections if part.startswith("Write the declared artifacts"))
     return {
         item["name"]: Path(item["path"])
-        for item in json.loads(section.split("\n\n", 1)[0])
+        for item in json.loads(section.split("\n", 1)[1])
     }
 
 

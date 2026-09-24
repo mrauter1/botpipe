@@ -121,7 +121,7 @@ def test_reconciled_invalid_artifact_is_validated_during_capture_and_repaired(
         return "invalid response"
 
     def repair(request):
-        assert not request.artifacts["result"].exists()
+        assert request.artifacts["result"].read_text() == "not json"
         request.artifacts["result"].write_text('{"fixed": true}')
         return "repair response"
 

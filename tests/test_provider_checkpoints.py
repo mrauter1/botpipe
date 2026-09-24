@@ -16,7 +16,6 @@ from botpipe.provider_checkpoints import (
     EmptyCheckpoint,
     IntentCheckpoint,
     NotDispatchedCheckpoint,
-    PreparingCheckpoint,
     ProviderCheckpoint,
     ProviderCheckpointError,
     ProviderLifecycle,
@@ -48,7 +47,6 @@ RESPONSE = {
     ("record", "kind"),
     [
         ({}, EmptyCheckpoint),
-        ({"generation": 0, "preparing": True}, PreparingCheckpoint),
         ({"generation": 0, "request": REQUEST}, IntentCheckpoint),
         (
             {"generation": 1, "request": REQUEST, "retry_authorized": True},
@@ -68,7 +66,6 @@ RESPONSE = {
                 "generation": 0,
                 "request": REQUEST,
                 "not_dispatched": True,
-                "restoration_pending": False,
                 "budget_error": "turns exhausted",
             },
             NotDispatchedCheckpoint,
@@ -94,7 +91,7 @@ RESPONSE = {
         ),
     ],
 )
-def test_legacy_checkpoint_states_round_trip(record, kind):
+def test_checkpoint_states_round_trip(record, kind):
     checkpoint = ProviderCheckpoint.from_record(record)
     assert type(checkpoint) is kind
     assert ProviderCheckpoint.from_record(checkpoint.to_record()) == checkpoint
@@ -137,37 +134,14 @@ def test_contradictory_or_unknown_checkpoints_fail_closed(record):
     assert issubclass(ProviderCheckpointError, ReplayMismatch)
 
 
-def test_checkpoint_effect_predicate_distinguishes_restored_non_dispatch():
-    pending = ProviderCheckpoint.from_record(
-        {
-            "generation": 0,
-            "request": REQUEST,
-            "not_dispatched": True,
-            "restoration_pending": True,
-            "policy_error": "denied",
-        }
-    )
-    restored = ProviderCheckpoint.from_record(
-        {**pending.to_record(), "restoration_pending": False}
-    )
-    validated = ProviderCheckpoint.from_record(
-        {
-            **RESPONSE,
-            "generation": 0,
-            "request": REQUEST,
-            "validated_value": "done",
-        }
-    )
-    responded = ProviderCheckpoint.from_record(
-        {**RESPONSE, "generation": 0, "request": REQUEST}
-    )
-
-    assert pending.has_unresolved_effects(has_writes=False)
-    assert not restored.has_unresolved_effects(has_writes=True)
-    assert not validated.has_unresolved_effects(has_writes=False)
-    assert validated.has_unresolved_effects(has_writes=True)
-    assert not responded.has_unresolved_effects(has_writes=False)
-    assert responded.has_unresolved_effects(has_writes=True)
+@pytest.mark.parametrize("obsolete", [
+    {"generation": 0, "preparing": True},
+    {"generation": 0, "request": REQUEST, "not_dispatched": True,
+     "restoration_pending": False, "budget_error": "budget"},
+])
+def test_obsolete_artifact_checkpoints_are_explicitly_rejected(obsolete):
+    with pytest.raises(ProviderCheckpointError, match="obsolete artifact"):
+        ProviderCheckpoint.from_record(obsolete)
 
 
 def test_normal_recovery_and_reconciliation_share_completed_transition():
@@ -301,27 +275,22 @@ def _fail_response_once(client, monkeypatch, predicate, *, after_commit):
 
 
 @pytest.mark.parametrize("after_commit", [False, True])
-@pytest.mark.parametrize("transition", ["preparing", "intent"])
 def test_pre_dispatch_checkpoint_ack_loss_never_duplicates_dispatch(
-    tmp_path, monkeypatch, after_commit, transition
+    tmp_path, monkeypatch, after_commit
 ):
     @workflow
     def work():
         return Provider().run("work").value
 
     def target(record):
-        if transition == "preparing":
-            return record.get("preparing") is True
-        return (
-            "request" in record and "text" not in record and not record.get("preparing")
-        )
+        return "request" in record and "text" not in record
 
     provider = FakeProvider(["done"])
     with Botpipe(tmp_path, provider=provider) as client:
         observations, original = _fail_response_once(
             client, monkeypatch, target, after_commit=after_commit
         )
-        first = client.run(work, run_id=f"{transition}-{after_commit}")
+        first = client.run(work, run_id=f"intent-{after_commit}")
         monkeypatch.setattr(client.journal, "response", original)
         result = first if first.ok else client.resume(first.run_id, workflow=work)
 
@@ -330,24 +299,19 @@ def test_pre_dispatch_checkpoint_ack_loss_never_duplicates_dispatch(
     assert len(provider.calls) == 1
     if after_commit:
         assert target(observations[0])
-    elif transition == "preparing":
-        assert observations[0] is None
     else:
-        assert observations[0]["preparing"] is True
+        assert observations[0] is None
 
 
 @pytest.mark.parametrize("after_commit", [False, True])
-@pytest.mark.parametrize("transition", ["not_dispatched", "restored"])
 @pytest.mark.parametrize("rejection", ["preview", "reservation"])
-def test_non_dispatch_checkpoint_ack_loss_preserves_restoration_state(
-    tmp_path, monkeypatch, after_commit, transition, rejection
+def test_non_dispatch_checkpoint_ack_loss_never_changes_outputs(
+    tmp_path, monkeypatch, after_commit, rejection
 ):
     if rejection == "reservation":
         import botpipe.budgets as budgets
-
         monkeypatch.setattr(
-            budgets,
-            "dispatch_timeout_ceiling",
+            budgets, "dispatch_timeout_ceiling",
             lambda _provider, configured_timeout: configured_timeout,
         )
     destination = tmp_path / "result.txt"
@@ -361,46 +325,24 @@ def test_non_dispatch_checkpoint_ack_loss_preserves_restoration_state(
                 "denied", writes=Artifact.text(destination, required=True)
             )
 
-    def target(record):
-        return record.get("not_dispatched") is True and record.get(
-            "restoration_pending"
-        ) is (transition == "not_dispatched")
-
     provider = FakeProvider(["first"])
     with Botpipe(tmp_path, provider=provider) as client:
         observations, original = _fail_response_once(
-            client, monkeypatch, target, after_commit=after_commit
+            client, monkeypatch,
+            lambda record: record.get("not_dispatched") is True,
+            after_commit=after_commit,
         )
-        first = client.run(
-            work, run_id=f"{rejection}-{transition}-{after_commit}"
-        )
-        operation = [
-            row
-            for row in client.journal.operations(first.run_id)
-            if row["kind"] == "provider"
-        ][-1]
+        first = client.run(work, run_id=f"{rejection}-{after_commit}")
         monkeypatch.setattr(client.journal, "response", original)
-        if rejection == "preview" or transition == "restored" or after_commit:
-            result = client.resume(first.run_id, workflow=work)
-            operation = client.journal.get(operation["id"])
+        result = client.resume(first.run_id, workflow=work)
+        if rejection == "preview" or after_commit:
             assert result.status == "budget_exceeded"
-            assert destination.read_text() == "before"
-            assert operation["response"]["restoration_pending"] is False
         else:
-            # The non-dispatch fact did not commit, so an intent remains
-            # uncertain and cannot be silently redispatched.
-            result = client.resume(first.run_id, workflow=work)
+            # An uncommitted non-dispatch fact leaves an intent uncertain.
             assert result.status == "interrupted"
-            assert operation["response"].get("not_dispatched") is not True
-
+        assert destination.read_text() == "before"
     assert observations
     assert len(provider.calls) == 1
-    if after_commit:
-        assert target(observations[0])
-    elif transition == "not_dispatched":
-        assert observations[0].get("not_dispatched") is not True
-    else:
-        assert observations[0]["restoration_pending"] is True
 
 
 @pytest.mark.parametrize("after_commit", [False, True])

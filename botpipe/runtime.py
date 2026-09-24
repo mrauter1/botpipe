@@ -13,7 +13,7 @@ import re
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import contextmanager, nullcontext
+from contextlib import nullcontext
 from enum import Enum
 from pathlib import Path
 from types import MemberDescriptorType
@@ -33,15 +33,12 @@ from .errors import (
     ReplayMismatch,
     Suspension,
     UncertainOperation,
-    WorkspaceBusy,
-    WorkspaceUnresolved,
 )
 from .journal import Journal, now
 from .limits import RunLimits
 from .locks import default_state_dir
 from .locks import run_lock as acquire_run_lock
 from .locks import session_lock as acquire_session_lock
-from .locks import workspace_turn as acquire_workspace_turn
 from .models import RunResult
 from .policy import Policy
 from .provenance import SourceContext, capture_workflow_provenance, source_context
@@ -907,7 +904,6 @@ class RunContext:
         *,
         scope="root",
         parent=None,
-        parallel_branch=False,
         input_candidate=None,
     ):
         self.client, self.journal, self.definition = client, client.journal, definition
@@ -937,11 +933,6 @@ class RunContext:
         self.policy = Policy.resolve(
             parent.policy if parent else client.policy, definition.policy
         )
-        self.parallel_branch = parallel_branch or (
-            parent.parallel_branch if parent else False
-        )
-        self._session_locks = parent._session_locks if parent else {}
-        self._workspace_locks = parent._workspace_locks if parent else {}
         self._guard = parent._guard if parent else threading.RLock()
         self._input_state = (
             parent._input_state if parent else {"candidate": input_candidate}
@@ -1120,14 +1111,13 @@ class RunContext:
         finally:
             _OPERATION.reset(token)
 
-    def _child(self, definition, args, kwargs, scope, *, parallel_branch=False):
+    def _child(self, definition, args, kwargs, scope):
         child = RunContext(
             self.client,
             self.journal.run(self.run_id),
             definition,
             scope=scope,
             parent=self,
-            parallel_branch=parallel_branch,
         )
         token = _CURRENT.set(child)
         try:
@@ -1164,9 +1154,7 @@ class RunContext:
         )
 
     def scope_call(self, scope, definition):
-        return self._child(
-            definition, (), {}, f"{self.scope}/{scope}", parallel_branch=True
-        )
+        return self._child(definition, (), {}, f"{self.scope}/{scope}")
 
     def assert_consumed(self):
         if self._replay_state["error"] is not None:
@@ -1312,7 +1300,6 @@ class Botpipe:
         max_operations=1000,
         timeout=3600,
         provider_config=None,
-        workspace_lock_timeout=1.0,
     ):
         from .providers import get_provider
 
@@ -1352,13 +1339,6 @@ class Botpipe:
         self.policy = Policy.resolve(policy)
         self._configured_policy = self.policy
         self.limits = RunLimits(max_operations, timeout)
-        if (
-            not isinstance(workspace_lock_timeout, (int, float))
-            or isinstance(workspace_lock_timeout, bool)
-            or workspace_lock_timeout < 0
-        ):
-            raise ValueError("workspace_lock_timeout must be nonnegative")
-        self.workspace_lock_timeout = float(workspace_lock_timeout)
         self.journal = Journal(self.state_dir / "state.sqlite3")
 
     @property
@@ -1430,55 +1410,6 @@ class Botpipe:
         """Hold the fail-fast execution lock for one journal/run identity."""
 
         return acquire_run_lock(self.journal.path, run_id)
-
-    @contextmanager
-    def workspace_turn(
-        self,
-        workspace=None,
-        *,
-        run_id=None,
-        operation_id=None,
-        writable=True,
-        timeout=None,
-    ):
-        """Serialize one writable turn and fence an uncertain dispatch."""
-
-        ctx = _CURRENT.get()
-        if run_id is None:
-            if ctx is None or ctx.client is not self:
-                raise BotpipeError("workspace_turn needs an active run or run_id")
-            run_id = ctx.run_id
-        target = self.workspace if workspace is None else Path(workspace).resolve()
-        wait = self.workspace_lock_timeout if timeout is None else timeout
-        with acquire_workspace_turn(
-            target,
-            journal=self.journal.path,
-            run_id=run_id,
-            operation_id=operation_id,
-            timeout=wait,
-            writable=writable,
-            cancellation=_cancellation_event(),
-        ) as turn:
-            try:
-                yield turn
-            except UncertainOperation as exc:
-                unresolved_id = exc.operation_id or operation_id
-                if turn is not None and unresolved_id:
-                    turn.mark_unresolved(unresolved_id)
-                raise
-
-    def clear_workspace_fence(self, workspace, run_id, operation_id=None):
-        target = self.workspace if workspace is None else Path(workspace).resolve()
-        with acquire_workspace_turn(
-            target,
-            journal=self.journal.path,
-            run_id=run_id,
-            operation_id=operation_id,
-            timeout=self.workspace_lock_timeout,
-            writable=True,
-        ) as turn:
-            assert turn is not None
-            return turn.clear(operation_id)
 
     def run(self, definition, *args, task_id=None, run_id=None, **kwargs):
         self._prepare_new_run()
@@ -1666,7 +1597,6 @@ class Botpipe:
         status = "completed"
         value = None
         error = None
-        coordination_error = None
         pending = data.get("pending_input")
         if provenance_start is None:
             provenance_start = capture_workflow_provenance(definition, self.workspace)
@@ -1716,12 +1646,6 @@ class Botpipe:
                 if waiting is None or waiting["status"] != "waiting":
                     pending = None
             encoded = None
-        except (WorkspaceBusy, WorkspaceUnresolved) as exc:
-            status = "interrupted"
-            error = str(exc)
-            pending = None
-            encoded = None
-            coordination_error = exc
         except Exception as exc:
             failure = exc
             try:
@@ -1762,8 +1686,6 @@ class Botpipe:
             ctx.folder,
             usage,
         )
-        if coordination_error is not None:
-            raise coordination_error
         return result
 
     def _outputs(self, run_id):
@@ -1825,11 +1747,11 @@ class Botpipe:
                     operation_id,
                     record,
                     source,
-                    clear_fence=False,
                     already_failed=replaying_failure,
                 )
                 return
             if record["kind"] == "provider":
+                from .artifacts import Artifact, ArtifactError, ArtifactStore
                 from .providers import ProviderRequest, ProviderResponse
 
                 checkpoint = ProviderCheckpoint.from_record(old)
@@ -1871,6 +1793,14 @@ class Botpipe:
                     instructions=inputs.get("instructions"),
                     settings=inputs.get("settings", {}),
                 )
+                store = ArtifactStore(
+                    request.receipt_dir.parent,
+                    workspace=request.workspace,
+                    allowed_roots=(self.state_dir / "tasks" / data["task_id"],),
+                    forbidden_paths=(self.journal.path,),
+                )
+                artifact_operation = f"{operation_id}:generation:{previous}"
+                store.check_legacy_operation(artifact_operation)
 
                 def reconcile_provider():
                     nonlocal artifact_digests, response, retry, source, checkpoint
@@ -1949,8 +1879,6 @@ class Botpipe:
                                     f"{exc}"
                                 ) from exc
                         checkpoint = ProviderLifecycle.completed(checkpoint, response)
-                    from .artifacts import Artifact, ArtifactError, ArtifactStore
-
                     declarations = tuple(
                         Artifact.from_record(a) for a in inputs.get("writes", ())
                     ) if artifact_digests is not None or accept else ()
@@ -1963,14 +1891,6 @@ class Botpipe:
                             raise ValueError(
                                 "This provider operation has no declared artifacts"
                             )
-                        store = ArtifactStore(
-                            request.receipt_dir.parent,
-                            workspace=request.workspace,
-                            allowed_roots=(
-                                self.state_dir / "tasks" / data["task_id"],
-                            ),
-                            forbidden_paths=(self.journal.path,),
-                        )
                         if accept and artifact_digests is None:
                             resolution = checkpoint.artifact_resolution
                             if resolution is not None:
@@ -1997,7 +1917,6 @@ class Botpipe:
                                         ) from exc
                                     accepted[declaration.name] = digest.hexdigest()
                                 artifact_digests = accepted
-                        artifact_operation = f"{operation_id}:generation:{previous}"
                         if store.has_capture_evidence(artifact_operation):
                             resolution = (
                                 checkpoint.artifact_resolution
@@ -2016,8 +1935,8 @@ class Botpipe:
                                 checkpoint, approved
                             )
                     if response is not _UNSET:
-                        # Record the operator's selection before capture, while
-                        # the workspace remains locked and fenced against writers.
+                        # Record the operator's selection before capture so a
+                        # restart can resume from the chosen response.
                         _persist_response(
                             self.journal,
                             operation_id,
@@ -2032,8 +1951,6 @@ class Botpipe:
                             expected_digests=artifact_digests,
                         )
 
-                target = request.workspace.resolve()
-                writable = self._operation_is_writable(inputs)
                 session_key = inputs.get("session")
                 recorded_timeout = inputs.get("timeout")
                 session_timeout = (
@@ -2052,13 +1969,7 @@ class Botpipe:
                     else nullcontext()
                 )
                 with session_guard:
-                    with self.workspace_turn(
-                        target,
-                        run_id=run_id,
-                        operation_id=operation_id,
-                        writable=writable,
-                    ):
-                        reconcile_provider()
+                    reconcile_provider()
 
                 if fail:
                     self._fail_resolution(
@@ -2066,7 +1977,6 @@ class Botpipe:
                         operation_id,
                         record,
                         source,
-                        clear_fence=writable,
                         already_failed=replaying_failure,
                     )
                     return
@@ -2110,18 +2020,6 @@ class Botpipe:
                 },
                 operation_id,
             )
-            if record["kind"] == "provider" and writable:
-                self.clear_workspace_fence(
-                    self._operation_workspace(record), run_id, operation_id
-                )
-
-    def _operation_workspace(self, record):
-        try:
-            inputs = codec.decode(record["inputs"])
-        except (KeyError, TypeError, ValueError):
-            return self.workspace
-        return Path(inputs.get("workspace", self.workspace)).resolve()
-
     def _fail_resolution(
         self,
         run_id,
@@ -2129,7 +2027,6 @@ class Botpipe:
         record,
         source,
         *,
-        clear_fence=True,
         already_failed=False,
     ):
         if not already_failed:
@@ -2144,10 +2041,6 @@ class Botpipe:
             pending_input=None,
             updated_at=now(),
         )
-        if clear_fence:
-            self.clear_workspace_fence(
-                self._operation_workspace(record), run_id, operation_id
-            )
         if not any(
             event["event"] == "operation_reconciled"
             and event["operation_id"] == operation_id
@@ -2175,11 +2068,6 @@ class Botpipe:
             and error.get("type") == BotpipeError.__qualname__
             and error.get("message") == _OPERATOR_FAILURE
         )
-
-    @staticmethod
-    def _operation_is_writable(inputs):
-        preset = inputs.get("operation", inputs.get("preset"))
-        return preset not in {"query", "generate"}
 
     def close(self):
         close = getattr(self.provider, "close", None)

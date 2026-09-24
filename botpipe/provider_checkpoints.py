@@ -139,13 +139,12 @@ class ProviderCheckpoint:
         generation = _generation(raw)
         if not raw:
             return EmptyCheckpoint(0)
-        if "preparing" in raw:
-            _only(raw, {"generation", "preparing"})
-            if raw["preparing"] is not True:
-                raise ProviderCheckpointError(
-                    "Provider preparing checkpoint marker is invalid"
-                )
-            return PreparingCheckpoint(generation)
+        if "preparing" in raw or "restoration_pending" in raw:
+            raise ProviderCheckpointError(
+                "This operation uses obsolete artifact preparation/restoration "
+                "checkpoints; it cannot be resumed by this version. "
+                "The workspace and stored files have been left untouched."
+            )
         if raw.get("retry_authorized") is True:
             _only(
                 raw,
@@ -172,14 +171,10 @@ class ProviderCheckpoint:
                     "generation",
                     "request",
                     "not_dispatched",
-                    "restoration_pending",
                     "budget_error",
                     "policy_error",
                 },
             )
-            pending = raw.get("restoration_pending")
-            if type(pending) is not bool:
-                raise ProviderCheckpointError("Provider restoration marker is invalid")
             errors = [
                 (name, raw[name])
                 for name in ("budget_error", "policy_error")
@@ -192,11 +187,10 @@ class ProviderCheckpoint:
             return NotDispatchedCheckpoint(
                 generation,
                 _request(raw),
-                pending,
                 errors[0][0],
                 errors[0][1],
             )
-        if "not_dispatched" in raw or "restoration_pending" in raw:
+        if "not_dispatched" in raw:
             raise ProviderCheckpointError(
                 "Provider non-dispatch markers are contradictory"
             )
@@ -259,22 +253,11 @@ class ProviderCheckpoint:
     def to_record(self) -> dict[str, Any]:
         raise NotImplementedError
 
-    def has_unresolved_effects(self, *, has_writes: bool) -> bool:
-        # An unfinished provider intent is conservatively effectful even if it
-        # declares no files: the provider itself may have external effects.
-        return True
-
 
 @dataclass(frozen=True, slots=True)
 class EmptyCheckpoint(ProviderCheckpoint):
     def to_record(self) -> dict[str, Any]:
         return {}
-
-
-@dataclass(frozen=True, slots=True)
-class PreparingCheckpoint(ProviderCheckpoint):
-    def to_record(self) -> dict[str, Any]:
-        return {"generation": self.generation, "preparing": True}
 
 
 @dataclass(frozen=True, slots=True)
@@ -308,7 +291,6 @@ class RetryAuthorizedCheckpoint(IntentCheckpoint):
 
 @dataclass(frozen=True, slots=True)
 class NotDispatchedCheckpoint(IntentCheckpoint):
-    restoration_pending: bool
     error_kind: str
     error: str
 
@@ -317,12 +299,8 @@ class NotDispatchedCheckpoint(IntentCheckpoint):
             "request": dict(self.request),
             "generation": self.generation,
             "not_dispatched": True,
-            "restoration_pending": self.restoration_pending,
             self.error_kind: self.error,
         }
-
-    def has_unresolved_effects(self, *, has_writes: bool) -> bool:
-        return self.restoration_pending
 
 
 @dataclass(frozen=True, slots=True)
@@ -341,11 +319,6 @@ class RespondedCheckpoint(IntentCheckpoint):
                 else {}
             ),
         }
-
-    def has_unresolved_effects(self, *, has_writes: bool) -> bool:
-        # The durable response resolves provider dispatch. Only publication of
-        # declared outputs can still affect the workspace.
-        return has_writes
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -473,7 +446,6 @@ __all__ = [
     "EmptyCheckpoint",
     "IntentCheckpoint",
     "NotDispatchedCheckpoint",
-    "PreparingCheckpoint",
     "ProviderCheckpoint",
     "ProviderCheckpointError",
     "ProviderLifecycle",

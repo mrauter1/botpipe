@@ -13,14 +13,6 @@ class RunBusy(BotpipeError):
     pass
 
 
-class WorkspaceBusy(BotpipeError):
-    pass
-
-
-class WorkspaceUnresolved(BotpipeError):
-    pass
-
-
 class SessionError(BotpipeError):
     """A conversation cannot be resumed with its recorded identity."""
 

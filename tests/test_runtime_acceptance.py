@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import threading
-from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 import pytest
 from pydantic import BaseModel
@@ -13,8 +13,6 @@ from botpipe import (
     Artifact,
     Botpipe,
     Provider,
-    WorkspaceBusy,
-    WorkspaceUnresolved,
     activity,
     ask_human,
     parallel,
@@ -400,45 +398,41 @@ def test_reconciliation_can_supply_none_as_an_activity_result(tmp_path):
         assert effects == ["sent"]
 
 
-@pytest.mark.parametrize("different_state_dir", [False, True])
-def test_unresolved_provider_fences_entire_workspace_across_runs(
-    tmp_path, different_state_dir
+@pytest.mark.parametrize("resolution", ["retry", "fail"])
+def test_provider_resolution_rejects_legacy_artifact_state_before_recovery(
+    tmp_path, resolution
 ):
-    @workflow
-    def interrupted():
-        return Provider().run("edit workspace").value
+    from botpipe.artifacts import ArtifactError, ArtifactStore
 
     @workflow
-    def replacement():
-        return Provider().run("more edits").value
+    def job():
+        return Provider().run(
+            "write", writes=[Artifact.text("result.txt", required=True)]
+        ).value
 
-    with Botpipe(
-        tmp_path, provider=FakeProvider([SystemExit("orphan may be editing")])
-    ) as first:
+    provider = FakeProvider([SystemExit("interrupted provider")])
+    with Botpipe(tmp_path, provider=provider) as client:
         with pytest.raises(SystemExit):
-            first.run(interrupted, run_id="orphan-owner")
-        state_dir = tmp_path / "different-state" if different_state_dir else None
-        provider = FakeProvider(["replacement complete"])
-        with Botpipe(tmp_path, provider=provider, state_dir=state_dir) as other:
-            with pytest.raises(WorkspaceUnresolved, match="unresolved"):
-                other.run(replacement, run_id="replacement-blocked")
-            assert provider.calls == []
-            operation = next(
-                row
-                for row in first.journal.operations("orphan-owner")
-                if row["kind"] == "provider"
-            )
-            first.provider.recover = lambda request: Stopped(
-                "test observed callback is quiescent"
-            )
-            first.resolve(
-                "orphan-owner",
+            client.run(job, run_id=f"legacy-{resolution}")
+        operation = next(
+            row
+            for row in client.journal.operations(f"legacy-{resolution}")
+            if row["kind"] == "provider"
+        )
+        folder = Path(client.journal.run(f"legacy-{resolution}")["folder"])
+        store = ArtifactStore(folder, workspace=tmp_path)
+        legacy = store._operation(f"{operation['id']}:generation:0")
+        legacy.mkdir(parents=True)
+        (legacy / "prepare.json").write_text("{}")
+
+        with pytest.raises(ArtifactError, match="Unsupported legacy"):
+            client.resolve(
+                f"legacy-{resolution}",
                 operation["id"],
-                response=ProviderResponse("verified stopped and completed"),
+                **{resolution: True},
             )
-            completed = other.run(replacement, run_id="replacement-allowed")
-            assert completed.ok, completed.error
-            assert len(provider.calls) == 1
+
+    assert len(provider.calls) == 1
 
 
 def test_repeated_async_cancellation_waits_until_effectful_worker_finishes(tmp_path):
@@ -522,92 +516,6 @@ def test_replayed_activity_exception_preserves_custom_type_and_constructor_args(
         assert replay.ok, replay.error
         assert replay.value == completed.value
         assert effects == ["called"]
-
-
-@pytest.mark.parametrize("parallel_branch", [False, True])
-def test_alternate_provider_workspace_excludes_independent_clients(
-    tmp_path, parallel_branch
-):
-    origin, target = tmp_path / "origin", tmp_path / "target"
-    origin.mkdir()
-    target.mkdir()
-    entered, release = threading.Event(), threading.Event()
-
-    def hold_target(request):
-        entered.set()
-        assert release.wait(15), "test did not release provider"
-        (request.workspace / "effect.txt").write_text("first owner's effect")
-        return "edited"
-
-    @workflow
-    def owner():
-        def edit():
-            return Provider(workspace=target).run("edit alternate target").value
-
-        return parallel(edit) if parallel_branch else edit()
-
-    @workflow
-    def contender():
-        return Provider().run("edit direct target").value
-
-    other_provider = FakeProvider(["must not dispatch"])
-    with (
-        Botpipe(origin, provider=FakeProvider([hold_target])) as first,
-        Botpipe(target, provider=other_provider) as other,
-    ):
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            running = executor.submit(first.run, owner)
-            try:
-                # Workflow/source and journal setup can be slow on hosted Windows.
-                # This watchdog is separate from the contention behavior below.
-                assert entered.wait(10), "owner did not dispatch"
-                with pytest.raises(WorkspaceBusy):
-                    other.run(contender)
-                assert other_provider.calls == []
-            finally:
-                release.set()
-                result = running.result(timeout=10)
-            assert result.ok, result.error
-
-
-def test_interrupted_alternate_workspace_remains_fenced_after_owner_exits(tmp_path):
-    origin, target = tmp_path / "origin", tmp_path / "target"
-    origin.mkdir()
-    target.mkdir()
-
-    @workflow
-    def owner():
-        return Provider(workspace=target).run("edit alternate target").value
-
-    @workflow
-    def contender():
-        return Provider().run("edit direct target").value
-
-    with Botpipe(
-        origin, provider=FakeProvider([SystemExit("provider may still own target")])
-    ) as first:
-        with pytest.raises(SystemExit):
-            first.run(owner, run_id="alternate-owner")
-        other_provider = FakeProvider(["after reconciliation"])
-        with Botpipe(target, provider=other_provider) as other:
-            with pytest.raises(WorkspaceUnresolved, match="unresolved"):
-                other.run(contender)
-            assert other_provider.calls == []
-            operation = next(
-                row
-                for row in first.journal.operations("alternate-owner")
-                if row["kind"] == "provider"
-            )
-            first.provider.recover = lambda request: Stopped(
-                "test observed callback is quiescent"
-            )
-            first.resolve(
-                "alternate-owner",
-                operation["id"],
-                response=ProviderResponse("verified stopped and completed"),
-            )
-            assert first.resume("alternate-owner", workflow=owner).ok
-            assert other.run(contender).ok
 
 
 def test_completed_root_does_not_reenter_changed_activity_call(
