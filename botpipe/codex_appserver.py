@@ -1436,6 +1436,8 @@ class CodexAppServerAdapter:
         if not lock.acquire(timeout=remaining(request.timeout)):
             raise TimeoutError("Codex native recovery timed out waiting for its thread")
         cleanup_uncertain: str | None = None
+        cleanup_required = False
+        recovered: _Turn | None = None
         try:
             previous_profile = self._thread_profiles.get(thread_id)
             refresh_loaded = (
@@ -1490,7 +1492,29 @@ class CodexAppServerAdapter:
                                 min(0.05, reconcile_deadline - time.monotonic()),
                             )
                         )
-            if status in {"failed", "interrupted", "cancelled"}:
+            if isinstance(match, Mapping) and status in {
+                "completed",
+                "failed",
+                "interrupted",
+                "cancelled",
+            }:
+                recovered = _Turn(thread_id, turn_id, request.tools, None)
+                for item in match.get("items", ()):
+                    if isinstance(item, Mapping):
+                        self._record_event(
+                            recovered,
+                            "item/completed",
+                            {
+                                "threadId": thread_id,
+                                "turnId": turn_id,
+                                "item": dict(item),
+                            },
+                        )
+            cleanup_required = status in {"failed", "interrupted", "cancelled"} or (
+                recovered is not None
+                and isinstance(recovered.error, CapabilityError)
+            )
+            if cleanup_required:
                 cleanup_methods = {
                     "thread/backgroundTerminals/clean",
                     "thread/backgroundTerminals/list",
@@ -1589,14 +1613,7 @@ class CodexAppServerAdapter:
             return "running", None
         if status not in {"completed", "failed", "interrupted", "cancelled"}:
             return "unknown", None
-        recovered = _Turn(thread_id, turn_id, request.tools, None)
-        for item in match.get("items", ()):
-            if isinstance(item, Mapping):
-                self._record_event(
-                    recovered,
-                    "item/completed",
-                    {"threadId": thread_id, "turnId": turn_id, "item": dict(item)},
-                )
+        assert recovered is not None
         enforcement = dict(checkpoint.get("enforcement") or {})
         enforcement["audit"] = (
             "tool-policy-violation"
@@ -1606,11 +1623,15 @@ class CodexAppServerAdapter:
             else "no-tool-calls-observed"
         )
         evidence = {"enforcement": enforcement, "audit": recovered.events}
-        if cleanup_uncertain is not None:
-            evidence["cleanup"] = {
-                "status": "incomplete",
-                "error": cleanup_uncertain,
-            }
+        if cleanup_required:
+            evidence["cleanup"] = (
+                {"status": "completed"}
+                if cleanup_uncertain is None
+                else {
+                    "status": "incomplete",
+                    "error": cleanup_uncertain,
+                }
+            )
         if request.on_checkpoint is not None:
             request.on_checkpoint(evidence)
         if recovered.error is not None:
@@ -1832,7 +1853,10 @@ class CodexAppServerAdapter:
                         cleanup_errors.append(exc)
                 with self._lock:
                     affected_turns = [
-                        turn for turn in self._turns.values() if not turn.completed
+                        turn
+                        for turn in self._turns.values()
+                        if not turn.completed
+                        or isinstance(turn.error, CapabilityError)
                     ]
                 if cleanup_errors:
                     failure = CodexProtocolError(

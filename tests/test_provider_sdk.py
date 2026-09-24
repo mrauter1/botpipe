@@ -647,6 +647,9 @@ def test_codex_retry_uses_supplied_thread_and_current_checkpoint(
 
         def start_turn(self, request, on_event=None):
             self.calls.append(request)
+            request.on_checkpoint(
+                {"status": "turn_intent", "session_id": "thread-1"}
+            )
             if request.attempt == 1:
                 request.on_checkpoint(
                     {"session_id": "thread-1", "profile_hash": "old-profile"}

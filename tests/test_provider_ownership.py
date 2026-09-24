@@ -50,6 +50,12 @@ class Adapter:
         self.calls.append(call)
         call.on_checkpoint(
             {
+                "status": "turn_intent",
+                "session_id": self.name,
+            }
+        )
+        call.on_checkpoint(
+            {
                 "status": "turn_acknowledged",
                 "session_id": self.name,
                 "turn_id": "turn",

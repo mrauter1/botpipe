@@ -250,24 +250,31 @@ def execute_provider_operation(
                     cleanup = durable.get("cleanup")
                     if (
                         isinstance(cleanup, dict)
-                        and (
-                            cleanup.get("status") == "completed"
-                            or cleanup.get("resolved_by") == "operator"
-                        )
+                        and cleanup.get("resolved_by") == "operator"
                     ):
                         return
+                    cleanup_completed = (
+                        isinstance(cleanup, dict)
+                        and cleanup.get("status") == "completed"
+                    )
                     try:
-                        ctx.journal.attempt_checkpoint(
-                            operation_id,
-                            attempt_number,
-                            {"cleanup": {"status": "pending"}},
-                        )
-                        release(operation_key, require_owner=True)
-                        ctx.journal.attempt_checkpoint(
-                            operation_id,
-                            attempt_number,
-                            {"cleanup": {"status": "completed"}},
-                        )
+                        if cleanup_completed:
+                            # The durable cleanup proof is already authoritative,
+                            # but the current runtime may still cache its closed
+                            # operation-local adapter. Absence on replay is fine.
+                            release(operation_key, require_owner=False)
+                        else:
+                            ctx.journal.attempt_checkpoint(
+                                operation_id,
+                                attempt_number,
+                                {"cleanup": {"status": "pending"}},
+                            )
+                            release(operation_key, require_owner=True)
+                            ctx.journal.attempt_checkpoint(
+                                operation_id,
+                                attempt_number,
+                                {"cleanup": {"status": "completed"}},
+                            )
                     except Exception as exc:
                         try:
                             ctx.journal.attempt_checkpoint(
@@ -442,14 +449,65 @@ def execute_provider_operation(
                     checkpoint=ctx.journal.attempt(operation_id, prior_generation + 1),
                 )
 
+                def finish_policy_failure(error):
+                    if not any(
+                        event["event"] == "provider_call_stopped"
+                        and event.get("operation_id") == operation_id
+                        for event in ctx.journal.events(ctx.run_id)
+                    ):
+                        ctx.journal.event(ctx.run_id, "provider_call_stopped", {
+                            "operation_key": operation_key,
+                            "reason": str(error),
+                        }, operation_id)
+                    if binding_store is not None:
+                        binding_store.finish(
+                            ctx.run_id, operation_key, operation_id=operation_id,
+                            attempt=request.attempt, outcome="policy_failed",
+                        )
+                    finish_independent_owner(request.attempt)
+
                 def recover_attempt():
                     # Checkpoints arrive on the transport's reader thread. Read
                     # the durable current attempt rather than the pre-dispatch
                     # snapshot carried by the original request.
-                    return recover_outcome(ctx.client.provider, replace(
-                        request,
-                        checkpoint=ctx.journal.attempt(operation_id, request.attempt),
-                    ))
+                    attempt = ctx.journal.attempt(operation_id, request.attempt)
+                    try:
+                        return recover_outcome(ctx.client.provider, replace(
+                            request, checkpoint=attempt,
+                        ))
+                    except ProviderPolicyError as error:
+                        # Native reconciliation can discover and checkpoint a
+                        # policy violation before raising it. Classify only the
+                        # resulting durable state, not the recovery input.
+                        attempt = ctx.journal.attempt(
+                            operation_id, request.attempt
+                        )
+                        cleanup = (
+                            attempt.get("cleanup")
+                            if isinstance(attempt, dict)
+                            else None
+                        )
+                        terminal_policy_failure = (
+                            isinstance(attempt, dict)
+                            and attempt.get("dispatch_authorized") is True
+                            and attempt.get("status") == "failed"
+                            and attempt.get("policy_error") is True
+                            and isinstance(cleanup, dict)
+                            and cleanup.get("status") == "completed"
+                        )
+                        if not terminal_policy_failure:
+                            detail = (
+                                cleanup.get("error")
+                                if isinstance(cleanup, dict)
+                                and isinstance(cleanup.get("error"), str)
+                                else str(error)
+                            )
+                            raise UncertainOperation(
+                                detail or "Provider policy failure is not confirmed stopped",
+                                operation_id,
+                            ) from error
+                        finish_policy_failure(error)
+                        raise
 
                 recovery_outcome = None
                 if (
@@ -622,9 +680,19 @@ def execute_provider_operation(
                                 usage=getattr(response, "usage", None),
                             )
                         else:
-                            response = _start_turn(
-                                ctx.client.provider, request, event_callback
-                            )
+                            try:
+                                response = _start_turn(
+                                    ctx.client.provider, request, event_callback
+                                )
+                            finally:
+                                durable_attempt = ctx.journal.attempt(
+                                    operation_id, request.attempt
+                                )
+                                dispatched = (
+                                    isinstance(durable_attempt, dict)
+                                    and durable_attempt.get("dispatch_authorized")
+                                    is True
+                                )
                         fresh_response = True
                     except BudgetExceeded as exc:
                         if not dispatched:
@@ -638,16 +706,7 @@ def execute_provider_operation(
                         if dispatched:
                             policy_outcome = recover_attempt()
                             if isinstance(policy_outcome, Stopped):
-                                ctx.journal.event(ctx.run_id, "provider_call_stopped", {
-                                    "operation_key": operation_key,
-                                    "reason": str(exc),
-                                }, operation_id)
-                                if binding_store is not None:
-                                    binding_store.finish(
-                                        ctx.run_id, operation_key, operation_id=operation_id,
-                                        attempt=request.attempt, outcome="policy_failed",
-                                    )
-                                finish_independent_owner(request.attempt)
+                                finish_policy_failure(exc)
                                 raise
                             raise UncertainOperation(
                                 policy_outcome.detail or str(exc), operation_id

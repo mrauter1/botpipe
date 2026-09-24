@@ -221,8 +221,14 @@ def test_generate_has_exact_empty_inventory_and_rejects_disallowed_tool_with_evi
     tmp_path: Path,
 ) -> None:
     client = adapter(tmp_path, "disallowed_shell")
+    checkpoints: list[dict] = []
     with pytest.raises(CapabilityError) as caught:
-        client.start_turn(request(tmp_path, preset="generate", tools=()))
+        client.start_turn(
+            replace(
+                request(tmp_path, preset="generate", tools=()),
+                on_checkpoint=checkpoints.append,
+            )
+        )
     client.close()
 
     message = str(caught.value)
@@ -242,6 +248,10 @@ def test_generate_has_exact_empty_inventory_and_rejects_disallowed_tool_with_evi
     assert config["tools.update_plan.enabled"] is False
     assert not any(key.startswith("mcp_servers.") for key in config)
     assert thread["params"]["dynamicTools"] == []
+    assert any(
+        update.get("cleanup") == {"status": "completed"}
+        for update in checkpoints
+    )
 
 
 @pytest.mark.parametrize(

@@ -267,6 +267,69 @@ def test_cached_capability_probe_is_not_repeated_for_start(
     assert calls[0] is not None
 
 
+def test_thread_setup_failure_is_uncharged_and_resume_dispatches_once(
+    tmp_path: Path, monkeypatch
+) -> None:
+    transcript = tmp_path / "transcript.jsonl"
+    adapter = CodexAppServerAdapter(
+        (sys.executable, str(FIXTURE)),
+        env={
+            "BOTPIPE_FAKE_SCENARIO": "complete",
+            "BOTPIPE_FAKE_TRANSCRIPT": str(transcript),
+        },
+        capabilities=capabilities(),
+    )
+    original_rpc = adapter._rpc
+    fail_thread_start = True
+
+    def rpc(method, params, timeout, cancel_event=None, *, deadline=None, process=None):
+        nonlocal fail_thread_start
+        if method == "thread/start" and fail_thread_start:
+            fail_thread_start = False
+            raise TimeoutError("controlled thread/start failure")
+        return original_rpc(
+            method,
+            params,
+            timeout,
+            cancel_event,
+            deadline=deadline,
+            process=process,
+        )
+
+    monkeypatch.setattr(adapter, "_rpc", rpc)
+
+    @workflow
+    def work():
+        with provider_budget(max_turns=1):
+            return Provider().generate("answer", session=None).value
+
+    with Botpipe(
+        tmp_path,
+        provider=CodexProvider(adapter=adapter),
+        state_dir=tmp_path / "state",
+    ) as runtime:
+        first = runtime.run(work, run_id="thread-setup-retry")
+        assert first.status == "interrupted"
+        assert budget_state(runtime, first.run_id)["used_turns"] == 0
+        assert dispatch_reservations(runtime) == []
+        operation = next(
+            row
+            for row in runtime.journal.operations(first.run_id)
+            if row["kind"] == "provider"
+        )
+        attempt = runtime.journal.attempt(operation["id"], 1)
+        assert attempt["status"] == "configured"
+        assert "dispatch_authorized" not in attempt
+        assert "turn/start" not in transcript.read_text()
+
+        resumed = runtime.resume(first.run_id, workflow=work)
+
+        assert resumed.ok, resumed.error
+        assert resumed.value == "fixture answer"
+        assert budget_state(runtime, first.run_id)["used_turns"] == 1
+        assert len(dispatch_reservations(runtime)) == 1
+
+
 def test_repairs_get_fresh_deadlines_and_one_charge_each(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -291,6 +354,7 @@ def test_repairs_get_fresh_deadlines_and_one_charge_each(
         def start_turn(self, request, on_event=None):
             self.start_deadlines.append(request.deadline)
             clock[0] += 1
+            request.on_checkpoint({"status": "turn_intent"})
             return ProviderResponse(next(self.responses))
 
         def close(self):

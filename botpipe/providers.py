@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
 from .capabilities import CapabilityError, CodexCapabilities
-from .errors import SessionError
+from .errors import BudgetExceeded, SessionError
 from .models import StreamEvent
 from .policy import Policy
 from .recovery import Completed, RecoveryOutcome, Stopped, Unknown
@@ -184,6 +184,7 @@ class CodexProvider:
     """Lazy provider facade with one app-server owner per logical session."""
 
     name = "codex"
+    _reserves_dispatch = True
     supports_safe_read_retry = True
     supports_timeout = True
 
@@ -307,25 +308,58 @@ class CodexProvider:
                 "Codex requests require a durable on_checkpoint callback"
             )
         owner = self._adapter_for(request)
+        durable_checkpoint = request.on_checkpoint
+        dispatch = None
+
+        def checkpoint(update: dict[str, Any]) -> None:
+            nonlocal dispatch
+            if update.get("status") == "turn_intent" and dispatch is None:
+                from .dispatches import Dispatch
+
+                dispatch = Dispatch(self, request)
+                dispatch.started()
+            durable_checkpoint(update)
+
+        native_request = replace(request, on_checkpoint=checkpoint)
         try:
-            response = owner.start_turn(request, request.on_event)
-            response.to_record()
-        except CapabilityError as exc:
-            request.on_checkpoint(
-                {
-                    "status": "failed",
-                    "policy_error": request.preset in {"query", "generate"},
-                    "error": str(exc),
-                }
-            )
-            raise ProviderPolicyError(str(exc)) from exc
-        except SessionError:
+            try:
+                response = owner.start_turn(native_request, request.on_event)
+                response.to_record()
+                if dispatch is None:
+                    raise ProviderError(
+                        "Codex adapter returned without a durable turn_intent checkpoint"
+                    )
+            except CapabilityError as exc:
+                checkpoint(
+                    {
+                        "status": "failed",
+                        "policy_error": request.preset in {"query", "generate"},
+                        "error": str(exc),
+                    }
+                )
+                raise ProviderPolicyError(str(exc)) from exc
+            except SessionError:
+                raise
+            except BudgetExceeded:
+                raise
+            except ProviderError:
+                raise
+            except Exception as exc:
+                raise ProviderError(f"Codex app-server failed: {exc}") from exc
+            checkpoint({"status": "completed", "response": response.to_record()})
+        except BaseException as exc:
+            if dispatch is not None:
+                dispatch.finish(
+                    "timed_out"
+                    if isinstance(exc, ProviderTimeoutError)
+                    else "failed"
+                    if isinstance(exc, Exception)
+                    else "interrupted",
+                    usage=getattr(exc, "usage", None),
+                    error=exc,
+                )
             raise
-        except ProviderError:
-            raise
-        except Exception as exc:
-            raise ProviderError(f"Codex app-server failed: {exc}") from exc
-        request.on_checkpoint({"status": "completed", "response": response.to_record()})
+        dispatch.finish("completed", usage=response.usage)
         return response
 
     def recover(self, request: ProviderRequest) -> RecoveryOutcome:
@@ -334,9 +368,21 @@ class CodexProvider:
             return Stopped("provider dispatch was not authorized")
         if not isinstance(value, Mapping):
             return Unknown("provider checkpoint is malformed")
+        cleanup = value.get("cleanup")
         if value.get("policy_error"):
-            raise ProviderPolicyError(
-                str(value.get("error") or "Codex tool policy failed")
+            if (
+                isinstance(cleanup, Mapping)
+                and cleanup.get("status") == "completed"
+            ):
+                raise ProviderPolicyError(
+                    str(value.get("error") or "Codex tool policy failed")
+                )
+            return Unknown(
+                str(
+                    cleanup.get("error")
+                    if isinstance(cleanup, Mapping) and cleanup.get("error")
+                    else "Codex policy failure cleanup is not verified"
+                )
             )
         status = value.get("status")
         if status in {"completed", "response_received"} and "response" in value:
@@ -355,7 +401,6 @@ class CodexProvider:
                     },
                 )
             return Completed(response, "adopted from the run ledger")
-        cleanup = value.get("cleanup")
         cleanup_incomplete = (
             isinstance(cleanup, Mapping) and cleanup.get("status") == "incomplete"
         )
