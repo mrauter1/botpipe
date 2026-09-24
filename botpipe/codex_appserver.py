@@ -354,7 +354,7 @@ class CodexAppServerAdapter:
         self._mcp_servers: frozenset[str] = frozenset()
         self._tearing_down_process: subprocess.Popen[bytes] | None = None
         self._transport_cleanup_results: weakref.WeakKeyDictionary[
-            subprocess.Popen[bytes], BaseException | None
+            subprocess.Popen[bytes], str | None
         ] = weakref.WeakKeyDictionary()
         self._pre_exit_captured: weakref.WeakSet[subprocess.Popen[bytes]] = (
             weakref.WeakSet()
@@ -417,12 +417,14 @@ class CodexAppServerAdapter:
                             CodexProtocolError("previous app-server process exited"),
                             expected_process=previous_process,
                         )
-                    except BaseException as exc:
+                    except CodexProtocolError:
                         # The old callers and receipts already retain this
                         # conservative cleanup failure. It must not permanently
                         # prevent unrelated work from installing a replacement.
-                        recorded = self._transport_cleanup_results.get(previous_process)
-                        if recorded is not exc:
+                        recorded = self._transport_cleanup_results.get(
+                            previous_process, _CLOSED
+                        )
+                        if recorded is _CLOSED or recorded is None:
                             raise
                 capabilities = self.probe(deadline=deadline)
                 if self._containment is not None:
@@ -552,20 +554,26 @@ class CodexAppServerAdapter:
         *,
         process: subprocess.Popen[bytes] | None = None,
     ) -> None:
-        if process is not None:
-            with self._lock:
-                if self._process is not process:
-                    return
         request_id = message.get("id")
         if request_id is not None and "method" not in message:
             with self._lock:
-                pending = self._pending.get(request_id)
+                pending = (
+                    self._pending.get(request_id)
+                    if process is None or self._process is process
+                    else None
+                )
             if pending is not None:
-                pending.put(message)
+                try:
+                    pending.put_nowait(message)
+                except queue.Full:
+                    pass
             return
         method = message.get("method")
         if isinstance(method, str) and request_id is not None:
-            self._answer_server_request(request_id, method)
+            with self._lock:
+                if process is not None and self._process is not process:
+                    return
+            self._answer_server_request(request_id, method, process=process)
             if method not in _TOOL_EVENTS:
                 return
         if not isinstance(method, str):
@@ -580,6 +588,8 @@ class CodexAppServerAdapter:
         if not isinstance(thread_id, str):
             return
         with self._lock:
+            if process is not None and self._process is not process:
+                return
             turn = (
                 self._turns.get((thread_id, turn_id))
                 if isinstance(turn_id, str)
@@ -593,10 +603,7 @@ class CodexAppServerAdapter:
                 ]
                 if len(candidates) == 1:
                     turn = candidates[0]
-        if turn is None:
-            if not isinstance(turn_id, str):
-                return
-            with self._lock:
+            if turn is None and isinstance(turn_id, str):
                 if (
                     len(self._orphan_events) >= 256
                     and (thread_id, turn_id) not in self._orphan_events
@@ -605,42 +612,46 @@ class CodexAppServerAdapter:
                 events = self._orphan_events.setdefault((thread_id, turn_id), [])
                 if len(events) < 128:
                     events.append((method, dict(params)))
+        if turn is None:
             return
         self._record_event(turn, method, dict(params))
 
-    def _answer_server_request(self, request_id: Any, method: str) -> None:
+    def _answer_server_request(
+        self,
+        request_id: Any,
+        method: str,
+        *,
+        process: subprocess.Popen[bytes] | None = None,
+    ) -> None:
         if method == "mcpServer/elicitation/request":
-            result: Any = {"action": "decline"}
+            response: dict[str, Any] = {
+                "id": request_id,
+                "result": {"action": "decline"},
+            }
         elif method in {"applyPatchApproval", "execCommandApproval"}:
-            result = {"decision": "abort"}
+            response = {"id": request_id, "result": {"decision": "abort"}}
         elif method in {
             "item/commandExecution/requestApproval",
             "item/fileChange/requestApproval",
         }:
-            result = {"decision": "cancel"}
+            response = {"id": request_id, "result": {"decision": "cancel"}}
         elif method in _APPROVAL_REQUESTS:
-            self._send(
-                {
-                    "id": request_id,
-                    "error": {
-                        "code": -32001,
-                        "message": "Botpipe approval policy is never",
-                    },
-                }
-            )
-            return
+            response = {
+                "id": request_id,
+                "error": {
+                    "code": -32001,
+                    "message": "Botpipe approval policy is never",
+                },
+            }
         else:
-            self._send(
-                {
-                    "id": request_id,
-                    "error": {
-                        "code": -32601,
-                        "message": f"Botpipe does not mediate {method}",
-                    },
-                }
-            )
-            return
-        self._send({"id": request_id, "result": result})
+            response = {
+                "id": request_id,
+                "error": {
+                    "code": -32601,
+                    "message": f"Botpipe does not mediate {method}",
+                },
+            }
+        self._send(response, process=process)
 
     def _record_event(self, turn: _Turn, method: str, params: dict[str, Any]) -> None:
         event = {"type": method, "data": _plain(params, label="event")}
@@ -1667,12 +1678,12 @@ class CodexAppServerAdapter:
                     raise CodexProtocolError(
                         "cleanup of the replaced app-server transport was not verified"
                     )
-                if isinstance(prior_cleanup, BaseException):
-                    raise prior_cleanup
+                if prior_cleanup is not None:
+                    raise CodexProtocolError(prior_cleanup)
                 return
             if prior_cleanup is not _CLOSED:
-                if isinstance(prior_cleanup, BaseException):
-                    raise prior_cleanup
+                if prior_cleanup is not None:
+                    raise CodexProtocolError(prior_cleanup)
                 return
             with self._lock:
                 self._tearing_down_process = process
@@ -1767,7 +1778,7 @@ class CodexAppServerAdapter:
                             + "; ".join(str(exc) for exc in checkpoint_errors)
                         )
                     if process is not None:
-                        self._transport_cleanup_results[process] = failure
+                        self._transport_cleanup_results[process] = str(failure)
                     self._fail_transport(failure, process=process)
                     raise failure
                 if process is not None:

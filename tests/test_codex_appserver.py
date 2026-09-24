@@ -237,7 +237,7 @@ def test_generate_audits_control_tools_and_declines_interactive_requests(
     turn = _Turn("thread", "turn", (), None)
     client._turns[("thread", "turn")] = turn
     sent = []
-    monkeypatch.setattr(client, "_send", sent.append)
+    monkeypatch.setattr(client, "_send", lambda message, **kwargs: sent.append(message))
     event = {
         "method": method,
         "params": {"threadId": "thread", "turnId": "turn", **params},
