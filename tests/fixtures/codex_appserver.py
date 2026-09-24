@@ -108,15 +108,16 @@ while True:
     turn_id = f"turn-{turn_number}"
     if SCENARIO in {
         "stall_turn_start",
-        "stall_turn_start_complete",
-        "stall_turn_start_disallowed",
+        "fail_turn_start",
+        "fail_turn_start_complete",
+        "fail_turn_start_disallowed",
     }:
-        # The native turn may already be executing even though its RPC response
-        # was lost. With no turn id available, only transport-tree teardown can
-        # establish quiescence.
-        if SCENARIO == "stall_turn_start":
+        # The native turn may already be executing even though its turn/start
+        # acknowledgement is unavailable. With no turn id, only transport-tree
+        # teardown can establish quiescence.
+        if SCENARIO in {"stall_turn_start", "fail_turn_start"}:
             spawn_descendant(new_session=True)
-        elif SCENARIO == "stall_turn_start_disallowed":
+        elif SCENARIO == "fail_turn_start_disallowed":
             send(
                 {
                     "method": "item/completed",
@@ -154,8 +155,22 @@ while True:
                     },
                 }
             )
-        while True:
-            time.sleep(60)
+        if SCENARIO == "stall_turn_start":
+            while True:
+                time.sleep(60)
+        # Deliver the orphan notification(s) before an explicit RPC failure.
+        # This deterministically models a native turn that executed while its
+        # turn/start acknowledgement could not be adopted by the caller.
+        send(
+            {
+                "id": request["id"],
+                "error": {
+                    "code": -32000,
+                    "message": "fixture rejected turn/start acknowledgement",
+                },
+            }
+        )
+        continue
     send(
         {
             "id": request["id"],

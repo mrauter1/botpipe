@@ -773,25 +773,39 @@ def test_late_turn_ack_cannot_bind_to_or_kill_replacement_transport(
 
 def test_turn_start_ack_timeout_kills_unknown_dispatched_turn_tree(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     marker = tmp_path / "pre-ack-descendant-escaped"
     pid_file = tmp_path / "pre-ack-descendant.pid"
     client = adapter(
         tmp_path,
-        "stall_turn_start",
+        "fail_turn_start",
         BOTPIPE_FAKE_DESCENDANT_MARKER=str(marker),
         BOTPIPE_FAKE_DESCENDANT_PID=str(pid_file),
     )
+    native_rpc = client._rpc
+
+    def lose_turn_start_ack(method, *args, **kwargs):
+        try:
+            return native_rpc(method, *args, **kwargs)
+        except CodexProtocolError as exc:
+            if method == "turn/start" and "fixture rejected" in str(exc):
+                raise TimeoutError("controlled turn/start timeout") from exc
+            raise
+
+    monkeypatch.setattr(client, "_rpc", lose_turn_start_ack)
 
     checkpoints = []
-    with pytest.raises(ProviderTimeoutError, match="turn start"):
-        client.start_turn(
-            replace(
-                request(tmp_path, timeout=0.2),
-                on_checkpoint=checkpoints.append,
+    try:
+        with pytest.raises(ProviderTimeoutError, match="turn start"):
+            client.start_turn(
+                replace(
+                    request(tmp_path, timeout=30),
+                    on_checkpoint=checkpoints.append,
+                )
             )
-        )
-    client.close()
+    finally:
+        client.close()
 
     assert pid_file.exists(), "fixture never dispatched its unknown turn"
     assert not any(
@@ -806,17 +820,24 @@ def test_turn_start_ack_timeout_kills_unknown_dispatched_turn_tree(
 def test_pre_ack_cleanup_preserves_orphaned_tool_policy_evidence(
     tmp_path: Path,
 ) -> None:
-    client = adapter(tmp_path, "stall_turn_start_disallowed")
+    client = adapter(tmp_path, "fail_turn_start_disallowed")
     checkpoints = []
 
-    with pytest.raises(CapabilityError, match="disallowed tool 'shell'"):
-        client.start_turn(
-            replace(
-                request(tmp_path, preset="generate", tools=(), timeout=0.2),
-                on_checkpoint=checkpoints.append,
+    try:
+        with pytest.raises(CapabilityError, match="disallowed tool 'shell'"):
+            client.start_turn(
+                replace(
+                    request(
+                        tmp_path,
+                        preset="generate",
+                        tools=(),
+                        timeout=30,
+                    ),
+                    on_checkpoint=checkpoints.append,
+                )
             )
-        )
-    client.close()
+    finally:
+        client.close()
 
     terminal = checkpoints[-1]
     assert terminal["status"] == "failed"
@@ -827,12 +848,12 @@ def test_pre_ack_cleanup_preserves_orphaned_tool_policy_evidence(
 
 
 def test_completed_orphan_wins_lost_turn_start_ack(tmp_path: Path) -> None:
-    client = adapter(tmp_path, "stall_turn_start_complete")
+    client = adapter(tmp_path, "fail_turn_start_complete")
     checkpoints = []
     try:
         response = client.start_turn(
             replace(
-                request(tmp_path, timeout=0.2),
+                request(tmp_path, timeout=30),
                 on_checkpoint=checkpoints.append,
             )
         )

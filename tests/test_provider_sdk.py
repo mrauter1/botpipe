@@ -719,32 +719,55 @@ def test_stopped_policy_failure_preserves_capability_error(tmp_path: Path):
 def test_cancelled_direct_call_stops_waiting_for_shared_session(tmp_path: Path):
     import asyncio
     import threading
+    from contextlib import suppress
 
     entered = threading.Event()
+    waiting_for_session = threading.Event()
     release = threading.Event()
+
+    class ObservedTurnLock:
+        def __init__(self):
+            self.lock = threading.Lock()
+
+        def acquire(self, *args, **kwargs):
+            if entered.is_set():
+                waiting_for_session.set()
+            return self.lock.acquire(*args, **kwargs)
+
+        def release(self):
+            self.lock.release()
 
     def hold(request):
         entered.set()
-        assert release.wait(3)
+        assert release.wait(30)
         return ProviderResponse("first", "thread-1")
 
     fake = FakeProvider([hold, ProviderResponse("second", "thread-1")])
-    provider = Provider(runtime=runtime(tmp_path, fake), session=Session())
+    shared = Session()
+    shared._turn_lock = ObservedTurnLock()
+    provider = Provider(runtime=runtime(tmp_path, fake), session=shared)
 
     async def scenario():
         first = asyncio.create_task(provider.aquery("first"))
-        assert await asyncio.to_thread(entered.wait, 1)
-        waiting = asyncio.create_task(provider.aquery("second"))
-        await asyncio.sleep(0.05)
-        waiting.cancel()
+        waiting = None
+        first_result = None
         try:
-            await asyncio.wait_for(waiting, 0.5)
-        except asyncio.CancelledError:
-            pass
-        else:
-            raise AssertionError("cancelled session waiter did not stop")
-        release.set()
-        assert (await first).value == "first"
+            assert await asyncio.to_thread(entered.wait, 10)
+            waiting = asyncio.create_task(provider.aquery("second"))
+            assert await asyncio.to_thread(waiting_for_session.wait, 10)
+            waiting.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await asyncio.wait_for(waiting, 2)
+        finally:
+            release.set()
+            try:
+                if waiting is not None and not waiting.done():
+                    waiting.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await asyncio.wait_for(waiting, 2)
+            finally:
+                first_result = await asyncio.wait_for(first, 10)
+        assert first_result.value == "first"
 
     asyncio.run(scenario())
     assert len(fake.calls) == 1
