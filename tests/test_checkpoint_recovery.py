@@ -8,7 +8,6 @@ from botpipe import (
     Artifact,
     Botpipe,
     Provider,
-    WorkspaceUnresolved,
     provider_budget,
     workflow,
 )
@@ -139,13 +138,8 @@ def test_uncommitted_finish_is_not_confirmed_from_writer_connection(
     assert len(provider.calls) == 1
 
 
-def test_interrupted_restore_keeps_foreign_workspace_fenced_until_resume(
-    tmp_path, monkeypatch
-):
-    import botpipe.artifacts as artifacts
-
-    first = tmp_path / "first.txt"
-    second = tmp_path / "second.txt"
+def test_budget_rejection_preserves_all_existing_outputs(tmp_path):
+    first, second = tmp_path / "first.txt", tmp_path / "second.txt"
     first.write_text("first before")
     second.write_text("second before")
 
@@ -154,63 +148,17 @@ def test_interrupted_restore_keeps_foreign_workspace_fenced_until_resume(
         with provider_budget(max_turns=1):
             Provider().run("consume budget")
             return Provider().run(
-                "denied",
-                writes=[
-                    Artifact.text(first, required=True),
-                    Artifact.text(second, required=True),
-                ],
+                "denied", writes=[Artifact.text(first), Artifact.text(second)]
             )
 
-    @workflow
-    def unrelated():
-        return Provider().run("unrelated write").value
-
     provider = FakeProvider(["first response"])
-    link = artifacts.os.link
-    interrupted = False
-
-    def interrupt_after_first_link(source, target, **kwargs):
-        nonlocal interrupted
-        link(source, target, **kwargs)
-        if not interrupted:
-            interrupted = True
-            raise KeyboardInterrupt()
-
-    monkeypatch.setattr(artifacts.os, "link", interrupt_after_first_link)
     with Botpipe(tmp_path, provider=provider) as client:
-        paused = client.run(work, run_id="restore-pending", task_id="task")
-        denied = _provider_operations(client, paused.run_id)[-1]
-
-    assert paused.status == "interrupted"
-    assert denied["response"]["not_dispatched"] is True
-    assert denied["response"]["restoration_pending"] is True
-    assert first.exists() != second.exists()
-
-    with Botpipe(
-        tmp_path,
-        state_dir=tmp_path / "foreign-state",
-        provider=FakeProvider(["must not dispatch"]),
-    ) as foreign:
-        with pytest.raises(WorkspaceUnresolved, match="unresolved"):
-            foreign.run(unrelated, run_id="foreign", task_id="foreign")
-
-    monkeypatch.setattr(artifacts.os, "link", link)
-    with Botpipe(tmp_path, provider=provider) as client:
-        resumed = client.resume(paused.run_id, workflow=work)
-        denied = client.journal.get(denied["id"])
-
-    assert resumed.status == "budget_exceeded"
+        result = client.run(work)
+        assert result.status == "budget_exceeded"
+        assert client.resume(result.run_id, workflow=work).status == "budget_exceeded"
     assert first.read_text() == "first before"
     assert second.read_text() == "second before"
-    assert denied["response"]["restoration_pending"] is False
     assert len(provider.calls) == 1
-
-    with Botpipe(
-        tmp_path,
-        state_dir=tmp_path / "foreign-state",
-        provider=FakeProvider(["unrelated"]),
-    ) as foreign:
-        assert foreign.run(unrelated, run_id="foreign-allowed", task_id="foreign").ok
 
 
 def test_policy_error_after_dispatch_requires_explicit_retry(tmp_path):
@@ -222,6 +170,7 @@ def test_policy_error_after_dispatch_requires_explicit_retry(tmp_path):
         raise ProviderPolicyError("policy failure after dispatch")
 
     def retry(request):
+        assert request.artifacts["result"].read_text() == "attempt output"
         request.artifacts["result"].write_text("retry output")
         return "retry complete"
 

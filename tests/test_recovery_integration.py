@@ -161,7 +161,7 @@ def test_known_stopped_unsafe_attempt_only_reexecutes_after_retry_authorization(
         assert provider.calls[-1].attempt == 2
 
 
-def test_repeated_live_reconciliation_remains_fenced(tmp_path):
+def test_repeated_live_reconciliation_remains_blocked(tmp_path):
     class LiveProvider(FakeProvider):
         def recover(self, request: ProviderRequest):
             return Running("the owned attempt is live")

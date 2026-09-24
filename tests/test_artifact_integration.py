@@ -117,7 +117,7 @@ def test_provider_response_is_recorded_before_artifact_validation(tmp_path):
     assert provider_row["status"] == "failed"
 
 
-def test_explicit_provider_retry_requires_new_artifact_outputs(tmp_path):
+def test_explicit_provider_retry_can_capture_current_artifact_output(tmp_path):
     class ConfirmedStoppedProvider(FakeProvider):
         def recover(self, request):
             return Stopped("the interrupted fake attempt is confirmed stopped")
@@ -145,8 +145,8 @@ def test_explicit_provider_retry_requires_new_artifact_outputs(tmp_path):
         )
         client.resolve(paused.run_id, operation["id"], retry=True)
         resumed = client.resume(paused.run_id, workflow=writer)
-    assert resumed.status == "failed"
-    assert "Required artifact was not written" in resumed.error
+    assert resumed.ok, resumed.error
+    assert resumed.value.artifacts.result.read_text() == "uncertain old attempt"
     assert len(provider.calls) == 2
 
 

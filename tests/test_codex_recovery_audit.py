@@ -14,6 +14,7 @@ from botpipe.codex_appserver import CodexAppServerAdapter
 from botpipe.policy import NetworkMode, Policy, SandboxMode
 from botpipe.providers import (
     CodexProvider,
+    ProviderInterruptedError,
     ProviderRequest,
     ProviderResponse,
     receipt_path,
@@ -416,3 +417,24 @@ def test_incomplete_cleanup_still_allows_completed_native_adoption(tmp_path):
 
     assert isinstance(outcome, Completed)
     assert outcome.response.text == "adopted"
+
+
+def test_completed_cleanup_with_unknown_history_stays_unknown_and_is_not_resent(
+    tmp_path,
+):
+    request = interrupted_request(tmp_path, preset="run")
+    path = receipt_path(request)
+    record = json.loads(path.read_text())
+    record["cleanup"] = {"status": "completed"}
+    path.write_text(json.dumps(record))
+
+    class Adapter:
+        def recover_turn(self, *args, **kwargs):
+            return "unknown", None
+
+    provider = CodexProvider(adapter=Adapter())
+    outcome = recover_outcome(provider, request)
+
+    assert isinstance(outcome, Unknown)
+    with pytest.raises(ProviderInterruptedError, match="refusing to resend"):
+        provider.run(request)

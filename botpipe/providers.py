@@ -6,6 +6,7 @@ import json
 import math
 import os
 import tempfile
+import threading
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -267,18 +268,21 @@ class CodexProvider:
     ) -> None:
         self.command, self.env, self.state_dir = command, dict(env or {}), state_dir
         self.interrupt_grace_seconds, self._adapter = interrupt_grace_seconds, adapter
+        self._adapter_lock = threading.Lock()
 
     @property
     def adapter(self):
         if self._adapter is None:
-            from .codex_appserver import CodexAppServerAdapter
+            with self._adapter_lock:
+                if self._adapter is None:
+                    from .codex_appserver import CodexAppServerAdapter
 
-            self._adapter = CodexAppServerAdapter(
-                self.command,
-                env=self.env,
-                state_dir=self.state_dir,
-                interrupt_grace_seconds=self.interrupt_grace_seconds,
-            )
+                    self._adapter = CodexAppServerAdapter(
+                        self.command,
+                        env=self.env,
+                        state_dir=self.state_dir,
+                        interrupt_grace_seconds=self.interrupt_grace_seconds,
+                    )
         return self._adapter
 
     def probe(self):
@@ -328,13 +332,20 @@ class CodexProvider:
             "status": "prepared",
             "session_id": request.session_id,
         }
-        _atomic_json(path, record)
+        receipt_lock = threading.Lock()
+
+        def persist(update: Mapping[str, Any]) -> dict[str, Any]:
+            with receipt_lock:
+                record.update(update)
+                _atomic_json(path, record)
+                return dict(record)
+
+        persist({})
 
         def checkpoint(update: dict[str, Any]) -> None:
-            record.update(update)
-            _atomic_json(path, record)
+            snapshot = persist(update)
             if request.on_checkpoint is not None:
-                request.on_checkpoint(dict(record))
+                request.on_checkpoint(snapshot)
 
         try:
             response = self.adapter.start_turn(
@@ -342,13 +353,14 @@ class CodexProvider:
             )
             response.to_record()
         except CapabilityError as exc:
-            if request.preset in {"query", "generate"}:
-                record.update(status="failed", policy_error=True, error=str(exc))
-            elif record.get("status") in {"prepared", "thread_bound"}:
-                record.update(status="failed", error=str(exc))
-            else:
-                record.update(error=str(exc))
-            _atomic_json(path, record)
+            with receipt_lock:
+                if request.preset in {"query", "generate"}:
+                    record.update(status="failed", policy_error=True, error=str(exc))
+                elif record.get("status") in {"prepared", "thread_bound"}:
+                    record.update(status="failed", error=str(exc))
+                else:
+                    record.update(error=str(exc))
+                _atomic_json(path, record)
             raise ProviderPolicyError(str(exc)) from exc
         except SessionError:
             raise
@@ -356,8 +368,7 @@ class CodexProvider:
             raise
         except Exception as exc:
             raise ProviderError(f"Codex app-server failed: {exc}") from exc
-        record.update(status="completed", response=response.to_record())
-        _atomic_json(path, record)
+        persist({"status": "completed", "response": response.to_record()})
         return response
 
     def recover(self, request: ProviderRequest) -> RecoveryOutcome:
@@ -407,13 +418,18 @@ class CodexProvider:
                 return Unknown(
                     "turn dispatch was sent before its native turn id was durable"
                 )
-            def checkpoint(
-                update: dict[str, Any], value=value, path=path
-            ) -> None:
-                value.update(update)
-                _atomic_json(path, value)
+            receipt_lock = threading.Lock()
+
+            def persist(update: Mapping[str, Any]) -> dict[str, Any]:
+                with receipt_lock:
+                    value.update(update)
+                    _atomic_json(path, value)
+                    return dict(value)
+
+            def checkpoint(update: dict[str, Any]) -> None:
+                snapshot = persist(update)
                 if request.on_checkpoint is not None:
-                    request.on_checkpoint(dict(value))
+                    request.on_checkpoint(snapshot)
 
             try:
                 status, response = self.adapter.recover_turn(
@@ -443,8 +459,7 @@ class CodexProvider:
                     **response.metadata,
                 }
                 recovered = replace(response, metadata=metadata)
-                value.update(status="completed", response=recovered.to_record())
-                _atomic_json(path, value)
+                persist({"status": "completed", "response": recovered.to_record()})
                 return Completed(recovered, "adopted from Codex thread history")
             if cleanup_incomplete:
                 return Unknown(

@@ -39,7 +39,7 @@ def test_missing_directory_flag_preserves_artifact_publication(
     )
     store = ArtifactStore(tmp_path)
     contracts = [Artifact.json("answer.json", required=True)]
-    paths = store.prepare(contracts, "turn")
+    paths = store.destinations(contracts, create_parents=True)
     paths["answer"].write_text('{"answer":42}')
     assert store.capture(contracts, "turn").answer.read_json() == {"answer": 42}
     assert flushed and all(flushed)
@@ -62,7 +62,7 @@ def test_windows_publication_keeps_file_flush_without_directory_open(
     monkeypatch.setattr(os, "fsync", fsync)
     store = ArtifactStore(tmp_path)
     contracts = [Artifact.text("answer.txt", required=True)]
-    paths = store.prepare(contracts, "turn")
+    paths = store.destinations(contracts, create_parents=True)
     paths["answer"].write_text("answer")
     assert store.capture(contracts, "turn").answer.read_text() == "answer"
     assert flushed_files

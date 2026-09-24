@@ -43,8 +43,7 @@ def test_schema_repairs_consume_turns_and_exhaustion_replays_without_dispatch(tm
         def next_run():
             return Provider().run("done").value
 
-        # A denied dispatch has no unresolved effects and does not retain a
-        # workspace ownership fence against an unrelated new run.
+        # A denied dispatch has no unresolved effects that block another run.
         assert client.run(next_run).status == "completed"
 
 
@@ -52,8 +51,7 @@ def test_child_parallel_calls_share_one_atomic_limit(tmp_path):
     concurrent_turns = threading.Barrier(2)
 
     def respond(request):
-        # Both permitted calls must reach the provider together: a workspace
-        # writer lock must not serialize the budget reservations for this test.
+        # Both permitted calls must reach the provider together.
         concurrent_turns.wait(timeout=30)
         return "done"
 

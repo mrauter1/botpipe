@@ -29,10 +29,10 @@ In `botpipe.toml`, use `default_provider = "codex"` and a `[codex]` table with
 `interrupt_grace_seconds`. `retry_safe` is also available at provider
 construction, through `with_config`, per call, and on every async form. Run
 `botpipe doctor --workspace PATH` to inspect installed capabilities and the
-workspace fence. Codex is not pinned: 0.156.0 is a recorded measured reference,
-not a minimum, while CI tests the floating `@openai/codex@latest` resolved by
-each job. A real credentialed smoke test is still required to establish live
-model behavior for a release.
+canonical workspace. Codex is not pinned: 0.156.0 is a recorded measured
+reference, not a minimum, while CI tests the floating `@openai/codex@latest`
+resolved by each job. A real credentialed smoke test is still required to
+establish live model behavior for a release.
 
 **1.x journals cannot be opened by 2.0.** They are rejected untouched; there is
 no migration. Finish existing work with 1.x or start in a new state directory.
@@ -44,10 +44,19 @@ reconciliation just like read-only presets. All presets default to
 idempotence; use `False` for nonrepeatable external effects. It also suppresses
 new output-repair dispatches, while an already completed repair still replays.
 
-If an unresolved workspace fence outlives a missing owner journal, it is never
-cleared automatically. After independently confirming the old work stopped, use
-`botpipe resolve RUN OP --clear-fence --workspace PATH` to assert abandonment
-and archive a receipt under the workspace lock.
+Workspace writer locks and unresolved-effect fences are removed. Parallel
+writable calls using distinct sessions may now operate in the same repository;
+turns sharing a session still serialize. Unresolved effects remain attached to
+their operation and run and require normal reconciliation or explicit
+resolution, but do not reserve the workspace. Botpipe does not snapshot,
+prepare, restore, or roll back the repository around a call, and retries operate
+on its current state.
+
+Interrupted operations from experimental builds that used artifact preparation
+or restoration checkpoints cannot resume in this version. Botpipe reports the
+obsolete state and leaves workspace files and stored backups untouched. Finish
+those runs with their original version before upgrading. Completed operations
+and their immutable captured artifacts remain replayable.
 
 The provider-first experimental API's `decide`, streaming iterators, exact argv
 grants and non-Codex constructors are not included. Progress uses `on_event`.

@@ -7,8 +7,7 @@ from pydantic import BaseModel, field_validator
 
 from botpipe import Artifact, Botpipe, Provider, workflow
 from botpipe.artifacts import ArtifactStore
-from botpipe.providers import FakeProvider, ProviderPolicyError, ProviderResponse
-from botpipe.recovery import Stopped
+from botpipe.providers import FakeProvider, ProviderResponse
 
 
 def _provider_operation(client, run_id):
@@ -17,9 +16,7 @@ def _provider_operation(client, run_id):
     )
 
 
-def test_exhausted_repairs_preserve_last_attempt_and_require_fresh_outputs(
-    tmp_path,
-):
+def test_exhausted_repairs_preserve_last_attempt_outputs(tmp_path):
     first_path = tmp_path / "exact" / "first.txt"
     second_path = tmp_path / "exact" / "second.json"
     first_path.parent.mkdir()
@@ -36,11 +33,11 @@ def test_exhausted_repairs_preserve_last_attempt_and_require_fresh_outputs(
         request.artifacts["second"].write_text("invalid json")
         return "first response"
 
-    def missing(request):
-        # The prior attempted files were quarantined and both originals were
-        # backed up again for this generation. No stale output can satisfy it.
-        assert not request.artifacts["first"].exists()
-        assert not request.artifacts["second"].exists()
+    def still_invalid(request):
+        # Repairs share the same workspace and can inspect or replace the prior
+        # attempt's current files.
+        assert request.artifacts["first"].read_text() == "valid first attempt"
+        assert request.artifacts["second"].read_text() == "invalid json"
         request.artifacts["first"].write_text("valid second attempt")
         return "second response"
 
@@ -48,18 +45,18 @@ def test_exhausted_repairs_preserve_last_attempt_and_require_fresh_outputs(
     def writer():
         return Provider().run("write", writes=declarations, output_retries=1)
 
-    provider = FakeProvider([invalid, missing])
+    provider = FakeProvider([invalid, still_invalid])
     with Botpipe(tmp_path, provider=provider) as client:
         result = client.run(writer)
 
     assert result.status == "failed"
-    assert "Required artifact was not written" in result.error
+    assert "Invalid json artifact" in result.error
     assert first_path.read_text() == "valid second attempt"
-    assert not second_path.exists()
+    assert second_path.read_text() == "invalid json"
     assert len(provider.calls) == 2
 
 
-def test_codec_preflight_failure_rolls_back_without_repeating_provider(
+def test_codec_preflight_failure_preserves_current_outputs_without_repeating_provider(
     tmp_path, monkeypatch
 ):
     import botpipe.sessions as sessions
@@ -79,8 +76,8 @@ def test_codec_preflight_failure_rolls_back_without_repeating_provider(
         return Provider().run(
             "write",
             writes=[
-                Artifact.text("first.txt", required=True),
-                Artifact.text("second.txt", required=True),
+                Artifact.text(first, required=True),
+                Artifact.text(second, required=True),
             ],
         )
 
@@ -98,8 +95,8 @@ def test_codec_preflight_failure_rolls_back_without_repeating_provider(
 
     assert result.status == "failed"
     assert "value cannot be stored" in result.error
-    assert first.read_text() == "old first"
-    assert second.read_text() == "old second"
+    assert first.read_text() == "new first"
+    assert second.read_text() == "new second"
     assert len(provider.calls) == 1
 
 
@@ -168,60 +165,6 @@ def test_new_client_recovers_typed_value_and_capture_after_finish_crash(
     assert resumed.value.usage == {"total_tokens": 4}
     assert validations == [3]
     assert replacement.calls == []
-
-
-def test_authorized_retry_resumes_between_old_rollback_and_new_prepare(
-    tmp_path, monkeypatch
-):
-    destination = tmp_path / "result.txt"
-    destination.write_text("original")
-
-    class StoppedProvider(FakeProvider):
-        def recover(self, request):
-            return Stopped("attempt is stopped")
-
-    def interrupted(request):
-        request.artifacts["result"].write_text("old attempt")
-        raise KeyboardInterrupt()
-
-    def retry(request):
-        assert not request.artifacts["result"].exists()
-        request.artifacts["result"].write_text("fresh attempt")
-        return "done"
-
-    @workflow
-    def writer():
-        return Provider().run(
-            "write", writes=[Artifact.text(destination, required=True)]
-        )
-
-    provider = StoppedProvider([interrupted, retry])
-    with Botpipe(tmp_path, provider=provider) as client:
-        paused = client.run(writer, task_id="task", run_id="run")
-        operation = _provider_operation(client, paused.run_id)
-        client.resolve(paused.run_id, operation["id"], retry=True)
-
-        real_prepare = ArtifactStore.prepare
-        interrupted_prepare = False
-
-        def crash_before_new_prepare(store, writes, operation_id):
-            nonlocal interrupted_prepare
-            if operation_id.endswith(":generation:1") and not interrupted_prepare:
-                interrupted_prepare = True
-                raise KeyboardInterrupt()
-            return real_prepare(store, writes, operation_id)
-
-        monkeypatch.setattr(ArtifactStore, "prepare", crash_before_new_prepare)
-        crashed = client.resume(paused.run_id, workflow=writer)
-    assert crashed.status == "interrupted"
-    assert destination.read_text() == "original"
-
-    monkeypatch.setattr(ArtifactStore, "prepare", real_prepare)
-    with Botpipe(tmp_path, provider=provider) as client:
-        resumed = client.resume(paused.run_id, workflow=writer)
-    assert resumed.ok, resumed.error
-    assert resumed.value.artifacts.result.read_text() == "fresh attempt"
-    assert len(provider.calls) == 2
 
 
 def test_capture_oserror_stays_interrupted_and_recovers_without_provider(
@@ -299,89 +242,6 @@ def test_invalid_response_envelope_preserves_uncertain_outputs(tmp_path, fields)
     assert result.status == replay.status == "interrupted"
     assert "ProviderResponse" in result.error
     assert destination.read_text() == "attempted output"
-    assert len(provider.calls) == 1
-
-
-def test_preparation_io_failure_resumes_before_first_dispatch(tmp_path, monkeypatch):
-    import botpipe.artifacts as artifacts
-
-    destination = tmp_path / "result.txt"
-    destination.write_text("original")
-
-    def write(request):
-        assert not request.artifacts["result"].exists()
-        request.artifacts["result"].write_text("fresh output")
-        return "done"
-
-    @workflow
-    def writer():
-        return Provider().run(
-            "write", writes=[Artifact.text(destination, required=True)]
-        )
-
-    original_replace = artifacts.os.replace
-    failed = False
-
-    def fail_after_backup(source, target):
-        nonlocal failed
-        original_replace(source, target)
-        if "previous" in artifacts.Path(target).parts and not failed:
-            failed = True
-            raise OSError("lost backup acknowledgement")
-
-    monkeypatch.setattr(artifacts.os, "replace", fail_after_backup)
-    provider = FakeProvider([write])
-    with Botpipe(tmp_path, provider=provider) as client:
-        interrupted = client.run(writer)
-        assert interrupted.status == "interrupted", interrupted.error
-        assert provider.calls == []
-        resumed = client.resume(interrupted.run_id, workflow=writer)
-
-    assert resumed.ok, resumed.error
-    assert resumed.value.artifacts.result.read_text() == "fresh output"
-    assert len(provider.calls) == 1
-
-
-def test_rejected_dispatch_resumes_interrupted_restoration(tmp_path, monkeypatch):
-    import botpipe.artifacts as artifacts
-
-    first, second = tmp_path / "first.txt", tmp_path / "second.txt"
-    first.write_text("old first")
-    second.write_text("old second")
-
-    @workflow
-    def writer():
-        return Provider().run(
-            "write", writes=[Artifact.text(first), Artifact.text(second)]
-        )
-
-    original_link = artifacts.os.link
-    failed = False
-
-    def fail_after_first_restore(source, target, **kwargs):
-        nonlocal failed
-        original_link(source, target, **kwargs)
-        if artifacts.Path(target) == first and not failed:
-            failed = True
-            raise OSError("lost restore acknowledgement")
-
-    monkeypatch.setattr(artifacts.os, "link", fail_after_first_restore)
-
-    class BeforeDispatchPolicyProvider(FakeProvider):
-        # Native adapters reserve dispatch themselves and reject unsupported
-        # policy before launching a process.
-        _reserves_dispatch = True
-
-    provider = BeforeDispatchPolicyProvider([ProviderPolicyError("unsupported policy")])
-    with Botpipe(tmp_path, provider=provider) as client:
-        interrupted = client.run(writer)
-        assert interrupted.status == "interrupted", interrupted.error
-        resumed = client.resume(interrupted.run_id, workflow=writer)
-
-    assert resumed.status == "failed"
-    assert "unsupported policy" in resumed.error
-    assert first.read_text() == "old first"
-    assert second.read_text() == "old second"
     assert len(provider.calls) == 1
 
 

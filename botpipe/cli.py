@@ -118,14 +118,6 @@ def build_parser() -> argparse.ArgumentParser:
         "--response",
         help="Record its externally observed JSON response (or plain text).",
     )
-    resolution.add_argument(
-        "--clear-fence",
-        action="store_true",
-        help=(
-            "Archive the matching workspace fence only when its owner journal is "
-            "gone and you assert the abandoned writer has stopped."
-        ),
-    )
     resolve.add_argument(
         "--artifact-digests",
         help="Explicit output reconciliation: JSON mapping of every artifact name to SHA-256, or null for an absent optional output.",
@@ -258,18 +250,16 @@ def _workflows_list(args: argparse.Namespace) -> int:
 
 
 def _doctor(args: argparse.Namespace) -> int:
-    from .locks import canonical_workspace, inspect_workspace_fence
+    from .locks import canonical_workspace
 
     workspace = canonical_workspace(args.workspace)
-    fence = inspect_workspace_fence(args.workspace)
     try:
         with _client(args) as client:
             capabilities = client.provider.probe()
-    except Exception as exc:  # noqa: BLE001 - retain fence diagnostics on failure
+    except Exception as exc:  # noqa: BLE001 - report provider diagnostic failures
         _emit(
             {
                 "workspace": workspace,
-                "workspace_fence": fence,
                 "codex": {"available": False, "error": str(exc)},
             }
         )
@@ -282,7 +272,6 @@ def _doctor(args: argparse.Namespace) -> int:
     )
     report = dict(value) if isinstance(value, Mapping) else {"capabilities": value}
     report["workspace"] = workspace
-    report["workspace_fence"] = fence
     _emit(report)
     try:
         require = getattr(capabilities, "require", None)
@@ -347,37 +336,6 @@ def _answer(args: argparse.Namespace) -> int:
 
 
 def _resolve(args: argparse.Namespace) -> int:
-    if args.clear_fence:
-        from .locks import clear_abandoned_workspace_fence
-
-        incompatible = [
-            option
-            for option, supplied in (
-                ("--config", args.config is not None),
-                ("--state-dir", args.state_dir is not None),
-                ("--provider", args.provider is not None),
-                ("--provider-config", args.provider_config is not None),
-                ("--policy", args.policy is not None),
-                ("--model", args.model is not None),
-                ("--effort", args.effort is not None),
-                ("--max-operations", args.max_operations is not None),
-                ("--timeout", args.timeout is not None),
-                ("--artifact-digests", args.artifact_digests is not None),
-                ("--workflow", args.workflow is not None),
-                ("--no-resume", args.no_resume),
-            )
-            if supplied
-        ]
-        if incompatible:
-            raise ConfigError(
-                "--clear-fence cannot be combined with " + ", ".join(incompatible)
-            )
-        _emit(
-            clear_abandoned_workspace_fence(
-                args.workspace, args.run_id, args.operation_id
-            )
-        )
-        return EXIT_OK
     client = _client(args)
     options = {"retry": args.retry}
     if args.accept:

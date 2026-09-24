@@ -10,8 +10,6 @@ from .errors import (
     RunBusy,
     SessionError,
     UncertainOperation,
-    WorkspaceBusy,
-    WorkspaceUnresolved,
 )
 from .models import Result, RunResult, StreamEvent
 from .operations import OutputValidationError
@@ -70,8 +68,6 @@ __all__ = [
     "WorkItem",
     "Workflow",
     "Worklist",
-    "WorkspaceBusy",
-    "WorkspaceUnresolved",
     "activity",
     "aparallel",
     "ask_human",

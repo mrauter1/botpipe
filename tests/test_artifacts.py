@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 
 import pytest
@@ -7,6 +8,7 @@ from pydantic import BaseModel
 
 from botpipe.artifacts import (
     Artifact,
+    ArtifactCaptureRecoveryError,
     ArtifactError,
     ArtifactHandle,
     ArtifactMap,
@@ -18,59 +20,65 @@ class Report(BaseModel):
     count: int
 
 
-def test_multiple_artifacts_are_immutable_and_serializable(tmp_path):
+def test_current_preexisting_artifacts_are_captured_and_immutable(tmp_path):
     store = ArtifactStore(tmp_path)
     writes = [
         Artifact.json("report.json", schema=Report, required=True),
         Artifact.md("notes.md", required=True),
     ]
-    paths = store.prepare(writes, "turn-1")
+    paths = store.destinations(writes)
     paths["report"].write_text('{"count": 2}')
-    paths["notes"].write_text("First report")
+    paths["notes"].write_text("Existing report")
+
     result = store.capture(writes, "turn-1")
     restored = ArtifactMap.from_record(json.loads(json.dumps(result.to_record())))
     assert restored.report.read_model() == Report(count=2)
-    assert restored.notes.read_text() == "First report"
+    assert restored.notes.read_text() == "Existing report"
+
     paths["report"].write_text('{"count": 99}')
     assert result.report.read_json() == {"count": 2}
     assert store.capture(writes, "turn-1").report.digest == result.report.digest
 
 
-def test_preparation_cannot_accept_stale_output_and_is_idempotent(tmp_path):
+def test_missing_required_fails_and_missing_optional_is_omitted(tmp_path):
     store = ArtifactStore(tmp_path)
-    writes = [Artifact.json("report.json", required=True)]
-    (tmp_path / "report.json").write_text('{"stale": true}')
-    paths = store.prepare(writes, "turn-1")
-    assert not paths["report"].exists()
-    with pytest.raises(ArtifactError, match="Required artifact"):
-        store.capture(writes, "turn-1")
-    paths["report"].write_text('{"fresh": true}')
-    store.prepare(writes, "turn-1")
-    assert store.capture(writes, "turn-1").report.read_json() == {"fresh": True}
+    optional = Artifact.text("optional.txt")
+    assert not store.capture([optional], "optional")
+
+    required = Artifact.text("required.txt", required=True)
+    with pytest.raises(ArtifactError, match="Required artifact is missing"):
+        store.capture([required], "required")
+    assert not (store._operation("required") / "capture.json").exists()
 
 
-def test_optional_stale_output_is_not_returned(tmp_path):
-    (tmp_path / "optional.txt").write_text("stale")
-    store = ArtifactStore(tmp_path)
-    writes = [Artifact.text("optional.txt")]
-    store.prepare(writes, "turn")
-    assert not store.capture(writes, "turn")
+def test_preexisting_optional_artifact_is_current_output(tmp_path):
+    destination = tmp_path / "optional.txt"
+    destination.write_text("already here")
+    captured = ArtifactStore(tmp_path).capture(
+        [Artifact.text("optional.txt")], "turn"
+    )
+    assert captured.optional.read_text() == "already here"
+    assert destination.read_text() == "already here"
 
 
-def test_schemas_and_required_outputs_are_validated_as_one_set(tmp_path):
+def test_validation_failure_leaves_all_current_files_untouched(tmp_path):
+    good = tmp_path / "good.txt"
+    bad = tmp_path / "bad.json"
+    good.write_text("valid")
+    bad.write_text('{"count": "oops"}')
     store = ArtifactStore(tmp_path)
     writes = [
         Artifact.text("good.txt", required=True),
         Artifact.json("bad.json", schema=Report, required=True),
     ]
-    paths = store.prepare(writes, "turn")
-    paths["good"].write_text("valid")
-    paths["bad"].write_text('{"count": "oops"}')
+
     with pytest.raises(ArtifactError, match="Invalid json artifact"):
         store.capture(writes, "turn")
+
+    assert good.read_text() == "valid"
+    assert bad.read_text() == '{"count": "oops"}'
     assert not list((tmp_path / ".artifacts").rglob("capture.json"))
-    paths["bad"].write_text('{"count": 3}')
-    assert len(store.capture(writes, "turn")) == 2
+    assert not list((tmp_path / ".artifacts").rglob("capture.pending.json"))
 
 
 def test_json_schema_validation_and_local_model_round_trip(tmp_path):
@@ -103,7 +111,7 @@ def test_json_schema_validation_and_local_model_round_trip(tmp_path):
 )
 def test_runtime_state_and_escape_paths_are_rejected(tmp_path, path):
     with pytest.raises(ArtifactError):
-        ArtifactStore(tmp_path).prepare([Artifact.text(path)], "turn")
+        ArtifactStore(tmp_path).destinations([Artifact.text(path)])
 
 
 def test_symlinks_and_protected_paths_are_rejected(tmp_path):
@@ -115,7 +123,23 @@ def test_symlinks_and_protected_paths_are_rejected(tmp_path):
     store = ArtifactStore(folder, workspace=tmp_path, forbidden_paths=[outside])
     for path in ("link/file.txt", outside / "file.txt"):
         with pytest.raises(ArtifactError):
-            store.prepare([Artifact.text(path)], "turn")
+            store.destinations([Artifact.text(path)])
+
+
+def test_destinations_are_read_only_unless_parent_creation_is_requested(tmp_path):
+    existing = tmp_path / "existing.txt"
+    existing.write_text("keep")
+    store = ArtifactStore(tmp_path)
+    writes = [Artifact.text("nested/result.txt"), Artifact.text(existing)]
+
+    paths = store.destinations(writes)
+    assert not paths["result"].parent.exists()
+    assert existing.read_text() == "keep"
+
+    created = store.destinations(writes, create_parents=True)
+    assert created == paths
+    assert paths["result"].parent.is_dir()
+    assert existing.read_text() == "keep"
 
 
 def test_new_versions_and_materialized_aliases_do_not_mutate_snapshots(tmp_path):
@@ -131,40 +155,15 @@ def test_new_versions_and_materialized_aliases_do_not_mutate_snapshots(tmp_path)
         store.publish(artifact, {"version": 3}, "v2")
 
 
-def test_interruption_after_backup_resumes_preparation(tmp_path, monkeypatch):
-    import botpipe.artifacts as module
-
-    store = ArtifactStore(tmp_path)
-    writes = [Artifact.text("old.txt", required=True)]
-    (tmp_path / "old.txt").write_text("before")
-    atomic = module._atomic
-
-    def fail_final_manifest(path, data):
-        if path.name == "prepare.json" and json.loads(data)["prepared"]:
-            raise KeyboardInterrupt()
-        return atomic(path, data)
-
-    monkeypatch.setattr(module, "_atomic", fail_final_manifest)
-    with pytest.raises(KeyboardInterrupt):
-        store.prepare(writes, "turn")
-    monkeypatch.setattr(module, "_atomic", atomic)
-    store.prepare(writes, "turn")
-    assert not (tmp_path / "old.txt").exists()
-    store.restore("turn")
-    assert (tmp_path / "old.txt").read_text() == "before"
-    with pytest.raises(ArtifactError, match="preparation"):
-        store.capture(writes, "turn")
-
-
-def test_interruption_after_blob_publish_resumes_without_stale_output(
+def test_interruption_after_blob_publish_replays_without_mutable_source(
     tmp_path, monkeypatch
 ):
     import botpipe.artifacts as module
 
     store = ArtifactStore(tmp_path)
     writes = [Artifact.text("result.txt", required=True)]
-    store.prepare(writes, "turn")
-    (tmp_path / "result.txt").write_text("provider result")
+    destination = tmp_path / "result.txt"
+    destination.write_text("captured bytes")
     atomic = module._atomic
 
     def fail_capture_manifest(path, data):
@@ -176,78 +175,88 @@ def test_interruption_after_blob_publish_resumes_without_stale_output(
     with pytest.raises(KeyboardInterrupt):
         store.capture(writes, "turn")
     monkeypatch.setattr(module, "_atomic", atomic)
+    destination.write_text("later edit")
+
     recreated = ArtifactStore(tmp_path)
-    recreated.prepare(writes, "turn")
-    assert recreated.capture(writes, "turn").result.read_text() == "provider result"
+    assert recreated.capture(writes, "turn").result.read_text() == "captured bytes"
 
 
-def test_restore_never_overwrites_new_provider_output(tmp_path):
-    store = ArtifactStore(tmp_path)
-    writes = [Artifact.text("result.txt")]
-    (tmp_path / "result.txt").write_text("old")
-    store.prepare(writes, "turn")
-    (tmp_path / "result.txt").write_text("new")
-    store.restore("turn")
-    assert (tmp_path / "result.txt").read_text() == "new"
-
-
-def test_completed_restore_replay_preserves_later_destination_edits(tmp_path):
-    store = ArtifactStore(tmp_path)
-    writes = [Artifact.text("result.txt")]
-    destination = tmp_path / "result.txt"
-    destination.write_text("old")
-    store.prepare(writes, "turn")
-
-    store.restore("turn")
-    assert destination.read_text() == "old"
-    destination.write_text("edited after restore")
-
-    store.restore("turn")
-    assert destination.read_text() == "edited after restore"
-
-
-def test_snapshot_tampering_is_detected(tmp_path):
-    handle = ArtifactStore(tmp_path).publish(Artifact.text("x.txt"), "original", "x")
-    handle.path.chmod(0o644)
-    handle.path.write_text("changed")
-    with pytest.raises(ArtifactError, match="modified"):
-        handle.read_text()
-
-
-def test_restore_crash_cannot_make_stale_output_capturable(tmp_path, monkeypatch):
-    import botpipe.artifacts as module
-
+def test_pending_capture_without_blob_requires_unchanged_source(tmp_path, monkeypatch):
     store = ArtifactStore(tmp_path)
     writes = [Artifact.text("result.txt", required=True)]
     destination = tmp_path / "result.txt"
-    destination.write_text("old")
-    store.prepare(writes, "turn")
-    link = module.os.link
+    destination.write_text("inventoried")
 
-    def interrupt_after_restore(source, path, **kwargs):
-        link(source, path, **kwargs)
-        if module.Path(path) == destination:
-            raise KeyboardInterrupt()
+    def interrupt_before_snapshot(*args, **kwargs):
+        raise KeyboardInterrupt()
 
-    monkeypatch.setattr(module.os, "link", interrupt_after_restore)
+    monkeypatch.setattr(store, "_snapshot", interrupt_before_snapshot)
     with pytest.raises(KeyboardInterrupt):
-        store.restore("turn")
-    assert destination.read_text() == "old"
-    with pytest.raises(ArtifactError, match="preparation"):
         store.capture(writes, "turn")
+    destination.write_text("changed")
+
+    with pytest.raises(ArtifactCaptureRecoveryError, match="capture intent"):
+        ArtifactStore(tmp_path).capture(writes, "turn")
+    assert destination.read_text() == "changed"
 
 
 def test_published_capture_replay_does_not_observe_mutable_destination(tmp_path):
     store = ArtifactStore(tmp_path)
     writes = [Artifact.text("result.txt", required=True)]
-    destination = store.prepare(writes, "turn")["result"]
+    destination = tmp_path / "result.txt"
     destination.write_text("published")
     original = store.capture(writes, "turn")
     destination.unlink()
     destination.mkdir()
-    assert store.prepare(writes, "turn")["result"] == destination
-    assert store.capture(writes, "turn").result == original.result
-    assert original.result.read_text() == "published"
+    (store._operation("turn") / "capture.pending.json").write_text("damaged")
+
+    replay = store.capture(writes, "turn")
+    recovered = ArtifactStore(tmp_path).captured("turn")
+    assert recovered is not None
+    assert replay.result == original.result == recovered.result
+    assert replay.result.read_text() == "published"
+
+
+def test_snapshot_tampering_is_detected_on_replay(tmp_path):
+    store = ArtifactStore(tmp_path)
+    destination = tmp_path / "x.txt"
+    destination.write_text("original")
+    handle = store.capture([Artifact.text("x.txt")], "turn").x
+    handle.path.chmod(0o644)
+    handle.path.write_text("changed")
+
+    with pytest.raises(ArtifactError, match="modified"):
+        store.captured("turn")
+
+
+def test_capture_recovery_repeats_publication_directory_sync(tmp_path, monkeypatch):
+    import botpipe.artifacts as module
+
+    store = ArtifactStore(tmp_path)
+    destination = tmp_path / "result.txt"
+    destination.write_text("published")
+    captured = store.capture([Artifact.text("result.txt", required=True)], "turn")
+    synced = []
+    monkeypatch.setattr(module, "_sync_dir", synced.append)
+
+    assert store.captured("turn").result == captured.result
+    assert captured.result.path.parent in synced
+    assert store._operation("turn") in synced
+
+
+def test_legacy_unfinished_state_is_rejected_without_touching_files(tmp_path):
+    store = ArtifactStore(tmp_path)
+    destination = tmp_path / "result.txt"
+    destination.write_text("current")
+    operation = store._operation("turn")
+    operation.mkdir(parents=True)
+    (operation / "prepare.json").write_text("{}")
+
+    with pytest.raises(ArtifactError, match="Unsupported legacy"):
+        store.check_legacy_operation("turn")
+    with pytest.raises(ArtifactError, match="Unsupported legacy"):
+        store.capture([Artifact.text("result.txt")], "turn")
+    assert destination.read_text() == "current"
 
 
 def test_hardlink_alias_to_explicitly_protected_state_is_rejected(tmp_path):
@@ -259,7 +268,61 @@ def test_hardlink_alias_to_explicitly_protected_state_is_rejected(tmp_path):
     os.link(protected, alias)
     store = ArtifactStore(tmp_path, forbidden_paths=[protected])
     with pytest.raises(ArtifactError, match="protected state"):
-        store.prepare([Artifact.text(alias)], "turn")
+        store.destinations([Artifact.text(alias)])
+
+
+def test_capture_recovery_revalidates_pending_blob(tmp_path, monkeypatch):
+    store = ArtifactStore(tmp_path)
+    writes = [Artifact.json("result.json", required=True)]
+    destination = tmp_path / "result.json"
+    destination.write_text('{"valid": true}')
+
+    def interrupt_before_snapshot(*args, **kwargs):
+        raise KeyboardInterrupt()
+
+    monkeypatch.setattr(store, "_snapshot", interrupt_before_snapshot)
+    with pytest.raises(KeyboardInterrupt):
+        store.capture(writes, "turn")
+
+    invalid = b"not json"
+    digest = hashlib.sha256(invalid).hexdigest()
+    intent_path = store._operation("turn") / "capture.pending.json"
+    intent = json.loads(intent_path.read_text())
+    intent["contents"][0].update(digest=digest, length=len(invalid))
+    intent_path.write_text(json.dumps(intent))
+    blob = store.root / "blobs" / digest[:2] / digest / destination.name
+    blob.parent.mkdir(parents=True)
+    blob.write_bytes(invalid)
+
+    with pytest.raises(ArtifactCaptureRecoveryError):
+        ArtifactStore(tmp_path).capture(writes, "turn")
+
+
+@pytest.mark.parametrize("corruption", ["missing-required", "nonhex-digest"])
+def test_capture_recovery_rejects_malformed_pending_content(
+    tmp_path, monkeypatch, corruption
+):
+    store = ArtifactStore(tmp_path)
+    writes = [Artifact.text("result.txt", required=True)]
+    destination = tmp_path / "result.txt"
+    destination.write_text("provider output")
+
+    def interrupt_before_snapshot(*args, **kwargs):
+        raise KeyboardInterrupt()
+
+    monkeypatch.setattr(store, "_snapshot", interrupt_before_snapshot)
+    with pytest.raises(KeyboardInterrupt):
+        store.capture(writes, "turn")
+    intent_path = store._operation("turn") / "capture.pending.json"
+    intent = json.loads(intent_path.read_text())
+    if corruption == "missing-required":
+        intent["contents"] = []
+    else:
+        intent["contents"][0]["digest"] = "z" * 64
+    intent_path.write_text(json.dumps(intent))
+
+    with pytest.raises(ArtifactCaptureRecoveryError):
+        ArtifactStore(tmp_path).capture(writes, "turn")
 
 
 def test_generic_schema_round_trip_requires_explicit_model_type(tmp_path):
@@ -268,6 +331,5 @@ def test_generic_schema_round_trip_requires_explicit_model_type(tmp_path):
     )
     restored = ArtifactHandle.from_record(handle.to_record())
     assert restored.read_model(list[Report]) == [Report(count=2)]
-    # A qualified builtins:list reference would silently lose its element type.
     with pytest.raises(ArtifactError, match="Pass a model type"):
         restored.read_model()

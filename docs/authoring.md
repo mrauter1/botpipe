@@ -67,8 +67,10 @@ answer; a missing answer suspends the run.
 Declare files with `Artifact.json`, `Artifact.md` or another constructor. Pass
 `writes=(artifact,)` to `run`, then use `result.artifacts.name` to access the
 immutable captured version. Required/optional files, schema validation, digest
-checks and versioned capture retain their normal semantics. Passing an artifact
-handle through `reads` gives the next call the immutable input.
+checks and versioned capture retain their normal semantics. Capture validates
+the current file, including a valid file that existed before the attempt; it
+does not prove which concurrent writer produced it. Passing an artifact handle
+through `reads` gives the next call the immutable input.
 
 Pure inspection reviews should use `query` with a typed verdict. A verifier that
 must execute tests or builds should use a typed `run`, usually without declared
@@ -78,6 +80,8 @@ workspace effects. Such a verifier should report failures for the producer to
 repair. If a review file is required, save the validated result in an activity.
 Read-only presets cannot declare writes. Repair turns run on the same thread and
 count against budgets. A validation failure does not roll back repository edits.
+Botpipe does not prepare, move, back up, restore, or roll back workspace files
+around an attempt. A retry sees and modifies the repository's current state.
 
 `Worklist.from_artifact(handle, collection="items")` snapshots the selected
 items durably. The same original selection is visited on every resume, including
@@ -94,8 +98,10 @@ Calling another decorated workflow records a child operation and runs it in a
 child scope. A completed child replays as a unit. Child operations share the
 parent run's operation budget, timeout defaults and provider budgets. Use
 `parallel` or `aparallel` to run independent callables. Each branch needs a
-separate session. Writers using the same canonical workspace serialize; use
-separate worktrees for independent parallel edits.
+separate session. With distinct sessions, writable branches may run at the same
+time in the same canonical workspace. Design prompts and artifact destinations
+for the resulting shared-state concurrency, or use separate worktrees when the
+edits themselves require isolation.
 
 Read-only calls may observe another writer mid-edit. A read declaration records
 its captured input, but does not restrict everything Codex may inspect in the
@@ -116,15 +122,17 @@ of those contracts fails replay.
 The run's `max_operations` counts journaled operations across child and parallel
 scopes. It may be increased, but not decreased, on resume. The run `timeout` is
 the default bound for provider dispatches and session-lock waits, not a
-wall-clock deadline for arbitrary workflow Python. Workspace-lock waits instead
-default to `Botpipe(workspace_lock_timeout=1)` unless the provider call sets
-`timeout`. Use `provider_budget(max_seconds=...)` for a durable provider
-deadline. Nested budget scopes all apply. Every repair dispatch counts against
-provider budgets; adopting a recovered response does not dispatch again.
+wall-clock deadline for arbitrary workflow Python. Use
+`provider_budget(max_seconds=...)` for a durable provider deadline. Nested budget
+scopes all apply. Every repair dispatch counts against provider budgets;
+adopting a recovered response does not dispatch again.
 Recovery adopts `Completed`, retries automatically only after confirmed
 `Stopped` when both recorded and current policy allow it, makes a bounded
 targeted interrupt attempt for `Running`, and leaves `Unknown` unresolved until
 operator resolution. Cancellation ends the current invocation without
-redispatch; a later explicit resume may retry within policy and limits. Opt-in
-remote tools should use `retry_safe=False` when their effects cannot safely be
-repeated.
+redispatch; a later explicit resume may retry within policy and limits. Because
+parallel turns can share one app-server process, cancellation escalation may
+interrupt siblings; recovery reconciles every affected operation as
+`Completed`, `Stopped`, or `Unknown`. Botpipe does not promise independent
+cancellation. Opt-in remote tools should use `retry_safe=False` when their
+effects cannot safely be repeated.

@@ -92,9 +92,11 @@ with Botpipe(workspace=".") as runtime:
 
 Loops, conditionals, activities, nested workflows, worklists, `parallel` and
 `aparallel` use the same durable journal. Completed operations replay recorded
-results. An interrupted provider turn follows its recorded retry policy; an
-unresolved writable turn keeps its workspace fenced until recovery or operator
-resolution.
+results. Parallel branches with distinct sessions may run writable calls in the
+same repository at the same time; calls sharing a session serialize. An
+interrupted provider turn follows its recorded retry policy, and unresolved work
+remains attached to that operation and run until recovery or operator resolution.
+It does not reserve the workspace globally.
 
 ```bash
 botpipe workflows list
@@ -105,9 +107,13 @@ botpipe resume RUN_ID
 botpipe resolve RUN_ID OPERATION_ID --retry
 botpipe resolve RUN_ID OPERATION_ID --accept
 botpipe resolve RUN_ID OPERATION_ID --fail
-# Explicitly abandon a stale fence only after confirming the old work stopped.
-botpipe resolve RUN_ID OPERATION_ID --clear-fence --workspace PATH
 ```
+
+Botpipe never prepares a transactional workspace snapshot or moves, backs up,
+restores, or rolls back repository files around a provider call. Retries operate
+on the repository's current state. Declared `writes` are validated and captured
+immutably when an operation completes; capture is not exclusive-writer
+attribution or an atomic snapshot of the repository.
 
 ## Configuration
 

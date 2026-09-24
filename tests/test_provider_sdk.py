@@ -560,46 +560,46 @@ def test_recorded_unsafe_output_does_not_gain_repair_after_safety_change(
     assert len(fake.calls) == 1
 
 
-def test_tightened_safety_does_not_dispatch_prepared_repair(
+def test_tightened_safety_does_not_dispatch_started_repair(
     tmp_path: Path, monkeypatch
 ):
+    import botpipe.operations as operations
     from botpipe import workflow
 
     fake = FakeProvider(
         [ProviderResponse("not-json", "thread-1"), ProviderResponse('{"count": 2}')]
     )
 
-    @workflow(name="prepared-repair")
+    @workflow(name="started-repair")
     def first_flow():
         return Provider().run(
             "count", returns=Answer, output_retries=1, retry_safe=True
         )
 
+    original = operations._preflight_provider
+    preflights = 0
+
+    def crash_before_second_dispatch(adapter, request):
+        nonlocal preflights
+        preflights += 1
+        if preflights == 2:
+            raise SystemExit("before repair dispatch")
+        return original(adapter, request)
+
     managed_runtime = runtime(tmp_path, fake)
-    original = managed_runtime.journal.response
-    preparations = 0
-
-    def crash_second_preparation(operation_id, record, session_key=None):
-        nonlocal preparations
-        original(operation_id, record, session_key=session_key)
-        if record.get("preparing") is True:
-            preparations += 1
-            if preparations == 2:
-                raise SystemExit("after repair preparation")
-
-    monkeypatch.setattr(managed_runtime.journal, "response", crash_second_preparation)
-    with pytest.raises(SystemExit, match="after repair preparation"):
-        managed_runtime.run(first_flow, run_id="prepared-repair")
-    monkeypatch.setattr(managed_runtime.journal, "response", original)
+    monkeypatch.setattr(operations, "_preflight_provider", crash_before_second_dispatch)
+    with pytest.raises(SystemExit, match="before repair dispatch"):
+        managed_runtime.run(first_flow, run_id="started-repair")
+    monkeypatch.setattr(operations, "_preflight_provider", original)
     assert len(fake.calls) == 1
 
-    @workflow(name="prepared-repair")
+    @workflow(name="started-repair")
     def tightened_flow():
         return Provider().run(
             "count", returns=Answer, output_retries=1, retry_safe=False
         )
 
-    resumed = managed_runtime.resume("prepared-repair", workflow=tightened_flow)
+    resumed = managed_runtime.resume("started-repair", workflow=tightened_flow)
 
     assert resumed.status == "failed"
     assert len(fake.calls) == 1
@@ -767,7 +767,7 @@ def test_async_cancellation_keeps_worker_cleanup_failure_as_cause():
     asyncio.run(scenario())
 
 
-def test_failed_preflight_restores_artifacts_and_clears_writer_fence(tmp_path: Path):
+def test_failed_preflight_preserves_artifacts_before_next_run(tmp_path: Path):
     from botpipe import Artifact
     from botpipe.capabilities import CapabilityError
 
@@ -810,22 +810,3 @@ def test_failed_preflight_restores_artifacts_and_clears_writer_fence(tmp_path: P
         )
     ).run("write")
     assert second.value == "available"
-
-
-def test_read_only_run_still_obeys_workspace_fence(tmp_path: Path):
-    from botpipe import WorkspaceUnresolved
-
-    fake = FakeProvider(["must not dispatch"])
-    managed_runtime = runtime(tmp_path, fake)
-    with managed_runtime.workspace_turn(
-        run_id="orphan", operation_id="uncertain-edit"
-    ) as turn:
-        turn.mark_unresolved("uncertain-edit")
-
-    try:
-        Provider(runtime=managed_runtime).run("inspect", sandbox="read-only")
-    except WorkspaceUnresolved as exc:
-        assert "orphan" in str(exc)
-    else:
-        raise AssertionError("read-only run bypassed the unresolved workspace fence")
-    assert fake.calls == []

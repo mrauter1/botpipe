@@ -7,6 +7,11 @@ unsafe to retry while read-only presets always retried. The user-selected
 contract is one explicit `retry_safe` policy, defaulting to `True`, across all
 provider presets and their async forms.
 
+The September 24 shared-workspace amendment removes workspace writer locks and
+unresolved-effect fences. Distinct sessions may run writable calls concurrently
+in one repository. Botpipe never prepares, backs up, restores, or rolls back the
+workspace; retry and resolution operate on current state.
+
 ## Product decision
 
 Botpipe lets a developer drive a coding agent from ordinary Python and resume
@@ -69,8 +74,9 @@ also accepts `retry_safe`. Full access is explicit.
 A provider owns one lazy session; reuse continues one Codex thread. Derived
 providers share it unless replaced; session=None is independent. Session.task
 and Session.work_item supply durable scoped identities. Same-session turns
-serialize; parallel branches use distinct sessions. Results contain value,
-artifacts, usage, operation_id, run_id and metadata. Replays emit a single event.
+serialize; parallel branches use distinct sessions and may write the same
+repository concurrently. Results contain value, artifacts, usage, operation_id,
+run_id and metadata. Replays emit a single event.
 
 ## Adapter and probe
 
@@ -121,7 +127,11 @@ Cancellation ends the current invocation without redispatch; a later explicit
 resume can retry subject to policy and remaining limits. A recorded terminal
 response is validated and captured without redispatch. Resolve supports explicit
 retry, current-workspace acceptance and failure. Output failures do not roll
-back repository changes.
+back repository changes. Botpipe does not prepare, move, back up, restore, or
+roll back workspace files around an attempt. Retries use current repository
+state. Declared `writes` validate and capture the current files, including valid
+files that predate the attempt; immutable capture is not exclusive-writer
+attribution or an atomic repository snapshot.
 
 Classify `Stopped` only from durable quiescence evidence: either a pre-ack receipt
 recording failure and completed local teardown, or failed/interrupted/cancelled
@@ -129,25 +139,24 @@ native history followed by background cleanup and a bounded paginated inventory
 proving empty. Historical status and cleanup-request acceptance alone remain
 `Unknown`.
 
-Use two file locks outside workspaces: journal+run for whole execution (fail fast
-RunBusy), and canonical workspace root for writer turns (timeout bounded,
-WorkspaceBusy). An unresolved-effect fence blocks other runs' writers on that
-root and names the owner; resolving the owner clears it. A missing owner journal
-never clears a fence automatically. `resolve RUN OP --clear-fence --workspace
-PATH` is an explicit abandonment assertion: only after the operator confirms the
-old work stopped, Botpipe checks the exact owner and absent journal under the
-workspace lock and archives a receipt before clearing. Reads ignore locks and
-fences and may observe mid-edit state. Overlapping roots and separate hosts are
-not coordinated; use worktrees for independent writers. `doctor --workspace
-PATH` reports the selected workspace fence.
+Use a journal+run lock for whole execution and resolution; concurrent execution
+of the same run fails fast with `RunBusy`. Durable session locks serialize turns
+sharing a session. There is no workspace writer lock, lock timeout, or
+unresolved-effect fence. Distinct sessions can dispatch writable calls against
+the same repository concurrently, while reads and writes may observe intermediate
+state. Unresolved effects remain operation/run concerns and are never silently
+retried; they do not reserve the workspace globally. Use worktrees when the
+application requires source isolation.
 
 POSIX process groups and Windows kill-on-close Jobs contain app-server children.
 Cancellation interrupts, waits the configurable grace (default ten seconds),
-then attempts to kill the group/Job. Killing a shared server affects all its
-active turns. Async cancellation waits for the bounded cleanup attempt. Failure
-to confirm cleanup degrades to `Unknown` and retains a writable fence. Escaped
-or detached daemons are outside the containment guarantee; Botpipe does not
-claim they were stopped. Codex owns command sandboxing on every platform.
+then attempts to kill the group/Job. Killing a shared server may affect all its
+active turns, so independent cancellation is not guaranteed. Async cancellation
+waits for the bounded cleanup attempt. Every affected operation is reconciled
+from cleanup evidence as `Completed`, `Stopped`, or `Unknown`; failure to confirm
+cleanup leaves that operation `Unknown`. Escaped or detached daemons are outside
+the containment guarantee; Botpipe does not claim they were stopped. Codex owns
+command sandboxing on every platform.
 
 ## Migration and release
 
@@ -171,8 +180,8 @@ acceptance evidence rather than preserving unsupported contracts.
 | C5 | Typed output validates; repairs are bounded and budgeted | Deterministic runtime suite |
 | C6 | Kill after two of three operations; resume does not dispatch the first two | Recovery suite |
 | C7 | All presets obey retry_safe; only confirmed stopped work auto-retries; all resolutions work | Recovery suite |
-| C8 | Concurrent resume gets RunBusy; writers serialize; fence blocks writers only | Cross-process suite |
-| C9 | Interrupt/kill contains descendants; async cancellation waits for cleanup | Platform contract suite |
+| C8 | Concurrent resume gets RunBusy; same-session turns serialize; distinct-session writers can overlap in one repository; unresolved work does not reserve it | Cross-process suite |
+| C9 | Interrupt/kill contains descendants; async cancellation waits for cleanup; every sibling affected through the shared server is reconciled without claiming independent cancellation | Platform contract suite |
 | C10 | Actual missing required capability fails before dispatch; irrelevant schema variation does not veto | Fake server suite |
 | C11 | Every workflow, lab and optimizer retains deterministic scenarios | Full suite |
 | C12 | Net production source growth about 4,500 lines or less; wheel/imports/strict public types pass | CI |
