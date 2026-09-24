@@ -357,6 +357,9 @@ def test_repairs_get_fresh_deadlines_and_one_charge_each(
             request.on_checkpoint({"status": "turn_intent"})
             return ProviderResponse(next(self.responses))
 
+        def dispose(self):
+            pass
+
         def close(self):
             pass
 

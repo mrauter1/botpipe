@@ -74,18 +74,20 @@ turn or response was recorded.
 
 Conversation continuity lives outside any one run in an atomic binding at
 `sessions/<identity-hash>.json`. The binding contains the canonical session key,
-native thread ID and, while work is pending, the owning run, logical operation
-and latest attempt. A pending binding remains owned through validation and
-repair; another run cannot silently continue that conversation.
+native thread ID and, while work or shutdown is pending, the owning run, logical
+operation and latest attempt. A pending binding remains owned through
+validation, repair, and adapter disposal; another run cannot silently continue
+that conversation.
 
-Within a runtime, each logical session owns one lazy `codex app-server` adapter.
-Independent calls use an operation-owned adapter. Calls sharing a session
+Each complete provider operation owns a temporary `codex app-server` adapter.
+The adapter starts or resumes the session's durable native thread, remains alive
+through validation and output-repair turns, and is disposed before the session
+lock is released. A later operation, even for the same session and runtime,
+uses a new app-server and resumes the recorded thread. Calls sharing a session
 serialize under a lock keyed by the state root and canonical session identity,
-including across runs and processes. Same-profile turns remain subscribed so
-native background work can continue. Codex 0.156.1 retains an exclusive writer
-lease for that loaded thread, so cross-process handoff requires closing the
-current adapter before the next runtime resumes the bound thread. Distinct
-sessions use distinct app-server processes and may run concurrently.
+including across runs and processes. Distinct sessions may run concurrently.
+Conversation history survives this boundary; background children and live tool
+handles created by one operation are not promised to survive into the next.
 
 `Provider.with_config` shares its parent's session unless `session=` replaces it.
 `Session.task(key)` is stable across runs for one task, `Session.work_item(item,
@@ -118,12 +120,19 @@ not prevent adoption of a response already recorded. An operator may retry an
 fail it. That choice is recorded and does not erase the uncertainty of earlier
 effects. A confirmed `Running` attempt must first reconcile to a terminal state.
 
-Cancellation targets the current session's app-server. It requests native turn
-interruption, performs bounded background-terminal cleanup when available, and
-then contains still-attached descendants through the POSIX process group or
+Ordinary operation completion performs normal idle app-server disposal and
+confirms that the app-server parent exited before releasing the session. Child
+process survival is not guaranteed. If disposal fails after the result is
+durable, Botpipe retains the completed result and records shutdown uncertainty;
+it never redispatches the completed work. The session remains unavailable for
+unsafe reuse until shutdown is retried or an operator resolves it.
+
+Cancellation and timeout use the stronger interruption path: request native
+turn interruption, perform bounded background-terminal cleanup when available,
+and contain still-attached descendants through the POSIX process group or
 Windows Job. Async cancellation waits for this attempt before returning.
-Unconfirmed cleanup remains `Unknown`; a detached daemon is outside Botpipe's
-containment guarantee.
+Unconfirmed turn cleanup remains `Unknown`; a detached daemon is outside
+Botpipe's containment guarantee.
 
 ## Concurrency and workspace state
 

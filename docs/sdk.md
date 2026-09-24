@@ -85,6 +85,13 @@ method used for that turn. Changing its tool profile requires Codex to resume th
 same history with the new profile; Botpipe fails before dispatch if the installed
 Codex cannot enforce that transition.
 
+One temporary app-server serves a complete provider operation, including its
+validation and repair turns. Botpipe disposes it before releasing the session;
+the next operation resumes the durable thread in a new app-server. Conversation
+history persists, but background children and live tool handles do not carry a
+survival guarantee across operations. Normal disposal confirms that the
+app-server parent exited before the session is released.
+
 ## Results, artifacts and events
 
 `Result[T]` exposes `value`, `artifacts`, `usage`, `operation_id`, `run_id`, and
@@ -121,10 +128,8 @@ Direct calls are one-operation durable runs, visible through `botpipe runs` and
 recoverable through `resume` and `resolve`, just like workflow operations.
 
 The call timeout covers setup as well as execution. Async cancellation performs
-a bounded interrupt and cleanup attempt before the task finishes cancelling.
-Within a runtime, each logical session owns its app-server process, so escalation
-is targeted to that conversation. Calls sharing the session serialize and are
-reconciled from their durable attempt evidence; unrelated sessions keep their
-own processes. Codex 0.156.1 keeps an exclusive writer lease while a thread is
-loaded. Close the current provider or runtime before handing that durable session
-to another process; the next runtime can then resume the bound native thread.
+a bounded interrupt and contained-tree cleanup attempt before the task finishes
+cancelling. This exceptional cleanup is distinct from normal idle app-server
+disposal after a result. If normal disposal fails after completion, the result remains
+completed and is never redispatched; shutdown is uncertain, and the session is
+blocked until cleanup is retried or explicitly resolved.

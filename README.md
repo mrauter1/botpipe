@@ -69,7 +69,15 @@ native cleanup request does not confirm a stop without durable cleanup evidence.
 Reusing `p` continues one conversation. A variant made with
 `p.with_config(instructions="Review carefully.")` shares that conversation;
 pass `session=Session()` for a separate conversation or `session=None` for an
-independent call. Each call is durable, including calls outside a workflow.
+independent call. Each complete provider operation gets a temporary app-server,
+kept through validation and output repair and then disposed before the session
+can be used again. Later operations resume the durable conversation in a new
+app-server. Each call is durable, including calls outside a workflow.
+Botpipe does not promise that background children or live tool handles survive
+between operations. Normal disposal confirms that the app-server parent exited;
+child survival remains unguaranteed. If a completed operation's server cannot be
+disposed, its result remains completed and is never redispatched; the session
+stays blocked until shutdown is retried or explicitly resolved.
 
 ## Ordinary Python workflows
 

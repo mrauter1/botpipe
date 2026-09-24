@@ -1800,6 +1800,28 @@ class Botpipe:
                 and record["status"] == "failed"
                 and self._is_operator_failure(record)
             )
+            failed_provider_cleanup = False
+            if (
+                fail
+                and record["status"] == "failed"
+                and record["kind"] == "provider"
+            ):
+                failed_checkpoint = ProviderCheckpoint.from_record(
+                    record.get("response")
+                )
+                failed_attempt = self.journal.attempt(
+                    operation_id, failed_checkpoint.attempt_generation + 1
+                )
+                cleanup = (
+                    failed_attempt.get("cleanup")
+                    if isinstance(failed_attempt, dict)
+                    else None
+                )
+                failed_provider_cleanup = (
+                    isinstance(cleanup, dict)
+                    and cleanup.get("status") in {"pending", "incomplete"}
+                )
+                replaying_failure = replaying_failure or failed_provider_cleanup
             if record["status"] not in ("started", "response") and not replaying_failure:
                 raise ValueError("Only unfinished operations can be reconciled")
             if record["kind"] not in ("provider", "activity"):
@@ -1875,29 +1897,69 @@ class Botpipe:
                 )
                 artifact_operation = f"{operation_id}:generation:{previous}"
 
-                def settle_independent_cleanup():
+                def settle_operation_owner(outcome):
                     release = getattr(self.provider, "release_operation", None)
-                    if inputs.get("session") is not None or not callable(release):
+                    if not callable(release):
                         return
                     attempt = self.journal.attempt(operation_id, previous + 1)
                     if not attempt:
                         return
                     cleanup = attempt.get("cleanup") or {}
-                    if cleanup.get("status") == "completed" or cleanup.get("resolved_by") == "operator":
+                    # A completed contained-tree cleanup already proves that the
+                    # operation owner exited.  It is stronger evidence than the
+                    # normal idle-exit path and must remain distinct from it.
+                    if (
+                        cleanup.get("status") == "completed"
+                        or cleanup.get("resolved_by") == "operator"
+                    ):
                         return
+                    completed = isinstance(outcome, Completed)
+                    abort_owner = not completed or cleanup.get("status") in {
+                        "pending",
+                        "incomplete",
+                    }
+                    field = "cleanup" if abort_owner else "disposal"
+                    evidence = attempt.get(field) or {}
+                    if (
+                        evidence.get("status") == "completed"
+                        or evidence.get("resolved_by") == "operator"
+                    ):
+                        return
+                    resolution = (
+                        "fail" if fail else "retry" if retry else "accept"
+                    )
+                    self.journal.attempt_checkpoint(
+                        operation_id,
+                        previous + 1,
+                        {field: {"status": "pending"}},
+                    )
                     try:
-                        release(operation_key, require_owner=bool(attempt.get("dispatch_authorized")))
+                        release(
+                            operation_key,
+                            require_owner=bool(attempt.get("dispatch_authorized")),
+                            abort=abort_owner,
+                        )
                     except Exception as exc:
                         # Explicit resolution may accept uncertainty, but it is
                         # not evidence that an old process was stopped.
-                        cleanup = {
+                        # A retry selection is already durable at this point.
+                        # Deliberately forget a cleanup-failed cached owner so
+                        # the authorized retry cannot reuse that same adapter.
+                        abandon = getattr(
+                            self.provider, "_abandon_operation", None
+                        )
+                        if abort_owner and retry and callable(abandon):
+                            abandon(operation_key)
+                        evidence = {
                             "status": "incomplete", "error": str(exc),
                             "resolved_by": "operator",
-                            "resolution": "fail" if fail else "retry" if retry else "accept",
+                            "resolution": resolution,
                         }
                     else:
-                        cleanup = {"status": "completed"}
-                    self.journal.attempt_checkpoint(operation_id, previous + 1, {"cleanup": cleanup})
+                        evidence = {"status": "completed"}
+                    self.journal.attempt_checkpoint(
+                        operation_id, previous + 1, {field: evidence}
+                    )
 
                 def reconcile_provider():
                     nonlocal artifact_digests, response, retry, source, checkpoint
@@ -1911,13 +1973,19 @@ class Botpipe:
                     if fail:
                         # Explicit failure may resolve a stopped or unknowable old
                         # attempt, but never a turn known to still be active.
-                        if isinstance(outcome, Completed):
+                        if (
+                            isinstance(outcome, Completed)
+                            and not failed_provider_cleanup
+                        ):
                             response = outcome.response
                             checkpoint = ProviderLifecycle.completed(checkpoint, response)
                         select_resolution(outcome)
-                        if isinstance(outcome, Completed):
+                        if (
+                            isinstance(outcome, Completed)
+                            and not failed_provider_cleanup
+                        ):
                             _persist_response(self.journal, operation_id, checkpoint.to_record(), session_key=inputs.get("session"))
-                        return
+                        return outcome
                     action = ProviderLifecycle.reconciliation_action(outcome)
                     if action is RecoveryAction.USE_RESPONSE:
                         checkpoint = ProviderLifecycle.completed(
@@ -2053,6 +2121,7 @@ class Botpipe:
                             recover=True,
                             expected_digests=artifact_digests,
                         )
+                    return outcome
 
                 session_key = inputs.get("session")
                 recorded_timeout = inputs.get("timeout")
@@ -2080,8 +2149,8 @@ class Botpipe:
                         pending = binding.check(operation_key).get("pending")
                         if pending is not None and pending["operation_key"] == operation_key:
                             owner_attempt = pending["attempt"]
-                    reconcile_provider()
-                    settle_independent_cleanup()
+                    outcome = reconcile_provider()
+                    settle_operation_owner(outcome)
                     if fail:
                         self._fail_resolution(
                             run_id, operation_id, record, source,

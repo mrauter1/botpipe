@@ -5,9 +5,11 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import platform
 import queue
 import shutil
 import subprocess
+import sys
 import threading
 import time
 import weakref
@@ -137,6 +139,180 @@ _APPROVAL_REQUESTS = {
     "execCommandApproval",
     "mcpServer/elicitation/request",
 }
+
+_CODEX_PLATFORM_PACKAGES = {
+    ("linux", "x86_64"): (
+        "codex-linux-x64",
+        "x86_64-unknown-linux-musl",
+        "codex",
+    ),
+    ("linux", "aarch64"): (
+        "codex-linux-arm64",
+        "aarch64-unknown-linux-musl",
+        "codex",
+    ),
+    ("darwin", "x86_64"): (
+        "codex-darwin-x64",
+        "x86_64-apple-darwin",
+        "codex",
+    ),
+    ("darwin", "aarch64"): (
+        "codex-darwin-arm64",
+        "aarch64-apple-darwin",
+        "codex",
+    ),
+    ("win32", "x86_64"): (
+        "codex-win32-x64",
+        "x86_64-pc-windows-msvc",
+        "codex.exe",
+    ),
+    ("win32", "aarch64"): (
+        "codex-win32-arm64",
+        "aarch64-pc-windows-msvc",
+        "codex.exe",
+    ),
+}
+
+
+def _packaged_codex_binary(
+    launcher: str | os.PathLike[str],
+    *,
+    platform_name: str | None = None,
+    machine: str | None = None,
+    search_path: str | None = None,
+) -> Path | None:
+    """Resolve an official npm launcher to the native binary it delegates to."""
+
+    value = str(launcher)
+    located = (
+        shutil.which(value, path=search_path)
+        if not Path(value).is_absolute() and Path(value).parent == Path(".")
+        else value
+    )
+    if not located:
+        return None
+    lexical = Path(located).expanduser().absolute()
+    try:
+        resolved = lexical.resolve(strict=True)
+    except OSError:
+        return None
+    package_roots: list[Path] = []
+    recognized_launcher = False
+    if resolved.name == "codex.js" and resolved.parent.name == "bin":
+        recognized_launcher = True
+        package_roots.append(resolved.parent.parent)
+    # npm command shims contain this canonical package-relative entrypoint.
+    # Inspect the marker only; never parse or execute an embedded path.
+    launcher_name = lexical.name.lower()
+    launcher_text = ""
+    if launcher_name in {"codex.cmd", "codex.ps1"}:
+        try:
+            with lexical.open("rb") as handle:
+                launcher_text = handle.read(65536).decode(errors="replace")
+            launcher_text = launcher_text.replace("\\", "/")
+        except OSError:
+            pass
+    normalized_upper = launcher_text.upper()
+    target_lines = [
+        line
+        for line in launcher_text.splitlines()
+        if "@openai/codex/bin/codex.js" in line
+    ]
+    standard_cmd = (
+        launcher_name == "codex.cmd"
+        and "@ECHO OFF" in normalized_upper
+        and "SETLOCAL" in normalized_upper
+        and any(
+            '"%_PROG%"' in line.upper()
+            and "%DP0%" in line.upper()
+            and "%*" in line
+            for line in target_lines
+        )
+    )
+    standard_powershell = launcher_name == "codex.ps1" and any(
+        "&" in line and "$basedir" in line and "$args" in line
+        for line in target_lines
+    )
+    if (
+        "@openai/codex/bin/codex.js" in launcher_text
+        and (standard_cmd or standard_powershell)
+    ):
+        recognized_launcher = True
+        package_roots.append(lexical.parent / "node_modules" / "@openai" / "codex")
+        if lexical.parent.name == ".bin":
+            package_roots.append(lexical.parent.parent / "@openai" / "codex")
+    if not recognized_launcher:
+        return None
+    package_root = None
+    package_metadata: dict[str, Any] | None = None
+    for candidate in package_roots:
+        try:
+            metadata = json.loads((candidate / "package.json").read_text())
+        except (OSError, ValueError):
+            continue
+        if metadata.get("name") == "@openai/codex":
+            package_root = candidate.resolve()
+            package_metadata = metadata
+            break
+    if package_root is None:
+        raise CapabilityError(
+            f"official Codex launcher {str(lexical)!r} has no readable package metadata"
+        )
+    assert package_metadata is not None
+    canonical_entrypoint = package_root / "bin" / "codex.js"
+    try:
+        with canonical_entrypoint.open("rb") as handle:
+            entrypoint_text = handle.read(65536).decode(errors="replace")
+    except OSError as exc:
+        raise CapabilityError(
+            f"official Codex launcher package has no readable bin/codex.js: {exc}"
+        ) from exc
+    expected_bin = package_metadata.get("bin")
+    standard_entrypoint = (
+        isinstance(expected_bin, Mapping)
+        and expected_bin.get("codex") == "bin/codex.js"
+        and all(
+            marker in entrypoint_text
+            for marker in (
+                "PLATFORM_PACKAGE_BY_TARGET",
+                "findCodexExecutable",
+                "spawn(binaryPath",
+                "process.argv.slice(2)",
+            )
+        )
+    )
+    if not standard_entrypoint:
+        raise CapabilityError(
+            "the @openai/codex launcher was customized; configure the native "
+            "Codex executable directly so app-server disposal can be verified"
+        )
+
+    platform_key = platform_name or sys.platform
+    architecture = (machine or platform.machine()).lower()
+    architecture = {
+        "amd64": "x86_64",
+        "x64": "x86_64",
+        "arm64": "aarch64",
+    }.get(architecture, architecture)
+    package = _CODEX_PLATFORM_PACKAGES.get((platform_key, architecture))
+    if package is None:
+        raise CapabilityError(
+            f"official Codex launcher does not support {platform_key}/{architecture}"
+        )
+    package_name, target, executable = package
+    roots = [
+        package_root / "node_modules" / "@openai" / package_name,
+        package_root.parent / package_name,
+        package_root,
+    ]
+    for root in roots:
+        binary = root / "vendor" / target / "bin" / executable
+        if binary.is_file():
+            return binary.resolve()
+    raise CapabilityError(
+        f"official Codex launcher {str(lexical)!r} is missing its native "
+        f"{platform_key}/{architecture} binary"
+    )
 
 
 @dataclass(slots=True)
@@ -299,7 +475,7 @@ def _tool_config(
 
 
 class CodexAppServerAdapter:
-    """One Codex app-server process owned by a logical Botpipe session."""
+    """One Codex app-server process owned by a logical Botpipe operation."""
 
     name = "codex"
 
@@ -313,17 +489,27 @@ class CodexAppServerAdapter:
         capabilities: CodexCapabilities | None = None,
         capability_probe_stat: tuple[str, int, int] | None = None,
     ) -> None:
+        self.env = {str(key): str(value) for key, value in (env or {}).items()}
+        effective_path = self.env.get("PATH", os.environ.get("PATH"))
         self.command: tuple[str, ...]
         if isinstance(command, (str, os.PathLike)):
-            executable = str(command)
+            executable = str(
+                _packaged_codex_binary(command, search_path=effective_path) or command
+            )
             self.command = (executable, "app-server", "--listen", "stdio://")
         else:
             self.command = tuple(map(str, command))
             if not self.command:
                 raise ValueError("Codex command cannot be empty")
-            executable = self.command[0]
+            executable = str(
+                _packaged_codex_binary(
+                    self.command[0], search_path=effective_path
+                )
+                or self.command[0]
+            )
+            if executable != self.command[0]:
+                self.command = (executable, *self.command[1:])
         self.executable = executable
-        self.env = {str(key): str(value) for key, value in (env or {}).items()}
         self.state_dir = state_dir
         self.interrupt_grace_seconds = float(interrupt_grace_seconds)
         self._capabilities = capabilities
@@ -352,6 +538,7 @@ class CodexAppServerAdapter:
         self._thread_profiles: dict[str, str] = {}
         self._mcp_servers: frozenset[str] = frozenset()
         self._tearing_down_process: subprocess.Popen[bytes] | None = None
+        self._disposing_process: subprocess.Popen[bytes] | None = None
         self._transport_cleanup_results: weakref.WeakKeyDictionary[
             subprocess.Popen[bytes], str | None
         ] = weakref.WeakKeyDictionary()
@@ -361,6 +548,7 @@ class CodexAppServerAdapter:
         self._pre_exit_captured: weakref.WeakSet[subprocess.Popen[bytes]] = (
             weakref.WeakSet()
         )
+        self._active_calls = 0
         self._closed = False
         self._cleanup_complete = False
 
@@ -518,16 +706,50 @@ class CodexAppServerAdapter:
     def _read_stderr(self, process: subprocess.Popen[bytes]) -> None:
         if process.stderr is None:
             return
-        for chunk in iter(process.stderr.readline, b""):
-            self._stderr.append(chunk[-8192:])
-            if len(self._stderr) > 32:
-                del self._stderr[:-32]
+        try:
+            for chunk in self._pipe_chunks(process.stderr, process):
+                self._stderr.append(chunk[-8192:])
+                if len(self._stderr) > 32:
+                    del self._stderr[:-32]
+        finally:
+            process.stderr.close()
+
+    @staticmethod
+    def _pipe_chunks(pipe: Any, process: subprocess.Popen[bytes]):
+        """Read a pipe without waiting forever on handles inherited by children."""
+
+        descriptor = pipe.fileno()
+        os.set_blocking(descriptor, False)
+        exit_deadline: float | None = None
+        while True:
+            if process.poll() is not None and exit_deadline is None:
+                # Drain bytes already queued by the parent, but bound the drain
+                # if a surviving descendant continuously writes the same pipe.
+                exit_deadline = time.monotonic() + 0.05
+            try:
+                chunk = os.read(descriptor, 64 * 1024)
+            except BlockingIOError:
+                if exit_deadline is not None:
+                    return
+                time.sleep(0.01)
+                continue
+            except OSError:
+                if process.poll() is not None:
+                    return
+                raise
+            if not chunk:
+                return
+            yield chunk
+            if exit_deadline is not None and time.monotonic() >= exit_deadline:
+                return
 
     def _read_loop(self, process: subprocess.Popen[bytes]) -> None:
         assert process.stdout is not None
         failure: BaseException | None = None
         try:
-            for raw in iter(process.stdout.readline, b""):
+            buffered = bytearray()
+
+            def receive_raw(raw: bytes) -> None:
                 if len(raw) > 8 * 1024 * 1024:
                     raise CodexProtocolError("app-server message exceeds 8 MiB")
                 try:
@@ -541,13 +763,38 @@ class CodexAppServerAdapter:
                         "app-server JSONL messages must be objects"
                     )
                 self._receive(dict(message), process=process)
+
+            for chunk in self._pipe_chunks(process.stdout, process):
+                buffered.extend(chunk)
+                if len(buffered) > 8 * 1024 * 1024 and b"\n" not in buffered:
+                    raise CodexProtocolError("app-server message exceeds 8 MiB")
+                while True:
+                    newline = buffered.find(b"\n")
+                    if newline < 0:
+                        break
+                    raw = bytes(buffered[: newline + 1])
+                    del buffered[: newline + 1]
+                    receive_raw(raw)
+            if buffered:
+                # Match BufferedReader.readline at EOF: a complete JSON value
+                # needs no final newline, while truncated data is an error.
+                receive_raw(bytes(buffered))
         except BaseException as exc:  # noqa: BLE001 - reader must wake waiters on every exit
             failure = exc
+        finally:
+            process.stdout.close()
         if failure is None:
             detail = b"".join(self._stderr).decode(errors="replace").strip()
             failure = CodexProtocolError(
                 "app-server closed" + (f": {detail[-2000:]}" if detail else "")
             )
+        with self._lock:
+            disposing = self._disposing_process is process
+        if disposing:
+            # Normal disposal owns this EOF.  In particular, do not turn it into
+            # the process-tree cleanup used for cancellation and transport loss.
+            self._fail_transport(failure, process=process)
+            return
         try:
             self._kill_transport(failure, expected_process=process)
         except BaseException as cleanup_error:  # reader must always wake old waiters
@@ -859,6 +1106,19 @@ class CodexAppServerAdapter:
                 self._pending.pop(request_id, None)
 
     def start_turn(
+        self, request: Any, on_event: Callable[[Any], None] | None = None
+    ) -> Any:
+        with self._lock:
+            if self._closed:
+                raise RuntimeError("Codex adapter is closed")
+            self._active_calls += 1
+        try:
+            return self._start_turn(request, on_event)
+        finally:
+            with self._lock:
+                self._active_calls -= 1
+
+    def _start_turn(
         self, request: Any, on_event: Callable[[Any], None] | None = None
     ) -> Any:
         from .providers import ProviderTimeoutError
@@ -1363,6 +1623,19 @@ class CodexAppServerAdapter:
                             self._turns.pop(key)
 
     def recover_turn(
+        self, request: Any, *, thread_id: str, turn_id: str
+    ) -> tuple[str, Any | None]:
+        with self._lock:
+            if self._closed:
+                raise RuntimeError("Codex adapter is closed")
+            self._active_calls += 1
+        try:
+            return self._recover_turn(request, thread_id=thread_id, turn_id=turn_id)
+        finally:
+            with self._lock:
+                self._active_calls -= 1
+
+    def _recover_turn(
         self, request: Any, *, thread_id: str, turn_id: str
     ) -> tuple[str, Any | None]:
         """Reconcile one durable native turn without dispatching model input."""
@@ -1946,6 +2219,49 @@ class CodexAppServerAdapter:
             if containment is not None:
                 containment.close()
             with self._lock:
+                self._cleanup_complete = True
+
+    def dispose(self) -> None:
+        """Exit an idle app-server and relinquish it without tree cleanup."""
+
+        with self._transport_cleanup_lock:
+            with self._lock:
+                if self._cleanup_complete:
+                    return
+                active_turns = [
+                    turn for turn in self._turns.values() if not turn.completed
+                ]
+                if self._active_calls or active_turns or self._pending:
+                    raise RuntimeError(
+                        "cannot dispose a Codex adapter with active work"
+                    )
+                self._closed = True
+                process, containment = self._process, self._containment
+                self._disposing_process = process
+            if process is None:
+                if containment is not None:
+                    containment.close()
+                with self._lock:
+                    self._containment = None
+                    self._cleanup_complete = True
+                return
+            if containment is None:
+                raise CodexProtocolError(
+                    "cannot dispose app-server without process containment ownership"
+                )
+            if process.stdin is not None:
+                try:
+                    process.stdin.close()
+                except BrokenPipeError:
+                    pass
+            # Current native app-servers do not exit on stdio EOF.  The idle
+            # parent receives SIGINT/TerminateProcess; descendants are neither
+            # inspected nor signalled by this path.
+            containment.release(process, grace_seconds=1.0)
+            with self._lock:
+                if self._process is process:
+                    self._process = None
+                    self._containment = None
                 self._cleanup_complete = True
 
     def __enter__(self) -> Self:

@@ -141,9 +141,11 @@ Recovery adopts `Completed`, retries automatically only after confirmed
 `Stopped` when both recorded and current policy allow it, makes a bounded
 targeted interrupt attempt for `Running`, and leaves `Unknown` unresolved until
 operator resolution. Cancellation ends the current invocation without
-redispatch; a later explicit resume may retry within policy and limits. Because
-parallel turns can share one app-server process, cancellation escalation may
-interrupt siblings; recovery reconciles every affected operation as
-`Completed`, `Stopped`, or `Unknown`. Botpipe does not promise independent
-cancellation. Opt-in remote tools should use `retry_safe=False` when their
-effects cannot safely be repeated.
+redispatch; a later explicit resume may retry within policy and limits. Each
+complete provider operation has its own temporary app-server, retained through
+validation and repair and disposed before its session is released. Normal idle
+app-server disposal after completion is separate from cancellation/timeout interruption
+and contained-tree cleanup. A disposal failure keeps the result completed,
+blocks session reuse, and permits shutdown retry or operator resolution without
+repeating the completed work. Opt-in remote tools should use `retry_safe=False`
+when their effects cannot safely be repeated.

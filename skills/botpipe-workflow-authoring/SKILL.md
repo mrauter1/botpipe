@@ -140,9 +140,15 @@ or use separate worktrees when edits require isolation. Read-only calls may
 observe a concurrent writer mid-edit, so isolate the source when a review needs
 a stable tree.
 
-Each logical session owns its app-server process. Cancellation is targeted to
-that conversation and must reconcile cleanup evidence as `Completed`, `Stopped`,
-or `Unknown`; unrelated sessions keep their own processes.
+Each complete provider operation owns a temporary app-server, retained through
+validation and repair and disposed before the session is released. Later
+operations resume durable conversation history in a new server; do not rely on
+background children or live tool handles surviving that boundary. Normal idle
+app-server disposal confirms the parent exited; child survival is unguaranteed.
+It is distinct from cancellation/timeout interruption and contained-tree
+cleanup. If disposal fails, retain the completed result, never redispatch it,
+and block session reuse until shutdown is retried or an operator resolves the
+uncertainty.
 
 Use `provider_budget(max_turns=..., max_seconds=..., turn_timeout_seconds=...)`
 for durable provider limits shared by nested and parallel work. Repairs count;

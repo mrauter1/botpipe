@@ -8,13 +8,13 @@ Delivery: one implementation PR, greenfield. This document specifies the work; i
 
 Botpipe lets developers run coding agents from ordinary Python, recover interrupted work, and understand what happened well enough to improve the process.
 
-Make the recorded history useful directly to a person or Codex reading files. Replace the SQLite journal and overlapping provider receipts with a file-native ledger; give each conversation its own Codex process; reduce duplicated provenance, lab ceremony, and obsolete tests. Preserve the runtime behaviors that justify its existence.
+Make the recorded history useful directly to a person or Codex reading files. Replace the SQLite journal and overlapping provider receipts with a file-native ledger; give each complete provider operation a temporary Codex process; reduce duplicated provenance, lab ceremony, and obsolete tests. Preserve the runtime behaviors that justify its existence.
 
 The design has four ownership rules:
 
 1. A run's append-only ledger owns its execution history and replay state.
 2. A small session binding owns conversation continuity across calls and runs.
-3. A session's adapter owns its Codex process and cleanup.
+3. A provider operation owns its temporary Codex process and cleanup.
 4. Python workflow code owns decisions, loops, concurrency, and workspace isolation choices.
 
 No database export, general transaction framework, new workflow DSL, or workspace rollback is introduced.
@@ -23,7 +23,7 @@ No database export, general transaction framework, new workflow DSL, or workspac
 
 The source reviewed while preparing this design is `12188c298e44e7f7b5230d2626b9dbd20c710548` on `simplify/shared-workspace-execution`. This is a reference for reusable code and behavior, not a compatibility baseline. Record the actual implementation base SHA in the single PR for review and source-delta accounting. This PRD's target requirements, not historical branch structure, govern the implementation.
 
-This PRD supersedes earlier requirements for SQLite as the journal, a runtime-wide multiplexed app-server, forced writer isolation, workspace fences, artifact preparation/rollback, and blanket producer/verifier pairs. Retain the chosen Codex-first product scope without a compatibility commitment to any prior SDK.
+This PRD supersedes earlier requirements for SQLite as the journal, a runtime-wide multiplexed app-server, persistent per-session servers, live process handoff, forced writer isolation, workspace fences, artifact preparation/rollback, and blanket producer/verifier pairs. Retain the chosen Codex-first product scope without a compatibility commitment to any prior SDK.
 
 ## 2. Outcomes, scope, and exclusions
 
@@ -32,7 +32,7 @@ This PRD supersedes earlier requirements for SQLite as the journal, a runtime-wi
 - An agent can inspect a run chronologically using ordinary file tools, open the exact inputs and outputs of an attempt, and understand retries, reviews, human decisions, failures, and resolutions.
 - Completed work replays without another provider call or revalidation of an already accepted human answer.
 - Uncertain external effects remain visible and are never mistaken for a safe fresh attempt.
-- Cancelling one conversation does not terminate an unrelated conversation's Codex process.
+- Cancelling one provider operation does not terminate an unrelated operation's Codex process.
 - Ordinary historical runs remain attributable for optimizer comparisons, without repeating full source manifests throughout their history.
 - Labs use typed values, ordinary Python, activities, and declared artifacts with less redundant orchestration.
 - Tests protect useful outcomes and real failure boundaries, with less dependence on superseded internals.
@@ -162,13 +162,13 @@ Validate a human answer once and record its accepted typed value before continua
 
 Record an operator's retry/accept/fail choice before executing it. Completion after a crash must continue that same choice. Preserve existing acceptance/capture behavior and approved digests; never replace a previously approved artifact capture with newly changed workspace bytes. A deliberate retry gets a new attempt identity, leaving earlier evidence intact. No resolution restores workspace files.
 
-Use this explicit-resolution policy: a turn confirmed `Running` blocks retry, accept, and fail until reconciled; `Unknown` blocks automatic retry, but an operator may deliberately retry, accept a valid supplied/current result, or fail it. Record that authorization and the remaining uncertainty. The operator's choice is not evidence that cleanup succeeded. This is the intended operator control, not a legacy-compatibility obligation; no mandatory session-fork/poison mechanism is needed.
+Use this explicit-resolution policy: a turn confirmed `Running` blocks retry, accept, and fail until reconciled; `Unknown` blocks automatic retry, but an operator may deliberately retry, accept a valid supplied/current result, or fail it. Record that authorization and the remaining uncertainty. The operator's choice is not evidence that cleanup succeeded, and unresolved shutdown still blocks session reuse until separately retried or resolved. This is the intended operator control, not a legacy-compatibility obligation; turn-outcome uncertainty alone does not require a permanent session fork.
 
 ## 5. Sessions and process ownership
 
 ### 5.1 Durable session bindings
 
-Run-local ledgers cannot by themselves own conversations shared across runs. Use one small atomic JSON binding per canonical session identity under the state directory, alongside the existing session-lock mechanism. Scope is encoded in the identity; retain existing task/work-item/direct identity semantics. Validate the binding's format version and canonical identity. It contains the native thread ID and, while a logical provider operation is pending, its owning run/operation and latest attempt reference. Ownership covers the full validation/repair loop, not only one physical turn.
+Run-local ledgers cannot by themselves own conversations shared across runs. Use one small atomic JSON binding per canonical session identity under the state directory, alongside the existing session-lock mechanism. Scope is encoded in the identity; retain existing task/work-item/direct identity semantics. Validate the binding's format version and canonical identity. It contains the native thread ID and, while a logical provider operation or its shutdown is pending, its owning run/operation and latest attempt reference. Ownership covers validation, repair, and disposal, not only one physical turn.
 
 Key session locks by the canonical state root and session identity, not by a particular run's new ledger path. Otherwise two runs sharing `Session.task(...)` would silently stop serializing. Lock order is run lock, then session lock; do not acquire another run lock while holding a session lock.
 
@@ -178,35 +178,31 @@ Under the session lock:
 2. Persist its pending-operation/attempt reference in the session binding **before dispatch**.
 3. Perform normal preflight and thread setup, recording any new native identity. Reserve/record immediately before a physical turn dispatch, then send it. Preflight/setup alone does not consume a provider turn.
 4. Persist acknowledgements and terminal response in the owning run ledger.
-5. Advance the binding's thread identity from recorded authoritative evidence, keeping its pending operation through validation and any repair attempts. Only after durable operation completion, final failure with a known finished/stopped attempt, or a completed operator resolution does one atomic replacement preserve the final thread identity and clear the pending owner. Retain the physical session lock through the repair loop as today.
+5. Advance the binding's thread identity from recorded authoritative evidence, keeping its pending operation through validation, repair, and adapter disposal. Only after confirmed disposal following durable operation completion, final failure with a known finished/stopped attempt, or a completed operator resolution does one atomic replacement preserve the final thread identity and clear the pending owner. Retain the physical session lock for the complete operation.
 
 An ambiguous binding write also requires confirmation under the session lock: re-read the exact intended binding and establish the required sync before dispatch or acknowledgement. If confirmation fails, stop; neither an exception nor visible bytes alone establishes whether the update became durable.
 
 On acquisition after a crash, inspect the referenced operation before using the binding. A durable response can repair a stale thread identity, but does not release ownership if validation/repair remains unfinished. If another run acquires the physical session lock but finds that pending owner, report a `SessionError` naming the run to resume/resolve; do not wait while holding the lock it needs. If no turn of the logical operation was authorized, non-dispatch is established and its pending reference can be cleared without provider recovery. A different run may repair the shared binding from already durable facts, but must not mutate the originating run's history or acquire its run lock while holding the session lock.
 
-An operator-authorized retry retains ownership for the next attempt. A completed accept/fail resolution releases it even when the prior native outcome remained unknown, under the policy in section 4.5; retain the uncertainty in the ledger rather than fabricating stop evidence. Without such authorization, unknown attempts never release a pending owner automatically. Missing owner history or a corrupt binding produces a named `SessionError`, not silent conversation loss.
+An operator-authorized retry retains ownership for the next attempt. A completed accept/fail resolution can release it when the prior native outcome remained unknown, under the policy in section 4.5, provided no separate shutdown uncertainty remains or the operator also resolves it; retain uncertainty in the ledger rather than fabricating stop evidence. A completed result whose adapter did not dispose is different: preserve the result, never redispatch it, and keep the session blocked until shutdown succeeds on retry or an operator explicitly resolves the shutdown uncertainty. Missing owner history or a corrupt binding produces a named `SessionError`, not silent conversation loss.
 
 This is a specific conversation-binding protocol, not a general multi-file transaction API. No global scan of all historical runs is required on every session acquisition.
 
-### 5.2 One app-server per active session
+### 5.2 One temporary app-server per provider operation
 
-The runtime lazily owns a simple map from canonical session identity to adapter. Distinct sessions get distinct app-server processes. All handles for one session within that runtime share its adapter; `with_config` does not accidentally create another process or lose history. Key routing by the Botpipe session identity, available before the first turn, not the initially absent native thread ID. Creation and close are synchronized; `run` and recovery select the same owner. Capability probing reuses its existing cache and must not create an extra idle app-server.
+Create an adapter when a provider operation is ready to use Codex. Start or resume the durable session thread, retain that adapter across all physical turns needed to validate or repair the operation, then dispose it before releasing the session lock. A different operation always creates a new app-server, including when it uses the same session in the same runtime. Capability probing reuses its existing cache and must not create an extra idle app-server.
 
-Keep a session's server alive until runtime/provider close, cancellation requiring escalation, or transport failure. Do not close it after each successful turn: that would change the behavior of background work started in the session. There is no idle eviction or generic process pool in this PR. Document that many long-lived sessions consume more processes; applications can bound lifetime using the existing close/context-manager API.
+Conversation continuity comes from the atomic session binding and Codex resume, not process lifetime. Botpipe does not promise that background children, yielded terminals, or live tool handles survive from one operation to another. `session=None` uses the same operation-scoped lifecycle without creating a durable conversation binding.
 
-`session=None` gets an operation-local adapter, reused for that operation's repairs/recovery and closed after its cleanup. It does not create a permanent anonymous entry in the session map. Durable thread continuity across runtime restarts still comes from the session binding and Codex resume, not from a process surviving forever.
-
-Per-session process ownership is per runtime, not a cross-process server broker. Two processes sharing a durable session still serialize through its lock and resume the latest native thread. Reacquisition after another process used the session must refresh its binding/profile; stale in-memory subscriptions must not lose intervening history. Verify this behavior against native Codex before claiming support.
-
-Sandbox remains per turn. Tool-profile changes still require whatever unsubscribe/resume sequence the installed Codex actually needs. One server per session does not justify deleting that behavior without a contract test.
+Two processes sharing a durable session serialize through its lock and resume the latest native thread. Reacquisition must refresh the binding and execution profile. Sandbox remains per turn; a new operation may establish its requested tool profile while resuming history. Verify native resume and lifecycle behavior before claiming support.
 
 ### 5.3 Lifecycle simplification
 
-Remove runtime-wide active-turn routing, sibling-interruption fan-out, and multi-session shutdown coordination that become unreachable. Retain protocol request correlation, process-generation checks, mandatory checkpoint failures, and cleanup evidence needed by one session; small scope does not make stale reader threads harmless.
+Remove runtime-wide active-turn routing, persistent session-adapter maps, sibling-interruption fan-out, live-handoff handling, and multi-session shutdown coordination that become unreachable. Retain protocol request correlation, process-generation checks, mandatory checkpoint failures, and cleanup evidence; operation scope does not make stale reader threads harmless.
 
-Cancellation interrupts the target turn, waits within its configured grace, and escalates only its owned process group/Job Object when required. Async cancellation waits for this bounded cleanup attempt. Incomplete cleanup stays `Unknown`; it must not be presented as a clean stop. Runtime close attempts cleanup for every owned adapter even when one fails, and reports relevant failures.
+Normal completion performs idle app-server disposal: close the transport, stop only the app-server parent, and confirm its exit. This path does not interrupt a turn, clean background terminals, or terminate the contained process tree. On Windows, clear kill-on-close before closing normal containment. Child survival is not guaranteed. Cancellation or timeout instead interrupts the target turn, waits within its configured grace, and escalates only that operation's owned process group/Job Object when required. Async cancellation waits for this bounded cleanup attempt. Do not conflate normal disposal failure with uncertainty about whether the provider work completed.
 
-After confirmed shutdown, the next authorized recovery/turn can lazily restart that session's transport. Prefer the adapter's existing restart path; if its map entry is replaced, use identity/generation checks so old cleanup cannot remove or affect the replacement. Retain/report incomplete cleanup rather than silently discarding its ownership.
+If a result is durable but normal disposal cannot be confirmed, keep the operation `Completed` and retain the result. Record shutdown uncertainty, never redispatch the completed work, and keep the session binding owned so another operation cannot resume the thread unsafely. Recovery may retry shutdown; operator resolution may release or otherwise resolve the lifecycle block while preserving the uncertainty. Generation and identity checks ensure late cleanup cannot affect a replacement. Runtime close attempts any still-owned cleanup and reports failures.
 
 ## 6. Provenance with demonstrated utility
 
@@ -284,9 +280,9 @@ All criteria are merge gates unless an explicitly named native environment is un
 | A4 — Ledger correctness | Parallel appends retain distinct ordered records. Lost acknowledgements do not duplicate an accepted result/reservation. A torn final tail is handled only as specified; interior corruption/missing required payloads fail visibly. Read-only inspection does not alter bytes. |
 | A5 — Shared limits | Three parallel child workflows under a two-turn budget dispatch exactly twice and report budget exhaustion. Nested reservations are all-or-none; repairs/retries count once; replay/recovery count zero. Original deadlines and run-operation ceilings survive resume. |
 | A6 — Human/operator decisions | Crash after answer acceptance or resolution selection, then resume. No second human validation or changed resolution choice occurs. Retry, accept, and fail each complete correctly; accepted artifact digests cannot silently change. |
-| A7 — Shared sessions | Separate processes/runs sharing task/work-item identity serialize and continue the latest thread; direct provider reuse preserves its existing cross-run continuity. Crash after a response but before binding update/validation does not lose history or let another run interleave before required repairs. Crash before any dispatch reservation is recognized as non-dispatch without a provider call or charge. Ambiguous binding writes prevent unconfirmed dispatch. Verify binding state after each explicit resolution of `Unknown`, and that all choices reject `Running`. |
-| A8 — Process ownership | Reused/derived providers continue one session; replaced/independent sessions are separate. Escalating cancellation of session A leaves B operational; A's authorized restart/recovery subsequently works. Independent operation-local adapters are cleaned up; runtime close attempts every adapter, and stale cleanup cannot affect a replacement. |
-| A9 — Native continuity | On each supported platform, verify same-session preset/tool-profile transitions, background-work behavior between successful turns, process cleanup, and cross-process reacquisition. Missing native evidence is not replaced by a fake assertion. |
+| A7 — Shared sessions | Separate processes/runs sharing task/work-item identity serialize and continue the latest thread; direct provider reuse preserves its existing cross-run continuity. Crash after a response but before binding update, validation, repair, or disposal does not lose history or let another run interleave. Crash before any dispatch reservation is recognized as non-dispatch without a provider call or charge. Ambiguous binding writes prevent unconfirmed dispatch. Verify binding state after each explicit resolution of `Unknown`, and that all choices reject `Running`. |
+| A8 — Process ownership | Reused/derived providers continue one durable session; replaced/independent sessions are separate. Every complete provider operation gets a new app-server retained through repair and disposed before session release. Cancellation is contained to its operation. A completed result survives disposal failure without redispatch, unsafe session reuse is blocked, shutdown can be retried or resolved, and stale cleanup cannot affect a replacement. |
+| A9 — Native continuity | On each supported platform, verify same-session resume across operation-scoped servers, preset/tool-profile transitions, normal parent-only disposal and exit confirmation, cancellation/timeout cleanup, and cross-process reacquisition. Verify that no cross-operation background-child or live-tool-handle survival is promised. Missing native evidence is not replaced by a fake assertion. |
 | A10 — Existing workspace behavior | Concurrent distinct-session writers can enter the same workspace. Failure/cancellation/resolution does not restore files. Current-state artifact capture and immutable prior versions retain their existing contracts. |
 | A11 — Provenance/optimizer | An ordinary run can later be attributed by optimizer history. Source/prompt drift, mixed execution segments, unavailable source, and completed replay are classified honestly. Full manifests are not repeated; explicit baseline/evaluation/publication scenarios pass. |
 | A12 — Labs | All useful deterministic scenarios in section 7 pass, including rework, backward replan, human prerequisites, negative decisions, executable checks, and no unrequested downstream execution. A producer's prose cannot masquerade as execution evidence. |
@@ -303,7 +299,7 @@ Use reviewable commits inside one PR. Do not ship partially migrated storage or 
 
 1. **Characterize and specify.** Record the base, map current journal consumers and preserved behaviors, define the small ledger envelope and session binding, and add representative behavior fixtures. Prototype the cross-run session crash boundary before broad storage replacement.
 2. **Replace journal authority.** Implement append/read/fold and payload references; move run operations, budgets, human input, resolutions, and inspection to it. Remove SQL access, duplicate receipt authority, and affected compatibility-only branches as their replacements land. Reuse the codec/artifact implementations for their useful behavior, not old-format compatibility.
-3. **Isolate session processes.** Add lazy per-session ownership and operation-local independent adapters; retain proven profile transitions/cleanup. Delete now-unused multiplexing and sibling-shutdown branches.
+3. **Scope processes to operations.** Add a temporary adapter for each complete provider operation, retained through validation/repair and disposed before session release; retain proven profile transitions and contained cancellation/timeout cleanup. Delete persistent session ownership, live-handoff, multiplexing, and sibling-shutdown branches.
 4. **Trim provenance and migrate consumers.** Record compact segment identities; retain explicit optimizer manifest capture; retarget CLI, optimizer, and history discovery to the same journal readers.
 5. **Simplify labs and tests.** Apply structured producer results and meaningful reviews phase by phase, remove prose gates, update all affected prompts/contracts/consumers, and remove superseded tests only with their behavior map.
 6. **Review and verify.** Run focused crash/concurrency/native tests, then the full deterministic/platform suite, public typing, wheel smoke, and source-growth checks. Independently review storage/session ownership and confirm no prohibited responsibility has reappeared.
@@ -317,7 +313,7 @@ The storage and process changes are the high-risk portions. A failed characteriz
 | `journal.py`, `budgets.py`, affected `runtime.py` paths | Replace SQL coupling with a small file ledger and domain operations implementing the specified target behavior |
 | `providers.py`, `operations.py`, provider checkpoints | One durable attempt-evidence path; remove mutable transport receipt authority |
 | `sessions.py`, `locks.py` | File bindings and state-root session-lock identity; preserve scope and cross-process semantics |
-| `codex_appserver.py`, provider ownership | Per-session process lifecycle; remove unnecessary multi-session routing/fan-out |
+| `codex_appserver.py`, provider ownership | Per-operation process lifecycle; separate normal parent-only disposal from cancellation/timeout cleanup and remove persistent-session routing/fan-out |
 | `provenance.py`, surface helpers, optimizer readers | Compact ordinary observations; explicit full manifests; no unrelated identity rewrite |
 | Lab shared helpers, contracts, prompts, publication validation | Typed producers, proportionate review, ordinary control flow, no prose policy regexes |
 | Tests and fixtures | Preserve behavioral/crash coverage; remove obsolete architectural assertions |
@@ -328,7 +324,7 @@ Use existing utilities where appropriate; introducing a small ledger I/O or sess
 
 Update `README.md`, `docs/sdk.md`, `docs/authoring.md`, `docs/architecture.md`, `docs/cli.md`, `docs/testing.md`, relevant optimizer/lab documentation, Codex capability notes, and `skills/botpipe-workflow-authoring/SKILL.md`. Remove obsolete migration/legacy-support documentation and links, including `docs/migration.md` if it has no remaining purpose. A concise fresh-state setup note is sufficient. Codex capability probing concerns the installed external provider, not compatibility with old Botpipe releases, and remains required.
 
-Documentation must explain the run layout, chronological reading, authoritative versus referenced data, fresh-state setup, cross-run session bindings, per-session process lifetime, retry uncertainty, shared workspaces, and the absence of rollback. Provide one small real generated example run; do not maintain a second hand-authored description of a different format.
+Documentation must explain the run layout, chronological reading, authoritative versus referenced data, fresh-state setup, cross-run session bindings, operation-scoped process lifetime, disposal uncertainty, retry uncertainty, shared workspaces, and the absence of rollback. Provide one small real generated example run; do not maintain a second hand-authored description of a different format.
 
 The PR is complete only when:
 

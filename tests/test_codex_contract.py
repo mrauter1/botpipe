@@ -24,7 +24,7 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-from botpipe import Artifact, Botpipe, Provider
+from botpipe import Artifact, Botpipe, Provider, Session
 from botpipe.codex_appserver import CodexAppServerAdapter, CodexProtocolError
 from botpipe.errors import UncertainOperation
 from botpipe.policy import NetworkMode, Policy, SandboxMode
@@ -309,6 +309,43 @@ def _start_or_skip_local_sandbox(
         raise
 
 
+def _native_adapter_factory(
+    template: CodexAppServerAdapter,
+    created: list[CodexAppServerAdapter] | None = None,
+):
+    def create() -> CodexAppServerAdapter:
+        adapter = CodexAppServerAdapter(
+            template.command,
+            env=template.env,
+            state_dir=template.state_dir,
+            interrupt_grace_seconds=template.interrupt_grace_seconds,
+        )
+        if created is not None:
+            created.append(adapter)
+        return adapter
+
+    return create
+
+
+def test_latest_native_packaged_launcher_runs_native_parent(native) -> None:
+    from botpipe.codex_appserver import _packaged_codex_binary
+
+    client, _server, _workspace = native
+    launcher = native_binary()
+    expected = _packaged_codex_binary(launcher)
+    if expected is None:
+        pytest.skip("configured Codex is already native or not the official npm package")
+
+    client._start()
+    process = client._process
+    try:
+        assert client.executable == str(expected)
+        assert process is not None
+        assert Path(process.args[0]).resolve() == expected
+    finally:
+        client.dispose()
+
+
 def test_latest_native_default_session_presets_and_read_only_enforcement(native) -> None:
     client, server, workspace = native
     discovered = client.probe()
@@ -321,7 +358,7 @@ def test_latest_native_default_session_presets_and_read_only_enforcement(native)
 
     runtime = Botpipe(
         workspace,
-        provider=CodexProvider(adapter=client),
+        provider=CodexProvider(adapter_factory=_native_adapter_factory(client)),
         state_dir=workspace.parent / "runtime-state",
     )
     sdk = Provider(runtime=runtime, model="gpt-5.4", workspace=workspace)
@@ -435,7 +472,7 @@ def test_latest_native_default_session_presets_and_read_only_enforcement(native)
     assert default.artifacts.report.read_text() == "native artifact"
 
 
-def test_latest_native_background_continuity_between_same_profile_turns(native) -> None:
+def test_latest_native_background_continuity_within_logical_operation(native) -> None:
     client, server, workspace = native
     marker = workspace / "between-turn-background.txt"
     readiness = workspace / "between-turn-background.ready"
@@ -462,7 +499,7 @@ def test_latest_native_background_continuity_between_same_profile_turns(native) 
     server.queue_exec("background-between-turns", command, yield_time_ms=250)
     first = native_request(
         workspace,
-        operation_id="native-background-first",
+        operation_id="native-background-logical-operation",
         preset="run",
         prompt=(
             "continuity-marker-first: start the requested background command, "
@@ -481,7 +518,7 @@ def test_latest_native_background_continuity_between_same_profile_turns(native) 
             client,
             native_request(
                 workspace,
-                operation_id="native-background-second",
+                operation_id="native-background-logical-operation",
                 preset="run",
                 prompt=(
                     "continuity-marker-second: return the fixed response without tools."
@@ -503,19 +540,72 @@ def test_latest_native_background_continuity_between_same_profile_turns(native) 
             print("Native fixture diagnostics:", server.diagnostics())
 
 
-def test_latest_native_cross_process_reacquires_after_owner_closes(native) -> None:
+def test_latest_native_dispose_records_background_outcome(
+    native, record_property
+) -> None:
+    client, server, workspace = native
+    marker = workspace / "dispose-background.txt"
+    readiness = workspace / "dispose-background.ready"
+    release = workspace / "dispose-background.release"
+    if os.name == "nt":
+        target = str(marker).replace("'", "''")
+        ready_target = str(readiness).replace("'", "''")
+        release_target = str(release).replace("'", "''")
+        command = (
+            f"[IO.File]::WriteAllText('{ready_target}', 'ready'); "
+            f"while (-not (Test-Path -LiteralPath '{release_target}')) "
+            "{ Start-Sleep -Milliseconds 50 }; "
+            f"[IO.File]::WriteAllText('{target}', 'alive')"
+        )
+    else:
+        command = (
+            f"printf %s ready > {shlex.quote(str(readiness))}; "
+            f"while [ ! -f {shlex.quote(str(release))} ]; do sleep 0.05; done; "
+            f"printf %s alive > {shlex.quote(str(marker))}"
+        )
+    server.queue_exec("background-at-dispose", command, yield_time_ms=250)
+    _start_or_skip_local_sandbox(
+        client,
+        native_request(
+            workspace,
+            operation_id="native-background-dispose",
+            preset="run",
+            prompt="Start the requested command, then return the fixed response.",
+            tools=("shell",),
+        ),
+    )
+    deadline = time.monotonic() + 5
+    while not readiness.exists() and time.monotonic() < deadline:
+        time.sleep(0.02)
+    assert readiness.read_text(encoding="utf-8") == "ready"
+    process = client._process
+
+    client.dispose()
+    assert process is not None and process.poll() is not None
+
+    release.write_text("finish", encoding="utf-8")
+    deadline = time.monotonic() + 3
+    while not marker.exists() and time.monotonic() < deadline:
+        time.sleep(0.02)
+    record_property(
+        "codex_dispose_background",
+        "completed_after_dispose" if marker.exists() else "not_observed_after_dispose",
+    )
+
+
+def test_latest_native_cross_process_reacquires_after_owner_disposes(native) -> None:
     client, server, workspace = native
     started = _start_or_skip_local_sandbox(
         client,
         native_request(
             workspace,
-            operation_id="native-owner-before-close",
+            operation_id="native-owner-before-dispose",
             preset="query",
-            prompt="continuity-marker-before-close: return the fixed response.",
+            prompt="continuity-marker-before-dispose: return the fixed response.",
             tools=(),
         ),
     )
-    client.close()
+    client.dispose()
 
     next_process = CodexAppServerAdapter(
         client.command,
@@ -528,9 +618,9 @@ def test_latest_native_cross_process_reacquires_after_owner_closes(native) -> No
             next_process,
             native_request(
                 workspace,
-                operation_id="native-owner-after-close",
+                operation_id="native-owner-after-dispose",
                 preset="query",
-                prompt="continuity-marker-after-close: return the fixed response.",
+                prompt="continuity-marker-after-dispose: return the fixed response.",
                 tools=(),
                 session_id=started.session_id,
             ),
@@ -541,66 +631,85 @@ def test_latest_native_cross_process_reacquires_after_owner_closes(native) -> No
     assert resumed.session_id == started.session_id
     wire_inputs = [json.dumps(request.get("input", [])) for request in server.requests]
     resumed_wire = next(
-        value for value in wire_inputs if "continuity-marker-after-close" in value
+        value for value in wire_inputs if "continuity-marker-after-dispose" in value
     )
-    assert "continuity-marker-before-close" in resumed_wire
+    assert "continuity-marker-before-dispose" in resumed_wire
 
 
-def test_latest_native_live_cross_process_handoff(native) -> None:
-    """Acceptance: another runtime must observe history while the owner is live."""
+def test_latest_native_two_live_runtimes_interleave_durable_session(native) -> None:
     client, server, workspace = native
-    started = _start_or_skip_local_sandbox(
-        client,
-        native_request(
-            workspace,
-            operation_id="native-live-owner",
-            preset="query",
-            prompt="continuity-marker-live-owner: return the fixed response.",
-            tools=(),
-        ),
+    created_a: list[CodexAppServerAdapter] = []
+    created_b: list[CodexAppServerAdapter] = []
+    state_dir = workspace.parent / "shared-runtime-state"
+    codex_a = CodexProvider(
+        adapter_factory=_native_adapter_factory(client, created_a)
     )
-    other_process = CodexAppServerAdapter(
-        client.command,
-        env=client.env,
-        state_dir=client.state_dir,
-        interrupt_grace_seconds=client.interrupt_grace_seconds,
+    codex_b = CodexProvider(
+        adapter_factory=_native_adapter_factory(client, created_b)
+    )
+    runtime_a = Botpipe(workspace, provider=codex_a, state_dir=state_dir)
+    runtime_b = Botpipe(workspace, provider=codex_b, state_dir=state_dir)
+    shared = Session.task("native-interleaved-session")
+    sdk_a = Provider(
+        runtime=runtime_a, model="gpt-5.4", workspace=workspace, session=shared
+    )
+    sdk_b = Provider(
+        runtime=runtime_b, model="gpt-5.4", workspace=workspace, session=shared
     )
     try:
-        external = _start_or_skip_local_sandbox(
-            other_process,
-            native_request(
-                workspace,
-                operation_id="native-live-handoff",
-                preset="query",
-                prompt="continuity-marker-live-handoff: return the fixed response.",
-                tools=(),
-                session_id=started.session_id,
-            ),
+        first = sdk_a.query(
+            "continuity-marker-runtime-a-first: return the fixed response.",
+            returns=NativeAnswer,
+            tools=[],
         )
-        refreshed = _start_or_skip_local_sandbox(
-            client,
-            native_request(
-                workspace,
-                operation_id="native-live-owner-refresh",
-                preset="query",
-                prompt="continuity-marker-live-refresh: return the fixed response.",
-                tools=(),
-                session_id=started.session_id,
-            ),
+        assert created_a[-1]._process is None
+        assert created_a[-1]._cleanup_complete
+        assert not codex_a._owners
+        second = sdk_b.query(
+            "continuity-marker-runtime-b: return the fixed response.",
+            returns=NativeAnswer,
+            tools=[],
         )
+        assert created_b[-1]._process is None
+        assert created_b[-1]._cleanup_complete
+        assert not codex_b._owners
+        third = sdk_a.query(
+            "continuity-marker-runtime-a-second: return the fixed response.",
+            returns=NativeAnswer,
+            tools=[],
+        )
+        assert created_a[-1]._process is None
+        assert created_a[-1]._cleanup_complete
+        assert not codex_a._owners
+    except (CodexProtocolError, UncertainOperation) as exc:
+        if (
+            not os.environ.get("CI")
+            and "bwrap:" in str(exc)
+            and "Operation not permitted" in str(exc)
+        ):
+            pytest.skip(f"host cannot start the native Codex sandbox: {exc}")
+        raise
     finally:
-        other_process.close()
+        runtime_b.close()
+        runtime_a.close()
 
-    assert external.session_id == refreshed.session_id == started.session_id
+    assert first.value == second.value == third.value == NativeAnswer(ok=True)
+    assert {
+        first.metadata["thread_id"],
+        second.metadata["thread_id"],
+        third.metadata["thread_id"],
+    } == {first.metadata["thread_id"]}
     wire_inputs = [json.dumps(request.get("input", [])) for request in server.requests]
-    external_wire = next(
-        value for value in wire_inputs if "continuity-marker-live-handoff" in value
+    runtime_b_wire = next(
+        value for value in wire_inputs if "continuity-marker-runtime-b" in value
     )
-    refreshed_wire = next(
-        value for value in wire_inputs if "continuity-marker-live-refresh" in value
+    runtime_a_second_wire = next(
+        value
+        for value in wire_inputs
+        if "continuity-marker-runtime-a-second" in value
     )
-    assert "continuity-marker-live-owner" in external_wire
-    assert "continuity-marker-live-handoff" in refreshed_wire
+    assert "continuity-marker-runtime-a-first" in runtime_b_wire
+    assert "continuity-marker-runtime-b" in runtime_a_second_wire
 
 
 def _process_exists(process_id: int) -> bool:

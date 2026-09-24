@@ -8,10 +8,11 @@ import sys
 import pytest
 
 from botpipe import Botpipe, Provider, Session, codec, workflow
+from botpipe.capabilities import CapabilityStatus, CodexCapabilities
 from botpipe.errors import SessionError
 from botpipe.journal import Journal
-from botpipe.providers import FakeProvider, ProviderResponse
-from botpipe.recovery import Stopped
+from botpipe.providers import CodexProvider, FakeProvider, ProviderResponse
+from botpipe.recovery import Completed, Stopped, Unknown
 from botpipe.session_bindings import SessionBinding
 
 
@@ -519,3 +520,318 @@ def test_manual_response_cancels_unprepared_retry_after_binding_finish_crash(
         assert binding.read()["pending"] is None
         assert binding.read()["session_id"] == "thread-manual"
         assert len(provider.calls) == 1
+
+
+def test_completed_resolution_disposes_owner_before_clearing_session_binding(
+    tmp_path,
+):
+    @workflow
+    def work():
+        return Provider(session=Session.task("shared")).run("work").value
+
+    provider = FakeProvider([SystemExit("turn interrupted")])
+    with Botpipe(tmp_path, provider=provider) as client:
+        with pytest.raises(SystemExit, match="turn interrupted"):
+            client.run(work, run_id="original", task_id="task")
+        operation = next(
+            row
+            for row in client.journal.operations("original")
+            if row["kind"] == "provider"
+        )
+        inputs = codec.decode(operation["inputs"])
+        binding = SessionBinding(client.journal, inputs["session"])
+        calls = []
+
+        provider.recover = lambda request: Completed(
+            ProviderResponse("recovered", session_id="thread-recovered")
+        )
+
+        def release(operation_key, *, require_owner=False, abort=False):
+            if not require_owner:
+                return
+            durable = client.journal.attempt(operation["id"], 1)
+            assert durable["disposal"] == {"status": "pending"}
+            assert binding.read()["pending"] is not None
+            calls.append((operation_key, require_owner, abort))
+
+        provider.release_operation = release
+        client.resolve("original", operation["id"], retry=True)
+
+        assert calls == [(inputs["operation_key"], True, False)]
+        attempt = client.journal.attempt(operation["id"], 1)
+        assert attempt["disposal"] == {"status": "completed"}
+        assert "cleanup" not in attempt
+        assert binding.read()["pending"] is None
+        resumed = client.resume("original", workflow=work)
+        assert resumed.ok, resumed.error
+        assert resumed.value == "recovered"
+        assert len(provider.calls) == 1
+
+
+def test_failed_completed_disposal_is_acknowledged_without_redispatch(
+    tmp_path,
+):
+    @workflow
+    def work():
+        return Provider(session=Session.task("shared")).run("work").value
+
+    provider = FakeProvider([SystemExit("turn interrupted")])
+    with Botpipe(tmp_path, provider=provider) as client:
+        with pytest.raises(SystemExit, match="turn interrupted"):
+            client.run(work, run_id="original", task_id="task")
+        operation = next(
+            row
+            for row in client.journal.operations("original")
+            if row["kind"] == "provider"
+        )
+        provider.recover = lambda request: Completed(
+            ProviderResponse("durable", session_id="thread-durable")
+        )
+
+        def release(_operation_key, *, require_owner=False, abort=False):
+            assert require_owner is True
+            assert abort is False
+            raise RuntimeError("normal disposal was not verified")
+
+        provider.release_operation = release
+        client.resolve("original", operation["id"], retry=True)
+
+        attempt = client.journal.attempt(operation["id"], 1)
+        assert attempt["disposal"] == {
+            "status": "incomplete",
+            "error": "normal disposal was not verified",
+            "resolved_by": "operator",
+            "resolution": "accept",
+        }
+        assert client.journal.get(operation["id"])["response"]["text"] == "durable"
+        resumed = client.resume("original", workflow=work)
+        assert resumed.ok and resumed.value == "durable"
+        assert len(provider.calls) == 1
+
+
+def test_saved_completed_resolution_reuses_disposal_after_settlement_crash(
+    tmp_path, monkeypatch
+):
+    @workflow
+    def work():
+        return Provider(session=Session.task("shared")).run("work").value
+
+    provider = FakeProvider([SystemExit("turn interrupted")])
+    with Botpipe(tmp_path, provider=provider) as client:
+        with pytest.raises(SystemExit, match="turn interrupted"):
+            client.run(work, run_id="original", task_id="task")
+        operation = next(
+            row
+            for row in client.journal.operations("original")
+            if row["kind"] == "provider"
+        )
+        provider.recover = lambda request: Completed(
+            ProviderResponse("recovered", session_id="thread-recovered")
+        )
+        required_releases = []
+
+        def release(operation_key, *, require_owner=False, abort=False):
+            if require_owner:
+                required_releases.append((operation_key, abort))
+
+        provider.release_operation = release
+
+        def crash_before_settlement(self, *args, **kwargs):
+            raise SystemExit("binding settlement interrupted")
+
+        with monkeypatch.context() as patch:
+            patch.setattr(SessionBinding, "finish", crash_before_settlement)
+            with pytest.raises(SystemExit, match="binding settlement interrupted"):
+                client.resolve("original", operation["id"], retry=True)
+
+        assert client.journal.attempt(operation["id"], 1)["disposal"] == {
+            "status": "completed"
+        }
+        resumed = client.resume("original", workflow=work)
+        assert resumed.ok and resumed.value == "recovered"
+        assert len(required_releases) == 1
+        assert len(provider.calls) == 1
+
+
+def test_unknown_operator_accept_aborts_owner_and_retains_uncertainty(tmp_path):
+    @workflow
+    def work():
+        return Provider(session=Session.task("shared")).run("work").value
+
+    provider = FakeProvider([SystemExit("turn interrupted")])
+    with Botpipe(tmp_path, provider=provider) as client:
+        with pytest.raises(SystemExit, match="turn interrupted"):
+            client.run(work, run_id="original", task_id="task")
+        operation = next(
+            row
+            for row in client.journal.operations("original")
+            if row["kind"] == "provider"
+        )
+        inputs = codec.decode(operation["inputs"])
+        binding = SessionBinding(client.journal, inputs["session"])
+        calls = []
+        provider.recover = lambda request: Unknown("native outcome is uncertain")
+
+        def release(operation_key, *, require_owner=False, abort=False):
+            calls.append((operation_key, require_owner, abort))
+            raise RuntimeError("abort cleanup was not verified")
+
+        provider.release_operation = release
+        client.resolve(
+            "original",
+            operation["id"],
+            accept=True,
+            response=ProviderResponse("accepted", session_id="thread-accepted"),
+        )
+
+        assert calls == [(inputs["operation_key"], True, True)]
+        assert client.journal.attempt(operation["id"], 1)["cleanup"] == {
+            "status": "incomplete",
+            "error": "abort cleanup was not verified",
+            "resolved_by": "operator",
+            "resolution": "accept",
+        }
+        selected = next(
+            event
+            for event in client.journal.events("original")
+            if event["event"] == "resolution_selected"
+        )
+        assert selected["data"]["prior_outcome"] == "Unknown"
+        assert selected["data"]["detail"] == "native outcome is uncertain"
+        assert binding.read()["pending"] is None
+
+
+def test_stopped_operator_retry_aborts_before_claiming_next_attempt(tmp_path):
+    @workflow
+    def work():
+        return Provider(session=Session.task("shared")).run("work").value
+
+    provider = FakeProvider([SystemExit("turn interrupted")])
+    with Botpipe(tmp_path, provider=provider) as client:
+        with pytest.raises(SystemExit, match="turn interrupted"):
+            client.run(work, run_id="original", task_id="task")
+        operation = next(
+            row
+            for row in client.journal.operations("original")
+            if row["kind"] == "provider"
+        )
+        inputs = codec.decode(operation["inputs"])
+        binding = SessionBinding(client.journal, inputs["session"])
+        calls = []
+
+        def release(operation_key, *, require_owner=False, abort=False):
+            assert binding.read()["pending"]["attempt"] == 1
+            assert client.journal.attempt(operation["id"], 1)["cleanup"] == {
+                "status": "pending"
+            }
+            calls.append((operation_key, require_owner, abort))
+
+        provider.release_operation = release
+        client.resolve("original", operation["id"], retry=True)
+
+        assert calls == [(inputs["operation_key"], True, True)]
+        assert client.journal.attempt(operation["id"], 1)["cleanup"] == {
+            "status": "completed"
+        }
+        assert binding.read()["pending"]["attempt"] == 2
+
+
+def test_unknown_retry_abandons_cleanup_failed_owner_before_redispatch(
+    tmp_path, monkeypatch
+):
+    created = []
+
+    class Owner:
+        def __init__(self, *, interrupted):
+            self.interrupted = interrupted
+            self.calls = []
+            self.closed = 0
+            self.disposed = 0
+
+        def probe(self, *, deadline=None):
+            return CodexCapabilities(
+                executable=sys.executable,
+                version="fixture",
+                identity="fixture",
+                methods=frozenset(),
+                presets={
+                    name: CapabilityStatus(True)
+                    for name in ("run", "query", "generate")
+                },
+            )
+
+        def start_turn(self, request, on_event=None):
+            self.calls.append(request)
+            request.on_checkpoint(
+                {"status": "turn_intent", "session_id": "thread"}
+            )
+            request.on_checkpoint(
+                {
+                    "status": "turn_acknowledged",
+                    "session_id": "thread",
+                    "turn_id": "turn",
+                }
+            )
+            if self.interrupted:
+                raise SystemExit("turn interrupted")
+            return ProviderResponse("retried", session_id="thread-retried")
+
+        def dispose(self):
+            self.disposed += 1
+
+        def close(self):
+            self.closed += 1
+            raise RuntimeError("abort cleanup was not verified")
+
+    def factory():
+        owner = Owner(interrupted=not created)
+        created.append(owner)
+        return owner
+
+    @workflow
+    def work():
+        return Provider(session=Session.task("shared")).run("work").value
+
+    backend = CodexProvider(adapter_factory=factory)
+    with Botpipe(tmp_path, provider=backend) as client:
+        with pytest.raises(SystemExit, match="turn interrupted"):
+            client.run(work, run_id="original", task_id="task")
+        operation = next(
+            row
+            for row in client.journal.operations("original")
+            if row["kind"] == "provider"
+        )
+        backend.recover = lambda request: Unknown("native outcome is uncertain")
+
+        checkpoint = client.journal.attempt_checkpoint
+
+        def crash_after_abandonment(operation_id, attempt, update):
+            checkpoint(operation_id, attempt, update)
+            cleanup = update.get("cleanup") or {}
+            if cleanup.get("resolution") == "retry":
+                raise SystemExit("crashed after owner abandonment")
+
+        with monkeypatch.context() as patch:
+            patch.setattr(
+                client.journal,
+                "attempt_checkpoint",
+                crash_after_abandonment,
+            )
+            with pytest.raises(SystemExit, match="after owner abandonment"):
+                client.resolve("original", operation["id"], retry=True)
+
+        cleanup = client.journal.attempt(operation["id"], 1)["cleanup"]
+        assert cleanup["status"] == "incomplete"
+        assert cleanup["resolved_by"] == "operator"
+        assert cleanup["resolution"] == "retry"
+        assert created[0].closed == 1
+        assert backend._owners == {}
+        assert "retry_authorized" not in client.journal.get(operation["id"])[
+            "response"
+        ]
+
+        resumed = client.resume("original", workflow=work)
+        assert resumed.ok and resumed.value == "retried"
+        assert len(created) == 2
+        assert len(created[0].calls) == 1
+        assert len(created[1].calls) == 1

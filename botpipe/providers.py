@@ -159,6 +159,7 @@ class Adapter(Protocol):
         on_event: Callable[[StreamEvent], None] | None = None,
     ) -> ProviderResponse: ...
     def interrupt(self, thread_id: str, turn_id: str) -> None: ...
+    def dispose(self) -> None: ...
     def close(self) -> None: ...
 
 
@@ -181,7 +182,7 @@ def _response(value: Any) -> ProviderResponse:
 
 
 class CodexProvider:
-    """Lazy provider facade with one app-server owner per logical session."""
+    """Lazy provider facade with one app-server per logical operation."""
 
     name = "codex"
     _reserves_dispatch = True
@@ -203,18 +204,17 @@ class CodexProvider:
         self.command, self.env, self.state_dir = command, dict(env or {}), state_dir
         self.interrupt_grace_seconds = interrupt_grace_seconds
         self._injected_adapter = adapter
+        self._injected_adapter_used = False
         self._adapter_factory = adapter_factory
-        self._owners: dict[tuple[str, str], Any] = {}
+        self._owners: dict[str, Any] = {}
         self._owner_lock = threading.RLock()
         self._probe_adapter: Any | None = adapter
         self._factory_probe_available = False
         self._closed = False
 
     @staticmethod
-    def _owner_key(request: ProviderRequest) -> tuple[str, str]:
-        if request.session_key is not None:
-            return "session", request.session_key
-        return "operation", request.operation_key or request.operation_id
+    def _owner_key(request: ProviderRequest) -> str:
+        return request.operation_key or request.operation_id
 
     def _new_adapter(self) -> Any:
         if self._adapter_factory is not None:
@@ -224,11 +224,12 @@ class CodexProvider:
                 return self._probe_adapter
             return self._adapter_factory()
         if self._injected_adapter is not None:
-            if any(self._injected_adapter is owner for owner in self._owners.values()):
+            if self._injected_adapter_used:
                 raise ProviderError(
-                    "an injected adapter can own only one logical session; "
-                    "pass adapter_factory for multiple sessions"
+                    "an injected adapter can own only one logical operation; "
+                    "pass adapter_factory for multiple operations"
                 )
+            self._injected_adapter_used = True
             return self._injected_adapter
         from .codex_appserver import CodexAppServerAdapter
 
@@ -475,11 +476,11 @@ class CodexProvider:
         return Unknown("Codex thread history does not identify the recorded turn")
 
     def release_operation(
-        self, operation_key: str, *, require_owner: bool = False
+        self, operation_key: str, *, require_owner: bool = False, abort: bool = False
     ) -> None:
         """Release the operation-local adapter after validation and repairs finish."""
 
-        key = ("operation", operation_key)
+        key = operation_key
         with self._owner_lock:
             owner = self._owners.get(key)
             if owner is None:
@@ -492,8 +493,24 @@ class CodexProvider:
             # Keep the key reserved until cleanup succeeds.  Otherwise a
             # concurrent repair can install a replacement while the prior
             # process tree is still alive or its cleanup is unverified.
-            owner.close()
+            if abort:
+                owner.close()
+            else:
+                owner.dispose()
             self._owners.pop(key, None)
+
+    def _abandon_operation(self, operation_key: str) -> None:
+        """Forget an owner after a durable explicit retry accepts its uncertainty."""
+
+        with self._owner_lock:
+            owner = self._owners.pop(operation_key, None)
+            if (
+                owner is not None
+                and self._adapter_factory is not None
+                and self._probe_adapter is owner
+            ):
+                self._probe_adapter = None
+                self._factory_probe_available = False
 
     def close(self) -> None:
         with self._owner_lock:
@@ -521,7 +538,7 @@ class CodexProvider:
         if failures:
             errors = [exc for _owner, exc in failures]
             raise ProviderError(
-                "failed to close one or more Codex session adapters: "
+                "failed to close one or more Codex operation adapters: "
                 + "; ".join(str(exc) for exc in errors)
             ) from ExceptionGroup("Codex adapter cleanup failures", errors)
 

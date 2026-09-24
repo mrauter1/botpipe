@@ -141,6 +141,407 @@ def adapter(
     )
 
 
+_OFFICIAL_CODEX_JS = """
+const PLATFORM_PACKAGE_BY_TARGET = {};
+function findCodexExecutable() {}
+const child = spawn(binaryPath, process.argv.slice(2));
+"""
+
+
+def _write_official_codex_package(package: Path) -> None:
+    (package / "bin").mkdir(parents=True)
+    (package / "package.json").write_text(
+        '{"name":"@openai/codex","bin":{"codex":"bin/codex.js"}}'
+    )
+    (package / "bin" / "codex.js").write_text(_OFFICIAL_CODEX_JS)
+
+
+def _npm_cmd(target: str = "node_modules/@openai/codex/bin/codex.js") -> str:
+    return f'@ECHO off\nSETLOCAL\n"%_prog%" "%dp0%/{target}" %*'
+
+
+def test_official_windows_launcher_resolves_native_and_preserves_args(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from botpipe import codex_appserver as appserver
+
+    prefix = tmp_path / "npm"
+    launcher = prefix / "codex.cmd"
+    package = prefix / "node_modules" / "@openai" / "codex"
+    native = (
+        prefix
+        / "node_modules"
+        / "@openai"
+        / "codex-win32-x64"
+        / "vendor"
+        / "x86_64-pc-windows-msvc"
+        / "bin"
+        / "codex.exe"
+    )
+    native.parent.mkdir(parents=True)
+    launcher.write_text(_npm_cmd())
+    _write_official_codex_package(package)
+    native.write_bytes(b"MZ")
+    monkeypatch.setattr(appserver.sys, "platform", "win32")
+    monkeypatch.setattr(appserver.platform, "machine", lambda: "AMD64")
+
+    client = CodexAppServerAdapter(
+        (str(launcher), "-c", "model=fixture", "app-server", "--listen", "stdio://")
+    )
+
+    assert client.executable == str(native.resolve())
+    assert client.command == (
+        str(native.resolve()),
+        "-c",
+        "model=fixture",
+        "app-server",
+        "--listen",
+        "stdio://",
+    )
+
+
+def test_non_official_wrapper_is_not_rewritten(tmp_path: Path) -> None:
+    launcher = tmp_path / "codex.cmd"
+    launcher.write_text(
+        "@ECHO off\nSETLOCAL\nREM node_modules/@openai/codex/bin/codex.js\n"
+        'custom.exe "%dp0%" %*'
+    )
+    package = tmp_path / "node_modules" / "@openai" / "codex"
+    package.mkdir(parents=True)
+    (package / "package.json").write_text('{"name":"@openai/codex"}')
+
+    client = CodexAppServerAdapter((str(launcher), "custom-argument"))
+
+    assert client.command == (str(launcher), "custom-argument")
+
+
+@pytest.mark.parametrize(
+    ("platform_name", "machine", "package_name", "target", "executable"),
+    [
+        ("linux", "x86_64", "codex-linux-x64", "x86_64-unknown-linux-musl", "codex"),
+        ("linux", "arm64", "codex-linux-arm64", "aarch64-unknown-linux-musl", "codex"),
+        ("darwin", "x64", "codex-darwin-x64", "x86_64-apple-darwin", "codex"),
+        ("darwin", "arm64", "codex-darwin-arm64", "aarch64-apple-darwin", "codex"),
+        ("win32", "AMD64", "codex-win32-x64", "x86_64-pc-windows-msvc", "codex.exe"),
+        ("win32", "arm64", "codex-win32-arm64", "aarch64-pc-windows-msvc", "codex.exe"),
+    ],
+)
+def test_official_launcher_platform_aliases(
+    tmp_path: Path,
+    platform_name: str,
+    machine: str,
+    package_name: str,
+    target: str,
+    executable: str,
+) -> None:
+    from botpipe.codex_appserver import _packaged_codex_binary
+
+    prefix = tmp_path / f"{platform_name}-{machine}"
+    launcher = prefix / "codex.cmd"
+    package = prefix / "node_modules" / "@openai" / "codex"
+    native = (
+        prefix
+        / "node_modules"
+        / "@openai"
+        / package_name
+        / "vendor"
+        / target
+        / "bin"
+        / executable
+    )
+    native.parent.mkdir(parents=True)
+    launcher.write_text(_npm_cmd())
+    _write_official_codex_package(package)
+    native.write_bytes(b"native")
+
+    assert _packaged_codex_binary(
+        launcher, platform_name=platform_name, machine=machine
+    ) == native.resolve()
+
+
+def test_local_npm_bin_launcher_resolves_hoisted_package(tmp_path: Path) -> None:
+    from botpipe.codex_appserver import _packaged_codex_binary
+
+    modules = tmp_path / "node_modules"
+    launcher = modules / ".bin" / "codex.cmd"
+    package = modules / "@openai" / "codex"
+    native = (
+        modules
+        / "@openai"
+        / "codex-linux-x64"
+        / "vendor"
+        / "x86_64-unknown-linux-musl"
+        / "bin"
+        / "codex"
+    )
+    launcher.parent.mkdir(parents=True)
+    native.parent.mkdir(parents=True)
+    launcher.write_text(_npm_cmd("../@openai/codex/bin/codex.js"))
+    _write_official_codex_package(package)
+    native.write_bytes(b"native")
+
+    assert _packaged_codex_binary(
+        launcher, platform_name="linux", machine="x86_64"
+    ) == native.resolve()
+
+
+def test_launcher_resolution_uses_injected_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from botpipe import codex_appserver as appserver
+
+    prefix = tmp_path / "isolated-npm"
+    launcher = prefix / "codex.cmd"
+    package = prefix / "node_modules" / "@openai" / "codex"
+    native = (
+        prefix
+        / "node_modules"
+        / "@openai"
+        / "codex-win32-x64"
+        / "vendor"
+        / "x86_64-pc-windows-msvc"
+        / "bin"
+        / "codex.exe"
+    )
+    native.parent.mkdir(parents=True)
+    _write_official_codex_package(package)
+    launcher.write_text(_npm_cmd())
+    native.write_bytes(b"native")
+    injected_path = str(prefix / "injected-path")
+
+    def which(value: str, *, path: str | None = None):
+        assert value == "codex"
+        assert path == injected_path
+        return str(launcher)
+
+    monkeypatch.setattr(appserver.shutil, "which", which)
+    monkeypatch.setattr(appserver.sys, "platform", "win32")
+    monkeypatch.setattr(appserver.platform, "machine", lambda: "AMD64")
+
+    client = CodexAppServerAdapter("codex", env={"PATH": injected_path})
+
+    assert client.executable == str(native.resolve())
+
+
+def test_official_launcher_missing_native_fails_closed(tmp_path: Path) -> None:
+    from botpipe.codex_appserver import _packaged_codex_binary
+
+    launcher = tmp_path / "codex.cmd"
+    package = tmp_path / "node_modules" / "@openai" / "codex"
+    launcher.write_text(_npm_cmd())
+    _write_official_codex_package(package)
+
+    with pytest.raises(CapabilityError, match="missing its native"):
+        _packaged_codex_binary(
+            launcher, platform_name="win32", machine="AMD64"
+        )
+
+
+def test_dispose_exits_idle_fixture_without_abort_cleanup(tmp_path: Path) -> None:
+    client = adapter(tmp_path)
+    response = client.start_turn(request(tmp_path))
+    process = client._process
+
+    client.dispose()
+    client.close()
+
+    assert response.text == "fixture answer"
+    assert process is not None and process.poll() is not None
+    assert client._process is None
+    transcript = [
+        json.loads(line)
+        for line in (tmp_path / "codex-transcript.jsonl").read_text().splitlines()
+    ]
+    assert not any(
+        item.get("method") in {"turn/interrupt", "thread/backgroundTerminals/clean"}
+        for item in transcript
+    )
+
+
+def test_dispose_rejects_an_active_turn_without_touching_transport(
+    tmp_path: Path,
+) -> None:
+    from botpipe.codex_appserver import _Turn
+
+    class FakeStdin:
+        closed = False
+
+        def close(self) -> None:
+            self.closed = True
+
+    class FakeProcess:
+        pid = 123
+        stdin = FakeStdin()
+
+        def poll(self):
+            return None
+
+    client = adapter(tmp_path)
+    process = FakeProcess()
+    turn = _Turn(
+        "thread", "turn", None, None, process=process  # type: ignore[arg-type]
+    )
+    client._process = process  # type: ignore[assignment]
+    client._turns[(turn.thread_id, turn.turn_id)] = turn
+
+    with pytest.raises(RuntimeError, match="active work"):
+        client.dispose()
+
+    assert not process.stdin.closed
+    assert client._process is process
+
+
+def test_failed_dispose_retains_cleanup_ownership(tmp_path: Path) -> None:
+    class FakeStdin:
+        def close(self) -> None:
+            pass
+
+    class FakeProcess:
+        pid = 123
+        stdin = FakeStdin()
+
+        def poll(self):
+            return None
+
+    class RefusingContainment:
+        def release(self, process, *, grace_seconds):
+            raise subprocess.TimeoutExpired("codex", grace_seconds)
+
+    import subprocess
+
+    client = adapter(tmp_path)
+    process = FakeProcess()
+    containment = RefusingContainment()
+    client._process = process  # type: ignore[assignment]
+    client._containment = containment  # type: ignore[assignment]
+
+    with pytest.raises(subprocess.TimeoutExpired):
+        client.dispose()
+
+    assert client._process is process
+    assert client._containment is containment
+    assert not client._cleanup_complete
+
+
+def test_completed_response_survives_disposal_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from botpipe.processes import ProcessContainment
+
+    client = adapter(tmp_path)
+    response = client.start_turn(request(tmp_path))
+    process = client._process
+    containment = client._containment
+
+    def fail_release(*_args, **_kwargs) -> None:
+        raise RuntimeError("normal exit failed")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(ProcessContainment, "release", fail_release)
+        with pytest.raises(RuntimeError, match="normal exit failed"):
+            client.dispose()
+
+    assert response.text == "fixture answer"
+    assert client._process is process
+    assert client._containment is containment
+    client.close()
+
+
+@pytest.mark.parametrize(
+    "blocked_status", ["configured", "response_received"]
+)
+def test_dispose_rejects_call_during_setup_and_terminal_processing(
+    tmp_path: Path, blocked_status: str
+) -> None:
+    entered = threading.Event()
+    release = threading.Event()
+    responses = []
+    errors = []
+
+    def checkpoint(update: dict) -> None:
+        if update.get("status") == blocked_status:
+            entered.set()
+            assert release.wait(2)
+
+    client = adapter(tmp_path)
+    call = replace(request(tmp_path), on_checkpoint=checkpoint)
+
+    def run() -> None:
+        try:
+            responses.append(client.start_turn(call))
+        except BaseException as exc:  # noqa: BLE001 - thread reports to test
+            errors.append(exc)
+
+    worker = threading.Thread(target=run)
+    worker.start()
+    assert entered.wait(2)
+    try:
+        with pytest.raises(RuntimeError, match="active work"):
+            client.dispose()
+    finally:
+        release.set()
+        worker.join(timeout=3)
+        if worker.is_alive():
+            client.close()
+    assert not worker.is_alive()
+    assert not errors
+    assert responses[0].text == "fixture answer"
+    client.dispose()
+
+
+def test_dispose_rejects_recovery_setup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    entered = threading.Event()
+    release = threading.Event()
+    result = []
+    client = adapter(tmp_path)
+    original_probe = client.probe
+
+    def blocked_probe(*, deadline=None):
+        entered.set()
+        assert release.wait(2)
+        return original_probe(deadline=deadline)
+
+    monkeypatch.setattr(client, "probe", blocked_probe)
+    worker = threading.Thread(
+        target=lambda: result.append(
+            client.recover_turn(request(tmp_path), thread_id="thread", turn_id="turn")
+        )
+    )
+    worker.start()
+    assert entered.wait(2)
+    try:
+        with pytest.raises(RuntimeError, match="active work"):
+            client.dispose()
+    finally:
+        release.set()
+        worker.join(timeout=3)
+    assert result == [("unknown", None)]
+    client.dispose()
+
+
+def test_dispose_stops_readers_when_descendant_inherits_pipes(tmp_path: Path) -> None:
+    marker = tmp_path / "inherited-pipe-child"
+    client = adapter(
+        tmp_path,
+        "inherited_stdio",
+        BOTPIPE_FAKE_DESCENDANT_MARKER=str(marker),
+        BOTPIPE_FAKE_DESCENDANT_PID=str(tmp_path / "inherited-pipe-child.pid"),
+    )
+    response = client.start_turn(request(tmp_path))
+    reader, stderr_reader = client._reader, client._stderr_reader
+
+    client.dispose()
+
+    assert response.text == "fixture answer"
+    assert reader is not None and stderr_reader is not None
+    reader.join(timeout=0.5)
+    stderr_reader.join(timeout=0.5)
+    assert not reader.is_alive()
+    assert not stderr_reader.is_alive()
+
+
 def transcript(tmp_path: Path) -> list[dict]:
     return [
         json.loads(line)

@@ -14,7 +14,10 @@ SCENARIO = os.environ.get("BOTPIPE_FAKE_SCENARIO", "complete")
 
 
 def receive() -> dict:
-    value = json.loads(sys.stdin.readline())
+    line = sys.stdin.readline()
+    if not line:
+        raise EOFError
+    value = json.loads(line)
     with TRANSCRIPT.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(value, sort_keys=True) + "\n")
     return value
@@ -48,7 +51,10 @@ assert receive()["method"] == "initialized"
 turn_number = 0
 background_child = None
 while True:
-    request = receive()
+    try:
+        request = receive()
+    except EOFError:
+        break
     method = request.get("method")
     if method == "thread/backgroundTerminals/clean":
         if background_child is not None:
@@ -186,6 +192,11 @@ while True:
     if SCENARIO == "native_background":
         background_child = spawn_descendant(new_session=True)
         continue
+    if SCENARIO == "inherited_stdio":
+        # This child deliberately inherits the app-server's stdout/stderr.
+        # Adapter disposal must not leave its reader threads blocked on those
+        # still-open pipe handles after the app-server parent exits.
+        spawn_descendant(new_session=True)
 
     if SCENARIO == "disallowed_shell":
         send(
