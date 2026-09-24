@@ -8,7 +8,6 @@ import threading
 import time
 from dataclasses import replace
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -23,9 +22,11 @@ from botpipe.codex_appserver import CodexAppServerAdapter
 from botpipe.policy import NetworkMode, Policy, SandboxMode
 from botpipe.providers import (
     CodexProvider,
+    ProviderError,
     ProviderInterruptedError,
     ProviderRequest,
     ProviderTimeoutError,
+    receipt_path,
 )
 
 FIXTURE = Path(__file__).parent / "fixtures" / "codex_appserver.py"
@@ -449,6 +450,188 @@ def test_timeout_and_cancellation_kill_actual_descendant_tree(
     assert not marker.exists(), "a descendant survived adapter cleanup"
 
 
+def test_concurrent_distinct_threads_share_transport_and_teardown_receipts(
+    tmp_path: Path,
+) -> None:
+    cancelled = threading.Event()
+    client = adapter(tmp_path, "concurrent_stall")
+    provider = CodexProvider(adapter=client)
+    calls = {
+        "cancelled": replace(
+            request(
+                tmp_path,
+                session_id="thread-cancelled",
+                timeout=30,
+                cancel_event=cancelled,
+            ),
+            operation_id="concurrent-cancelled",
+        ),
+        "sibling": replace(
+            request(tmp_path, session_id="thread-sibling", timeout=30),
+            operation_id="concurrent-sibling",
+        ),
+    }
+    errors: dict[str, BaseException] = {}
+
+    def run(name: str) -> None:
+        try:
+            provider.run(calls[name])
+        except BaseException as exc:
+            errors[name] = exc
+
+    workers = [threading.Thread(target=run, args=(name,)) for name in calls]
+    for worker in workers:
+        worker.start()
+    deadline = time.monotonic() + 30
+    observed: list[dict] = []
+    while time.monotonic() < deadline:
+        if (tmp_path / "codex-transcript.jsonl").exists():
+            observed = transcript(tmp_path)
+            if sum(item.get("method") == "turn/start" for item in observed) == 2:
+                break
+        time.sleep(0.01)
+    assert sum(item.get("method") == "turn/start" for item in observed) == 2
+
+    cancelled.set()
+    for worker in workers:
+        worker.join(timeout=30)
+    try:
+        assert all(not worker.is_alive() for worker in workers)
+        assert isinstance(errors["cancelled"], ProviderInterruptedError)
+        assert isinstance(errors["sibling"], ProviderError)
+
+        recorded = transcript(tmp_path)
+        methods = [item.get("method") for item in recorded]
+        assert methods.count("initialize") == 1
+        assert methods.index("turn/interrupt") > max(
+            index for index, method in enumerate(methods) if method == "turn/start"
+        )
+        assert {
+            item["params"]["threadId"]
+            for item in recorded
+            if item.get("method") == "turn/start"
+        } == {"thread-cancelled", "thread-sibling"}
+        for call in calls.values():
+            receipt = json.loads(receipt_path(call).read_text())
+            assert receipt["status"] == "turn_acknowledged"
+            assert receipt["cleanup"] == {"status": "completed"}
+            assert receipt["enforcement"]["audit"] == "no-tool-calls-observed"
+    finally:
+        client.close()
+
+
+def test_start_waits_for_in_progress_transport_teardown(tmp_path: Path) -> None:
+    client = adapter(tmp_path)
+    client._transport_cleanup_lock.acquire()
+    entered = threading.Event()
+    errors: list[BaseException] = []
+
+    def start() -> None:
+        entered.set()
+        try:
+            client._start()
+        except BaseException as exc:
+            errors.append(exc)
+
+    worker = threading.Thread(target=start)
+    worker.start()
+    assert entered.wait(30)
+    time.sleep(0.05)
+    assert worker.is_alive()
+    assert client._process is None
+    with client._lock:
+        client._closed = True
+    client._transport_cleanup_lock.release()
+    worker.join(timeout=30)
+
+    assert not worker.is_alive()
+    assert len(errors) == 1 and isinstance(errors[0], RuntimeError)
+
+
+def test_late_turn_ack_cannot_bind_to_or_kill_replacement_transport(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from botpipe.codex_appserver import CodexProtocolError
+
+    class FakeProcess:
+        def __init__(self) -> None:
+            self.alive = True
+
+        def poll(self):
+            return None if self.alive else 0
+
+    class FakeContainment:
+        def __init__(self) -> None:
+            self.terminations = 0
+
+        def capture_descendant_groups(self, process):
+            pass
+
+        def terminate(self, process, *, grace_seconds):
+            self.terminations += 1
+            process.alive = False
+
+        def ensure_tree_exited(self, process, *, grace_seconds):
+            if process.alive:
+                self.terminate(process, grace_seconds=grace_seconds)
+
+    client = adapter(tmp_path)
+    old_process, new_process = FakeProcess(), FakeProcess()
+    old_containment, new_containment = FakeContainment(), FakeContainment()
+    client._process = old_process  # type: ignore[assignment]
+    client._containment = old_containment  # type: ignore[assignment]
+    monkeypatch.setattr(client, "_start", lambda **_kwargs: None)
+    ack_ready = threading.Event()
+    release_ack = threading.Event()
+
+    def rpc(
+        method, params, timeout, cancel_event=None, *, deadline=None, process=None
+    ):
+        if method == "thread/resume":
+            return {"thread": {"id": "thread-late-ack"}}
+        if method == "turn/start":
+            assert process is old_process
+            ack_ready.set()
+            assert release_ack.wait(30)
+            return {"turn": {"id": "turn-old", "status": "inProgress"}}
+        raise AssertionError(method)
+
+    monkeypatch.setattr(client, "_rpc", rpc)
+    checkpoints: list[dict] = []
+    call = replace(
+        request(tmp_path, session_id="thread-late-ack", timeout=30),
+        on_checkpoint=checkpoints.append,
+    )
+    errors: list[BaseException] = []
+
+    def run() -> None:
+        try:
+            client.start_turn(call)
+        except BaseException as exc:
+            errors.append(exc)
+
+    worker = threading.Thread(target=run)
+    worker.start()
+    assert ack_ready.wait(30)
+    client._kill_transport(CodexProtocolError("old transport stopped"), cleanup_seconds=0)
+    with client._transport_cleanup_lock, client._lock:
+        client._process = new_process  # type: ignore[assignment]
+        client._containment = new_containment  # type: ignore[assignment]
+        client._tearing_down_process = None
+    release_ack.set()
+    worker.join(timeout=30)
+
+    assert not worker.is_alive()
+    assert len(errors) == 1
+    assert isinstance(errors[0], CodexProtocolError)
+    assert "stopped transport" in str(errors[0])
+    assert checkpoints[-1]["status"] == "failed"
+    assert checkpoints[-1]["cleanup"] == {"status": "completed"}
+    assert new_process.poll() is None
+    assert new_containment.terminations == 0
+    assert not client._turns
+
+
 def test_turn_start_ack_timeout_kills_unknown_dispatched_turn_tree(
     tmp_path: Path,
 ) -> None:
@@ -557,7 +740,9 @@ def test_setup_and_turn_start_share_one_timeout_budget(
     monkeypatch.setattr(client, "_start", lambda **_kwargs: None)
     monkeypatch.setattr(client, "_kill_transport", lambda *_args, **_kwargs: None)
 
-    def rpc(method, params, timeout, cancel_event=None, *, deadline=None):
+    def rpc(
+        method, params, timeout, cancel_event=None, *, deadline=None, process=None
+    ):
         calls.append((method, timeout, deadline))
         if method == "thread/start":
             clock[0] += 0.18
@@ -664,7 +849,13 @@ def test_cleanup_failure_checkpoints_every_affected_turn(tmp_path: Path) -> None
     from botpipe.codex_appserver import CodexProtocolError, _Turn
 
     client = adapter(tmp_path)
-    process = SimpleNamespace(pid=123, poll=lambda: None)
+    class FakeProcess:
+        pid = 123
+
+        def poll(self):
+            return None
+
+    process = FakeProcess()
 
     class BrokenContainment:
         def capture_descendant_groups(self, _process):
@@ -698,6 +889,62 @@ def test_cleanup_failure_checkpoints_every_affected_turn(tmp_path: Path) -> None
     for recorded in updates.values():
         assert recorded[-1]["cleanup"]["status"] == "incomplete"
         assert "process inspection unavailable" in recorded[-1]["cleanup"]["error"]
+
+
+@pytest.mark.skipif(os.name != "posix", reason="detached POSIX process groups")
+def test_cleanup_started_after_parent_exit_is_not_recorded_as_verified(
+    tmp_path: Path,
+) -> None:
+    from botpipe.codex_appserver import CodexProtocolError, _Turn
+
+    class DeadProcess:
+        pid = 123
+
+        def poll(self):
+            return 0
+
+    class ApparentlyEmptyContainment:
+        def capture_descendant_groups(self, process):
+            pass
+
+        def ensure_tree_exited(self, process, *, grace_seconds):
+            pass
+
+    client = adapter(tmp_path)
+    process = DeadProcess()
+    updates: list[dict] = []
+    turn = _Turn("thread", "turn", None, None, updates.append, process=process)  # type: ignore[arg-type]
+    client._process = process  # type: ignore[assignment]
+    client._containment = ApparentlyEmptyContainment()  # type: ignore[assignment]
+    client._turns[(turn.thread_id, turn.turn_id)] = turn
+
+    with pytest.raises(CodexProtocolError, match="detached descendants"):
+        client._kill_transport(
+            CodexProtocolError("parent exited"),
+            expected_process=process,  # type: ignore[arg-type]
+        )
+
+    assert updates[-1]["cleanup"]["status"] == "incomplete"
+    assert "after the app-server exited" in updates[-1]["cleanup"]["error"]
+
+
+def test_shared_transport_failure_preserves_authoritative_completed_turn(
+    tmp_path: Path,
+) -> None:
+    from botpipe.codex_appserver import CodexProtocolError, _Turn
+
+    client = adapter(tmp_path)
+    completed = _Turn("thread-complete", "turn-complete", None, None)
+    active = _Turn("thread-active", "turn-active", None, None)
+    completed.completed = True
+    client._turns[(completed.thread_id, completed.turn_id)] = completed
+    client._turns[(active.thread_id, active.turn_id)] = active
+
+    failure = CodexProtocolError("shared transport stopped")
+    client._fail_transport(failure)
+
+    assert completed.error is None
+    assert active.error is failure
 
 
 @pytest.mark.asyncio

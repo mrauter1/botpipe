@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import threading
 import time
+import weakref
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import ExitStack
 from dataclasses import dataclass, field
@@ -151,6 +152,7 @@ class _Turn:
     tools_observed: bool = False
     completed: bool = False
     error: BaseException | None = None
+    process: subprocess.Popen[bytes] | None = None
 
 
 def _plain(value: Any, *, label: str) -> Any:
@@ -336,7 +338,10 @@ class CodexAppServerAdapter:
         self._stderr_reader: threading.Thread | None = None
         self._stderr: list[bytes] = []
         self._lock = threading.RLock()
-        self._startup_lock = threading.Lock()
+        # Process installation and teardown share one reentrant lifecycle lock.
+        # Reentrancy lets initialization failure clean up the process installed
+        # by the same _start call without exposing a replacement in between.
+        self._transport_cleanup_lock = threading.RLock()
         self._write_lock = threading.Lock()
         self._next_id = 0
         self._pending: dict[int, queue.Queue[Any]] = {}
@@ -347,6 +352,13 @@ class CodexAppServerAdapter:
         self._thread_locks: dict[str, Any] = {}
         self._thread_profiles: dict[str, str] = {}
         self._mcp_servers: frozenset[str] = frozenset()
+        self._tearing_down_process: subprocess.Popen[bytes] | None = None
+        self._transport_cleanup_results: weakref.WeakKeyDictionary[
+            subprocess.Popen[bytes], BaseException | None
+        ] = weakref.WeakKeyDictionary()
+        self._pre_exit_captured: weakref.WeakSet[subprocess.Popen[bytes]] = (
+            weakref.WeakSet()
+        )
         self._closed = False
 
     def probe(self, *, deadline: float | None = None) -> CodexCapabilities:
@@ -390,7 +402,7 @@ class CodexAppServerAdapter:
 
     def _start(self, *, deadline: float | None = None) -> None:
         lock_timeout = -1 if deadline is None else max(0.0, deadline - time.monotonic())
-        if not self._startup_lock.acquire(timeout=lock_timeout):
+        if not self._transport_cleanup_lock.acquire(timeout=lock_timeout):
             raise TimeoutError("Codex initialization timed out")
         try:
             with self._lock:
@@ -398,12 +410,31 @@ class CodexAppServerAdapter:
                     raise RuntimeError("Codex adapter is closed")
                 if self._process is not None and self._process.poll() is None:
                     return
+                if self._process is not None:
+                    previous_process = self._process
+                    try:
+                        self._kill_transport(
+                            CodexProtocolError("previous app-server process exited"),
+                            expected_process=previous_process,
+                        )
+                    except BaseException as exc:
+                        # The old callers and receipts already retain this
+                        # conservative cleanup failure. It must not permanently
+                        # prevent unrelated work from installing a replacement.
+                        recorded = self._transport_cleanup_results.get(previous_process)
+                        if recorded is not exc:
+                            raise
                 capabilities = self.probe(deadline=deadline)
                 if self._containment is not None:
                     self._containment.close()
                     self._containment = None
+                self._tearing_down_process = None
                 self._orphan_events.clear()
                 self._thread_profiles.clear()
+                # Old waiters retain their _Turn objects and cleanup audit,
+                # but events from the replacement transport must not bind
+                # to those stale registrations.
+                self._turns.clear()
                 containment = ProcessContainment.create()
                 try:
                     process = subprocess.Popen(
@@ -442,7 +473,10 @@ class CodexAppServerAdapter:
                     deadline=deadline,
                 )
                 self._send({"method": "initialized"})
-                if os.name == "nt" and "windowsSandbox/readiness" in capabilities.methods:
+                if (
+                    os.name == "nt"
+                    and "windowsSandbox/readiness" in capabilities.methods
+                ):
                     readiness = self._rpc(
                         "windowsSandbox/readiness", None, 10, deadline=deadline
                     )
@@ -467,10 +501,12 @@ class CodexAppServerAdapter:
                         and isinstance(item.get("name"), str)
                     )
             except BaseException:
-                self._kill_transport(CodexProtocolError("Codex initialization failed"))
+                self._kill_transport(
+                    CodexProtocolError("Codex initialization failed")
+                )
                 raise
         finally:
-            self._startup_lock.release()
+            self._transport_cleanup_lock.release()
 
     def _read_stderr(self, process: subprocess.Popen[bytes]) -> None:
         if process.stderr is None:
@@ -497,7 +533,7 @@ class CodexAppServerAdapter:
                     raise CodexProtocolError(
                         "app-server JSONL messages must be objects"
                     )
-                self._receive(dict(message))
+                self._receive(dict(message), process=process)
         except BaseException as exc:  # noqa: BLE001 - reader must wake waiters on every exit
             failure = exc
         if failure is None:
@@ -505,25 +541,21 @@ class CodexAppServerAdapter:
             failure = CodexProtocolError(
                 "app-server closed" + (f": {detail[-2000:]}" if detail else "")
             )
-        with self._lock:
-            current = self._process is process
-            containment = self._containment if current else None
-        if current:
-            if containment is not None:
-                try:
-                    containment.ensure_tree_exited(process, grace_seconds=0.1)
-                except Exception as cleanup_error:  # noqa: BLE001 - cleanup failure replaces transport failure
-                    failure = CodexProtocolError(
-                        f"app-server process-tree cleanup failed: {cleanup_error}"
-                    )
-                    with self._lock:
-                        affected = [
-                            turn for turn in self._turns.values() if not turn.completed
-                        ]
-                    self._checkpoint_cleanup_failure(affected, failure)
-            self._fail_transport(failure, process=process)
+        try:
+            self._kill_transport(failure, expected_process=process)
+        except BaseException as cleanup_error:  # reader must always wake old waiters
+            self._fail_transport(cleanup_error, process=process)
 
-    def _receive(self, message: dict[str, Any]) -> None:
+    def _receive(
+        self,
+        message: dict[str, Any],
+        *,
+        process: subprocess.Popen[bytes] | None = None,
+    ) -> None:
+        if process is not None:
+            with self._lock:
+                if self._process is not process:
+                    return
         request_id = message.get("id")
         if request_id is not None and "method" not in message:
             with self._lock:
@@ -709,10 +741,18 @@ class CodexAppServerAdapter:
                 candidates.add(f"mcp:{server}/{tool}")
         return any(name in candidates for name in allowed)
 
-    def _send(self, message: Mapping[str, Any]) -> None:
+    def _send(
+        self,
+        message: Mapping[str, Any],
+        *,
+        process: subprocess.Popen[bytes] | None = None,
+    ) -> None:
         payload = (json.dumps(message, separators=(",", ":")) + "\n").encode()
         with self._write_lock:
-            process = self._process
+            current = self._process
+            if process is not None and current is not process:
+                raise CodexProtocolError("app-server transport was replaced")
+            process = current
             if process is None or process.poll() is not None or process.stdin is None:
                 raise CodexProtocolError("app-server is not running")
             try:
@@ -729,6 +769,7 @@ class CodexAppServerAdapter:
         cancel_event: Any | None = None,
         *,
         deadline: float | None = None,
+        process: subprocess.Popen[bytes] | None = None,
     ) -> dict[str, Any]:
         response_queue: queue.Queue[Any] = queue.Queue(maxsize=1)
         with self._lock:
@@ -738,7 +779,10 @@ class CodexAppServerAdapter:
         try:
             if deadline is not None and time.monotonic() >= deadline:
                 raise TimeoutError(f"Codex RPC {method} timed out before dispatch")
-            self._send({"id": request_id, "method": method, "params": params})
+            self._send(
+                {"id": request_id, "method": method, "params": params},
+                process=process,
+            )
             rpc_deadline = time.monotonic() + timeout
             if deadline is not None:
                 rpc_deadline = min(rpc_deadline, deadline)
@@ -976,7 +1020,11 @@ class CodexAppServerAdapter:
                 orphan_baseline = {
                     key for key in self._orphan_events if key[0] == thread_id
                 }
+                dispatch_process = self._process
+                dispatch_reader = self._reader
             acknowledged_turn_id: str | None = None
+            turn: _Turn | None = None
+            turn_registered = False
             try:
                 if request.on_checkpoint is not None:
                     request.on_checkpoint(
@@ -994,6 +1042,7 @@ class CodexAppServerAdapter:
                     remaining(10),
                     request.cancel_event,
                     deadline=deadline,
+                    process=dispatch_process,
                 )
                 turn_value = started.get("turn")
                 turn_id = (
@@ -1002,6 +1051,34 @@ class CodexAppServerAdapter:
                 if not isinstance(turn_id, str) or not turn_id:
                     raise CodexProtocolError("turn/start returned no turn id")
                 acknowledged_turn_id = turn_id
+                turn = _Turn(
+                    thread_id,
+                    turn_id,
+                    request.tools,
+                    on_event or request.on_event,
+                    request.on_checkpoint,
+                    process=dispatch_process,
+                )
+                # Bind the ACK and turn registration to the exact transport
+                # that accepted turn/start. Teardown marks that process while
+                # holding _lock, and takes its affected-turn snapshot under the
+                # same lock, so registration either precedes the snapshot or
+                # is rejected after cleanup began.
+                with self._lock:
+                    if (
+                        dispatch_process is None
+                        or self._process is not dispatch_process
+                        or self._tearing_down_process is dispatch_process
+                        or dispatch_process.poll() is not None
+                    ):
+                        raise CodexProtocolError(
+                            "turn/start acknowledgement belonged to a stopped transport"
+                        )
+                    self._turns[(thread_id, turn_id)] = turn
+                    turn_registered = True
+                    early = self._orphan_events.pop((thread_id, turn_id), ())
+                for method, event_params in early:
+                    self._record_event(turn, method, event_params)
                 if request.on_checkpoint is not None:
                     request.on_checkpoint(
                         {
@@ -1018,6 +1095,7 @@ class CodexAppServerAdapter:
                     self._kill_transport(
                         CodexTurnError("turn/start acknowledgement was not durable"),
                         grace_seconds=0.1,
+                        expected_process=dispatch_process,
                     )
                 except BaseException as cleanup_exc:
                     if request.on_checkpoint is not None:
@@ -1030,7 +1108,7 @@ class CodexAppServerAdapter:
                             }
                         )
                     raise
-                reader = self._reader
+                reader = dispatch_reader
                 if reader is not None and reader is not threading.current_thread():
                     reader.join(timeout=min(1.0, self.interrupt_grace_seconds))
                     if reader.is_alive():
@@ -1050,25 +1128,35 @@ class CodexAppServerAdapter:
                 # A verified transport-tree teardown makes the unknown
                 # pre-acknowledgement dispatch durably stopped.  Audit any
                 # events that arrived before the RPC response was lost.
-                pre_ack = _Turn(thread_id, "pre-ack", request.tools, None)
-                with self._lock:
-                    orphaned = [
-                        (key, list(events))
-                        for key, events in self._orphan_events.items()
-                        if key[0] == thread_id
-                        and key not in orphan_baseline
-                        and (
-                            acknowledged_turn_id is None
-                            or key[1] == acknowledged_turn_id
-                        )
-                    ]
-                    for key, _events in orphaned:
-                        self._orphan_events.pop(key, None)
-                if len(orphaned) == 1:
-                    pre_ack.turn_id = orphaned[0][0][1]
-                for (_event_thread, _event_turn), events in orphaned:
-                    for method, event_params in events:
-                        self._record_event(pre_ack, method, event_params)
+                if turn_registered:
+                    assert turn is not None
+                    with self._lock:
+                        key = (thread_id, turn.turn_id)
+                        if self._turns.get(key) is turn:
+                            self._turns.pop(key)
+                    pre_ack = turn
+                    recovered_single_turn = True
+                else:
+                    pre_ack = _Turn(thread_id, "pre-ack", request.tools, None)
+                    with self._lock:
+                        orphaned = [
+                            (key, list(events))
+                            for key, events in self._orphan_events.items()
+                            if key[0] == thread_id
+                            and key not in orphan_baseline
+                            and (
+                                acknowledged_turn_id is None
+                                or key[1] == acknowledged_turn_id
+                            )
+                        ]
+                        for key, _events in orphaned:
+                            self._orphan_events.pop(key, None)
+                    recovered_single_turn = len(orphaned) == 1
+                    if recovered_single_turn:
+                        pre_ack.turn_id = orphaned[0][0][1]
+                    for (_event_thread, _event_turn), events in orphaned:
+                        for method, event_params in events:
+                            self._record_event(pre_ack, method, event_params)
                 enforcement["audit"] = (
                     "tool-policy-violation"
                     if isinstance(pre_ack.error, CapabilityError)
@@ -1086,7 +1174,7 @@ class CodexAppServerAdapter:
                 if isinstance(pre_ack.error, CapabilityError):
                     stopped_checkpoint["policy_error"] = True
                 if (
-                    len(orphaned) == 1
+                    recovered_single_turn
                     and pre_ack.completed
                     and pre_ack.error is None
                     and pre_ack.messages
@@ -1136,18 +1224,7 @@ class CodexAppServerAdapter:
                         f"Codex turn start timed out (dispatch budget: {request.timeout:g} seconds)"
                     ) from exc
                 raise
-            turn = _Turn(
-                thread_id,
-                turn_id,
-                request.tools,
-                on_event or request.on_event,
-                request.on_checkpoint,
-            )
-            with self._lock:
-                self._turns[(thread_id, turn_id)] = turn
-                early = self._orphan_events.pop((thread_id, turn_id), ())
-            for method, event_params in early:
-                self._record_event(turn, method, event_params)
+            assert turn is not None and turn_registered
             try:
                 with turn.condition:
                     while not turn.completed and turn.error is None:
@@ -1216,7 +1293,9 @@ class CodexAppServerAdapter:
                         )
                 finally:
                     with self._lock:
-                        self._turns.pop((thread_id, turn_id), None)
+                        key = (thread_id, turn_id)
+                        if self._turns.get(key) is turn:
+                            self._turns.pop(key)
 
     def recover_turn(
         self, request: Any, *, thread_id: str, turn_id: str
@@ -1475,19 +1554,33 @@ class CodexAppServerAdapter:
             },
         )
 
-    def interrupt(self, thread_id: str, turn_id: str) -> None:
+    def interrupt(
+        self,
+        thread_id: str,
+        turn_id: str,
+        *,
+        process: subprocess.Popen[bytes] | None = None,
+    ) -> None:
         self._rpc(
             "turn/interrupt",
             {"threadId": thread_id, "turnId": turn_id},
             min(5.0, self.interrupt_grace_seconds),
+            process=process,
         )
 
     def _stop_turn(self, turn: _Turn, reason: str) -> None:
-        if self._process is not None and self._containment is not None:
-            self._containment.capture_descendant_groups(self._process)
+        with self._lock:
+            process = turn.process
+            containment = (
+                self._containment if self._process is process else None
+            )
+        if process is not None and containment is not None:
+            containment.capture_descendant_groups(process)
+            if process.poll() is None:
+                self._pre_exit_captured.add(process)
         cleanup_deadline = time.monotonic() + self.interrupt_grace_seconds
         try:
-            self.interrupt(turn.thread_id, turn.turn_id)
+            self.interrupt(turn.thread_id, turn.turn_id, process=process)
         except Exception:  # noqa: BLE001,S110 - escalation below is authoritative
             pass
         # Codex deliberately keeps background terminals alive after interruption.
@@ -1496,6 +1589,7 @@ class CodexAppServerAdapter:
             CodexTurnError(reason),
             grace_seconds=0.1,
             cleanup_seconds=max(0.0, cleanup_deadline - time.monotonic()),
+            expected_process=process,
         )
 
     def _fail_transport(
@@ -1512,7 +1606,10 @@ class CodexAppServerAdapter:
                 pass
         for turn in turns:
             with turn.condition:
-                if turn.error is None:
+                # A terminal notification is authoritative even when another
+                # concurrent turn tears down the shared transport immediately
+                # afterward.
+                if not turn.completed and turn.error is None:
                     turn.error = error
                 turn.condition.notify_all()
 
@@ -1543,71 +1640,162 @@ class CodexAppServerAdapter:
         *,
         grace_seconds: float = 0.1,
         cleanup_seconds: float = 0.1,
+        expected_process: subprocess.Popen[bytes] | None = None,
     ) -> None:
-        process, containment = self._process, self._containment
-        with self._lock:
-            affected_turns = [turn for turn in self._turns.values() if not turn.completed]
-        if process is not None and containment is not None:
-            containment.capture_descendant_groups(process)
-        if process is not None and process.poll() is None:
-            deadline = time.monotonic() + cleanup_seconds
-            if (
-                self._capabilities is not None
-                and "thread/backgroundTerminals/clean" in self._capabilities.methods
-            ):
-                with self._lock:
-                    threads = set(self._thread_profiles) | {
-                        thread_id for thread_id, _ in self._turns
-                    }
-                    requests = [
-                        ("turn/interrupt", {"threadId": tid, "turnId": turn_id})
-                        for (tid, turn_id), turn in self._turns.items()
-                        if not turn.completed
-                    ]
-                requests.extend(
-                    ("thread/backgroundTerminals/clean", {"threadId": thread_id})
-                    for thread_id in sorted(threads)
+        # Stopping any turn stops the shared app-server because Codex can keep
+        # background terminals alive after turn interruption.  Serialize that
+        # containment boundary so every affected caller returns only after the
+        # same process tree has been verified quiescent.
+        with self._transport_cleanup_lock:
+            process, containment = self._process, self._containment
+            if process is not None:
+                current_cleanup = self._transport_cleanup_results.get(
+                    process, _CLOSED
                 )
-                for method, params in requests:
-                    remaining = deadline - time.monotonic()
-                    if remaining <= 0:
-                        break
-                    try:
-                        self._rpc(method, params, remaining)
-                    except Exception:  # noqa: BLE001,S110 - containment still closes below
-                        pass
-            # The cleanup RPC acknowledges acceptance before native jobs exit.
-            while process.poll() is None and time.monotonic() < deadline:
-                time.sleep(max(0.0, min(0.02, deadline - time.monotonic())))
-            if containment is not None:
-                containment.capture_descendant_groups(process)
-        self._fail_transport(error)
-        cleanup_errors: list[BaseException] = []
-        if process is not None and containment is not None:
-            if process.poll() is None:
-                try:
-                    containment.terminate(process, grace_seconds=grace_seconds)
-                except BaseException as exc:  # cleanup still continues below
-                    cleanup_errors.append(exc)
+            else:
+                current_cleanup = _CLOSED
+            if expected_process is process:
+                prior_cleanup = current_cleanup
+            elif expected_process is not None:
+                prior_cleanup = self._transport_cleanup_results.get(
+                    expected_process, _CLOSED
+                )
+            else:
+                prior_cleanup = current_cleanup
+            if expected_process is not None and process is not expected_process:
+                if prior_cleanup is _CLOSED:
+                    raise CodexProtocolError(
+                        "cleanup of the replaced app-server transport was not verified"
+                    )
+                if isinstance(prior_cleanup, BaseException):
+                    raise prior_cleanup
+                return
+            if prior_cleanup is not _CLOSED:
+                if isinstance(prior_cleanup, BaseException):
+                    raise prior_cleanup
+                return
+            with self._lock:
+                self._tearing_down_process = process
             try:
-                containment.ensure_tree_exited(process, grace_seconds=grace_seconds)
-            except BaseException as exc:
-                cleanup_errors.append(exc)
-        if cleanup_errors:
-            failure = CodexProtocolError(
-                "app-server process-tree cleanup was incomplete: "
-                + "; ".join(str(exc) for exc in cleanup_errors)
-            )
-            checkpoint_errors = self._checkpoint_cleanup_failure(
-                affected_turns, failure
-            )
-            if checkpoint_errors:
-                failure = CodexProtocolError(
-                    f"{failure}; cleanup checkpoint failed: "
-                    + "; ".join(str(exc) for exc in checkpoint_errors)
+                parent_alive_at_entry = (
+                    process is not None and process.poll() is None
                 )
-            self._fail_transport(failure)
-            raise failure
+                cleanup_started_after_parent_exit = (
+                    os.name == "posix"
+                    and process is not None
+                    and not parent_alive_at_entry
+                    and process not in self._pre_exit_captured
+                )
+                if process is not None and containment is not None:
+                    containment.capture_descendant_groups(process)
+                    if parent_alive_at_entry:
+                        self._pre_exit_captured.add(process)
+                if process is not None and process.poll() is None:
+                    deadline = time.monotonic() + cleanup_seconds
+                    if (
+                        self._capabilities is not None
+                        and "thread/backgroundTerminals/clean"
+                        in self._capabilities.methods
+                    ):
+                        with self._lock:
+                            threads = set(self._thread_profiles) | {
+                                thread_id for thread_id, _ in self._turns
+                            }
+                            requests = [
+                                (
+                                    "turn/interrupt",
+                                    {"threadId": tid, "turnId": turn_id},
+                                )
+                                for (tid, turn_id), turn in self._turns.items()
+                                if not turn.completed
+                            ]
+                        requests.extend(
+                            (
+                                "thread/backgroundTerminals/clean",
+                                {"threadId": thread_id},
+                            )
+                            for thread_id in sorted(threads)
+                        )
+                        for method, params in requests:
+                            remaining = deadline - time.monotonic()
+                            if remaining <= 0:
+                                break
+                            try:
+                                self._rpc(method, params, remaining)
+                            except Exception:  # noqa: BLE001,S110 - containment still closes below
+                                pass
+                    # The cleanup RPC acknowledges acceptance before native jobs exit.
+                    while process.poll() is None and time.monotonic() < deadline:
+                        time.sleep(max(0.0, min(0.02, deadline - time.monotonic())))
+                    if containment is not None:
+                        containment.capture_descendant_groups(process)
+                cleanup_errors: list[BaseException] = []
+                if cleanup_started_after_parent_exit:
+                    cleanup_errors.append(
+                        CodexProtocolError(
+                            "process-tree cleanup began after the app-server exited; "
+                            "detached descendants cannot be verified"
+                        )
+                    )
+                if process is not None and containment is not None:
+                    if process.poll() is None:
+                        try:
+                            containment.terminate(process, grace_seconds=grace_seconds)
+                        except BaseException as exc:  # cleanup still continues below
+                            cleanup_errors.append(exc)
+                    try:
+                        containment.ensure_tree_exited(
+                            process, grace_seconds=grace_seconds
+                        )
+                    except BaseException as exc:
+                        cleanup_errors.append(exc)
+                with self._lock:
+                    affected_turns = [
+                        turn for turn in self._turns.values() if not turn.completed
+                    ]
+                if cleanup_errors:
+                    failure = CodexProtocolError(
+                        "app-server process-tree cleanup was incomplete: "
+                        + "; ".join(str(exc) for exc in cleanup_errors)
+                    )
+                    checkpoint_errors = self._checkpoint_cleanup_failure(
+                        affected_turns, failure
+                    )
+                    if checkpoint_errors:
+                        failure = CodexProtocolError(
+                            f"{failure}; cleanup checkpoint failed: "
+                            + "; ".join(str(exc) for exc in checkpoint_errors)
+                        )
+                    if process is not None:
+                        self._transport_cleanup_results[process] = failure
+                    self._fail_transport(failure, process=process)
+                    raise failure
+                if process is not None:
+                    self._transport_cleanup_results[process] = None
+                checkpoint_errors = []
+                for turn in affected_turns:
+                    if turn.on_checkpoint is None:
+                        continue
+                    try:
+                        turn.on_checkpoint({"cleanup": {"status": "completed"}})
+                    except BaseException as exc:
+                        checkpoint_errors.append(exc)
+                if checkpoint_errors:
+                    failure = CodexProtocolError(
+                        "app-server process-tree cleanup completed but its checkpoint failed: "
+                        + "; ".join(str(exc) for exc in checkpoint_errors)
+                    )
+                    self._fail_transport(failure, process=process)
+                    raise failure
+                # Wake RPC and turn waiters only after containment and its
+                # receipts are durable; returning is the quiescence boundary.
+                self._fail_transport(error, process=process)
+            finally:
+                # Keep the old process marked until _start installs a new one;
+                # its reader may observe EOF after containment has completed.
+                with self._lock:
+                    if self._process is process:
+                        self._tearing_down_process = process
 
     def close(self) -> None:
         with self._lock:
