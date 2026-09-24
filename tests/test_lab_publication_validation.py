@@ -30,8 +30,18 @@ def investigation_summary(*, ready: bool = True) -> dict[str, object]:
 
 def test_release_and_incident_publication_reject_missing_domain_facts() -> None:
     assert validate_release_publication(
-        {"recommended_decision": "conditional_go", "blocking_issue_count": 1}
-    ) == {"recommended_decision": "conditional_go", "blocking_issue_count": 1}
+        {
+            "recommended_decision": "conditional_go",
+            "blocking_issue_count": 1,
+            "executed_checks": ["unit tests"],
+            "unexecuted_checks": ["production smoke"],
+        }
+    ) == {
+        "recommended_decision": "conditional_go",
+        "blocking_issue_count": 1,
+        "executed_checks": ["unit tests"],
+        "unexecuted_checks": ["production smoke"],
+    }
     with pytest.raises(ValueError, match="recommended_decision"):
         validate_release_publication({"blocking_issue_count": 0})
 
@@ -196,6 +206,19 @@ def test_portfolio_publication_rejects_unknown_priority_and_candidate_drift() ->
         change_candidates=candidates,
         allowed_workflows=["alpha"],
         expected_focus_workflows=["alpha"],
+    )["change_candidate_ids"] == ["keep-alpha"]
+
+    # Prose is a recommendation, not evidence that another operation executed.
+    # The structured publication boundary and recorded runtime operations carry
+    # that fact, so a wording pattern must not reject an otherwise valid package.
+    summary["next_action"] = "The runtime will automatically launch a review."
+    package["next_action"] = summary["next_action"]
+    assert validate_portfolio_publication(
+        summary,
+        analysis=analysis,
+        package=package,
+        change_candidates=candidates,
+        allowed_workflows=["alpha"],
     )["change_candidate_ids"] == ["keep-alpha"]
 
     summary["priority_workflows"] = ["unknown"]

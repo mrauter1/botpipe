@@ -198,7 +198,7 @@ def _location_parser() -> argparse.ArgumentParser:
 def _client_parser() -> argparse.ArgumentParser:
     parser = _location_parser()
     parser.add_argument(
-        "--config", type=Path, help="TOML, JSON, or pyproject configuration."
+        "--config", type=Path, help="Botpipe TOML configuration file."
     )
     parser.add_argument("--state-dir", type=Path)
     parser.add_argument("--provider")

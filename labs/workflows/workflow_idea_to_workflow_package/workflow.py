@@ -33,7 +33,7 @@ def WorkflowIdeaToWorkflowPackage(
 ) -> LabWorkflowResult:
     """Execute the workflow idea to workflow package evidence workflow."""
     _producer = Provider()
-    _verifier = _producer.with_config(session=None)
+    _reviewer = _producer.with_config(session=None)
     context = {"request": request, "parameters": params.model_dump(mode="json")}
     context["workflow_catalog"] = observe_catalog()
     run = current_run()
@@ -50,15 +50,8 @@ def WorkflowIdeaToWorkflowPackage(
                 returns=CandidateSelectionPayload,
                 replan_target="frame_candidate",
                 producer=_producer,
-                verifier=_verifier,
                 producer_prompt="prompts/frame_producer.md",
-                verifier_prompt="prompts/frame_verifier.md",
-                input={
-                    **context,
-                    "prior_phases": [
-                        item.evidence.model_dump(mode="json") for item in completed
-                    ],
-                },
+                input=context,
                 reads=prior_handles,
                 writes=(
                     artifact("workflow_idea_brief.md"),
@@ -77,16 +70,8 @@ def WorkflowIdeaToWorkflowPackage(
                         returns=WorkflowDesignPayload,
                         replan_target="frame_candidate",
                         producer=_producer,
-                        verifier=_verifier,
                         producer_prompt="prompts/design_producer.md",
-                        verifier_prompt="prompts/design_verifier.md",
-                        input={
-                            **context,
-                            "prior_phases": [
-                                item.evidence.model_dump(mode="json")
-                                for item in completed
-                            ],
-                        },
+                        input=context,
                         reads=prior_handles,
                         writes=(
                             artifact("workflow_design.md"),
@@ -119,12 +104,7 @@ def WorkflowIdeaToWorkflowPackage(
                             ),
                         )
                         build_input = {
-                            **context,
-                            "prior_phases": [
-                                item.evidence.model_dump(mode="json")
-                                for item in completed
-                            ],
-                            "build_attempt": build_attempt,
+                            **context,                            "build_attempt": build_attempt,
                             "max_build_attempts": 3,
                         }
                         if build_validation_feedback is not None:
@@ -136,9 +116,7 @@ def WorkflowIdeaToWorkflowPackage(
                             returns=WorkflowBuildPayload,
                             replan_target="design_package",
                             producer=_producer,
-                            verifier=_verifier,
                             producer_prompt="prompts/build_producer.md",
-                            verifier_prompt="prompts/build_verifier.md",
                             input=build_input,
                             reads=build_reads,
                             writes=(
@@ -205,16 +183,10 @@ def WorkflowIdeaToWorkflowPackage(
                         returns=WorkflowEvaluationPayload,
                         replan_target="design_package",
                         producer=_producer,
-                        verifier=_verifier,
+                        reviewer=_reviewer,
                         producer_prompt="prompts/evaluate_producer.md",
-                        verifier_prompt="prompts/evaluate_verifier.md",
-                        input={
-                            **context,
-                            "prior_phases": [
-                                item.evidence.model_dump(mode="json")
-                                for item in completed
-                            ],
-                        },
+                        reviewer_prompt="prompts/evaluate_reviewer.md",
+                        input=context,
                         reads=prior_handles,
                         writes=(
                             artifact("workflow_evaluation.md"),

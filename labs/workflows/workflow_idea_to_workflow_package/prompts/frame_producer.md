@@ -1,6 +1,6 @@
-## Durable producer result
+## Durable typed phase result
 
-After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+After writing every declared artifact, return one JSON result matching the injected phase-specific schema. Return `accepted` only when the artifacts meet this phase's positive condition and populate the domain fields in the schema. Return `needs_rework` for a local repair, `needs_replan` for a material upstream change, `question` or `blocked` for a missing prerequisite, and `failed` for a terminal domain failure. Report only captured artifact names and stable identifiers present in the artifacts.
 
 # Frame Candidate Producer
 
@@ -31,7 +31,7 @@ After writing every declared artifact, return a JSON result matching the injecte
 
 ### Expected outcome
 - Leave the repository with a clear, evidence-backed selection package that downstream design can treat as authoritative.
-- The verifier will decide the route. Your job is to make the artifacts decisive enough that `candidate_selected` is possible if the work is strong.
+- Return `accepted` when the artifacts make the candidate selection explicit and well supported.
 
 ## Evidence
 
@@ -44,8 +44,8 @@ After writing every declared artifact, return a JSON result matching the injecte
 - Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
 - Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Outcome guidance for the verifier
-- `candidate_selected`: the comparison is complete, explicit, and supports one choice.
+### Outcome selection
+- `accepted`: the comparison is complete, explicit, and supports one choice.
 - `needs_rework`: the same framing boundary still holds, but the comparison or brief is incomplete or weak.
 - `needs_replan`: the candidate set or selection framing is materially wrong.
 - Use `blocked` only when a missing prerequisite or irreconcilable contradiction prevents safe progress.

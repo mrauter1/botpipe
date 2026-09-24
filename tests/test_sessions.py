@@ -60,7 +60,7 @@ def test_distinct_handles_for_same_task_session_serialize_turns(tmp_path):
 
 def test_session_lock_serializes_across_processes(monkeypatch, tmp_path):
     monkeypatch.setenv("BOTPIPE_COORDINATION_DIR", str(tmp_path / "coordination"))
-    journal, ready = tmp_path / "journal.sqlite3", tmp_path / "ready"
+    journal, ready = tmp_path / "state", tmp_path / "ready"
     script = (
         "import sys\n"
         "from pathlib import Path\n"
@@ -192,10 +192,12 @@ def test_constructor_sessions_are_independent_and_task_sessions_persist(tmp_path
     assert provider.calls[-1].session_id == "task"
 
 
-def test_explicit_retry_recovers_completed_receipt_before_preparing_new_artifacts(
+def test_explicit_retry_adopts_completed_response_without_repeating_effects(
     tmp_path,
 ):
-    class ReceiptedProvider(FakeProvider):
+    from botpipe.recovery import Completed
+
+    class RecoveringProvider(FakeProvider):
         def run(self, request):
             self.calls.append(request)
             request.artifacts["report"].write_text("completed before process loss")
@@ -203,7 +205,7 @@ def test_explicit_retry_recovers_completed_receipt_before_preparing_new_artifact
             raise KeyboardInterrupt()
 
         def recover(self, request):
-            return self.receipt
+            return Completed(self.receipt)
 
     @workflow
     def report():
@@ -211,7 +213,7 @@ def test_explicit_retry_recovers_completed_receipt_before_preparing_new_artifact
             "report", writes=Artifact.text("report.txt", required=True)
         )
 
-    provider = ReceiptedProvider([])
+    provider = RecoveringProvider([])
     with Botpipe(tmp_path, provider=provider) as client:
         interrupted = client.run(report)
         op = next(

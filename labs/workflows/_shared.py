@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from botpipe import (
     Artifact,
@@ -19,22 +19,6 @@ from botpipe import (
     ask_human,
     current_run,
 )
-
-
-class LabPhaseDraft(BaseModel):
-    """Structured producer result retained in the operation journal."""
-
-    summary: str = Field(min_length=1)
-    evidence_notes: list[str] = Field(default_factory=list)
-    candidate_ids: list[str] = Field(default_factory=list)
-
-    @field_validator("candidate_ids")
-    @classmethod
-    def unique_candidates(cls, value: list[str]) -> list[str]:
-        normalized = [item.strip() for item in value if item.strip()]
-        if len(normalized) != len(set(normalized)):
-            raise ValueError("candidate_ids must be unique")
-        return normalized
 
 
 class _LabPhaseResult(BaseModel):
@@ -53,7 +37,7 @@ class _LabPhaseResult(BaseModel):
 
 
 class LabPhaseOutcome(_LabPhaseResult):
-    """Typed verifier decision used as the durable control-flow outcome."""
+    """Base for a phase-specific producer result accepted by the workflow."""
 
     outcome: Literal["accepted"]
 
@@ -61,10 +45,15 @@ class LabPhaseOutcome(_LabPhaseResult):
 class LabPhaseControl(_LabPhaseResult):
     """A nonacceptance decision never requires facts that are still unavailable."""
 
-    model_config = ConfigDict(extra="allow")
     outcome: Literal["needs_rework", "needs_replan", "question", "blocked", "failed"]
     question: str | None = None
     replan_reason: str | None = None
+
+
+class LabPhaseReview(_LabPhaseResult):
+    """Independent judgment without reconstructing the producer's domain facts."""
+
+    outcome: Literal["accepted"]
 
 
 class PhaseEvidence(BaseModel):
@@ -81,7 +70,7 @@ class PhaseEvidence(BaseModel):
     artifact_names: list[str]
     candidate_ids: list[str] = Field(default_factory=list)
     producer_operation_id: str
-    verifier_operation_id: str
+    review_operation_id: str | None = None
     details: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -109,7 +98,7 @@ class LabWorkflowResult(BaseModel):
 
 
 class LabPhaseRejected(RuntimeError):
-    def __init__(self, phase: str, outcome: LabPhaseOutcome):
+    def __init__(self, phase: str, outcome: LabPhaseOutcome | LabPhaseControl):
         self.phase = phase
         self.outcome = outcome
         super().__init__(
@@ -130,6 +119,7 @@ class ReplanRequired(RuntimeError):
 class PhaseRun:
     evidence: PhaseEvidence
     handles: tuple[Any, ...]
+    value: LabPhaseOutcome | LabPhaseControl
 
 
 def artifact(path: str, *, required: bool = True) -> Artifact:
@@ -289,17 +279,17 @@ def run_phase(
     *,
     phase: str,
     producer: Provider,
-    verifier: Provider,
     producer_prompt: str,
-    verifier_prompt: str,
     input: Mapping[str, Any],
     writes: Sequence[Artifact],
     reads: Sequence[Any] = (),
     provider_workspace: str | Path | None = None,
     returns: type[LabPhaseOutcome] = LabPhaseOutcome,
+    reviewer: Provider | None = None,
+    reviewer_prompt: str | None = None,
     replan_target: str | None = None,
 ) -> PhaseRun:
-    """Run a journaled producer/validator pair and accept only evidenced output."""
+    """Produce a typed phase handoff, with independent review only when useful."""
 
     response_type = returns | LabPhaseControl
     expected = [str(item.name) for item in writes]
@@ -310,8 +300,12 @@ def run_phase(
     if provider_workspace is not None:
         producer_config["workspace"] = provider_workspace
     phase_producer = producer.with_config(**producer_config)
-    phase_verifier = verifier.with_config(
-        name=f"{phase}.verify", output_retries=2
+    if (reviewer is None) != (reviewer_prompt is None):
+        raise ValueError("reviewer and reviewer_prompt must be supplied together")
+    phase_reviewer = (
+        reviewer.with_config(name=f"{phase}.review", output_retries=2)
+        if reviewer is not None
+        else None
     )
     feedback: dict[str, Any] | None = None
     previous_handles: tuple[Any, ...] = ()
@@ -324,7 +318,7 @@ def run_phase(
             input=phase_input,
             reads=tuple(reads) + previous_handles,
             writes=tuple(writes),
-            returns=LabPhaseDraft,
+            returns=response_type,
         )
         handles = tuple(producer_result.artifacts.values())
         captured = sorted(producer_result.artifacts.keys())
@@ -333,35 +327,47 @@ def run_phase(
             raise ValueError(
                 f"{phase} did not capture required artifacts: {', '.join(missing)}"
             )
-        verification = phase_verifier.query(
-            Prompt.file(verifier_prompt),
-            input={
-                **dict(input),
-                "phase": phase,
-                "producer_result": producer_result.value.model_dump(mode="json"),
-                "required_artifacts": expected,
-                "rework_feedback": feedback,
-            },
-            reads=handles,
-            returns=response_type,
-        )
-        outcome = verification.value
+        outcome = producer_result.value
+        review_operation_id: str | None = None
+        review_details: dict[str, Any] | None = None
+        if outcome.outcome == "accepted" and phase_reviewer is not None:
+            review = phase_reviewer.query(
+                Prompt.file(str(reviewer_prompt)),
+                input={
+                    **dict(input),
+                    "phase": phase,
+                    "producer_result": outcome.model_dump(mode="json"),
+                    "required_artifacts": expected,
+                },
+                reads=handles,
+                returns=LabPhaseReview | LabPhaseControl,
+            )
+            outcome = review.value
+            review_operation_id = review.operation_id
+            review_details = outcome.model_dump(mode="json")
         unknown = sorted(set(outcome.authoritative_artifacts) - set(captured))
         if unknown:
             raise ValueError(
-                f"{phase} verifier cited uncaptured artifacts: {', '.join(unknown)}"
+                f"{phase} review cited uncaptured artifacts: {', '.join(unknown)}"
             )
         evidence = PhaseEvidence(
             name=phase,
             outcome=outcome.outcome,
             summary=outcome.summary,
             artifact_names=outcome.authoritative_artifacts or captured,
-            candidate_ids=outcome.candidate_ids or producer_result.value.candidate_ids,
+            candidate_ids=producer_result.value.candidate_ids,
             producer_operation_id=producer_result.operation_id,
-            verifier_operation_id=verification.operation_id,
-            details=outcome.model_dump(mode="json"),
+            review_operation_id=review_operation_id,
+            details={
+                **producer_result.value.model_dump(mode="json"),
+                **(review_details or {}),
+            },
         )
-        phase_run = PhaseRun(evidence=evidence, handles=handles)
+        phase_run = PhaseRun(
+            evidence=evidence,
+            handles=handles,
+            value=producer_result.value,
+        )
         if outcome.outcome == "accepted":
             return phase_run
         if outcome.outcome == "needs_rework":
@@ -429,8 +435,8 @@ def finish(
 
 __all__ = [
     "LabPhaseControl",
-    "LabPhaseDraft",
     "LabPhaseOutcome",
+    "LabPhaseReview",
     "LabPhaseRejected",
     "LabWorkflowResult",
     "PhaseEvidence",

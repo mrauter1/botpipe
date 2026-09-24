@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-
 import pytest
 
 from botpipe import Botpipe
@@ -13,6 +11,9 @@ from botpipe.read_projection import _inspection_value, project_run
 def _run_record(run_id="run", **updates):
     return {
         "run_id": run_id,
+        "task_id": "task",
+        "args": {"$botpipe": "tuple", "value": []},
+        "kwargs": {"$botpipe": "dict", "value": {}},
         "status": "running",
         "error": None,
         **updates,
@@ -34,7 +35,7 @@ def _begin(journal, *, run_id="run", operation_id="op", kind="activity"):
 
 
 def test_snapshot_reads_run_operations_and_events_as_one_projection(tmp_path):
-    journal = Journal(tmp_path / "state.sqlite3")
+    journal = Journal(tmp_path)
     try:
         journal.create_run(_run_record(error="root orchestration failed"))
         _begin(journal)
@@ -49,35 +50,35 @@ def test_snapshot_reads_run_operations_and_events_as_one_projection(tmp_path):
         journal.close()
 
 
-def test_snapshot_never_exposes_uncommitted_writer_state(tmp_path):
-    journal = Journal(tmp_path / "state.sqlite3")
+def test_snapshot_is_a_bounded_prefix_and_ignores_incomplete_tail(tmp_path):
+    journal = Journal(tmp_path)
     try:
         journal.create_run(_run_record(status="running"))
-        with journal.transaction() as db:
-            changed = _run_record(status="failed", error="not committed")
-            db.execute(
-                "UPDATE runs SET metadata=? WHERE id=?",
-                (json.dumps(changed), "run"),
-            )
-            snapshot = journal.snapshot("run")
-            assert snapshot.run["status"] == "running"
-            assert snapshot.run["error"] is None
+        ledger = tmp_path / "tasks" / "task" / "runs" / "run" / "ledger.jsonl"
+        with ledger.open("ab") as stream:
+            stream.write(b'{"seq":2,"event":"run_updated"')
+        snapshot = journal.snapshot("run")
+        assert snapshot.run["status"] == "running"
+        assert snapshot.run["error"] is None
+        assert snapshot.last_seq == 1
+        assert ledger.read_bytes().endswith(b'"run_updated"')
     finally:
         journal.close()
 
 
 def test_read_only_snapshot_does_not_create_or_mutate_foreign_journal(tmp_path):
-    path = tmp_path / "foreign.sqlite3"
+    path = tmp_path / "foreign"
     journal = Journal(path)
     journal.create_run(_run_record())
     _begin(journal)
     journal.close()
-    before = path.read_bytes()
+    ledger = path / "tasks" / "task" / "runs" / "run" / "ledger.jsonl"
+    before = ledger.read_bytes()
 
     snapshot = Journal.read_only_snapshot(path, "run")
 
     assert snapshot.run["run_id"] == "run"
-    assert path.read_bytes() == before
+    assert ledger.read_bytes() == before
 
 
 @pytest.mark.parametrize(
@@ -171,7 +172,7 @@ def test_projection_uses_physical_dispatch_events_not_response_claims():
     assert projection.usage == {"input_tokens": 3}
 
 
-def test_legacy_response_usage_is_preserved_without_dispatch_evidence():
+def test_response_claim_does_not_replace_missing_dispatch_evidence():
     operation = {
         "id": "op",
         "run_id": "run",
@@ -191,9 +192,9 @@ def test_legacy_response_usage_is_preserved_without_dispatch_evidence():
 
     projection = project_run(JournalSnapshot(_run_record(), (operation,), ()))
 
-    assert projection.operations[0]["usage"] == {"total_tokens": 999}
+    assert projection.operations[0]["usage"] == {}
     assert "dispatches" not in projection.operations[0]
-    assert projection.usage == {"total_tokens": 999}
+    assert projection.usage == {}
 
 
 def test_inspect_consumes_exactly_one_journal_snapshot(tmp_path, monkeypatch):

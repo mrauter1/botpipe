@@ -120,9 +120,10 @@ _DISABLED_ONLY_TOOL_FEATURES = frozenset(
         "workspace_dependencies",
     }
 )
-_TOOL_ENABLING_FEATURES = frozenset(
-    feature for features in _TOOL_FEATURES.values() for feature in features
-) | _DISABLED_ONLY_TOOL_FEATURES
+_TOOL_ENABLING_FEATURES = (
+    frozenset(feature for features in _TOOL_FEATURES.values() for feature in features)
+    | _DISABLED_ONLY_TOOL_FEATURES
+)
 _TOOL_EVENTS = {
     "turn/plan/updated": "update_plan",
     "item/tool/requestUserInput": "request_user_input",
@@ -152,6 +153,7 @@ class _Turn:
     tools_observed: bool = False
     completed: bool = False
     error: BaseException | None = None
+    checkpoint_error: BaseException | None = None
     process: subprocess.Popen[bytes] | None = None
 
 
@@ -262,9 +264,7 @@ def _tool_config(
     if tools is None:
         return config
     known_features = {item["name"] for item in capabilities.features}
-    feature_values = {
-        name: False for name in known_features & _TOOL_ENABLING_FEATURES
-    }
+    feature_values = {name: False for name in known_features & _TOOL_ENABLING_FEATURES}
     for tool in tools:
         family = tool.split(":", 1)[0]
         for feature in _TOOL_FEATURES.get(family, ()):
@@ -274,7 +274,9 @@ def _tool_config(
         {f"features.{name}": enabled for name, enabled in feature_values.items()}
     )
     config["web_search"] = "live" if "web_search" in tools else "disabled"
-    config["tools.experimental_request_user_input.enabled"] = "request_user_input" in tools
+    config["tools.experimental_request_user_input.enabled"] = (
+        "request_user_input" in tools
+    )
     config["tools.update_plan.enabled"] = "update_plan" in tools
     if not mcp_tools:
         config.update(
@@ -303,7 +305,7 @@ def _tool_config(
 
 
 class CodexAppServerAdapter:
-    """One multiplexed Codex app-server process owned by a runtime."""
+    """One Codex app-server process owned by a logical Botpipe session."""
 
     name = "codex"
 
@@ -315,6 +317,7 @@ class CodexAppServerAdapter:
         state_dir: Path | None = None,
         interrupt_grace_seconds: float = 10.0,
         capabilities: CodexCapabilities | None = None,
+        capability_probe_stat: tuple[str, int, int] | None = None,
     ) -> None:
         self.command: tuple[str, ...]
         if isinstance(command, (str, os.PathLike)):
@@ -330,8 +333,10 @@ class CodexAppServerAdapter:
         self.state_dir = state_dir
         self.interrupt_grace_seconds = float(interrupt_grace_seconds)
         self._capabilities = capabilities
-        self._injected_capabilities = capabilities is not None
-        self._probe_stat: tuple[str, int, int] | None = None
+        self._injected_capabilities = (
+            capabilities is not None and capability_probe_stat is None
+        )
+        self._probe_stat = capability_probe_stat
         self._process: subprocess.Popen[bytes] | None = None
         self._containment: ProcessContainment | None = None
         self._reader: threading.Thread | None = None
@@ -418,7 +423,7 @@ class CodexAppServerAdapter:
                             expected_process=previous_process,
                         )
                     except CodexProtocolError:
-                        # The old callers and receipts already retain this
+                        # The owning ledger already retains this
                         # conservative cleanup failure. It must not permanently
                         # prevent unrelated work from installing a replacement.
                         recorded = self._transport_cleanup_results.get(
@@ -503,9 +508,7 @@ class CodexAppServerAdapter:
                         and isinstance(item.get("name"), str)
                     )
             except BaseException:
-                self._kill_transport(
-                    CodexProtocolError("Codex initialization failed")
-                )
+                self._kill_transport(CodexProtocolError("Codex initialization failed"))
                 raise
         finally:
             self._transport_cleanup_lock.release()
@@ -721,9 +724,38 @@ class CodexAppServerAdapter:
                 turn.completed = True
                 if turn.on_checkpoint is not None:
                     try:
-                        turn.on_checkpoint({"status": "response_received"})
-                    except Exception:  # noqa: BLE001,S110 - best-effort observation
-                        pass
+                        update: dict[str, Any] = {
+                            "status": (
+                                "response_received"
+                                if status in (None, "completed")
+                                else "turn_terminal"
+                            ),
+                            "native_status": status,
+                            "session_id": turn.thread_id,
+                            "turn_id": turn.turn_id,
+                            "audit": list(turn.events),
+                        }
+                        if turn.messages:
+                            update["response"] = {
+                                "text": turn.messages[-1],
+                                "session_id": turn.thread_id,
+                                "usage": dict(turn.usage),
+                                "metadata": {
+                                    "provider": "codex",
+                                    "thread_id": turn.thread_id,
+                                    "turn_id": turn.turn_id,
+                                    "audit": list(turn.events),
+                                },
+                            }
+                        turn.on_checkpoint(update)
+                    except Exception as exc:
+                        # Terminal response evidence is a durability boundary.
+                        # A failed callback must wake the caller and prevent it
+                        # from treating the native completion as accepted.
+                        turn.checkpoint_error = exc
+                        turn.error = CodexProtocolError(
+                            f"terminal response checkpoint failed: {exc}"
+                        )
             turn.condition.notify_all()
         callback = turn.on_event
         if callback is not None:
@@ -875,7 +907,8 @@ class CodexAppServerAdapter:
             "sandbox": f"codex:{sandbox_name}",
             "network": (
                 "codex:on"
-                if sandbox_name == "danger-full-access" or sandbox_policy.get("networkAccess")
+                if sandbox_name == "danger-full-access"
+                or sandbox_policy.get("networkAccess")
                 else "codex:off"
             ),
             "tools": (
@@ -950,18 +983,27 @@ class CodexAppServerAdapter:
             else:
                 try:
                     previous_profile = self._thread_profiles.get(thread_id)
-                    if previous_profile is not None and previous_profile != profile_hash:
-                        if "thread/unsubscribe" not in capabilities.methods:
-                            raise CapabilityError(
-                                "thread/unsubscribe is required to change a loaded thread's configuration"
-                            )
-                        # Codex ignores resume config while a thread has subscribers.
-                        # Detach this idle session so resume reloads the same history.
+                    if (
+                        previous_profile is not None
+                        and "thread/unsubscribe" in capabilities.methods
+                    ):
+                        # A durable session can be advanced by another runtime
+                        # while this process is idle.  Refresh every subscribed
+                        # thread before resume so cached profile/subscription
+                        # state cannot hide intervening turns.
                         self._rpc(
                             "thread/unsubscribe",
                             {"threadId": thread_id},
                             remaining(10),
                             deadline=deadline,
+                        )
+                    elif (
+                        previous_profile is not None
+                        and previous_profile != profile_hash
+                        and "thread/unsubscribe" not in capabilities.methods
+                    ):
+                        raise CapabilityError(
+                            "thread/unsubscribe is required to change a loaded thread's configuration"
                         )
                     result = self._rpc(
                         "thread/resume",
@@ -1088,8 +1130,6 @@ class CodexAppServerAdapter:
                     self._turns[(thread_id, turn_id)] = turn
                     turn_registered = True
                     early = self._orphan_events.pop((thread_id, turn_id), ())
-                for method, event_params in early:
-                    self._record_event(turn, method, event_params)
                 if request.on_checkpoint is not None:
                     request.on_checkpoint(
                         {
@@ -1101,6 +1141,11 @@ class CodexAppServerAdapter:
                             "enforcement": enforcement,
                         }
                     )
+                # The native acknowledgement is the durable identity boundary.
+                # Only publish buffered notifications after it, even when Codex
+                # emitted a complete response before the turn/start RPC reply.
+                for method, event_params in early:
+                    self._record_event(turn, method, event_params)
             except BaseException as exc:
                 try:
                     self._kill_transport(
@@ -1190,19 +1235,9 @@ class CodexAppServerAdapter:
                     and pre_ack.error is None
                     and pre_ack.messages
                 ):
-                    if request.on_checkpoint is not None:
-                        request.on_checkpoint(
-                            {
-                                "status": "response_received",
-                                "session_id": thread_id,
-                                "turn_id": pre_ack.turn_id,
-                                "enforcement": enforcement,
-                                "audit": list(pre_ack.events),
-                            }
-                        )
                     from .providers import ProviderResponse
 
-                    return ProviderResponse(
+                    response = ProviderResponse(
                         pre_ack.messages[-1],
                         thread_id,
                         dict(pre_ack.usage),
@@ -1218,6 +1253,18 @@ class CodexAppServerAdapter:
                             "recovered_from_lost_ack": True,
                         },
                     )
+                    if request.on_checkpoint is not None:
+                        request.on_checkpoint(
+                            {
+                                "status": "response_received",
+                                "session_id": thread_id,
+                                "turn_id": pre_ack.turn_id,
+                                "enforcement": enforcement,
+                                "audit": list(pre_ack.events),
+                                "response": response.to_record(),
+                            }
+                        )
+                    return response
                 if request.on_checkpoint is not None:
                     request.on_checkpoint(stopped_checkpoint)
                 if pre_ack.error is not None:
@@ -1298,7 +1345,10 @@ class CodexAppServerAdapter:
                     else "no-tool-calls-observed"
                 )
                 try:
-                    if request.on_checkpoint is not None:
+                    if (
+                        request.on_checkpoint is not None
+                        and turn.checkpoint_error is None
+                    ):
                         request.on_checkpoint(
                             {"enforcement": enforcement, "audit": list(turn.events)}
                         )
@@ -1330,6 +1380,13 @@ class CodexAppServerAdapter:
         self._start(deadline=deadline)
         config = _tool_config(request, capabilities, self._mcp_servers)
         sandbox_name, _ = _sandbox(request)
+        checkpoint = request.checkpoint if isinstance(request.checkpoint, Mapping) else {}
+        recorded_profile = checkpoint.get("profile_hash")
+        profile_hash = (
+            recorded_profile
+            if isinstance(recorded_profile, str) and recorded_profile
+            else _profile_hash(request, config)
+        )
         common = {
             "threadId": thread_id,
             "cwd": str(Path(request.workspace).resolve()),
@@ -1340,6 +1397,9 @@ class CodexAppServerAdapter:
         model = getattr(request.policy, "model", None)
         if model:
             common["model"] = model
+        if request.instructions:
+            common["developerInstructions"] = request.instructions
+
         def read_turn(
             *, read_deadline: float = deadline
         ) -> tuple[Mapping[str, Any] | None, str | None]:
@@ -1373,10 +1433,20 @@ class CodexAppServerAdapter:
             raise TimeoutError("Codex native recovery timed out waiting for its thread")
         cleanup_uncertain: str | None = None
         try:
-            self._rpc(
-                "thread/resume", common, remaining(10), deadline=deadline
-            )
-            self._thread_profiles.setdefault(thread_id, "")
+            previous_profile = self._thread_profiles.get(thread_id)
+            if previous_profile is not None and "thread/unsubscribe" in capabilities.methods:
+                self._rpc(
+                    "thread/unsubscribe",
+                    {"threadId": thread_id},
+                    remaining(10),
+                    deadline=deadline,
+                )
+            elif previous_profile is not None and previous_profile != profile_hash:
+                raise CapabilityError(
+                    "thread/unsubscribe is required to change a loaded thread's configuration"
+                )
+            self._rpc("thread/resume", common, remaining(10), deadline=deadline)
+            self._thread_profiles[thread_id] = profile_hash
             match, status = read_turn()
             if status in {"inProgress", "running", "pending"}:
                 if not capabilities.supports_interrupt:
@@ -1417,10 +1487,7 @@ class CodexAppServerAdapter:
                     "thread/backgroundTerminals/clean",
                     "thread/backgroundTerminals/list",
                 }
-                if (
-                    request.cancel_event is not None
-                    and request.cancel_event.is_set()
-                ):
+                if request.cancel_event is not None and request.cancel_event.is_set():
                     cleanup_uncertain = (
                         "Codex background terminal cleanup was cancelled"
                     )
@@ -1522,7 +1589,6 @@ class CodexAppServerAdapter:
                     "item/completed",
                     {"threadId": thread_id, "turnId": turn_id, "item": dict(item)},
                 )
-        checkpoint = request.checkpoint or {}
         enforcement = dict(checkpoint.get("enforcement") or {})
         enforcement["audit"] = (
             "tool-policy-violation"
@@ -1555,9 +1621,7 @@ class CodexAppServerAdapter:
             {},
             {
                 "provider": "codex",
-                "codex_version": enforcement.get(
-                    "codex_version", capabilities.version
-                ),
+                "codex_version": enforcement.get("codex_version", capabilities.version),
                 "thread_id": thread_id,
                 "turn_id": turn_id,
                 "recovered": True,
@@ -1582,9 +1646,7 @@ class CodexAppServerAdapter:
     def _stop_turn(self, turn: _Turn, reason: str) -> None:
         with self._lock:
             process = turn.process
-            containment = (
-                self._containment if self._process is process else None
-            )
+            containment = self._containment if self._process is process else None
         if process is not None and containment is not None:
             containment.capture_descendant_groups(process)
             if process.poll() is None:
@@ -1617,9 +1679,8 @@ class CodexAppServerAdapter:
                 pass
         for turn in turns:
             with turn.condition:
-                # A terminal notification is authoritative even when another
-                # concurrent turn tears down the shared transport immediately
-                # afterward.
+                # A terminal notification is authoritative even if transport
+                # teardown follows it immediately.
                 if not turn.completed and turn.error is None:
                     turn.error = error
                 turn.condition.notify_all()
@@ -1653,16 +1714,14 @@ class CodexAppServerAdapter:
         cleanup_seconds: float = 0.1,
         expected_process: subprocess.Popen[bytes] | None = None,
     ) -> None:
-        # Stopping any turn stops the shared app-server because Codex can keep
+        # Stopping a turn stops its session app-server because Codex can keep
         # background terminals alive after turn interruption.  Serialize that
         # containment boundary so every affected caller returns only after the
         # same process tree has been verified quiescent.
         with self._transport_cleanup_lock:
             process, containment = self._process, self._containment
             if process is not None:
-                current_cleanup = self._transport_cleanup_results.get(
-                    process, _CLOSED
-                )
+                current_cleanup = self._transport_cleanup_results.get(process, _CLOSED)
             else:
                 current_cleanup = _CLOSED
             if expected_process is process:
@@ -1688,9 +1747,7 @@ class CodexAppServerAdapter:
             with self._lock:
                 self._tearing_down_process = process
             try:
-                parent_alive_at_entry = (
-                    process is not None and process.poll() is None
-                )
+                parent_alive_at_entry = process is not None and process.poll() is None
                 cleanup_started_after_parent_exit = (
                     os.name == "posix"
                     and process is not None
@@ -1799,7 +1856,7 @@ class CodexAppServerAdapter:
                     self._fail_transport(failure, process=process)
                     raise failure
                 # Wake RPC and turn waiters only after containment and its
-                # receipts are durable; returning is the quiescence boundary.
+                # checkpoints are durable; returning is the quiescence boundary.
                 self._fail_transport(error, process=process)
             finally:
                 # Keep the old process marked until _start installs a new one;

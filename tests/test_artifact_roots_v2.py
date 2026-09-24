@@ -16,8 +16,31 @@ def test_task_artifacts_outside_workspace_are_allowed_explicitly(tmp_path):
         store.destinations((Artifact.md(str(tmp_path / "unrelated.md")),))
 
 
-def test_allowed_task_root_does_not_authorize_runtime_metadata(tmp_path):
-    task = tmp_path / "task"
-    store = ArtifactStore(task / "runs" / "run", allowed_roots=(task,))
-    with pytest.raises(ArtifactError, match="metadata"):
-        store.destinations((Artifact.json(str(task / "receipts" / "turn.json")),))
+@pytest.mark.parametrize(
+    "metadata_path",
+    [
+        "ledger.jsonl",
+        "input.json",
+        "request.md",
+        "operations/provider/attempts/1/request.json",
+        ".artifacts/blobs/result.txt",
+    ],
+)
+def test_allowed_task_root_does_not_authorize_sibling_run_metadata(
+    tmp_path, metadata_path
+):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    state = tmp_path / "state"
+    task = state / "tasks" / "task"
+    current = task / "runs" / "current"
+    sibling_metadata = task / "runs" / "sibling" / metadata_path
+
+    store = ArtifactStore(
+        current,
+        workspace=workspace,
+        allowed_roots=(task,),
+        state_dir=state,
+    )
+    with pytest.raises(ArtifactError, match="protected state"):
+        store.destinations((Artifact.json(sibling_metadata),))

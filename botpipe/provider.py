@@ -284,7 +284,6 @@ class Provider:
             raise TypeError("on_event must be callable or None")
         spec = {
             "operation": operation,
-            "prompt": prompt,
             "session": None
             if selected_session is None
             else selected_session.descriptor(direct=True),
@@ -316,6 +315,7 @@ class Provider:
                     )
             outcome = runtime.run(
                 _direct_provider_operation,
+                prompt,
                 spec,
                 task_id=self._runtime_cell.direct_task_id,
             )
@@ -594,13 +594,13 @@ def _policy(config: Mapping[str, Any], operation: str) -> Policy:
 
 
 @workflow(name="botpipe.provider.operation", version="2")
-def _direct_provider_operation(spec):
+def _direct_provider_operation(prompt, spec):
     session = (
         None if spec["session"] is None else Session.from_descriptor(spec["session"])
     )
     callback = _CALLBACK.get()
     return execute_provider_operation(
-        session, spec["prompt"], on_event=callback, **spec["options"]
+        session, prompt, on_event=callback, **spec["options"]
     )
 
 

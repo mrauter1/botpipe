@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-
 import pytest
 
 from botpipe import (
@@ -96,7 +94,7 @@ def test_committed_provider_response_with_lost_ack_is_not_failed(tmp_path, monke
     assert len(provider.calls) == 1
 
 
-def test_uncommitted_finish_is_not_confirmed_from_writer_connection(
+def test_finish_failure_before_ledger_append_leaves_response_recoverable(
     tmp_path, monkeypatch
 ):
     @workflow
@@ -105,32 +103,29 @@ def test_uncommitted_finish_is_not_confirmed_from_writer_connection(
 
     provider = FakeProvider(["done"])
     with Botpipe(tmp_path, provider=provider) as client:
-        finish = client.journal.finish
+        append = client.journal._append_locked
         interrupted = False
 
-        def leave_uncommitted_result(operation_id, result):
+        def fail_before_finish_append(run_id, event, data, operation_id=None):
             nonlocal interrupted
+            operation = client.journal.get(operation_id) if operation_id else None
             if (
-                client.journal.get(operation_id)["kind"] == "provider"
+                event == "operation_completed"
+                and operation is not None
+                and operation["kind"] == "provider"
                 and not interrupted
             ):
                 interrupted = True
-                client.journal.db.execute("BEGIN IMMEDIATE")
-                client.journal.db.execute(
-                    "UPDATE operations SET status='completed',result=? WHERE id=?",
-                    (json.dumps(result), operation_id),
-                )
-                raise OSError("commit failed with transaction still open")
-            return finish(operation_id, result)
+                raise OSError("ledger append failed before writing")
+            return append(run_id, event, data, operation_id)
 
-        monkeypatch.setattr(client.journal, "finish", leave_uncommitted_result)
+        monkeypatch.setattr(client.journal, "_append_locked", fail_before_finish_append)
         paused = client.run(work, run_id="uncommitted-finish", task_id="task")
         operation = _provider_operations(client, paused.run_id)[0]
 
         assert paused.status == "interrupted"
         assert operation["status"] == "response"
-        assert not client.journal.db.in_transaction
-        monkeypatch.setattr(client.journal, "finish", finish)
+        monkeypatch.setattr(client.journal, "_append_locked", append)
         resumed = client.resume(paused.run_id, workflow=work)
 
     assert resumed.ok, resumed.error

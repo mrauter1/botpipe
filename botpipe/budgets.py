@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import json
 import math
 import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
 
-from .errors import BudgetExceeded, ReplayMismatch
+from .errors import BudgetExceeded
 
 
 def _seconds(value, name):
@@ -29,71 +28,24 @@ class ProviderBudget:
         self.ctx, self.operation_id = ctx, operation_id
         self.config = config
         self._monotonic_start = time.monotonic()
-        now = time.time()
-        with ctx.journal.transaction() as db:
-            row = db.execute(
-                "SELECT state FROM provider_budgets WHERE id=?", (operation_id,)
-            ).fetchone()
-            if row is None:
-                duration = config["max_seconds"]
-                started = datetime.fromisoformat(
-                    ctx.journal.get(operation_id)["started_at"]
-                ).timestamp()
-                deadline = None if duration is None else started + duration
-                state = {
-                    **config,
-                    "used_turns": 0,
-                    "deadline": deadline,
-                    "last_observed": now,
-                    "remaining_seconds": None
-                    if deadline is None
-                    else max(0.0, deadline - now),
-                }
-                db.execute(
-                    "INSERT INTO provider_budgets VALUES (?,?)",
-                    (operation_id, json.dumps(state)),
-                )
-            else:
-                state = json.loads(row[0])
-                if any(state[key] != value for key, value in config.items()):
-                    raise ReplayMismatch("Provider budget limits changed across resume")
+        state = ctx.journal.create_budget(operation_id, config, time.time())
         self._remaining_at_start = state["remaining_seconds"]
         self._last_observed = state["last_observed"]
 
-    def _state(self, db):
-        state = json.loads(
-            db.execute(
-                "SELECT state FROM provider_budgets WHERE id=?", (self.operation_id,)
-            ).fetchone()[0]
-        )
-        now = time.time()
-        if now < max(self._last_observed, state["last_observed"]):
-            raise BudgetExceeded(
-                "Wall clock moved backwards while enforcing provider deadline"
-            )
-        self._last_observed = state["last_observed"] = now
-        if state["deadline"] is not None:
-            state["remaining_seconds"] = max(
-                0.0,
-                min(
-                    state["deadline"] - now,
-                    state["remaining_seconds"],
-                    self._remaining_at_start
-                    - (time.monotonic() - self._monotonic_start),
-                ),
-            )
-        return state
-
-    def _save(self, db, state):
-        db.execute(
-            "UPDATE provider_budgets SET state=? WHERE id=?",
-            (json.dumps(state), self.operation_id),
-        )
+    def _remaining_cap(self):
+        if self._remaining_at_start is None:
+            return None
+        return self._remaining_at_start - (time.monotonic() - self._monotonic_start)
 
     def snapshot(self):
-        with self.ctx.journal.transaction() as db:
-            state = self._state(db)
-            self._save(db, state)
+        states = self.ctx.journal.observe_budgets(
+            self.ctx.run_id,
+            [self.operation_id],
+            time.time(),
+            {self.operation_id: self._remaining_cap()},
+        )
+        state = states[0]
+        self._last_observed = state["last_observed"]
         deadline = state.pop("deadline")
         state.pop("last_observed")
         return {
@@ -141,7 +93,7 @@ def provider_budget(*, max_turns, max_seconds=None, turn_timeout_seconds=None):
         # Do not mask a workflow failure with a second exception on cleanup.
 
 
-def _dispatch_limits(provider, configured_timeout, states):
+def _dispatch_limits(provider, configured_timeout, states, *, check_counts=True):
     from .providers import ProviderPolicyError
 
     if any(
@@ -155,10 +107,10 @@ def _dispatch_limits(provider, configured_timeout, states):
         )
     limits = [configured_timeout]
     for _budget, state in states:
-        remaining = state["remaining_seconds"]
-        if remaining is not None and remaining <= 0:
+        remaining = state.get("remaining_seconds")
+        if "remaining_seconds" in state and remaining is not None and remaining <= 0:
             raise BudgetExceeded("Provider dispatch deadline exhausted")
-        if state["used_turns"] >= state["max_turns"]:
+        if check_counts and state["used_turns"] >= state["max_turns"]:
             raise BudgetExceeded(
                 f"Provider dispatch budget exhausted ({state['used_turns']}/{state['max_turns']} turns)"
             )
@@ -180,11 +132,17 @@ def dispatch_timeout_ceiling(provider, configured_timeout):
     budgets = ctx.provider_budgets
     if not budgets:
         return configured_timeout
-    with ctx.journal.transaction() as db:
-        states = [(budget, budget._state(db)) for budget in budgets]
-        limits = _dispatch_limits(provider, configured_timeout, states)
-        for budget, state in states:
-            budget._save(db, state)
+    observed = time.time()
+    states = ctx.journal.observe_budgets(
+        ctx.run_id,
+        [budget.operation_id for budget in budgets],
+        observed,
+        {budget.operation_id: budget._remaining_cap() for budget in budgets},
+    )
+    paired = list(zip(budgets, states, strict=True))
+    limits = _dispatch_limits(provider, configured_timeout, paired)
+    for budget, state in paired:
+        budget._last_observed = state["last_observed"]
     return min(limits)
 
 
@@ -195,26 +153,23 @@ def reserve_dispatch(provider, configured_timeout, *, dispatch_id, details):
     budgets = () if ctx is None else ctx.provider_budgets
     if ctx is None:
         return configured_timeout
-    with ctx.journal.transaction() as db:
-        states = [(budget, budget._state(db)) for budget in budgets]
-        limits = _dispatch_limits(provider, configured_timeout, states)
-        reservations = []
-        for budget, state in states:
-            state["used_turns"] += 1
-            budget._save(db, state)
-            reservations.append(
-                {"budget_id": budget.operation_id, "sequence": state["used_turns"]}
-            )
-        ctx.journal._event(
-            db,
-            ctx.run_id,
-            ctx.operation_id,
-            "provider_dispatch_reserved",
-            {
-                **details,
-                "dispatch_id": dispatch_id,
-                "timeout_seconds": min(limits),
-                "budgets": reservations,
-            },
-        )
+    # Provider capability is checked before a durable reservation. Counts and
+    # deadlines are rechecked atomically by the journal before it appends the
+    # one record shared by all enclosing budgets.
+    configurations = [(budget, budget.config) for budget in budgets]
+    _dispatch_limits(provider, configured_timeout, configurations, check_counts=False)
+    observed = time.time()
+    states = ctx.journal.reserve_budgets(
+        ctx.run_id,
+        ctx.operation_id,
+        [budget.operation_id for budget in budgets],
+        observed,
+        {budget.operation_id: budget._remaining_cap() for budget in budgets},
+        configured_timeout,
+        {**details, "dispatch_id": dispatch_id},
+    )
+    paired = list(zip(budgets, states, strict=True))
+    limits = _dispatch_limits(provider, configured_timeout, paired, check_counts=False)
+    for budget, state in paired:
+        budget._last_observed = state["last_observed"]
     return min(limits)

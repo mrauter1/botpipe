@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import math
 import os
-import tempfile
 import threading
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
@@ -17,7 +16,6 @@ from .errors import SessionError
 from .models import StreamEvent
 from .policy import Policy
 from .recovery import Completed, RecoveryOutcome, Stopped, Unknown
-from .storage import sync_directory
 
 
 class ProviderError(RuntimeError):
@@ -33,11 +31,10 @@ class ProviderInterruptedError(ProviderError):
         self,
         message: str,
         *,
-        receipt: Path | None = None,
         process_alive: bool | None = None,
     ) -> None:
         super().__init__(message)
-        self.receipt, self.process_alive = receipt, process_alive
+        self.process_alive = process_alive
 
 
 class ProviderTimeoutError(ProviderError):
@@ -53,8 +50,9 @@ class ProviderRequest:
     output_schema: dict[str, Any] | None
     policy: Policy
     artifacts: dict[str, Path]
-    receipt_dir: Path
     timeout: float
+    session_key: str | None = None
+    operation_key: str | None = None
     attempt: int = 1
     reads: tuple[Path, ...] = ()
     preset: str = "run"
@@ -73,13 +71,16 @@ class ProviderRequest:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "workspace", Path(self.workspace))
-        object.__setattr__(self, "receipt_dir", Path(self.receipt_dir))
         object.__setattr__(
             self, "artifacts", {str(k): Path(v) for k, v in self.artifacts.items()}
         )
         object.__setattr__(self, "reads", tuple(Path(v) for v in self.reads))
         if not self.operation_id:
             raise ValueError("operation_id must be non-empty")
+        if self.session_key is not None and not self.session_key:
+            raise ValueError("session_key must be non-empty or None")
+        if self.operation_key is not None and not self.operation_key:
+            raise ValueError("operation_key must be non-empty or None")
         if not isinstance(self.prompt, str):
             raise TypeError("prompt must be a string")
         if (
@@ -161,83 +162,12 @@ class Adapter(Protocol):
     def close(self) -> None: ...
 
 
-def _safe_id(value: str) -> str:
-    import hashlib
-
-    label = "".join(c if c.isalnum() or c in "._-" else "-" for c in value)[:80]
-    return f"{label.strip('.-') or 'operation'}-{hashlib.sha256(value.encode()).hexdigest()[:10]}"
-
-
-def receipt_path(request: ProviderRequest) -> Path:
-    return _receipt_path_for(request, request.attempt)
-
-
-def _receipt_path_for(request: ProviderRequest, attempt: int) -> Path:
-    return (
-        request.receipt_dir / f"{_safe_id(request.operation_id)}.attempt-{attempt}.json"
-    )
-
-
-def _atomic_json(path: Path, value: Mapping[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as stream:
-            json.dump(value, stream, ensure_ascii=False, sort_keys=True, indent=2)
-            stream.write("\n")
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(temporary, path)
-        sync_directory(path.parent)
-    finally:
-        try:
-            os.unlink(temporary)
-        except FileNotFoundError:
-            pass
-
-
-def _atomic_bytes(path: Path, value: bytes) -> None:
-    """Compatibility helper used by receipt durability tests."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
-    try:
-        with os.fdopen(fd, "wb") as stream:
-            stream.write(value)
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(temporary, path)
-        sync_directory(path.parent)
-    finally:
-        try:
-            os.unlink(temporary)
-        except FileNotFoundError:
-            pass
-
-
-def _read_receipt(path: Path) -> dict[str, Any]:
-    try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise ProviderInterruptedError(
-            f"provider receipt is unreadable: {path}", receipt=path
-        ) from exc
-    if not isinstance(value, dict):
-        raise ProviderInterruptedError(
-            f"provider receipt is malformed: {path}", receipt=path
-        )
-    return value
-
-
-def _response(value: Any, path: Path) -> ProviderResponse:
+def _response(value: Any) -> ProviderResponse:
     if not isinstance(value, Mapping):
-        raise ProviderInterruptedError(
-            "completed receipt has no response", receipt=path
-        )
+        raise ProviderInterruptedError("completed checkpoint has no response")
     text = value.get("text")
     if not isinstance(text, str):
-        raise ProviderInterruptedError(
-            "completed receipt has invalid response text", receipt=path
-        )
+        raise ProviderInterruptedError("completed checkpoint has invalid response text")
     response = ProviderResponse(
         text, value.get("session_id"), value.get("usage", {}), value.get("metadata", {})
     )
@@ -245,13 +175,13 @@ def _response(value: Any, path: Path) -> ProviderResponse:
         response.to_record()
     except TypeError as exc:
         raise ProviderInterruptedError(
-            f"completed receipt has invalid response: {exc}", receipt=path
+            f"completed checkpoint has invalid response: {exc}"
         ) from exc
     return response
 
 
 class CodexProvider:
-    """Lazy provider facade around one shared app-server adapter."""
+    """Lazy provider facade with one app-server owner per logical session."""
 
     name = "codex"
     supports_safe_read_retry = True
@@ -265,32 +195,106 @@ class CodexProvider:
         state_dir: Path | None = None,
         interrupt_grace_seconds: float = 10.0,
         adapter: Any | None = None,
+        adapter_factory: Callable[[], Any] | None = None,
     ) -> None:
+        if adapter is not None and adapter_factory is not None:
+            raise ValueError("adapter and adapter_factory are mutually exclusive")
         self.command, self.env, self.state_dir = command, dict(env or {}), state_dir
-        self.interrupt_grace_seconds, self._adapter = interrupt_grace_seconds, adapter
-        self._adapter_lock = threading.Lock()
+        self.interrupt_grace_seconds = interrupt_grace_seconds
+        self._injected_adapter = adapter
+        self._adapter_factory = adapter_factory
+        self._owners: dict[tuple[str, str], Any] = {}
+        self._owner_lock = threading.RLock()
+        self._probe_adapter: Any | None = adapter
+        self._factory_probe_available = False
+        self._closed = False
 
-    @property
-    def adapter(self):
-        if self._adapter is None:
-            with self._adapter_lock:
-                if self._adapter is None:
+    @staticmethod
+    def _owner_key(request: ProviderRequest) -> tuple[str, str]:
+        if request.session_key is not None:
+            return "session", request.session_key
+        return "operation", request.operation_key or request.operation_id
+
+    def _new_adapter(self) -> Any:
+        if self._adapter_factory is not None:
+            if self._factory_probe_available:
+                assert self._probe_adapter is not None
+                self._factory_probe_available = False
+                return self._probe_adapter
+            return self._adapter_factory()
+        if self._injected_adapter is not None:
+            if any(self._injected_adapter is owner for owner in self._owners.values()):
+                raise ProviderError(
+                    "an injected adapter can own only one logical session; "
+                    "pass adapter_factory for multiple sessions"
+                )
+            return self._injected_adapter
+        from .codex_appserver import CodexAppServerAdapter
+
+        capabilities = self.probe()
+        assert self._probe_adapter is not None
+        return CodexAppServerAdapter(
+            self.command,
+            env=self.env,
+            state_dir=self.state_dir,
+            interrupt_grace_seconds=self.interrupt_grace_seconds,
+            capabilities=capabilities,
+            capability_probe_stat=self._probe_adapter._probe_stat,
+        )
+
+    def _adapter_for(self, request: ProviderRequest) -> Any:
+        key = self._owner_key(request)
+        with self._owner_lock:
+            if self._closed:
+                raise ProviderError("Codex provider is closed")
+            owner = self._owners.get(key)
+            if owner is None:
+                owner = self._new_adapter()
+                self._owners[key] = owner
+            return owner
+
+    def probe(self):
+        with self._owner_lock:
+            if self._closed:
+                raise ProviderError("Codex provider is closed")
+            if self._probe_adapter is None:
+                if self._adapter_factory is not None:
+                    self._probe_adapter = self._adapter_factory()
+                    self._factory_probe_available = True
+                else:
                     from .codex_appserver import CodexAppServerAdapter
 
-                    self._adapter = CodexAppServerAdapter(
+                    # Adapter construction is process-free. This object owns only
+                    # the capability cache and never starts an app-server.
+                    self._probe_adapter = CodexAppServerAdapter(
                         self.command,
                         env=self.env,
                         state_dir=self.state_dir,
                         interrupt_grace_seconds=self.interrupt_grace_seconds,
                     )
-        return self._adapter
-
-    def probe(self):
-        return self.adapter.probe()
+            probe_adapter = self._probe_adapter
+        return probe_adapter.probe()
 
     def validate_request(self, request: ProviderRequest) -> CodexCapabilities:
         try:
-            capabilities = self.adapter.probe(deadline=request.deadline)
+            with self._owner_lock:
+                if self._closed:
+                    raise ProviderError("Codex provider is closed")
+                if self._probe_adapter is None:
+                    if self._adapter_factory is not None:
+                        self._probe_adapter = self._adapter_factory()
+                        self._factory_probe_available = True
+                    else:
+                        from .codex_appserver import CodexAppServerAdapter
+
+                        self._probe_adapter = CodexAppServerAdapter(
+                            self.command,
+                            env=self.env,
+                            state_dir=self.state_dir,
+                            interrupt_grace_seconds=self.interrupt_grace_seconds,
+                        )
+                probe_adapter = self._probe_adapter
+            capabilities = probe_adapter.probe(deadline=request.deadline)
         except TimeoutError as exc:
             raise ProviderTimeoutError(
                 f"Codex capability probe timed out (dispatch budget: {request.timeout:g} seconds)"
@@ -298,69 +302,22 @@ class CodexProvider:
         return capabilities
 
     def run(self, request: ProviderRequest) -> ProviderResponse:
-        path = receipt_path(request)
-        if path.exists():
-            existing = _read_receipt(path)
-            if (
-                existing.get("operation_id") != request.operation_id
-                or existing.get("attempt") != request.attempt
-            ):
-                raise ProviderInterruptedError(
-                    "provider receipt identity mismatch", receipt=path
-                )
-            if existing.get("status") == "completed":
-                return _response(existing.get("response"), path)
-            raise ProviderInterruptedError(
-                "provider attempt has no durable terminal result; refusing to resend",
-                receipt=path,
+        if request.on_checkpoint is None:
+            raise ProviderError(
+                "Codex requests require a durable on_checkpoint callback"
             )
-        if request.attempt > 1:
-            for attempt in range(request.attempt - 1, 0, -1):
-                prior_path = _receipt_path_for(request, attempt)
-                if not prior_path.exists():
-                    continue
-                prior = _read_receipt(prior_path)
-                session_id = prior.get("session_id")
-                if isinstance(session_id, str):
-                    request = replace(request, session_id=session_id)
-                    break
-        record: dict[str, Any] = {
-            "version": 2,
-            "provider": "codex",
-            "operation_id": request.operation_id,
-            "attempt": request.attempt,
-            "status": "prepared",
-            "session_id": request.session_id,
-        }
-        receipt_lock = threading.Lock()
-
-        def persist(update: Mapping[str, Any]) -> dict[str, Any]:
-            with receipt_lock:
-                record.update(update)
-                _atomic_json(path, record)
-                return dict(record)
-
-        persist({})
-
-        def checkpoint(update: dict[str, Any]) -> None:
-            snapshot = persist(update)
-            if request.on_checkpoint is not None:
-                request.on_checkpoint(snapshot)
-
+        owner = self._adapter_for(request)
         try:
-            response = self.adapter.start_turn(
-                replace(request, on_checkpoint=checkpoint), request.on_event
-            )
+            response = owner.start_turn(request, request.on_event)
             response.to_record()
         except CapabilityError as exc:
-            with receipt_lock:
-                if request.preset in {"query", "generate"}:
-                    record.update(status="failed", policy_error=True, error=str(exc))
-                elif record.get("status") in {"prepared", "thread_bound"}:
-                    record.update(status="failed", error=str(exc))
-                else:
-                    record.update(error=str(exc))
-                _atomic_json(path, record)
+            request.on_checkpoint(
+                {
+                    "status": "failed",
+                    "policy_error": request.preset in {"query", "generate"},
+                    "error": str(exc),
+                }
+            )
             raise ProviderPolicyError(str(exc)) from exc
         except SessionError:
             raise
@@ -368,119 +325,160 @@ class CodexProvider:
             raise
         except Exception as exc:
             raise ProviderError(f"Codex app-server failed: {exc}") from exc
-        persist({"status": "completed", "response": response.to_record()})
+        request.on_checkpoint({"status": "completed", "response": response.to_record()})
         return response
 
     def recover(self, request: ProviderRequest) -> RecoveryOutcome:
-        found = False
-        for attempt in range(request.attempt, 0, -1):
-            path = _receipt_path_for(request, attempt)
-            if not path.exists():
-                continue
-            found = True
+        value = request.checkpoint
+        if value is None:
+            return Stopped("provider dispatch was not authorized")
+        if not isinstance(value, Mapping):
+            return Unknown("provider checkpoint is malformed")
+        if value.get("policy_error"):
+            raise ProviderPolicyError(
+                str(value.get("error") or "Codex tool policy failed")
+            )
+        status = value.get("status")
+        if status in {"completed", "response_received"} and "response" in value:
             try:
-                value = _read_receipt(path)
+                response = _response(value.get("response"))
             except ProviderInterruptedError as exc:
                 return Unknown(str(exc))
-            if (
-                value.get("operation_id") != request.operation_id
-                or value.get("attempt") != attempt
-            ):
-                return Unknown("provider receipt identity mismatch")
-            if value.get("policy_error"):
-                raise ProviderPolicyError(
-                    str(value.get("error") or "Codex tool policy failed")
+            if status == "response_received":
+                response = replace(
+                    response,
+                    metadata={
+                        "probe_hash": value.get("probe_hash"),
+                        "profile_hash": value.get("profile_hash"),
+                        "enforcement": value.get("enforcement", {}),
+                        **response.metadata,
+                    },
                 )
-            if value.get("status") == "completed":
-                try:
-                    return Completed(_response(value.get("response"), path))
-                except ProviderInterruptedError as exc:
-                    return Unknown(str(exc))
-            cleanup = value.get("cleanup")
-            cleanup_incomplete = (
-                isinstance(cleanup, Mapping)
-                and cleanup.get("status") == "incomplete"
-            )
-            if value.get("status") == "failed" and not cleanup_incomplete:
-                return Stopped(str(value.get("error") or "provider attempt failed"))
-            if value.get("status") in {"prepared", "configured", "thread_bound"}:
-                if cleanup_incomplete:
-                    return Unknown(
-                        str(cleanup.get("error") or "provider cleanup is incomplete")
-                    )
-                continue
-            thread_id, turn_id = value.get("session_id"), value.get("turn_id")
-            if not isinstance(thread_id, str) or not isinstance(turn_id, str):
-                if cleanup_incomplete:
-                    return Unknown(
-                        str(cleanup.get("error") or "provider cleanup is incomplete")
-                    )
-                return Unknown(
-                    "turn dispatch was sent before its native turn id was durable"
-                )
-            receipt_lock = threading.Lock()
-
-            def persist(update: Mapping[str, Any]) -> dict[str, Any]:
-                with receipt_lock:
-                    value.update(update)
-                    _atomic_json(path, value)
-                    return dict(value)
-
-            def checkpoint(update: dict[str, Any]) -> None:
-                snapshot = persist(update)
-                if request.on_checkpoint is not None:
-                    request.on_checkpoint(snapshot)
-
-            try:
-                status, response = self.adapter.recover_turn(
-                    replace(
-                        request,
-                        session_id=thread_id,
-                        checkpoint=value,
-                        on_checkpoint=checkpoint,
-                    ),
-                    thread_id=thread_id,
-                    turn_id=turn_id,
-                )
-            except CapabilityError as exc:
-                if request.preset in {"query", "generate"}:
-                    checkpoint(
-                        {"status": "failed", "policy_error": True, "error": str(exc)}
-                    )
-                    raise ProviderPolicyError(str(exc)) from exc
-                return Unknown(f"Codex native recovery failed policy audit: {exc}")
-            except Exception as exc:  # noqa: BLE001 - recovery must normalize adapter failures
-                return Unknown(f"Codex native recovery failed: {exc}")
-            if status == "completed" and isinstance(response, ProviderResponse):
-                metadata = {
-                    "probe_hash": value.get("probe_hash"),
-                    "profile_hash": value.get("profile_hash"),
-                    "enforcement": value.get("enforcement", {}),
-                    **response.metadata,
-                }
-                recovered = replace(response, metadata=metadata)
-                persist({"status": "completed", "response": recovered.to_record()})
-                return Completed(recovered, "adopted from Codex thread history")
+            return Completed(response, "adopted from the run ledger")
+        cleanup = value.get("cleanup")
+        cleanup_incomplete = (
+            isinstance(cleanup, Mapping) and cleanup.get("status") == "incomplete"
+        )
+        if status == "failed" and not cleanup_incomplete:
+            return Stopped(str(value.get("error") or "provider attempt failed"))
+        dispatch_authorized = (
+            status in {"dispatch_authorized", "turn_intent"}
+            or value.get("dispatch_authorized") is True
+        )
+        if (
+            status in {"prepared", "configured", "thread_bound"}
+            and not dispatch_authorized
+        ):
             if cleanup_incomplete:
                 return Unknown(
                     str(cleanup.get("error") or "provider cleanup is incomplete")
                 )
-            if status == "running":
-                from .recovery import Running
-
-                return Running("Codex reports the native turn is still running")
-            if status == "stopped":
-                return Stopped("Codex reports the native turn stopped")
-            return Unknown("Codex thread history does not identify the recorded turn")
-        return (
-            Stopped("provider was not dispatched")
-            if found
-            else Unknown("no matching provider receipt")
+            return Stopped("provider dispatch was not authorized")
+        thread_id, turn_id = value.get("session_id"), value.get("turn_id")
+        if not isinstance(thread_id, str) or not isinstance(turn_id, str):
+            if cleanup_incomplete:
+                return Unknown(
+                    str(cleanup.get("error") or "provider cleanup is incomplete")
+                )
+            return Unknown(
+                "turn dispatch was authorized before its native turn id was durable"
+            )
+        if request.on_checkpoint is None:
+            return Unknown("native recovery requires a durable on_checkpoint callback")
+        owner = self._adapter_for(request)
+        recovery_request = replace(
+            request, session_id=thread_id, checkpoint=dict(value)
         )
+        try:
+            native_status, response = owner.recover_turn(
+                recovery_request, thread_id=thread_id, turn_id=turn_id
+            )
+        except CapabilityError as exc:
+            if request.preset in {"query", "generate"}:
+                request.on_checkpoint(
+                    {"status": "failed", "policy_error": True, "error": str(exc)}
+                )
+                raise ProviderPolicyError(str(exc)) from exc
+            return Unknown(f"Codex native recovery failed policy audit: {exc}")
+        except Exception as exc:  # noqa: BLE001 - recovery must normalize adapter failures
+            return Unknown(f"Codex native recovery failed: {exc}")
+        if native_status == "completed" and isinstance(response, ProviderResponse):
+            metadata = {
+                "probe_hash": value.get("probe_hash"),
+                "profile_hash": value.get("profile_hash"),
+                "enforcement": value.get("enforcement", {}),
+                **response.metadata,
+            }
+            recovered = replace(response, metadata=metadata)
+            request.on_checkpoint(
+                {"status": "completed", "response": recovered.to_record()}
+            )
+            return Completed(recovered, "adopted from Codex thread history")
+        if cleanup_incomplete:
+            return Unknown(
+                str(cleanup.get("error") or "provider cleanup is incomplete")
+            )
+        if native_status == "running":
+            from .recovery import Running
+
+            return Running("Codex reports the native turn is still running")
+        if native_status == "stopped":
+            request.on_checkpoint(
+                {"status": "failed", "error": "Codex reports the native turn stopped"}
+            )
+            return Stopped("Codex reports the native turn stopped")
+        return Unknown("Codex thread history does not identify the recorded turn")
+
+    def release_operation(
+        self, operation_key: str, *, require_owner: bool = False
+    ) -> None:
+        """Release the operation-local adapter after validation and repairs finish."""
+
+        key = ("operation", operation_key)
+        with self._owner_lock:
+            owner = self._owners.get(key)
+            if owner is None:
+                if require_owner:
+                    raise ProviderError(
+                        f"Codex operation owner {operation_key!r} is unavailable; "
+                        "cleanup cannot be verified"
+                    )
+                return
+            # Keep the key reserved until cleanup succeeds.  Otherwise a
+            # concurrent repair can install a replacement while the prior
+            # process tree is still alive or its cleanup is unverified.
+            owner.close()
+            self._owners.pop(key, None)
 
     def close(self) -> None:
-        if self._adapter is not None:
-            self._adapter.close()
+        with self._owner_lock:
+            if self._closed and not self._owners:
+                return
+            self._closed = True
+            owners: list[Any] = []
+            for owner in self._owners.values():
+                if not any(owner is existing for existing in owners):
+                    owners.append(owner)
+            failures: list[tuple[Any, BaseException]] = []
+            closed: list[Any] = []
+            for owner in owners:
+                try:
+                    owner.close()
+                except Exception as exc:  # noqa: BLE001 - close every owned adapter
+                    failures.append((owner, exc))
+                else:
+                    closed.append(owner)
+            self._owners = {
+                key: owner
+                for key, owner in self._owners.items()
+                if not any(owner is finished for finished in closed)
+            }
+        if failures:
+            errors = [exc for _owner, exc in failures]
+            raise ProviderError(
+                "failed to close one or more Codex session adapters: "
+                + "; ".join(str(exc) for exc in errors)
+            ) from ExceptionGroup("Codex adapter cleanup failures", errors)
 
 
 class FakeProvider:
@@ -558,5 +556,4 @@ __all__ = [
     "SessionError",
     "StreamEvent",
     "get_provider",
-    "receipt_path",
 ]

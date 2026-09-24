@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import threading
 
 from botpipe import (
@@ -16,10 +15,10 @@ from botpipe.providers import FakeProvider, ProviderError
 
 def states(client):
     return [
-        json.loads(row[0])
-        for row in client.journal.db.execute(
-            "SELECT state FROM provider_budgets ORDER BY rowid"
-        )
+        client.journal.budget(operation["id"])
+        for run in client.journal.runs()
+        for operation in client.journal.operations(run["run_id"])
+        if operation["kind"] == "provider_budget"
     ]
 
 

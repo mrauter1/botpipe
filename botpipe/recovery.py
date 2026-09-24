@@ -1,4 +1,4 @@
-"""Explicit provider recovery outcomes and legacy adapter normalization."""
+"""Explicit provider recovery outcomes and conservative adapter handling."""
 
 from __future__ import annotations
 
@@ -45,12 +45,10 @@ class Unknown(RecoveryOutcome):
 
 
 def recover_outcome(provider: Any, request: ProviderRequest) -> RecoveryOutcome:
-    """Call a provider's recovery hook and normalize its compatibility surface.
+    """Call a provider's recovery hook and require an explicit typed outcome.
 
-    Third-party providers may still implement the historical contract of
-    returning ``ProviderResponse | None`` or raising
-    ``ProviderInterruptedError``. Absence of a response and generic failures do
-    not prove that effects stopped, so both normalize to :class:`Unknown`.
+    Failures and malformed results do not prove that an external attempt
+    stopped, so they remain :class:`Unknown`.
     """
 
     # Imported lazily so providers can import the outcome classes without a
@@ -59,7 +57,6 @@ def recover_outcome(provider: Any, request: ProviderRequest) -> RecoveryOutcome:
         ProviderError,
         ProviderInterruptedError,
         ProviderPolicyError,
-        ProviderResponse,
     )
 
     recover = getattr(provider, "recover", None)
@@ -83,9 +80,9 @@ def recover_outcome(provider: Any, request: ProviderRequest) -> RecoveryOutcome:
     except Exception as exc:  # noqa: BLE001 - unknown provider failures are uncertain
         return Unknown(f"recovery failed: {exc}")
 
-    if isinstance(value, ProviderResponse):
-        value = Completed(value, "legacy provider returned a response")
     if isinstance(value, Completed):
+        from .providers import ProviderResponse
+
         if not isinstance(value.response, ProviderResponse):
             return Unknown(
                 "provider returned Completed with an invalid response object"
@@ -101,8 +98,6 @@ def recover_outcome(provider: Any, request: ProviderRequest) -> RecoveryOutcome:
         return Unknown(
             f"provider returned unsupported recovery outcome {type(value).__name__}"
         )
-    if value is None:
-        return Unknown("legacy provider returned no recovery result")
     return Unknown(
         f"provider returned unsupported recovery result {type(value).__name__}"
     )

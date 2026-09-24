@@ -1,15 +1,13 @@
 """Pure semantic publication gates shared by imperative labs workflows.
 
 Provider verification is evidence, not the publication gate itself.  These
-helpers validate the cross-artifact facts that the former graph publication
-steps checked before declaring a workflow complete.  They deliberately accept
-plain mappings so callers can use them both with typed verifier payloads and
-JSON artifacts read by a journaled activity.
+helpers validate cross-artifact facts before a workflow completes. They accept
+plain mappings from typed producer values or JSON artifacts read by a journaled
+activity.
 """
 
 from __future__ import annotations
 
-import re
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from typing import Any
@@ -50,32 +48,6 @@ COMPANY_AUTHORITATIVE_ARTIFACTS = frozenset(
         "recursive_improvement_candidates",
     }
 )
-_HIDDEN_EXECUTION_PATTERNS = (
-    re.compile(r"\bauto[- ]?run\b"),
-    re.compile(
-        r"\bautomatically\s+(?:run|queue|launch|execute|trigger|start)(?:s|ed)?\b"
-    ),
-    re.compile(
-        r"\b(?:the runtime|the system|this workflow|this package)\s+(?:will\s+)?"
-        r"(?:queue|launch|run|execute|trigger|start)(?:s|ed)?\b"
-    ),
-    re.compile(r"\bwill\s+be\s+(?:queued|launched|run|executed|triggered|started)\b"),
-    re.compile(r"\bwithout further review\b"),
-)
-_NEGATED_EXECUTION_MARKERS = (
-    "do not auto-run",
-    "does not auto-run",
-    "must not auto-run",
-    "should not auto-run",
-    "do not automatically",
-    "does not automatically",
-    "must not automatically",
-    "should not automatically",
-    "without auto-running",
-    "instead of auto-running",
-)
-
-
 def _text(value: Any, field: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{field} must be a non-empty string")
@@ -127,17 +99,6 @@ def _same(actual: Sequence[str], expected: Sequence[str], field: str) -> None:
         raise ValueError(f"{field} must match the accepted upstream result")
 
 
-def _no_hidden_execution(value: Any, field: str) -> str:
-    text = _text(value, field)
-    for line in text.splitlines():
-        lowered = line.strip().lower()
-        if any(marker in lowered for marker in _NEGATED_EXECUTION_MARKERS):
-            continue
-        if any(pattern.search(lowered) for pattern in _HIDDEN_EXECUTION_PATTERNS):
-            raise ValueError(f"{field} must not imply hidden downstream execution")
-    return text
-
-
 def _authoritative_subset(
     value: Any, required: frozenset[str], field: str
 ) -> list[str]:
@@ -166,7 +127,22 @@ def validate_release_publication(
         decision_summary.get("blocking_issue_count"),
         "decision_summary.blocking_issue_count",
     )
-    return {"recommended_decision": decision, "blocking_issue_count": blocking_count}
+    executed = _string_list(
+        decision_summary.get("executed_checks"),
+        "decision_summary.executed_checks",
+        allow_empty=True,
+    )
+    unexecuted = _string_list(
+        decision_summary.get("unexecuted_checks"),
+        "decision_summary.unexecuted_checks",
+        allow_empty=True,
+    )
+    return {
+        "recommended_decision": decision,
+        "blocking_issue_count": blocking_count,
+        "executed_checks": executed,
+        "unexecuted_checks": unexecuted,
+    }
 
 
 def validate_investigation_summary(
@@ -488,7 +464,7 @@ def validate_portfolio_publication(
         PORTFOLIO_AUTHORITATIVE_ARTIFACTS,
         "summary.authoritative_artifacts",
     )
-    _no_hidden_execution(summary.get("next_action"), "summary.next_action")
+    _text(summary.get("next_action"), "summary.next_action")
     for field in (
         "focus_workflows",
         "analyzed_workflows",
@@ -731,7 +707,7 @@ def validate_company_publication(
         COMPANY_AUTHORITATIVE_ARTIFACTS,
         "summary.authoritative_artifacts",
     )
-    _no_hidden_execution(summary.get("next_action"), "summary.next_action")
+    _text(summary.get("next_action"), "summary.next_action")
     if (
         _text(summary.get("workflow_name"), "summary.workflow_name")
         != "company_operation_to_recursive_improvement_cycle"

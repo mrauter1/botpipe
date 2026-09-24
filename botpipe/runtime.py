@@ -112,6 +112,13 @@ def _persist_response(journal, operation_id, response, session_key=None):
         {"status": "response", "response": response},
         "Operation checkpoint could not be confirmed; resume to reconcile it",
     )
+    if session_key and response.get("session_id"):
+        from .session_bindings import SessionBinding
+
+        request = response.get("request") or {}
+        SessionBinding(journal, session_key).advance(
+            request.get("operation_key", operation_id), response["session_id"]
+        )
 
 
 def _operation_encoded_values(record):
@@ -1339,7 +1346,14 @@ class Botpipe:
         self.policy = Policy.resolve(policy)
         self._configured_policy = self.policy
         self.limits = RunLimits(max_operations, timeout)
-        self.journal = Journal(self.state_dir / "state.sqlite3")
+        self.journal = Journal(self.state_dir)
+
+    def protected_paths(self, folder):
+        folder = Path(folder)
+        return (
+            folder / "ledger.jsonl", folder / "input.json", folder / "request.md",
+            folder / "operations", self.state_dir / "sessions",
+        )
 
     @property
     def max_operations(self):
@@ -1427,6 +1441,7 @@ class Botpipe:
         folder = self.state_dir / "tasks" / task_id / "runs" / run_id
         encoded_args = codec.encode(args)
         encoded_kwargs = codec.encode(kwargs)
+        request_text = args[0] if args and isinstance(args[0], str) else kwargs.get("request")
         data = {
             "run_id": run_id,
             "task_id": task_id,
@@ -1444,6 +1459,7 @@ class Botpipe:
             "version": _observed_workflow_fingerprint(definition),
             "args": encoded_args,
             "kwargs": encoded_kwargs,
+            **({"request_text": request_text} if isinstance(request_text, str) else {}),
             "status": "created",
             "folder": str(folder),
             "provider": self.provider_name,
@@ -1455,7 +1471,7 @@ class Botpipe:
             "error": None,
         }
         with self.run_lock(run_id):
-            data["provenance_start"] = capture_workflow_provenance(
+            provenance_start = capture_workflow_provenance(
                 definition, self.workspace
             )
             self.journal.create_run(data)
@@ -1464,7 +1480,7 @@ class Botpipe:
                 data,
                 args,
                 kwargs,
-                provenance_start=data["provenance_start"],
+                provenance_start=provenance_start,
             )
 
     async def arun(self, definition, *args, **kwargs):
@@ -1476,6 +1492,9 @@ class Botpipe:
         self, run_id, *, answer=_UNSET, workflow=None, max_operations=None, timeout=None
     ):
         with self.run_lock(run_id):
+            for operation_id, selection in self._pending_resolutions(run_id).items():
+                arguments = codec.decode(selection["arguments"])
+                self._resolve(run_id, operation_id, **arguments, _locked=True)
             data = self.journal.run(run_id)
             self._check_run_configuration(data)
             operations = self.journal.operations(run_id)
@@ -1668,7 +1687,6 @@ class Botpipe:
             pending_input=pending,
             usage=usage,
             updated_at=now(),
-            provenance_end=provenance_end,
         )
         self.journal.event(
             ctx.run_id,
@@ -1713,12 +1731,60 @@ class Botpipe:
         response=_UNSET,
         artifact_digests=None,
     ):
+        return self._resolve(
+            run_id, operation_id, retry=retry, accept=accept, fail=fail,
+            response=response, artifact_digests=artifact_digests,
+        )
+
+    def _pending_resolutions(self, run_id):
+        pending = {}
+        for event in self.journal.events(run_id):
+            if event["event"] == "resolution_selected":
+                pending[event["operation_id"]] = event["data"]
+            elif event["event"] == "operation_reconciled":
+                pending.pop(event["operation_id"], None)
+        return pending
+
+    def _resolve(
+        self, run_id, operation_id, *, retry=False, accept=False, fail=False,
+        response=_UNSET, artifact_digests=None, _locked=False,
+    ):
         choices = int(bool(retry)) + int(bool(accept)) + int(bool(fail))
         if choices > 1 or (retry and (response is not _UNSET or artifact_digests is not None)):
             raise ValueError("Choose exactly one of retry, accept, or fail")
         if choices == 0 and response is _UNSET and artifact_digests is None:
             raise ValueError("Choose retry, accept, fail, a response, or artifact_digests")
-        with self.run_lock(run_id):
+        with nullcontext() if _locked else self.run_lock(run_id):
+            requested = codec.encode({
+                "retry": retry, "accept": accept, "fail": fail,
+                **({"response": response} if response is not _UNSET else {}),
+                "artifact_digests": artifact_digests,
+            })
+            selected = self._pending_resolutions(run_id).get(operation_id)
+            if selected is not None:
+                if not _locked and requested != selected["requested"]:
+                    raise ValueError("A recorded resolution is unfinished; resume it before choosing another")
+                arguments = codec.decode(selected["arguments"])
+                retry, accept, fail = (arguments[key] for key in ("retry", "accept", "fail"))
+                response = arguments.get("response", _UNSET)
+                artifact_digests = arguments.get("artifact_digests")
+
+            def select_resolution(outcome=None):
+                nonlocal selected
+                if selected is not None:
+                    return
+                selected = {
+                    "requested": requested,
+                    "arguments": codec.encode({
+                        "retry": retry, "accept": accept, "fail": fail,
+                        **({"response": response} if response is not _UNSET else {}),
+                        "artifact_digests": artifact_digests,
+                    }),
+                    "prior_outcome": None if outcome is None else type(outcome).__name__,
+                    "detail": None if outcome is None else getattr(outcome, "detail", None),
+                }
+                self.journal.event(run_id, "resolution_selected", selected, operation_id)
+
             data = self.journal.run(run_id)
             self._check_run_configuration(data)
             operations = self.journal.operations(run_id)
@@ -1726,6 +1792,9 @@ class Botpipe:
             record = self.journal.get(operation_id)
             if record is None or record["run_id"] != run_id:
                 raise KeyError(operation_id)
+            if selected is not None and record["kind"] == "activity" and record["status"] == "completed":
+                self.journal.event(run_id, "operation_reconciled", {"retry": False, "source": "operator"}, operation_id)
+                return
             replaying_failure = (
                 fail
                 and record["status"] == "failed"
@@ -1742,6 +1811,7 @@ class Botpipe:
             old = dict(record.get("response") or {})
             source = "operator"
             if fail and record["kind"] == "activity":
+                select_resolution()
                 self._fail_resolution(
                     run_id,
                     operation_id,
@@ -1749,6 +1819,7 @@ class Botpipe:
                     source,
                     already_failed=replaying_failure,
                 )
+                self._finish_failed_resolution(run_id, operation_id, source)
                 return
             if record["kind"] == "provider":
                 from .artifacts import Artifact, ArtifactError, ArtifactStore
@@ -1762,6 +1833,7 @@ class Botpipe:
                     )
                 inputs = codec.decode(record["inputs"])
                 request_data = checkpoint.request_data or {}
+                operation_key = request_data.get("operation_key", inputs.get("operation_key", operation_id))
                 # A retry marker names the *next* generation; reconcile the
                 # attempt whose effects are still awaiting resolution.
                 previous = checkpoint.attempt_generation
@@ -1776,11 +1848,8 @@ class Botpipe:
                         name: Path(path)
                         for name, path in request_data.get("artifacts", {}).items()
                     },
-                    receipt_dir=Path(
-                        request_data.get(
-                            "receipt_dir", Path(data["folder"]) / "receipts"
-                        )
-                    ),
+                    operation_key=operation_key,
+                    session_key=inputs.get("session"),
                     timeout=RunLimits.from_record(data).timeout,
                     attempt=previous + 1,
                     reads=tuple(Path(path) for path in request_data.get("reads", ())),
@@ -1792,21 +1861,48 @@ class Botpipe:
                     ),
                     instructions=inputs.get("instructions"),
                     settings=inputs.get("settings", {}),
+                    checkpoint=self.journal.attempt(operation_id, previous + 1),
+                    on_checkpoint=lambda update: self.journal.attempt_checkpoint(
+                        operation_id, previous + 1, update
+                    ),
                 )
                 store = ArtifactStore(
-                    request.receipt_dir.parent,
+                    Path(data["folder"]),
+                    state_dir=self.state_dir,
                     workspace=request.workspace,
                     allowed_roots=(self.state_dir / "tasks" / data["task_id"],),
-                    forbidden_paths=(self.journal.path,),
+                    forbidden_paths=self.protected_paths(data["folder"]),
                 )
                 artifact_operation = f"{operation_id}:generation:{previous}"
-                store.check_legacy_operation(artifact_operation)
+
+                def settle_independent_cleanup():
+                    release = getattr(self.provider, "release_operation", None)
+                    if inputs.get("session") is not None or not callable(release):
+                        return
+                    attempt = self.journal.attempt(operation_id, previous + 1)
+                    if not attempt:
+                        return
+                    cleanup = attempt.get("cleanup") or {}
+                    if cleanup.get("status") == "completed" or cleanup.get("resolved_by") == "operator":
+                        return
+                    try:
+                        release(operation_key, require_owner=bool(attempt.get("dispatch_authorized")))
+                    except Exception as exc:
+                        # Explicit resolution may accept uncertainty, but it is
+                        # not evidence that an old process was stopped.
+                        cleanup = {
+                            "status": "incomplete", "error": str(exc),
+                            "resolved_by": "operator",
+                            "resolution": "fail" if fail else "retry" if retry else "accept",
+                        }
+                    else:
+                        cleanup = {"status": "completed"}
+                    self.journal.attempt_checkpoint(operation_id, previous + 1, {"cleanup": cleanup})
 
                 def reconcile_provider():
                     nonlocal artifact_digests, response, retry, source, checkpoint
                     if isinstance(checkpoint, RespondedCheckpoint):
-                        # This journaled response already passed the provider
-                        # boundary; it is as authoritative as a recovered receipt.
+                        # The durable terminal response needs no native recovery.
                         outcome = Completed(checkpoint.response)
                     else:
                         outcome = recover_outcome(self.provider, request)
@@ -1815,6 +1911,12 @@ class Botpipe:
                     if fail:
                         # Explicit failure may resolve a stopped or unknowable old
                         # attempt, but never a turn known to still be active.
+                        if isinstance(outcome, Completed):
+                            response = outcome.response
+                            checkpoint = ProviderLifecycle.completed(checkpoint, response)
+                        select_resolution(outcome)
+                        if isinstance(outcome, Completed):
+                            _persist_response(self.journal, operation_id, checkpoint.to_record(), session_key=inputs.get("session"))
                         return
                     action = ProviderLifecycle.reconciliation_action(outcome)
                     if action is RecoveryAction.USE_RESPONSE:
@@ -1934,6 +2036,7 @@ class Botpipe:
                             checkpoint = ProviderLifecycle.with_artifact_resolution(
                                 checkpoint, approved
                             )
+                    select_resolution(outcome)
                     if response is not _UNSET:
                         # Record the operator's selection before capture so a
                         # restart can resume from the chosen response.
@@ -1969,20 +2072,51 @@ class Botpipe:
                     else nullcontext()
                 )
                 with session_guard:
-                    reconcile_provider()
+                    from .session_bindings import SessionBinding
 
-                if fail:
-                    self._fail_resolution(
-                        run_id,
-                        operation_id,
-                        record,
-                        source,
-                        already_failed=replaying_failure,
-                    )
+                    binding = SessionBinding(self.journal, session_key) if session_key else None
+                    owner_attempt = previous + 1
+                    if binding is not None:
+                        pending = binding.check(operation_key).get("pending")
+                        if pending is not None and pending["operation_key"] == operation_key:
+                            owner_attempt = pending["attempt"]
+                    reconcile_provider()
+                    settle_independent_cleanup()
+                    if fail:
+                        self._fail_resolution(
+                            run_id, operation_id, record, source,
+                            already_failed=replaying_failure,
+                        )
+                        if binding is not None:
+                            binding.finish(
+                                run_id, operation_key,
+                                operation_id=operation_id, attempt=owner_attempt,
+                                session_id=None if response is _UNSET else response.session_id,
+                                outcome="operator_failed",
+                            )
+                        self._finish_failed_resolution(run_id, operation_id, source)
+                        return
+                    if retry:
+                        checkpoint = ProviderLifecycle.authorize_retry(checkpoint)
+                        _persist_response(self.journal, operation_id, checkpoint.to_record())
+                        if binding is not None:
+                            binding.claim(run_id, operation_key, operation_id, checkpoint.generation + 1)
+                    if binding is not None and not retry:
+                        binding.finish(
+                            run_id, operation_key,
+                            operation_id=operation_id, attempt=owner_attempt,
+                            session_id=None if response is _UNSET else response.session_id,
+                            outcome="operator_accepted",
+                        )
+                    self.journal.event(run_id, "operation_reconciled", {
+                        "retry": retry, "source": source,
+                        **({"artifacts": checkpoint.artifact_resolution} if artifact_digests is not None else {}),
+                    }, operation_id)
                     return
 
             elif response is not _UNSET:
                 result = codec.encode(response)
+                select_resolution()
                 _commit_or_confirm(
                     self.journal,
                     operation_id,
@@ -1993,18 +2127,15 @@ class Botpipe:
             elif accept:
                 raise ValueError("Activity resolution with accept needs a response")
             if retry:
+                select_resolution()
                 # Explicit retry is represented by an authorization marker; the
-                # original intent/identity remains, and adapters keep old receipts.
-                if record["kind"] == "provider":
-                    checkpoint = ProviderLifecycle.authorize_retry(checkpoint)
-                    retry_record = checkpoint.to_record()
-                else:
-                    retry_record = {
-                        "retry_authorized": True,
-                        "generation": old.get("generation", 0)
-                        + (0 if old.get("retry_authorized") else 1),
-                        **({"request": old["request"]} if "request" in old else {}),
-                    }
+                # original intent and every attempt remain in the ledger.
+                retry_record = {
+                    "retry_authorized": True,
+                    "generation": old.get("generation", 0)
+                    + (0 if old.get("retry_authorized") else 1),
+                    **({"request": old["request"]} if "request" in old else {}),
+                }
                 _persist_response(self.journal, operation_id, retry_record)
             self.journal.event(
                 run_id,
@@ -2041,6 +2172,8 @@ class Botpipe:
             pending_input=None,
             updated_at=now(),
         )
+
+    def _finish_failed_resolution(self, run_id, operation_id, source):
         if not any(
             event["event"] == "operation_reconciled"
             and event["operation_id"] == operation_id

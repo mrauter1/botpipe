@@ -24,7 +24,10 @@ def adapter():
     return CodexAppServerAdapter(
         ["unused"],
         capabilities=CodexCapabilities(
-            executable="unused", version="fixture", identity="fixture", methods=frozenset()
+            executable="unused",
+            version="fixture",
+            identity="fixture",
+            methods=frozenset(),
         ),
     )
 
@@ -199,7 +202,7 @@ def test_replacement_start_does_not_suppress_cleanup_checkpoint_failure(monkeypa
             pass
 
     def fail_checkpoint(update):
-        raise RuntimeError("receipt write failed")
+        raise RuntimeError("checkpoint write failed")
 
     def unexpected_probe(**kwargs):
         pytest.fail("replacement startup ignored a checkpoint write failure")
@@ -211,5 +214,5 @@ def test_replacement_start_does_not_suppress_cleanup_checkpoint_failure(monkeypa
         "thread", "turn", None, None, fail_checkpoint, process=old
     )
     monkeypatch.setattr(client, "probe", unexpected_probe)
-    with pytest.raises(CodexProtocolError, match="receipt write failed"):
+    with pytest.raises(CodexProtocolError, match="checkpoint write failed"):
         client._start()

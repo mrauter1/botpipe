@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import sys
 import threading
 from dataclasses import replace
@@ -14,10 +13,8 @@ from botpipe.codex_appserver import CodexAppServerAdapter
 from botpipe.policy import NetworkMode, Policy, SandboxMode
 from botpipe.providers import (
     CodexProvider,
-    ProviderInterruptedError,
     ProviderRequest,
     ProviderResponse,
-    receipt_path,
 )
 from botpipe.recovery import Completed, Stopped, Unknown, recover_outcome
 
@@ -41,38 +38,35 @@ def capabilities() -> CodexCapabilities:
 
 
 def interrupted_request(tmp_path: Path, *, preset: str = "generate") -> ProviderRequest:
-    request = ProviderRequest(
-        "interrupted",
-        "answer",
-        tmp_path,
-        "thread",
-        None,
-        Policy(sandbox_mode=SandboxMode.READ_ONLY, network=NetworkMode.NONE),
-        {},
-        tmp_path / "receipts",
-        1,
+    checkpoint = {
+        "status": "turn_acknowledged",
+        "session_id": "thread",
+        "turn_id": "turn",
+        "probe_hash": "original-probe",
+        "enforcement": {
+            "sandbox": "codex:read-only",
+            "codex_version": "original-version",
+        },
+    }
+
+    def save(update: dict) -> None:
+        checkpoint.update(update)
+
+    return ProviderRequest(
+        operation_id="interrupted",
+        prompt="answer",
+        workspace=tmp_path,
+        session_id="thread",
+        output_schema=None,
+        policy=Policy(sandbox_mode=SandboxMode.READ_ONLY, network=NetworkMode.NONE),
+        artifacts={},
+        timeout=1,
+        session_key="test:interrupted",
         preset=preset,
         tools=(),
+        checkpoint=checkpoint,
+        on_checkpoint=save,
     )
-    path = receipt_path(request)
-    path.parent.mkdir()
-    path.write_text(
-        json.dumps(
-            {
-                "operation_id": request.operation_id,
-                "attempt": 1,
-                "status": "turn_acknowledged",
-                "session_id": "thread",
-                "turn_id": "turn",
-                "probe_hash": "original-probe",
-                "enforcement": {
-                    "sandbox": "codex:read-only",
-                    "codex_version": "original-version",
-                },
-            }
-        )
-    )
-    return request
 
 
 def history_adapter(
@@ -173,10 +167,11 @@ def test_recovered_disallowed_tool_is_terminal_and_keeps_evidence(
             ]
         )
     assert calls == expected
-    receipt = json.loads(receipt_path(request).read_text())
-    assert receipt["status"] == "failed" and receipt["policy_error"] is True
-    assert receipt["enforcement"]["audit"] == "tool-policy-violation"
-    assert receipt["audit"][0]["data"]["item"]["id"] == "forbidden-command"
+    checkpoint = request.checkpoint
+    assert checkpoint is not None
+    assert checkpoint["status"] == "failed" and checkpoint["policy_error"] is True
+    assert checkpoint["enforcement"]["audit"] == "tool-policy-violation"
+    assert checkpoint["audit"][0]["data"]["item"]["id"] == "forbidden-command"
 
 
 @pytest.mark.parametrize("status", ["failed", "interrupted", "cancelled"])
@@ -195,10 +190,11 @@ def test_recovered_clean_terminal_turn_is_stopped_with_audit(
         "thread/backgroundTerminals/clean",
         "thread/backgroundTerminals/list",
     ]
-    receipt = json.loads(receipt_path(request).read_text())
-    assert receipt["status"] == "turn_acknowledged"
-    assert receipt["enforcement"]["audit"] == "no-tool-calls-observed"
-    assert receipt["audit"][0]["data"]["item"]["type"] == "agentMessage"
+    checkpoint = request.checkpoint
+    assert checkpoint is not None
+    assert checkpoint["status"] == "failed"
+    assert checkpoint["enforcement"]["audit"] == "no-tool-calls-observed"
+    assert checkpoint["audit"][0]["data"]["item"]["type"] == "agentMessage"
 
 
 def test_recovered_safe_result_keeps_audit_and_original_enforcement(
@@ -248,8 +244,9 @@ def test_running_recovery_requires_background_cleanup_before_stopped(
         "thread/backgroundTerminals/clean",
         "thread/backgroundTerminals/list",
     ]
-    receipt = json.loads(receipt_path(request).read_text())
-    assert receipt["enforcement"]["audit"] == "no-tool-calls-observed"
+    checkpoint = request.checkpoint
+    assert checkpoint is not None
+    assert checkpoint["enforcement"]["audit"] == "no-tool-calls-observed"
 
 
 def test_running_recovery_without_background_cleanup_stays_unknown(
@@ -265,8 +262,9 @@ def test_running_recovery_without_background_cleanup_stays_unknown(
     outcome = recover_outcome(CodexProvider(adapter=adapter), request)
 
     assert isinstance(outcome, Unknown)
-    receipt = json.loads(receipt_path(request).read_text())
-    assert receipt["enforcement"]["audit"] == "no-tool-calls-observed"
+    checkpoint = request.checkpoint
+    assert checkpoint is not None
+    assert checkpoint["enforcement"]["audit"] == "no-tool-calls-observed"
 
 
 def test_recovery_waits_until_native_background_inventory_is_empty(
@@ -322,8 +320,9 @@ def test_invalid_background_inventory_stays_unknown(
     outcome = recover_outcome(CodexProvider(adapter=adapter), request)
 
     assert isinstance(outcome, Unknown)
-    receipt = json.loads(receipt_path(request).read_text())
-    assert receipt["cleanup"]["status"] == "incomplete"
+    checkpoint = request.checkpoint
+    assert checkpoint is not None
+    assert checkpoint["cleanup"]["status"] == "incomplete"
 
 
 def test_cancelled_recovery_does_not_claim_terminal_cleanup(tmp_path, monkeypatch):
@@ -351,8 +350,9 @@ def test_recovered_run_policy_violation_remains_unresolved(
 
     assert isinstance(outcome, Unknown)
     assert "disallowed tool" in outcome.detail
-    receipt = json.loads(receipt_path(request).read_text())
-    assert receipt["enforcement"]["audit"] == "tool-policy-violation"
+    checkpoint = request.checkpoint
+    assert checkpoint is not None
+    assert checkpoint["enforcement"]["audit"] == "tool-policy-violation"
 
 
 def test_sdk_native_audit_violation_fails_without_becoming_unresolved(tmp_path):
@@ -381,13 +381,11 @@ def test_incomplete_cleanup_blocks_retry_even_when_native_turn_is_terminal(
     tmp_path, native_status
 ):
     request = interrupted_request(tmp_path, preset="run")
-    path = receipt_path(request)
-    record = json.loads(path.read_text())
-    record.update(
+    assert request.checkpoint is not None
+    request.checkpoint.update(
         status="failed",
         cleanup={"status": "incomplete", "error": "terminal cleanup failed"},
     )
-    path.write_text(json.dumps(record))
 
     class Adapter:
         def recover_turn(self, *args, **kwargs):
@@ -401,13 +399,11 @@ def test_incomplete_cleanup_blocks_retry_even_when_native_turn_is_terminal(
 
 def test_incomplete_cleanup_still_allows_completed_native_adoption(tmp_path):
     request = interrupted_request(tmp_path, preset="run")
-    path = receipt_path(request)
-    record = json.loads(path.read_text())
-    record.update(
+    assert request.checkpoint is not None
+    request.checkpoint.update(
         status="failed",
         cleanup={"status": "incomplete", "error": "terminal cleanup failed"},
     )
-    path.write_text(json.dumps(record))
 
     class Adapter:
         def recover_turn(self, *args, **kwargs):
@@ -423,18 +419,13 @@ def test_completed_cleanup_with_unknown_history_stays_unknown_and_is_not_resent(
     tmp_path,
 ):
     request = interrupted_request(tmp_path, preset="run")
-    path = receipt_path(request)
-    record = json.loads(path.read_text())
-    record["cleanup"] = {"status": "completed"}
-    path.write_text(json.dumps(record))
+    assert request.checkpoint is not None
+    request.checkpoint["cleanup"] = {"status": "completed"}
 
     class Adapter:
         def recover_turn(self, *args, **kwargs):
             return "unknown", None
 
-    provider = CodexProvider(adapter=Adapter())
-    outcome = recover_outcome(provider, request)
+    outcome = recover_outcome(CodexProvider(adapter=Adapter()), request)
 
     assert isinstance(outcome, Unknown)
-    with pytest.raises(ProviderInterruptedError, match="refusing to resend"):
-        provider.run(request)

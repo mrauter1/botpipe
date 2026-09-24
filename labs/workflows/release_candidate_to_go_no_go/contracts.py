@@ -25,6 +25,8 @@ class ReleaseEvidencePayload(LabPhaseOutcome):
     evidence_artifacts: list[str] = Field(min_length=1)
     blocker_artifacts: list[str] = Field(default_factory=list)
     unresolved_gaps: list[str] = Field(default_factory=list)
+    executed_checks: list[str] = Field(default_factory=list)
+    unexecuted_checks: list[str] = Field(default_factory=list)
     replan_reason: str | None = None
 
 
@@ -35,6 +37,8 @@ class ReleaseAssessmentPayload(LabPhaseOutcome):
     evidence_artifacts: list[str] = Field(min_length=1)
     recommended_decision: Literal["go", "conditional_go", "no_go"] | None = None
     blocking_issue_count: int = Field(default=0, ge=0)
+    executed_checks: list[str] = Field(default_factory=list)
+    unexecuted_checks: list[str] = Field(default_factory=list)
     replan_reason: str | None = None
 
 

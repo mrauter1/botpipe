@@ -294,23 +294,6 @@ def test_stale_pending_metadata_cannot_replace_accepted_answer(tmp_path):
         assert client.resume(paused.run_id, workflow=gate).value == "first"
 
 
-def test_unvalidated_answer_checkpoint_is_rejected_without_revalidation(tmp_path):
-    @workflow
-    def gate():
-        return ask_human("Approve?")
-
-    with Botpipe(tmp_path, provider=FakeProvider([])) as client:
-        paused = client.run(gate)
-        operation_id = paused.pending_input["operation_id"]
-        client.journal.response(operation_id, {"answer": codec.encode("legacy")})
-
-        result = client.resume(paused.run_id, workflow=gate)
-
-        assert result.status == "failed"
-        assert "missing its validated answer" in result.error
-        assert client.journal.get(operation_id)["status"] == "response"
-
-
 def test_cli_rejected_answer_is_actionable_and_correctable(tmp_path):
     source = tmp_path / "approval.py"
     source.write_text(

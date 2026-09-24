@@ -30,6 +30,8 @@ def _release_answer(request, *, outcome="accepted", invalid=False):
                 "decision": "go",
                 "recommended_decision": "go",
                 "blocking_issue_count": 0,
+                "executed_checks": ["pytest"],
+                "unexecuted_checks": [],
                 "communication_ready": True,
             }
             path.write_text(
@@ -37,7 +39,7 @@ def _release_answer(request, *, outcome="accepted", invalid=False):
                 if path.suffix == ".json"
                 else f"# {name}\nAccepted evidence."
             )
-        return {"summary": "Produced evidence."}
+    producer = bool(request.artifacts)
     common = {
         "outcome": outcome,
         "summary": "Repair the rollout boundary."
@@ -48,7 +50,12 @@ def _release_answer(request, *, outcome="accepted", invalid=False):
         if outcome == "needs_replan"
         else None,
     }
-    if phase == "assemble_evidence_pack":
+    if not producer:
+        common["validation_findings"] = ["The evidence supports the decision."]
+        return common
+    if phase == "frame_release":
+        common["evidence_focus"] = ["tests", "rollback"]
+    elif phase == "assemble_evidence_pack":
         common["evidence_artifacts"] = names
     elif phase == "assess_go_no_go":
         common.update(
@@ -73,13 +80,13 @@ def test_local_rework_and_backward_replan_preserve_history_and_replay(tmp_path):
     def provider_response(request):
         payload = _input(request)
         phase = payload["phase"]
-        role = "producer" if request.artifacts else "verifier"
+        role = "producer" if request.artifacts else "reviewer"
         seen[phase, role] += 1
         if role == "producer":
             produced.append(phase)
             inputs.append(payload)
         outcome = "accepted"
-        if role == "verifier" and seen[phase, role] == 1:
+        if role == "reviewer" and seen[phase, role] == 1:
             if phase == "assemble_evidence_pack":
                 outcome = "needs_rework"
             elif phase == "prepare_decision_package":
@@ -101,14 +108,11 @@ def test_local_rework_and_backward_replan_preserve_history_and_replay(tmp_path):
         ]
         assert inputs[2]["rework_feedback"]["outcome"] == "needs_rework"
         assert inputs[5]["replan_feedback"]["details"]["outcome"] == "needs_replan"
-        assert [item["name"] for item in inputs[5]["prior_phases"]] == [
-            "frame_release",
-            "assemble_evidence_pack",
-        ]
+        assert "prior_phases" not in inputs[5]
         assert len(result.value.phases) == 4
         assert result.value.phases[-1].details["decision"] == "go"
         operations = _provider_operations(client, result.run_id)
-        assert len(operations) == 14
+        assert len(operations) == 13
         assert all(row["status"] == "completed" for row in operations)
         before = len(provider.calls)
         replayed = client.resume(result.run_id)
@@ -155,7 +159,7 @@ def test_replan_to_outer_framing_restarts_evidence_and_drops_stale_logical_phase
 
 
 @pytest.mark.parametrize("defect", ["invalid_enum", "missing_required_field"])
-def test_domain_verifier_contract_repairs_invalid_payload_without_repeating_producer(
+def test_domain_producer_contract_repairs_invalid_payload_in_the_same_operation(
     tmp_path,
     defect,
 ):
@@ -164,7 +168,7 @@ def test_domain_verifier_contract_repairs_invalid_payload_without_repeating_prod
     def answer(request):
         nonlocal assessment_turns
         assessment = (
-            not request.artifacts and _input(request)["phase"] == "assess_go_no_go"
+            bool(request.artifacts) and _input(request)["phase"] == "assess_go_no_go"
         )
         if assessment:
             assessment_turns += 1
@@ -181,9 +185,9 @@ def test_domain_verifier_contract_repairs_invalid_payload_without_repeating_prod
         result = client.run(ReleaseCandidateToGoNoGo, Params(release_name="release"))
         assert result.ok, result.error
         assert result.value.phases[2].details["recommended_decision"] == "go"
-        assert len([request for request in provider.calls if request.artifacts]) == 4
+        assert len([request for request in provider.calls if request.artifacts]) == 5
         assert assessment_turns == 2
-        assert len(provider.calls) == 9
+        assert len(provider.calls) == 8
         operations = _provider_operations(client, result.run_id)
         assert sum(row["status"] == "failed" for row in operations) == 1
 
@@ -192,34 +196,33 @@ def test_domain_verifier_contract_repairs_invalid_payload_without_repeating_prod
 def test_missing_prerequisite_pauses_then_resumes_same_phase_with_answer(
     tmp_path, pause_outcome
 ):
-    verifier_turns = 0
+    frame_turns = 0
     producer_inputs = []
 
     def answer(request):
-        nonlocal verifier_turns
+        nonlocal frame_turns
         payload = _input(request)
         if request.artifacts:
             producer_inputs.append(payload)
-        else:
-            verifier_turns += 1
+        if request.artifacts and payload["phase"] == "frame_release":
+            frame_turns += 1
         outcome = (
             pause_outcome
-            if not request.artifacts and verifier_turns == 1
+            if request.artifacts
+            and payload["phase"] == "frame_release"
+            and frame_turns == 1
             else "accepted"
         )
+        result = _release_answer(request, outcome=outcome)
         if outcome != "accepted":
-            return {
-                "outcome": outcome,
-                "summary": "The rollback prerequisite is unavailable.",
-                "question": "Where is the production rollback evidence?",
-            }
-        return _release_answer(request)
+            result["question"] = "Where is the production rollback evidence?"
+        return result
 
     provider = FakeProvider([answer] * 12)
     with Botpipe(tmp_path, provider=provider) as client:
         paused = client.run(ReleaseCandidateToGoNoGo, Params(release_name="release"))
         assert paused.status == "awaiting_input", paused.error
-        assert len(provider.calls) == 2
+        assert len(provider.calls) == 1
         assert (
             "Where is the production rollback evidence?"
             in paused.pending_input["question"]
@@ -228,7 +231,7 @@ def test_missing_prerequisite_pauses_then_resumes_same_phase_with_answer(
             paused.run_id, answer="Production rollback evidence is in rollback.json."
         )
         assert result.ok, result.error
-        assert len(provider.calls) == 10
+        assert len(provider.calls) == 8
         assert "rollback.json" in json.dumps(producer_inputs[1])
         assert len(result.value.phases) == 4
 
@@ -293,5 +296,5 @@ def test_security_child_passes_immutable_handles_with_external_state_directory(
         )
         replayed = client.resume(result.run_id)
         assert replayed.ok, replayed.error
-        assert len(provider.calls) == 10
+        assert len(provider.calls) == 9
         assert replayed.value.artifacts == result.value.artifacts

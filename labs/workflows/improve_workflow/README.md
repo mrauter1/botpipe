@@ -41,6 +41,9 @@ The supported objectives
 are `reliability`, `token_usage`, and `latency`. Rankings describe recorded
 burden, not predicted benefit. Source identity and evidence checks prevent
 unrelated runs from being treated as observations of the selected workflow.
+The workflow captures one canonical full surface manifest for the optimizer
+baseline and fails clearly when that attribution is unavailable or changes
+during capture.
 
 ## Outcomes
 
@@ -65,8 +68,8 @@ a shell command. Discovery/import and compilation checks also run in isolation.
 The model implements and reviews; deterministic code owns identities, metrics,
 validation, and comparison outcomes.
 
-`max_revisions=2` allows at most three proposal/review attempts and three
-implementation attempts. All provider work shares `max_provider_turns=12`,
+`max_revisions=2` allows at most three implementation/check/review attempts
+after one reviewed proposal. All provider work shares `max_provider_turns=12`,
 `max_provider_seconds=1800`, and `provider_timeout=600`. Provider repair turns
 are included. Executable validation has its own `validation_timeout=600`, and
 the evaluation specification carries process and evaluator limits. These are

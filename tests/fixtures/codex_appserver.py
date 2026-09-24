@@ -72,8 +72,23 @@ while True:
     if method == "thread/unsubscribe":
         send({"id": request["id"], "result": {"status": "unsubscribed"}})
         continue
-    if SCENARIO == "concurrent_stall" and method == "turn/interrupt":
-        send({"id": request["id"], "result": {}})
+    if method == "thread/read":
+        send({
+            "id": request["id"],
+            "result": {
+                "thread": {
+                    "turns": [
+                        {
+                            "id": "recorded-turn",
+                            "status": "completed",
+                            "items": [
+                                {"type": "agentMessage", "text": "recovered answer"}
+                            ],
+                        }
+                    ]
+                }
+            },
+        })
         continue
     if method in {"thread/start", "thread/resume"}:
         time.sleep(float(os.environ.get("BOTPIPE_FAKE_THREAD_DELAY", "0")))
@@ -147,11 +162,6 @@ while True:
             "result": {"turn": {"id": turn_id, "status": "inProgress", "items": []}},
         }
     )
-
-    if SCENARIO == "concurrent_stall":
-        # Keep accepting JSON-RPC so distinct resumed threads can have active
-        # turns at the same time. The test tears down this shared transport.
-        continue
 
     if SCENARIO == "stall_tree":
         # Match Codex's native sandbox helper: it has its own process group and

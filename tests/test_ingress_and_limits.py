@@ -32,6 +32,18 @@ def _subprocess_env():
     }
 
 
+def _toml_value(value):
+    if isinstance(value, bool):
+        return str(value).lower()
+    if isinstance(value, str):
+        return json.dumps(value)
+    if isinstance(value, int) and not -(2**63) <= value < 2**63:
+        # TOML integers are signed 64-bit; an overflowing float reaches the
+        # same finite-number validation exercised by this case.
+        return "1e1000"
+    return str(value).lower()
+
+
 def test_model_input_is_bound_once_and_internal_calls_do_not_revalidate(tmp_path):
     calls = []
 
@@ -251,8 +263,8 @@ def test_resumed_limits_are_run_owned_and_inherited_by_children(tmp_path):
 def test_operation_limit_validation_is_shared(tmp_path, value):
     with pytest.raises(ValueError, match="positive integer"):
         Botpipe(tmp_path, provider=FakeProvider([]), max_operations=value)
-    path = tmp_path / "botpipe.json"
-    path.write_text(json.dumps({"max_operations": value}))
+    path = tmp_path / "botpipe.toml"
+    path.write_text(f"max_operations = {_toml_value(value)}\n")
     with pytest.raises(ConfigError, match="positive integer"):
         load_config(tmp_path)
 
@@ -263,8 +275,8 @@ def test_operation_limit_validation_is_shared(tmp_path, value):
 def test_timeout_validation_is_shared(tmp_path, value):
     with pytest.raises(ValueError, match="finite positive"):
         Botpipe(tmp_path, provider=FakeProvider([]), timeout=value)
-    path = tmp_path / "botpipe.json"
-    path.write_text(json.dumps({"timeout": value}))
+    path = tmp_path / "botpipe.toml"
+    path.write_text(f"timeout = {_toml_value(value)}\n")
     with pytest.raises(ConfigError, match="finite positive"):
         load_config(tmp_path)
 

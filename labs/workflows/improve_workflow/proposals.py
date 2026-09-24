@@ -71,14 +71,24 @@ class Proposal(BaseModel):
 @activity(retry_safe=True, name="capture improvement source")
 def _capture_source(selected_workflow: str) -> _SourceCapture:
     from botpipe.discovery import resolve_workflow
-    from botpipe.provenance import capture_workflow_provenance
+    from botpipe.provenance import (
+        capture_workflow_provenance,
+        capture_workflow_surface_manifest,
+    )
     from botpipe_optimizer import capture_source_manifest
 
     context = current_run()
     selected = resolve_workflow(selected_workflow, context.workspace)
     manifest = capture_source_manifest(selected)
     provenance = capture_workflow_provenance(selected, context.workspace)
-    baseline_manifest = provenance.get("surface_manifest") or asdict(manifest)
+    if not provenance["verified"]:
+        raise ValueError(
+            "Cannot capture an attributable optimizer baseline: "
+            + provenance["error"]
+        )
+    baseline_manifest = capture_workflow_surface_manifest(selected, context.workspace)
+    if baseline_manifest["surface_id"] != provenance["surface_id"]:
+        raise ValueError("workflow surface changed during optimizer baseline capture")
     return _SourceCapture(
         manifest=manifest,
         provenance=provenance,

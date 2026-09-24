@@ -278,10 +278,11 @@ def native_request(
             network=NetworkMode.NONE,
         ),
         artifacts={},
-        receipt_dir=root.parent / "receipts",
         timeout=timeout,
+        session_key=f"native:{session_id}" if session_id is not None else None,
         preset=preset,
         tools=tools,
+        on_checkpoint=lambda _update: None,
     )
 
 
@@ -426,6 +427,108 @@ def test_latest_native_default_session_presets_and_read_only_enforcement(native)
     assert any(word in output for word in ("denied", "read-only", "permission", "not permitted")), output
     report.write_text("later workspace edit", encoding="utf-8")
     assert default.artifacts.report.read_text() == "native artifact"
+
+
+def test_latest_native_background_continuity_and_cross_process_refresh(native) -> None:
+    client, server, workspace = native
+    marker = workspace / "between-turn-background.txt"
+    if os.name == "nt":
+        target = str(marker).replace("'", "''")
+        script = (
+            "Start-Sleep -Milliseconds 400; "
+            f"[IO.File]::WriteAllText('{target}', 'alive')"
+        ).replace('"', '`"')
+        command = (
+            "Start-Process powershell -WindowStyle Hidden "
+            f"-ArgumentList '-NoProfile','-Command','{script}'"
+        )
+    else:
+        command = (
+            f"(sleep 0.4; printf %s alive > {shlex.quote(str(marker))}) "
+            ">/dev/null 2>&1 &"
+        )
+    server.queue_exec("background-between-turns", command)
+    first = native_request(
+        workspace,
+        operation_id="native-background-first",
+        preset="run",
+        prompt=(
+            "continuity-marker-first: start the requested background command, "
+            "then return the fixed response."
+        ),
+        tools=("shell",),
+    )
+    try:
+        started = _start_or_skip_local_sandbox(client, first)
+        second = _start_or_skip_local_sandbox(
+            client,
+            native_request(
+                workspace,
+                operation_id="native-background-second",
+                preset="generate",
+                prompt=(
+                    "continuity-marker-second: return the fixed response without tools."
+                ),
+                tools=(),
+                session_id=started.session_id,
+            ),
+        )
+        assert second.session_id == started.session_id
+
+        deadline = time.monotonic() + 5
+        while not marker.exists() and time.monotonic() < deadline:
+            time.sleep(0.02)
+        assert marker.read_text(encoding="utf-8") == "alive"
+
+        other_process = CodexAppServerAdapter(
+            client.command,
+            env=client.env,
+            state_dir=client.state_dir,
+            interrupt_grace_seconds=client.interrupt_grace_seconds,
+        )
+        try:
+            external = _start_or_skip_local_sandbox(
+                other_process,
+                native_request(
+                    workspace,
+                    operation_id="native-external-process",
+                    preset="query",
+                    prompt=(
+                        "continuity-marker-external: return the fixed response without tools."
+                    ),
+                    tools=(),
+                    session_id=started.session_id,
+                ),
+            )
+            refreshed = _start_or_skip_local_sandbox(
+                client,
+                native_request(
+                    workspace,
+                    operation_id="native-original-process-refresh",
+                    preset="generate",
+                    prompt=(
+                        "continuity-marker-refresh: return the fixed response without tools."
+                    ),
+                    tools=(),
+                    session_id=started.session_id,
+                ),
+            )
+        finally:
+            other_process.close()
+        assert external.session_id == refreshed.session_id == started.session_id
+        wire_inputs = [json.dumps(request.get("input", [])) for request in server.requests]
+        external_wire = next(
+            value for value in wire_inputs if "continuity-marker-external" in value
+        )
+        refreshed_wire = next(
+            value for value in wire_inputs if "continuity-marker-refresh" in value
+        )
+        assert "continuity-marker-first" in external_wire
+        assert "continuity-marker-second" in external_wire
+        assert "continuity-marker-external" in refreshed_wire
+    finally:
+        if not marker.exists():
+            print("Native fixture diagnostics:", server.diagnostics())
 
 
 def _process_exists(process_id: int) -> bool:

@@ -15,7 +15,7 @@ from urllib.parse import urlsplit
 
 from .limits import RunLimits
 
-CONFIG_FILENAMES = ("botpipe.toml", ".botpipe.toml", "botpipe.json")
+CONFIG_FILENAMES = ("botpipe.toml",)
 
 
 class ConfigError(ValueError):
@@ -53,21 +53,8 @@ def discover_config(workspace: str | Path = ".") -> Path | None:
         if not path.is_file():
             raise ConfigError(f"BOTPIPE_CONFIG does not exist: {path}")
         return path.resolve()
-    found = [root / name for name in CONFIG_FILENAMES if (root / name).is_file()]
-    if len(found) > 1:
-        names = ", ".join(path.name for path in found)
-        raise ConfigError(f"multiple Botpipe config files found: {names}")
-    if found:
-        return found[0]
-    pyproject = root / "pyproject.toml"
-    if pyproject.is_file():
-        try:
-            payload = tomllib.loads(pyproject.read_text(encoding="utf-8"))
-        except (OSError, tomllib.TOMLDecodeError) as exc:
-            raise ConfigError(f"could not read {pyproject}: {exc}") from exc
-        if isinstance(payload.get("tool", {}).get("botpipe"), Mapping):
-            return pyproject
-    return None
+    path = root / CONFIG_FILENAMES[0]
+    return path if path.is_file() else None
 
 
 def load_config(
@@ -95,9 +82,6 @@ def load_config(
     allowed = {
         "default_provider",
         "codex",
-        "codex_path",
-        "provider",
-        "provider_config",
         "policy",
         "state_dir",
         "max_operations",
@@ -109,19 +93,10 @@ def load_config(
 
     if "default_provider" in payload and payload["default_provider"] != "codex":
         raise ConfigError("default_provider must be 'codex' in Botpipe 2.0")
-    file_provider, legacy_config = _provider_values(
-        payload.get("provider"), payload.get("provider_config")
-    )
-    resolved_provider = (
-        provider or payload.get("default_provider") or file_provider or "codex"
-    )
+    resolved_provider = provider or payload.get("default_provider") or "codex"
     if resolved_provider != "codex":
         raise ConfigError("Botpipe 2.0 supports only the codex provider")
-    file_provider_config = _merge(
-        legacy_config, _mapping(payload.get("codex"), "codex")
-    )
-    if "codex_path" in payload:
-        file_provider_config.setdefault("path", payload["codex_path"])
+    file_provider_config = _mapping(payload.get("codex"), "codex")
     resolved_provider_config = _merge(file_provider_config, provider_config)
     validate_codex_config(resolved_provider_config)
     executable = resolved_provider_config.get("path")
@@ -172,21 +147,10 @@ def load_config(
 
 
 def _load_mapping(path: Path) -> dict[str, Any]:
+    if path.suffix.lower() != ".toml":
+        raise ConfigError("Botpipe configuration must be a TOML file")
     try:
-        if path.suffix.lower() == ".json":
-            payload = json.loads(path.read_text(encoding="utf-8"))
-        elif path.suffix.lower() in {".yaml", ".yml"}:
-            try:
-                import yaml
-            except ImportError as exc:  # pragma: no cover - optional convenience
-                raise ConfigError(
-                    "YAML config requires PyYAML; use TOML or JSON instead"
-                ) from exc
-            payload = yaml.safe_load(path.read_text(encoding="utf-8"))
-        else:
-            payload = tomllib.loads(path.read_text(encoding="utf-8"))
-            if path.name == "pyproject.toml":
-                payload = payload.get("tool", {}).get("botpipe", {})
+        payload = tomllib.loads(path.read_text(encoding="utf-8"))
     except ConfigError:
         raise
     except (OSError, ValueError, tomllib.TOMLDecodeError) as exc:
@@ -196,21 +160,6 @@ def _load_mapping(path: Path) -> dict[str, Any]:
     if not isinstance(payload, Mapping):
         raise ConfigError(f"{path}: configuration must be a mapping")
     return dict(payload)
-
-
-def _provider_values(provider: Any, separate: Any) -> tuple[str | None, dict[str, Any]]:
-    provider_config = _mapping(separate, "provider_config")
-    if provider is None:
-        return None, provider_config
-    if isinstance(provider, str):
-        return provider, provider_config
-    if isinstance(provider, Mapping):
-        data = dict(provider)
-        name = data.pop("name", None)
-        if name is not None and not isinstance(name, str):
-            raise ConfigError("provider.name must be a string")
-        return name, _merge(data, provider_config)
-    raise ConfigError("provider must be a name or mapping")
 
 
 def _mapping(value: Any, name: str) -> dict[str, Any]:

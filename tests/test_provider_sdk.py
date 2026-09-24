@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from botpipe import Botpipe, Provider, Session, StreamEvent
 from botpipe.policy import NetworkMode, SandboxMode
 from botpipe.providers import FakeProvider, ProviderResponse
+from botpipe.recovery import Unknown
 
 
 class Answer(BaseModel):
@@ -217,7 +218,7 @@ def test_capability_failure_is_preserved_before_dispatch(tmp_path: Path):
             raise AssertionError("must not dispatch")
 
         def recover(self, request):
-            return None
+            return Unknown("preflight rejected before dispatch")
 
     adapter = Adapter()
     provider = Provider(
@@ -632,7 +633,7 @@ def test_retry_safety_tightening_replays_completed_output_repair(tmp_path: Path)
     assert len(fake.calls) == 2
 
 
-def test_codex_retry_carries_thread_without_reusing_old_profile_checkpoint(
+def test_codex_retry_uses_supplied_thread_and_current_checkpoint(
     tmp_path: Path,
 ):
     from dataclasses import replace
@@ -657,6 +658,7 @@ def test_codex_retry_carries_thread_without_reusing_old_profile_checkpoint(
 
     adapter = Adapter()
     provider = CodexProvider(adapter=adapter)
+    checkpoints = []
     request = ProviderRequest(
         operation_id="retry-thread",
         prompt="work",
@@ -665,16 +667,24 @@ def test_codex_retry_carries_thread_without_reusing_old_profile_checkpoint(
         output_schema=None,
         policy=Policy(),
         artifacts={},
-        receipt_dir=tmp_path / "receipts",
         timeout=10,
         preset="run",
+        on_checkpoint=checkpoints.append,
     )
     provider.run(request)
     current_checkpoint = {"profile_hash": "current-profile"}
-    provider.run(replace(request, attempt=2, checkpoint=current_checkpoint))
+    provider.run(
+        replace(
+            request,
+            session_id="thread-1",
+            attempt=2,
+            checkpoint=current_checkpoint,
+        )
+    )
 
     assert adapter.calls[1].session_id == "thread-1"
     assert adapter.calls[1].checkpoint == current_checkpoint
+    assert checkpoints[-1]["status"] == "completed"
 
 
 def test_stopped_policy_failure_preserves_capability_error(tmp_path: Path):
@@ -788,7 +798,7 @@ def test_failed_preflight_preserves_artifacts_before_next_run(tmp_path: Path):
             raise AssertionError("must not dispatch")
 
         def recover(self, request):
-            return None
+            return Unknown("preflight rejected before dispatch")
 
     first_runtime = Botpipe(
         tmp_path, provider=Adapter(), state_dir=tmp_path / "first-state"

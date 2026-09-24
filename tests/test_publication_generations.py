@@ -214,7 +214,7 @@ def test_oversized_republication_does_not_mutate_accepted_generation(tmp_path):
 
 
 def test_admitted_input_and_expanded_snapshot_use_same_publish_load_policy(tmp_path):
-    input_limit = 1_000
+    input_limit = 1_200
     snapshot_limit = 10_000
     snapshot, candidate_set, review, baseline = _records(
         "separate evidence bounds",

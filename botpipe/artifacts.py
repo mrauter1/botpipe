@@ -256,6 +256,7 @@ class ArtifactStore:
         workspace: Path | str | None = None,
         allowed_roots: Sequence[Path | str] = (),
         forbidden_paths: Sequence[Path | str] = (),
+        state_dir: Path | str | None = None,
     ):
         self.folder = Path(folder).resolve()
         self.workspace = (
@@ -268,6 +269,25 @@ class ArtifactStore:
             *(Path(p).resolve() for p in allowed_roots),
         )
         self.forbidden_paths = tuple(Path(p).resolve() for p in forbidden_paths)
+        self.state_dir = Path(state_dir).resolve() if state_dir is not None else None
+
+    def _is_run_metadata(self, path: Path) -> bool:
+        if self.state_dir is None:
+            return False
+        try:
+            relative = path.relative_to(self.state_dir / "tasks")
+        except ValueError:
+            return False
+        parts = relative.parts
+        if len(parts) < 4 or parts[1] != "runs":
+            return False
+        return parts[3] in {
+            "ledger.jsonl",
+            "input.json",
+            "request.md",
+            "operations",
+            ".artifacts",
+        }
 
     def _destination(self, artifact: Artifact) -> Path:
         raw = Path(artifact.path)
@@ -284,25 +304,10 @@ class ArtifactStore:
         for parent in (candidate, *candidate.parents):
             if parent.is_symlink():
                 raise ArtifactError(f"Artifact path contains a symlink: {candidate}")
-        relative = resolved.relative_to(root)
-        if any(
-            part in {".artifacts", "receipts", ".receipts"} for part in relative.parts
-        ):
+        if resolved == self.root or resolved.is_relative_to(self.root):
             raise ArtifactError(f"Artifact path targets runtime metadata: {raw}")
-        if resolved.name.endswith(
-            (
-                ".db",
-                ".db-wal",
-                ".db-shm",
-                ".sqlite",
-                ".sqlite-wal",
-                ".sqlite-shm",
-                ".sqlite3",
-                ".sqlite3-wal",
-                ".sqlite3-shm",
-            )
-        ):
-            raise ArtifactError(f"Artifact path targets a database: {raw}")
+        if self._is_run_metadata(resolved):
+            raise ArtifactError(f"Artifact path targets protected state: {raw}")
         if any(
             resolved == path
             or resolved.is_relative_to(path)
@@ -350,19 +355,6 @@ class ArtifactStore:
             # again before handing paths to a provider.
             _, paths = self._declarations(writes)
         return paths
-
-    def check_legacy_operation(self, operation_id: str) -> None:
-        """Reject unfinished state from the removed prepare/rollback protocol."""
-        operation = self._operation(operation_id)
-        if (operation / "rollback.json").exists() or (
-            (operation / "prepare.json").exists()
-            and not (operation / "capture.json").exists()
-        ):
-            raise ArtifactError(
-                "Unsupported legacy artifact preparation or rollback state; "
-                "cannot resume this operation with this version; stored files "
-                "are unchanged"
-            )
 
     def _snapshot(
         self, artifact: Artifact, source: Path, data: bytes
@@ -488,7 +480,6 @@ class ArtifactStore:
         approved = self._approved_digests(writes, expected_digests)
         requested = [artifact.to_record() for artifact in writes]
         operation = self._operation(operation_id)
-        self.check_legacy_operation(operation_id)
         manifest_path = operation / "capture.json"
         intent_path = operation / "capture.pending.json"
         if manifest_path.exists():

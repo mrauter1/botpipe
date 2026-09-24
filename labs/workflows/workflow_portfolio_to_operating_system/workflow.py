@@ -29,7 +29,6 @@ def WorkflowPortfolioToOperatingSystem(
 ) -> LabWorkflowResult:
     """Execute the workflow portfolio to operating system evidence workflow."""
     _producer = Provider()
-    _verifier = _producer.with_config(session=None)
     context = {"request": request, "parameters": params.model_dump(mode="json")}
     context["workflow_catalog"] = observe_catalog()
     context["observed_run_health"] = observe_run_history(
@@ -48,15 +47,8 @@ def WorkflowPortfolioToOperatingSystem(
                 returns=PortfolioGovernanceFramingPayload,
                 replan_target="frame_portfolio_governance",
                 producer=_producer,
-                verifier=_verifier,
                 producer_prompt="prompts/frame_producer.md",
-                verifier_prompt="prompts/frame_verifier.md",
-                input={
-                    **context,
-                    "prior_phases": [
-                        item.evidence.model_dump(mode="json") for item in completed
-                    ],
-                },
+                input=context,
                 reads=prior_handles,
                 writes=(
                     artifact("portfolio_governance_brief.md"),
@@ -75,16 +67,8 @@ def WorkflowPortfolioToOperatingSystem(
                         returns=PortfolioOperatingModelPayload,
                         replan_target="frame_portfolio_governance",
                         producer=_producer,
-                        verifier=_verifier,
                         producer_prompt="prompts/analyze_producer.md",
-                        verifier_prompt="prompts/analyze_verifier.md",
-                        input={
-                            **context,
-                            "prior_phases": [
-                                item.evidence.model_dump(mode="json")
-                                for item in completed
-                            ],
-                        },
+                        input=context,
                         reads=prior_handles,
                         writes=(
                             artifact("portfolio_health_analysis.md"),
@@ -99,16 +83,8 @@ def WorkflowPortfolioToOperatingSystem(
                         returns=PortfolioOperatingSystemPayload,
                         replan_target="analyze_portfolio_operating_model",
                         producer=_producer,
-                        verifier=_verifier,
                         producer_prompt="prompts/package_producer.md",
-                        verifier_prompt="prompts/package_verifier.md",
-                        input={
-                            **context,
-                            "prior_phases": [
-                                item.evidence.model_dump(mode="json")
-                                for item in completed
-                            ],
-                        },
+                        input=context,
                         reads=prior_handles,
                         writes=(
                             artifact("workflow_portfolio_operating_system.md"),

@@ -29,7 +29,6 @@ from .params import Params
 def WorkflowToEvalSuite(params: Params, request: str = "") -> LabWorkflowResult:
     """Execute the workflow to eval suite evidence workflow."""
     _producer = Provider()
-    _verifier = _producer.with_config(session=None)
     context = {"request": request, "parameters": params.model_dump(mode="json")}
     context["selected_workflow_contract"] = observe_workflow(params.selected_workflow)
     optimizer_handoff = None
@@ -61,21 +60,18 @@ def WorkflowToEvalSuite(params: Params, request: str = "") -> LabWorkflowResult:
                 returns=EvaluationTargetFramingPayload,
                 replan_target="frame_evaluation_target",
                 producer=_producer,
-                verifier=_verifier,
                 producer_prompt="prompts/frame_producer.md",
-                verifier_prompt="prompts/frame_verifier.md",
-                input={
-                    **context,
-                    "prior_phases": [
-                        item.evidence.model_dump(mode="json") for item in completed
-                    ],
-                },
+                input=context,
                 reads=prior_handles,
                 writes=(
                     artifact("evaluation_request_brief.md"),
                     artifact("evaluation_dimensions.md"),
                 ),
             )
+            framing = EvaluationTargetFramingPayload.model_validate(phase_1.value)
+            selected_name = context["selected_workflow_contract"]["name"]
+            if framing.selected_workflow_name != selected_name:
+                raise ValueError("evaluation framing changed the selected workflow")
             completed.append(phase_1)
             prior_handles = prior_handles + phase_1.handles
             design_eval_cases_checkpoint = len(completed)
@@ -88,16 +84,8 @@ def WorkflowToEvalSuite(params: Params, request: str = "") -> LabWorkflowResult:
                         returns=EvalCaseDesignPayload,
                         replan_target="frame_evaluation_target",
                         producer=_producer,
-                        verifier=_verifier,
                         producer_prompt="prompts/design_producer.md",
-                        verifier_prompt="prompts/design_verifier.md",
-                        input={
-                            **context,
-                            "prior_phases": [
-                                item.evidence.model_dump(mode="json")
-                                for item in completed
-                            ],
-                        },
+                        input=context,
                         reads=prior_handles,
                         writes=(
                             artifact("benchmark_case_matrix.md"),
@@ -107,6 +95,9 @@ def WorkflowToEvalSuite(params: Params, request: str = "") -> LabWorkflowResult:
                             artifact("eval_rubric.md"),
                         ),
                     )
+                    design = EvalCaseDesignPayload.model_validate(phase_2.value)
+                    if design.selected_workflow_name != selected_name:
+                        raise ValueError("eval design changed the selected workflow")
                     completed.append(phase_2)
                     prior_handles = prior_handles + phase_2.handles
                     proposed_manifest = next(
@@ -122,6 +113,14 @@ def WorkflowToEvalSuite(params: Params, request: str = "") -> LabWorkflowResult:
                     context["validated_eval_case_manifest"] = (
                         validated_manifest.model_dump(mode="json")
                     )
+                    if design.case_ids != validated_manifest.case_ids:
+                        raise ValueError(
+                            "typed eval case ids must match the validated manifest"
+                        )
+                    if design.case_kinds != validated_manifest.case_kinds:
+                        raise ValueError(
+                            "typed eval case kinds must match the validated manifest"
+                        )
                     context["evaluation_suite_id"] = evaluation_suite_identity(
                         context["validated_eval_case_manifest"],
                         source_candidate_id=(
@@ -135,16 +134,8 @@ def WorkflowToEvalSuite(params: Params, request: str = "") -> LabWorkflowResult:
                         returns=WorkflowEvalSuitePayload,
                         replan_target="design_eval_cases",
                         producer=_producer,
-                        verifier=_verifier,
                         producer_prompt="prompts/package_producer.md",
-                        verifier_prompt="prompts/package_verifier.md",
-                        input={
-                            **context,
-                            "prior_phases": [
-                                item.evidence.model_dump(mode="json")
-                                for item in completed
-                            ],
-                        },
+                        input=context,
                         reads=prior_handles,
                         writes=(
                             artifact("workflow_eval_suite.md"),
@@ -154,9 +145,21 @@ def WorkflowToEvalSuite(params: Params, request: str = "") -> LabWorkflowResult:
                     )
                     completed.append(phase_3)
                     prior_handles = prior_handles + phase_3.handles
-                    details = phase_3.evidence.details
+                    details = WorkflowEvalSuitePayload.model_validate(
+                        phase_3.value
+                    )
+                    if details.case_ids != validated_manifest.case_ids:
+                        raise ValueError("packaged eval case ids drifted from validation")
+                    if details.case_kinds != validated_manifest.case_kinds:
+                        raise ValueError(
+                            "packaged eval case kinds drifted from validation"
+                        )
+                    if details.case_count != validated_manifest.case_count:
+                        raise ValueError(
+                            "packaged eval case count drifted from validation"
+                        )
                     if (
-                        details.get("evaluation_suite_id")
+                        details.evaluation_suite_id
                         != context["evaluation_suite_id"]
                     ):
                         raise ValueError(
@@ -167,7 +170,7 @@ def WorkflowToEvalSuite(params: Params, request: str = "") -> LabWorkflowResult:
                         if optimizer_handoff is not None
                         else None
                     )
-                    if details.get("source_candidate_id") != expected_candidate:
+                    if details.source_candidate_id != expected_candidate:
                         raise ValueError(
                             "eval suite source_candidate_id must match the optimizer handoff"
                         )

@@ -104,14 +104,16 @@ def test_json_schema_validation_and_local_model_round_trip(tmp_path):
     [
         "../outside.txt",
         ".artifacts/pwn.txt",
-        "receipts/response.json",
-        "state.sqlite",
-        "journal.db-wal",
     ],
 )
-def test_runtime_state_and_escape_paths_are_rejected(tmp_path, path):
+def test_artifact_store_metadata_and_escape_paths_are_rejected(tmp_path, path):
     with pytest.raises(ArtifactError):
         ArtifactStore(tmp_path).destinations([Artifact.text(path)])
+
+
+@pytest.mark.parametrize("path", ["receipts/response.json", "state.sqlite"])
+def test_ordinary_directories_and_database_names_are_valid_artifacts(tmp_path, path):
+    assert ArtifactStore(tmp_path).destinations([Artifact.text(path)])
 
 
 def test_symlinks_and_protected_paths_are_rejected(tmp_path):
@@ -242,21 +244,6 @@ def test_capture_recovery_repeats_publication_directory_sync(tmp_path, monkeypat
     assert store.captured("turn").result == captured.result
     assert captured.result.path.parent in synced
     assert store._operation("turn") in synced
-
-
-def test_legacy_unfinished_state_is_rejected_without_touching_files(tmp_path):
-    store = ArtifactStore(tmp_path)
-    destination = tmp_path / "result.txt"
-    destination.write_text("current")
-    operation = store._operation("turn")
-    operation.mkdir(parents=True)
-    (operation / "prepare.json").write_text("{}")
-
-    with pytest.raises(ArtifactError, match="Unsupported legacy"):
-        store.check_legacy_operation("turn")
-    with pytest.raises(ArtifactError, match="Unsupported legacy"):
-        store.capture([Artifact.text("result.txt")], "turn")
-    assert destination.read_text() == "current"
 
 
 def test_hardlink_alias_to_explicitly_protected_state_is_rejected(tmp_path):

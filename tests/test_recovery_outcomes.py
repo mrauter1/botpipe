@@ -31,14 +31,13 @@ def request(tmp_path: Path, *, attempt: int = 1) -> ProviderRequest:
         output_schema=None,
         policy=Policy(),
         artifacts={},
-        receipt_dir=tmp_path / "receipts",
         timeout=2,
         attempt=attempt,
     )
 
 
-class LegacyProvider:
-    name = "legacy"
+class RecoveringProvider:
+    name = "recovering"
 
     def __init__(self, result: object) -> None:
         self.result = result
@@ -60,31 +59,38 @@ class LegacyProvider:
         (ProviderInterruptedError("unverifiable", process_alive=None), Unknown),
     ],
 )
-def test_legacy_recovery_is_normalized_conservatively(
+def test_recovery_failures_are_reported_conservatively(
     tmp_path: Path, result: object, outcome_type: type
 ) -> None:
     assert isinstance(
-        recover_outcome(LegacyProvider(result), request(tmp_path)), outcome_type
+        recover_outcome(RecoveringProvider(result), request(tmp_path)), outcome_type
     )
 
 
-def test_legacy_completed_response_is_preserved(tmp_path: Path) -> None:
+def test_typed_completed_response_is_preserved(tmp_path: Path) -> None:
     response = ProviderResponse("done", "session-1")
 
-    outcome = recover_outcome(LegacyProvider(response), request(tmp_path))
+    outcome = recover_outcome(
+        RecoveringProvider(Completed(response, "reconciled")), request(tmp_path)
+    )
 
-    assert outcome == Completed(response, "legacy provider returned a response")
+    assert outcome == Completed(response, "reconciled")
 
 
 @pytest.mark.parametrize(
     "result",
-    [Completed("not a response"), RecoveryOutcome()],  # type: ignore[arg-type]
+    [
+        None,
+        ProviderResponse("untyped response"),
+        Completed("not a response"),  # type: ignore[arg-type]
+        RecoveryOutcome(),
+    ],
 )
 def test_malformed_explicit_recovery_outcome_is_unknown(
     tmp_path: Path, result: object
 ) -> None:
     assert isinstance(
-        recover_outcome(LegacyProvider(result), request(tmp_path)), Unknown
+        recover_outcome(RecoveringProvider(result), request(tmp_path)), Unknown
     )
 
 

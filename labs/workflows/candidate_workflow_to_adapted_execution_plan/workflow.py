@@ -27,7 +27,6 @@ def CandidateWorkflowToAdaptedExecutionPlan(
 ) -> LabWorkflowResult:
     """Execute the candidate workflow to adapted execution plan evidence workflow."""
     _producer = Provider()
-    _verifier = _producer.with_config(session=None)
     context = {"request": request, "parameters": params.model_dump(mode="json")}
     context["selected_workflow_contract"] = observe_workflow(params.selected_workflow)
     completed = []
@@ -42,21 +41,18 @@ def CandidateWorkflowToAdaptedExecutionPlan(
                 returns=AdaptationRequestFramingPayload,
                 replan_target="frame_adaptation_request",
                 producer=_producer,
-                verifier=_verifier,
                 producer_prompt="prompts/frame_producer.md",
-                verifier_prompt="prompts/frame_verifier.md",
-                input={
-                    **context,
-                    "prior_phases": [
-                        item.evidence.model_dump(mode="json") for item in completed
-                    ],
-                },
+                input=context,
                 reads=prior_handles,
                 writes=(
                     artifact("adaptation_request_brief.md"),
                     artifact("adaptation_success_criteria.md"),
                 ),
             )
+            framing = AdaptationRequestFramingPayload.model_validate(phase_1.value)
+            selected_name = context["selected_workflow_contract"]["name"]
+            if framing.selected_workflow_name != selected_name:
+                raise ValueError("adaptation framing changed the selected workflow")
             completed.append(phase_1)
             prior_handles = prior_handles + phase_1.handles
             analyze_adaptation_surface_checkpoint = len(completed)
@@ -69,22 +65,19 @@ def CandidateWorkflowToAdaptedExecutionPlan(
                         returns=AdaptationSurfaceAnalysisPayload,
                         replan_target="frame_adaptation_request",
                         producer=_producer,
-                        verifier=_verifier,
                         producer_prompt="prompts/analyze_producer.md",
-                        verifier_prompt="prompts/analyze_verifier.md",
-                        input={
-                            **context,
-                            "prior_phases": [
-                                item.evidence.model_dump(mode="json")
-                                for item in completed
-                            ],
-                        },
+                        input=context,
                         reads=prior_handles,
                         writes=(
                             artifact("workflow_fit_assessment.md"),
                             artifact("step_adaptation_matrix.md"),
                         ),
                     )
+                    analysis = AdaptationSurfaceAnalysisPayload.model_validate(
+                        phase_2.value
+                    )
+                    if analysis.selected_workflow_name != selected_name:
+                        raise ValueError("adaptation analysis changed the selected workflow")
                     completed.append(phase_2)
                     prior_handles = prior_handles + phase_2.handles
                     phase_3 = run_phase(
@@ -92,16 +85,8 @@ def CandidateWorkflowToAdaptedExecutionPlan(
                         returns=AdaptedExecutionPlanPayload,
                         replan_target="analyze_adaptation_surface",
                         producer=_producer,
-                        verifier=_verifier,
                         producer_prompt="prompts/package_producer.md",
-                        verifier_prompt="prompts/package_verifier.md",
-                        input={
-                            **context,
-                            "prior_phases": [
-                                item.evidence.model_dump(mode="json")
-                                for item in completed
-                            ],
-                        },
+                        input=context,
                         reads=prior_handles,
                         writes=(
                             artifact("adapted_execution_plan.md"),
@@ -110,6 +95,15 @@ def CandidateWorkflowToAdaptedExecutionPlan(
                             artifact("adapted_execution_next_action.md"),
                         ),
                     )
+                    plan = AdaptedExecutionPlanPayload.model_validate(phase_3.value)
+                    if plan.selected_workflow_name != selected_name:
+                        raise ValueError("adapted plan changed the selected workflow")
+                    if plan.expected_downstream_artifacts != (
+                        analysis.expected_downstream_artifacts
+                    ):
+                        raise ValueError(
+                            "adapted plan changed the analyzed downstream artifact set"
+                        )
                     completed.append(phase_3)
                     prior_handles = prior_handles + phase_3.handles
                     proposed_parameters = next(

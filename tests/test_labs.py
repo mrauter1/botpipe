@@ -227,7 +227,12 @@ def _publication_fixture(phase_input):
         "key_findings": ["The supplied evidence supports the scoped assessment."],
     }
     artifacts = {
-        "decision_summary": {"recommended_decision": "go", "blocking_issue_count": 0},
+        "decision_summary": {
+            "recommended_decision": "go",
+            "blocking_issue_count": 0,
+            "executed_checks": ["pytest"],
+            "unexecuted_checks": [],
+        },
         "incident_summary": {
             "recommended_posture": "planned",
             "primary_hypothesis": "A missing guard caused the outage.",
@@ -280,6 +285,8 @@ def _publication_fixture(phase_input):
         "recommended_decision": "go",
         "decision": "go",
         "blocking_issue_count": 0,
+        "executed_checks": ["pytest"],
+        "unexecuted_checks": [],
         "communication_ready": True,
         "verification_ready": True,
         "rollout_ready": True,
@@ -310,7 +317,64 @@ def _publication_fixture(phase_input):
                 "priority": "P2",
             }
         ]
+    if phase == "frame_candidate_request":
+        details["decision_axes"] = ["fit"]
+    if phase == "analyze_candidate_workflows":
+        details.update(
+            compared_workflows=[
+                "release_candidate_to_go_no_go",
+                "workflow_idea_to_workflow_package",
+            ],
+            ranked_candidates=["release_candidate_to_go_no_go"],
+            portfolio_posture="direct_fit",
+            builder_considered=True,
+        )
+    if phase == "package_candidate_workflow_set":
+        details.update(
+            comparison_candidates=[
+                "release_candidate_to_go_no_go",
+                "workflow_idea_to_workflow_package",
+            ],
+            ranked_candidates=["release_candidate_to_go_no_go"],
+            recommended_candidate_workflows=["release_candidate_to_go_no_go"],
+            builder_baseline_workflow="workflow_idea_to_workflow_package",
+            builder_considered=True,
+            portfolio_posture="direct_fit",
+        )
+    if phase in {"select_strategy", "package_strategy"}:
+        details.update(
+            selected_strategy="run_existing",
+            recommended_workflows=["release_candidate_to_go_no_go"],
+        )
+    if phase in {
+        "frame_adaptation_request",
+        "analyze_adaptation_surface",
+        "package_adapted_execution_plan",
+    }:
+        details.update(
+            selected_workflow_name="release_candidate_to_go_no_go",
+            expected_downstream_artifacts=["release_decision_package"],
+        )
+    if phase in {
+        "frame_evaluation_target",
+        "design_eval_cases",
+        "package_workflow_eval_suite",
+    }:
+        details["selected_workflow_name"] = "release_candidate_to_go_no_go"
+    if phase == "design_eval_cases":
+        details.update(
+            case_ids=["base", "edge", "attack"],
+            case_kinds=["benchmark", "edge", "adversarial"],
+            covered_expected_artifacts=["release_decision_package"],
+        )
     if phase == "package_workflow_eval_suite":
+        manifest = phase_input["validated_eval_case_manifest"]
+        details.update(
+            case_count=manifest["case_count"],
+            case_ids=manifest["case_ids"],
+            case_kinds=manifest["case_kinds"],
+            covered_expected_artifacts=["release_decision_package"],
+        )
         details["evaluation_suite_id"] = phase_input["evaluation_suite_id"]
         handoff = phase_input.get("optimizer_handoff")
         details["source_candidate_id"] = (
@@ -320,7 +384,7 @@ def _publication_fixture(phase_input):
 
 
 def _accepted_schema(schema):
-    """Choose the domain success branch of the verifier's outcome union."""
+    """Choose the accepted branch of a typed producer or review union."""
     for branch in schema.get("oneOf", []) + schema.get("anyOf", []):
         resolved = branch
         if "$ref" in branch:
@@ -446,13 +510,23 @@ def test_release_workflow_runs_staged_typed_outcomes_and_captures_artifacts(tmp_
         name: str(handle.path) for name, handle in result.value.artifacts.items()
     }
     assert all(phase.outcome == "accepted" for phase in result.value.phases)
-    assert [call.preset for call in provider.calls] == ["run", "query"] * 4
+    assert [call.preset for call in provider.calls] == [
+        "run",
+        "run",
+        "query",
+        "run",
+        "query",
+        "run",
+        "query",
+    ]
     assert all(not call.artifacts for call in provider.calls if call.preset == "query")
+    assert result.value.phases[0].review_operation_id is None
+    assert all(phase.review_operation_id for phase in result.value.phases[1:])
     inspection = Botpipe(tmp_path, provider=FakeProvider([])).inspect("staged")
     provider_operations = [
         item for item in inspection["operations"] if item["kind"] == "provider"
     ]
-    assert len(provider_operations) == 8
+    assert len(provider_operations) == 7
     assert all(item["status"] == "completed" for item in provider_operations)
 
 
