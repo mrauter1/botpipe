@@ -49,11 +49,13 @@ class ResponsesFixture(ThreadingHTTPServer):
         super().__init__(("127.0.0.1", 0), ResponsesHandler)
         self.requests: list[dict] = []
         self.authorizations: list[str | None] = []
-        self._next_function: tuple[str, str] | None = None
+        self._next_function: tuple[str, str, int] | None = None
 
-    def queue_exec(self, call_id: str, command: str) -> None:
+    def queue_exec(
+        self, call_id: str, command: str, *, yield_time_ms: int = 10_000
+    ) -> None:
         assert self._next_function is None
-        self._next_function = (call_id, command)
+        self._next_function = (call_id, command, yield_time_ms)
 
     def diagnostics(self) -> str:
         return json.dumps([
@@ -91,13 +93,17 @@ class ResponsesHandler(BaseHTTPRequestHandler):
         queued = self.server._next_function
         if queued is not None:
             self.server._next_function = None
-            call_id, command = queued
+            call_id, command, yield_time_ms = queued
             item = {
                 "type": "function_call",
                 "call_id": call_id,
                 "name": "exec_command",
                 "arguments": json.dumps(
-                    {"cmd": command, "login": False, "yield_time_ms": 10_000}
+                    {
+                        "cmd": command,
+                        "login": False,
+                        "yield_time_ms": yield_time_ms,
+                    }
                 ),
             }
             self._events(
@@ -432,22 +438,28 @@ def test_latest_native_default_session_presets_and_read_only_enforcement(native)
 def test_latest_native_background_continuity_and_cross_process_refresh(native) -> None:
     client, server, workspace = native
     marker = workspace / "between-turn-background.txt"
+    readiness = workspace / "between-turn-background.ready"
+    release = workspace / "between-turn-background.release"
     if os.name == "nt":
         target = str(marker).replace("'", "''")
-        script = (
-            "Start-Sleep -Milliseconds 400; "
-            f"[IO.File]::WriteAllText('{target}', 'alive')"
-        ).replace('"', '`"')
+        ready_target = str(readiness).replace("'", "''")
+        release_target = str(release).replace("'", "''")
         command = (
-            "Start-Process powershell -WindowStyle Hidden "
-            f"-ArgumentList '-NoProfile','-Command','{script}'"
+            f"[IO.File]::WriteAllText('{ready_target}', 'ready'); "
+            f"while (-not (Test-Path -LiteralPath '{release_target}')) "
+            "{ Start-Sleep -Milliseconds 50 }; "
+            f"[IO.File]::WriteAllText('{target}', 'alive')"
         )
     else:
         command = (
-            f"(sleep 0.4; printf %s alive > {shlex.quote(str(marker))}) "
-            ">/dev/null 2>&1 &"
+            f"printf %s ready > {shlex.quote(str(readiness))}; "
+            f"while [ ! -f {shlex.quote(str(release))} ]; do sleep 0.05; done; "
+            f"printf %s alive > {shlex.quote(str(marker))}"
         )
-    server.queue_exec("background-between-turns", command)
+    # Yield a still-running foreground tool session back to Codex. This uses
+    # Codex's supported unified-exec continuation rather than relying on a
+    # shell-detached child that the tool is allowed to reap at turn completion.
+    server.queue_exec("background-between-turns", command, yield_time_ms=250)
     first = native_request(
         workspace,
         operation_id="native-background-first",
@@ -460,6 +472,11 @@ def test_latest_native_background_continuity_and_cross_process_refresh(native) -
     )
     try:
         started = _start_or_skip_local_sandbox(client, first)
+        deadline = time.monotonic() + 5
+        while not readiness.exists() and time.monotonic() < deadline:
+            time.sleep(0.02)
+        assert readiness.read_text(encoding="utf-8") == "ready"
+        assert not marker.exists()
         second = _start_or_skip_local_sandbox(
             client,
             native_request(
@@ -474,6 +491,8 @@ def test_latest_native_background_continuity_and_cross_process_refresh(native) -
             ),
         )
         assert second.session_id == started.session_id
+        assert not marker.exists()
+        release.write_text("finish", encoding="utf-8")
 
         deadline = time.monotonic() + 5
         while not marker.exists() and time.monotonic() < deadline:

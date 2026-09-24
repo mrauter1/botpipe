@@ -132,7 +132,7 @@ class Journal:
     @staticmethod
     def _sync_file(path: Path) -> None:
         # Windows FlushFileBuffers requires a handle with write access.
-        descriptor = os.open(path, os.O_RDWR)
+        descriptor = os.open(path, os.O_RDWR | getattr(os, "O_BINARY", 0))
         try:
             os.fsync(descriptor)
         finally:
@@ -698,7 +698,9 @@ class Journal:
         if operation_id is not None:
             record["operation_id"] = operation_id
         encoded, offset = self._encode(record), ledger.stat().st_size
-        descriptor = os.open(ledger, os.O_WRONLY | os.O_APPEND)
+        descriptor = os.open(
+            ledger, os.O_WRONLY | os.O_APPEND | getattr(os, "O_BINARY", 0)
+        )
         try:
             try:
                 self._write_all(descriptor, encoded)
@@ -715,7 +717,9 @@ class Journal:
                             "ledger bytes differ at the retained append offset"
                         )
                     if len(observed) < len(encoded):
-                        repair = os.open(ledger, os.O_WRONLY | os.O_APPEND)
+                        repair = os.open(
+                            ledger, os.O_WRONLY | os.O_APPEND | getattr(os, "O_BINARY", 0)
+                        )
                         try:
                             self._write_all(repair, encoded[len(observed) :])
                             os.fsync(repair)
