@@ -122,5 +122,8 @@ recoverable through `resume` and `resolve`, just like workflow operations.
 
 The call timeout covers setup as well as execution. Async cancellation performs
 a bounded interrupt and cleanup attempt before the task finishes cancelling.
-Escalation on the shared app-server may interrupt sibling turns; each affected
-operation is reconciled separately from durable evidence.
+Within a runtime, each logical session owns its app-server process, so escalation
+is targeted to that conversation. Another process reacquires the same durable
+session with its own process and resumes the bound native thread. Calls sharing
+the session serialize and are reconciled from their durable attempt evidence;
+unrelated sessions keep their own processes.

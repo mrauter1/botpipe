@@ -37,6 +37,30 @@ Direct Provider calls appear in the same run list and use the same recovery
 commands. Completed operations replay without Codex. A local non-importable
 workflow may require `resume --workflow path/to/file.py:function`.
 
+## Read the run files directly
+
+The state root contains `tasks/<task-id>/runs/<run-id>/ledger.jsonl`. Each line
+is one record with `seq`, `at`, `event`, `run_id`, `data`, and, for operation
+records, `operation_id`. `input.json` holds the original typed invocation.
+When the invocation includes a textual request, `request.md` keeps that text in
+plain UTF-8. Provider attempts keep `prompt.md`, `request.json`, and, after a response,
+`response.md` below `operations/<safe-operation-component>/attempts/<attempt>/`.
+Use the referenced paths in the ledger; unsafe operation IDs are represented by
+a stable hashed directory component.
+
+Use ordinary file tools when you need the exact evidence:
+
+```bash
+RUN_DIR=STATE/tasks/TASK/runs/RUN
+jq -c '{seq,event,operation_id,data}' "$RUN_DIR/ledger.jsonl"
+PROMPT=$(jq -r 'select(.event == "attempt_prepared") | .data.prompt.path' "$RUN_DIR/ledger.jsonl" | head -1)
+cat "$RUN_DIR/$PROMPT"
+```
+
+Paths stored in ledger references are relative to the run directory and include
+size and SHA-256 evidence. `runs show` and `runs logs` are read-only projections
+of the same ledger.
+
 ## Resolve uncertain work
 
 ```bash
@@ -77,8 +101,8 @@ Commands that construct a runtime accept `--workspace`, `--config`,
 file; `--provider-config` accepts a JSON object. Botpipe 2.0 rejects any provider
 other than `codex`.
 
-Configuration can come from `botpipe.toml`, `.botpipe.toml`, `botpipe.json`, or
-`[tool.botpipe]` in `pyproject.toml`. `BOTPIPE_CONFIG` selects an explicit file.
+Configuration is read from `botpipe.toml`. `BOTPIPE_CONFIG` or `--config`
+selects an explicit TOML file.
 A relative `state_dir` is resolved from the chosen workspace. A relative
 `[codex].path` containing a directory component is resolved from the
 configuration file's directory; a bare `codex` is located on `PATH`.
@@ -104,5 +128,4 @@ The `[codex]` table also accepts `instructions`, `tools`, `timeout`,
 `[codex].timeout`, which limits a provider call.
 
 Codex is the only provider in 2.0. Model names are passed through. There is no
-version allowlist. Existing 1.x journals are rejected untouched; choose a new
-`--state-dir` for 2.0 work.
+version allowlist or state migration path; start with a new state root.

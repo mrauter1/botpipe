@@ -1,0 +1,19 @@
+{
+  "artifacts": {},
+  "instructions": null,
+  "operation_key": "readable-run:root:0",
+  "output_schema": {
+    "type": "integer"
+  },
+  "policy": {
+    "network": "none",
+    "sandbox_mode": "workspace_write"
+  },
+  "preset": "run",
+  "reads": [],
+  "session_id": null,
+  "settings": {},
+  "timeout": 3600.0,
+  "tools": null,
+  "workspace": "/workspace/scratch/713e68bd9b70/botpipe/docs/examples/readable-history"
+}

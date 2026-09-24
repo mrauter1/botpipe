@@ -1,6 +1,6 @@
 ---
 name: botpipe-workflow-authoring
-description: Author, migrate, review, and test durable Botpipe 2.0 Python workflows. Use for Provider and Codex calls, sessions, prompts, typed results, activities, artifacts, worklists, human input, replay, recovery, and workflow labs.
+description: Author, review, and test durable Botpipe 2.0 Python workflows. Use for Provider and Codex calls, sessions, prompts, typed results, activities, artifacts, worklists, human input, file-native ledger replay, recovery, and workflow labs.
 ---
 
 # Botpipe workflow authoring
@@ -15,8 +15,9 @@ Target the Codex-only 2.0 API. Use `Provider()` by default or `Codex()` explicit
 both are lazy and bind to the active workflow runtime. Do not introduce removed
 1.x APIs (`Session.run`, `ask`, `Session.fresh`), other provider backends,
 `decide`, `allow_commands`, or streaming iterators. Use `on_event` only for
-best-effort progress, never durable control flow. Do not migrate 1.x journals;
-use a new state directory.
+best-effort progress, never durable control flow. Use the current file-native
+state format; do not add a legacy reader, migration path, SQLite journal, or
+provider receipt store.
 
 ## Invariant
 
@@ -50,12 +51,17 @@ Neither accepts `writes`, `sandbox`, or `network`. Use `query(tools=...)` or
 An opted-in remote tool can still have remote effects; sandbox restrictions and
 tool-call auditing are not proof that those effects cannot occur.
 
-Use `run` for verifiers expected to execute tests, even with `writes=()`:
+Use `run` for reviewers expected to execute tests, even with `writes=()`:
 no declared outputs does not mean no workspace writes. Preserve native temporary
 directory access; do not request full access just for test caches. Make the
-verifier report executed checks, failures, and unavailable checks distinctly;
+reviewer report executed checks, failures, and unavailable checks distinctly;
 do not silently replace execution with inspection or let it repair the producer's
 work unless that is explicitly its role.
+
+For labs, return typed producer results directly. Add a reviewer only at a
+material decision or publication gate where rejection changes control flow.
+Avoid duplicating every producer with a mechanical verifier. Bound repair loops
+in Python and feed typed review findings into the next producer call.
 
 Keep custom effects inside activities; ordinary workflow Python reruns on
 resume. Use `current_run().operation` only for lower-level integrations.
@@ -77,6 +83,12 @@ permission. Leave unknown effects unresolved; do not catch them and launch a
 replacement turn. Use operator resolution after inspecting the run. Unresolved
 work belongs to its operation and run; it does not reserve the workspace. Never
 claim exactly-once execution.
+
+Treat `ledger.jsonl` as the only run history and replay authority. Exact attempt
+prompts, resolved requests and responses already live under the run's
+`operations/` directory. Do not add parallel checkpoint, receipt, trace or
+summary files for durable control flow. Session continuity belongs in the
+runtime's session binding, not in workflow-authored state.
 
 Preserve recorded operation scopes, order, and contracts across resume. Changes
 to prompts, inputs, read digests, output schemas, or effective configuration can
@@ -128,9 +140,9 @@ or use separate worktrees when edits require isolation. Read-only calls may
 observe a concurrent writer mid-edit, so isolate the source when a review needs
 a stable tree.
 
-Cancellation escalation on a shared app-server may interrupt sibling turns.
-Do not promise independent cancellation. Each affected operation must be
-reconciled from cleanup evidence as `Completed`, `Stopped`, or `Unknown`.
+Each logical session owns its app-server process. Cancellation is targeted to
+that conversation and must reconcile cleanup evidence as `Completed`, `Stopped`,
+or `Unknown`; unrelated sessions keep their own processes.
 
 Use `provider_budget(max_turns=..., max_seconds=..., turn_timeout_seconds=...)`
 for durable provider limits shared by nested and parallel work. Repairs count;

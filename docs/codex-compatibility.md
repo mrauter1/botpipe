@@ -77,24 +77,26 @@ cannot enforce network off, so full access also requires an explicit network
 opt-in when that native limitation applies. A named remote MCP server can have
 remote effects; filesystem read-only does not constrain that server.
 
-The app-server process uses a POSIX process group or a Windows kill-on-close Job.
-Cancellation requests `turn/interrupt` and uses Codex's native background-terminal
-cleanup when available: interrupt alone intentionally leaves those terminals
-running. Botpipe captures still-attached descendant process groups before cleanup
-and checks their process identities before signalling them. A pre-ack attempt is
-`Stopped` only when its durable receipt records failed dispatch and completed,
-verified local teardown. Native history marked failed, interrupted, or cancelled
-is `Stopped` only after background cleanup and a bounded, paginated inventory
-proves empty. The historical status or successful cleanup RPC by itself is not
-proof. Missing support, nonempty inventory, timeout, or inspection error yields
-`Unknown`; the affected operation remains unresolved. Native `Completed` history
-can still be adopted when terminal items pass the tool audit and an assistant
-message supplies the response, even if cleanup evidence is incomplete.
-A daemon already detached from the process tree is outside Botpipe's containment,
-so Botpipe cannot guarantee that every escaped daemon ended. Killing a shared
-app-server may interrupt its other active turns too. Botpipe does not claim
-independent cancellation: cleanup evidence for every affected operation is
-reconciled as `Completed`, `Stopped`, or `Unknown`.
+Within a runtime, each logical session owns an app-server process in a POSIX
+process group or a Windows kill-on-close Job. Cancellation requests
+`turn/interrupt` and uses
+Codex's native background-terminal cleanup when available: interrupt alone may
+leave those terminals running. Botpipe captures still-attached descendant
+process groups before cleanup and checks their identities before signalling.
+
+Attempt preparation, dispatch authorization, native IDs, responses and cleanup
+evidence are recorded in the owning run's ledger. A pre-ack attempt is `Stopped`
+only when the ledger proves dispatch was not authorized or records completed,
+verified local teardown. Native history marked failed, interrupted or cancelled
+is `Stopped` only after cleanup and a bounded, paginated inventory proves empty.
+The historical status or successful cleanup RPC alone is not proof. Missing
+support, a nonempty inventory, timeout or inspection error yields `Unknown`.
+Native `Completed` history can still be adopted when terminal items pass the
+tool audit and an assistant message supplies the response.
+
+A daemon already detached from the process tree is outside Botpipe's
+containment. Escalation may affect other calls in the same logical session, but
+unrelated sessions own different app-server processes and remain independent.
 
 ## Validation and release gate
 

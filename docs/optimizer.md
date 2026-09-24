@@ -105,7 +105,7 @@ names. Retrying identical input reuses the same generation. Concurrent
 publishers may race to select the latest root receipt, while each accepted
 generation and its own receipt remain complete and loadable.
 
-Ordinary workflow artifacts otherwise use the durable journal and immutable
+Ordinary workflow artifacts otherwise use the durable run ledger and immutable
 `ArtifactHandle`s; Botpipe does not create duplicate generic receipt files for
 every operation. Every recommendation receipt reports
 `improvement = not_evaluated`.
@@ -148,8 +148,8 @@ without rerunning either evaluator.
 
 `improve_workflow` replaces the failure-mode, optimization-candidate,
 refinement, and decomposition labs. Deprecated depth, command-string, and
-per-pass aliases are removed. Existing lab journals require their original
-workflow source; start new runs for this replacement. Recommendation and
+per-pass aliases are removed. Start new runs for this replacement; there is no
+reader or migration path for earlier state formats. Recommendation and
 paired-evaluation record formats retain their existing validation guarantees.
 
 The lower-level `botpipe_optimizer` library remains usable directly, including

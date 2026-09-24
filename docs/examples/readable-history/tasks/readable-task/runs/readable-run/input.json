@@ -1,0 +1,12 @@
+{
+  "args": {
+    "$botpipe": "tuple",
+    "value": [
+      "Prepare the readable history example."
+    ]
+  },
+  "kwargs": {
+    "$botpipe": "dict",
+    "value": {}
+  }
+}
