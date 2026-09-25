@@ -1,156 +1,163 @@
 # Architecture
 
 Botpipe has three responsibilities: authoring ordinary Python workflows,
-coordinating durable operations, and talking to Codex. Python expresses the
+recording durable operations, and talking to Codex. Python expresses the
 process; there is no graph language or scheduler DSL.
 
-## Runtime and journal
+## Run ledger
 
-The SQLite journal retains runs, operations, sessions, provider budgets and
-events. The 2.0 schema adds Codex thread and turn identifiers, the preset,
-enforcement record and probe hash. Opening a 1.x journal fails without migrating
-or modifying it.
+The state root contains one directory per task and run:
 
-An operation is identified by run, scope and position. Provider-operation inputs
-include the prompt, input, read digests, output schema and resolved user
-configuration. Probe hashes and other discovered installation/profile facts
-remain audit evidence; a change in those observations alone is not a durable
-identity veto. A committed operation replays its result. A different durable
-fingerprint at a committed position fails before dispatch.
+```text
+tasks/<task-id>/runs/<run-id>/
+├── ledger.jsonl
+├── input.json
+├── request.md                 # when the invocation has a textual request
+└── operations/<safe-operation-component>/
+    ├── attempts/<attempt>/prompt.md
+    ├── attempts/<attempt>/request.json
+    ├── attempts/<attempt>/response.md
+    └── payloads/*.json
+```
 
-Workflow and operation callable identities deliberately omit source text.
-Captured source hashes and manifests are provenance evidence, not replay keys.
-Edited orchestration may resume when it consumes the same recorded operations in
-the same scopes and order with matching durable inputs; an inserted, removed,
-reordered or changed operation fails replay. Completed child workflows replay as
-one child operation without re-entering the child body.
+`ledger.jsonl` is the sole authoritative run chronology. Every record has a
+monotonic `seq`, UTC timestamp, event name, run identity and data object.
+Operation and attempt records also name their operation and attempt. The first
+record references `input.json`, references `request.md` when the invocation has
+a textual request, and carries the run's workflow, configuration, limits and
+task identity.
 
-A provider intent precedes dispatch. A terminal response is recorded before
-output validation and immutable artifact capture. This ordering lets recovery
-adopt completed work without another model call, including after interruption
-between response and capture. Repairs are additional recorded, budgeted attempts
-on the same thread. Recovery itself does not consume a dispatch budget.
+Prompts and response text are plain UTF-8 files. Large or type-sensitive values
+use referenced JSON payloads with a relative path, byte count and SHA-256 digest.
+The codec preserves tuples, models, exceptions, non-string mapping keys and
+other supported replay values; readable JSON does not replace that typed value.
 
-Activities, provider turns, human answers, nested workflows, parallel branches,
-session bindings and worklist updates use the same operation journal and share
-the run operation limit. Activities and provider turns default to
-`retry_safe=True`. This flag permits repetition; it does not establish that the
-operation is idempotent. Provider recovery also confirms that the prior turn
-stopped before automatically dispatching a replacement. Nonrepeatable external
-effects must use `retry_safe=False`.
+Opening a run streams the ledger to fold its current run, operation, attempt and
+budget state. Readers take a complete-record prefix and never contact Codex.
+Malformed complete records, sequence gaps, missing payloads and digest failures
+fail clearly. An executor holding the run lock may truncate an incomplete final
+line before appending and records that repair.
 
-## Codex adapter
+Each append validates referenced payloads first, writes one complete JSON line,
+flushes and syncs it, and only then advances memory. If acknowledgement is
+ambiguous, the writer checks the retained offset and re-establishes durability.
+An unconfirmable append poisons that run writer rather than allowing another
+effect without a reliable record.
 
-One lazy `codex app-server` process belongs to a runtime and multiplexes its
-threads. Its small adapter boundary is `probe`, `start_turn`, `interrupt` and
-`close`. Runtime request/response records carry the durable attempt context.
-There is one transport and one provider implementation.
+The [generated readable-history example](examples/readable-history/README.md)
+can be inspected without a database or Botpipe process.
 
-Probing checks the installed executable's identity and generated protocol
-schemas. Required methods are `thread/start`, `thread/resume`, `turn/start` and
-`turn/interrupt`, with per-turn sandbox policy. Optional `outputSchema` falls
-back to a prompt schema and local validation. Unused schema item versions do not
-veto an otherwise usable installation. Missing capabilities actually required
-by a call fail before dispatch; probe or profile changes alone do not invalidate
-durable operation identity.
+Operation identity remains run, scope and ordinal plus durable inputs. Source
+manifests and hashes are execution evidence, not replay keys. Compatible source
+edits may resume when they consume the same operations in the same scopes and
+order. A changed prompt, input, read digest, output schema or effective
+configuration fails before dispatch at an already-recorded position.
 
-Every turn uses approval policy `never`. `query` and `generate` fix the read-only
-sandbox and network off for commands within Codex's sandbox. Workspace-write
-turns allow the workspace, declared artifact parents, and Codex's native
-temporary roots. For an explicit tool allowlist, Botpipe disables discovered
-tool-enabling features it knows how to control while preserving unrelated and
-unknown feature flags. It audits the event stream, and a disallowed observed
-tool call fails the operation with retained evidence. That audit detects the
-violation; it cannot undo remote effects. Codex enforces its sandbox, while
-Botpipe records configuration and observations.
+## Provider attempts
 
-Session bindings persist Codex thread identifiers. Threads are resumed after
-restart. Sandbox policy is supplied per turn. Tool configuration is a thread
-profile: when it changes, Botpipe unsubscribes the idle thread and resumes the
-same history with the new configuration. If the installed Codex cannot perform
-that transition, the call fails before dispatch.
+A provider operation records intent before dispatch. Each physical attempt has
+its exact prompt and resolved non-secret request. The ledger records preparation,
+dispatch reservation, native thread and turn checkpoints, terminal response,
+validation failures, repair attempts and cleanup evidence. The terminal response
+is durable before validation and artifact capture, so recovery can adopt it
+without another model call.
 
-A provider lazily creates a run-scoped session; providers derived with
-`with_config` share it unless the session is replaced. `Session.task(key)` is
-stable across runs of one task, `Session.work_item(item, key)` is stable for a
-selected work item, and `session=None` creates independent turns. Durable session
-locks serialize use of one session across threads and processes.
+Provider budgets are ledger state. One dispatch reservation updates all enclosing
+budgets under the append lock. Every physical turn, including repair and an
+operator-authorized retry, reserves once. Replay and recovery do not reserve.
+
+Best-effort `on_event` callbacks are separate from durable checkpoints. Callback
+failure does not alter the operation and callback delivery is not proof that a
+turn or response was recorded.
+
+## Sessions and processes
+
+Conversation continuity lives outside any one run in an atomic binding at
+`sessions/<identity-hash>.json`. The binding contains the canonical session key,
+native thread ID and, while work or shutdown is pending, the owning run, logical
+operation and latest attempt. A pending binding remains owned through
+validation, repair, and adapter disposal; another run cannot silently continue
+that conversation.
+
+Each complete provider operation owns a temporary `codex app-server` adapter.
+The adapter starts or resumes the session's durable native thread, remains alive
+through validation and output-repair turns, and is disposed before the session
+lock is released. A later operation, even for the same session and runtime,
+uses a new app-server and resumes the recorded thread. Calls sharing a session
+serialize under a lock keyed by the state root and canonical session identity,
+including across runs and processes. Distinct sessions may run concurrently.
+Conversation history survives this boundary; background children and live tool
+handles created by one operation are not promised to survive into the next.
+
+`Provider.with_config` shares its parent's session unless `session=` replaces it.
+`Session.task(key)` is stable across runs for one task, `Session.work_item(item,
+key)` is stable for a selected item, and `session=None` creates an independent
+turn.
+
+Probing checks the installed executable and generated protocol schema without
+starting a model turn. Required capabilities are enforced immediately before
+dispatch. A changed probe is audit evidence and does not by itself invalidate a
+recorded operation.
 
 ## Recovery
 
-| Reconciliation result | Action |
+| Outcome | Runtime action |
 | --- | --- |
-| `Completed` | Adopt the authoritative response; do not redispatch |
-| `Stopped` | Retry automatically only when recorded and current policy permit it; otherwise wait for operator resolution |
-| `Running` | Make a targeted, bounded interrupt/reconciliation attempt; keep the operation unresolved while it may still act |
-| `Unknown` | Keep the operation unresolved until an operator resolves it |
+| `Completed` | Adopt the authoritative response without redispatch |
+| `Stopped` | Retry only when recorded and current policy permit it |
+| `Running` | Attempt bounded targeted interruption; remain unresolved while effects may continue |
+| `Unknown` | Block automatic retry and require reconciliation or explicit resolution |
 
-`Stopped` requires durable quiescence evidence. Before a turn acknowledgement,
-a durable receipt recording failure and `cleanup.status=completed` is sufficient.
-For native history marked failed, interrupted, or cancelled, Botpipe must run
-background-terminal cleanup and then prove through the bounded, paginated list
-that no background terminal remains. A historical terminal status or acceptance
-of the cleanup RPC alone is not proof and remains `Unknown`.
+Missing terminal evidence after dispatch authorization is uncertain. Botpipe
+does not infer that a turn was never sent from a missing acknowledgement. A
+terminal response is validated and captured on resume. A completed operation
+replays its recorded typed result and approved artifact handles.
 
-A recorded terminal response is validated and captured without redispatch, so
-completed output-repair work can still replay when later policy sets
-`retry_safe=False`. That setting suppresses new automatic retries and new output
-repair dispatches. Automatic and operator-authorized retries are recorded with
-their origin. Cancellation ends the current invocation after bounded cleanup;
-it does not redispatch. A later explicit resume may retry subject to the recorded
-policy and limits. Retries operate on the repository's current state.
+`retry_safe=True` permits repetition; it does not prove idempotence.
+`retry_safe=False` prevents new automatic retries and repair dispatches but does
+not prevent adoption of a response already recorded. An operator may retry an
+`Unknown` attempt deliberately, accept a supplied or current valid result, or
+fail it. That choice is recorded and does not erase the uncertainty of earlier
+effects. A confirmed `Running` attempt must first reconcile to a terminal state.
 
-The run operation limit applies atomically across nested and parallel scopes and
-can only be increased on resume. The run timeout supplies the default provider
-dispatch and session-lock wait bound; it is not an overall deadline for workflow
-Python. Durable provider-budget deadlines retain their original deadline across
-suspension and resume, and nested provider budgets all apply.
+Ordinary operation completion performs normal idle app-server disposal and
+confirms that the app-server parent exited before releasing the session. Child
+process survival is not guaranteed. If disposal fails after the result is
+durable, Botpipe retains the completed result and records shutdown uncertainty;
+it never redispatches the completed work. The session remains unavailable for
+unsafe reuse until shutdown is retried or an operator resolves it.
 
-An operator resolves uncertainty with explicit retry, acceptance of the current
-workspace, or failure. A retry never pretends the earlier effects did not happen.
-Accepting validates and captures the current declared artifact files. A valid
-file may have existed before the attempt; capture does not establish exclusive
-writer attribution.
+Cancellation and timeout use the stronger interruption path: request native
+turn interruption, perform bounded background-terminal cleanup when available,
+and contain still-attached descendants through the POSIX process group or
+Windows Job. Async cancellation waits for this attempt before returning.
+Unconfirmed turn cleanup remains `Unknown`; a detached daemon is outside
+Botpipe's containment guarantee.
 
-## Concurrency
+## Concurrency and workspace state
 
-A run lock is keyed by journal path and run id and held for execution or
-resolution. Another executor receives `RunBusy` immediately.
-Windows and macOS canonical roots are compared without case sensitivity.
+A run lock permits one executor or resolver for a run. A session lock serializes
+one conversation. The short in-process append lock orders parallel ledger writes
+and is never held across provider I/O, callbacks or artifact capture.
 
-Conversation turns use the same file-lock primitive, keyed by journal and durable
-session identity. Separate handles for one task or work item therefore serialize
-across threads and processes, including the repair loop and session updates.
-Independent calls (`session=None`) need no conversation lock.
+Distinct sessions may write the same canonical workspace concurrently. Botpipe
+does not take a workspace lock, snapshot or rollback. It never prepares, moves,
+backs up, restores or merges repository files around a call. Applications that
+need source isolation should use separate worktrees.
 
-Distinct sessions may dispatch writable turns against the same canonical
-workspace at the same time, across threads and processes. An unresolved writable
-operation remains governed by its own operation and run recovery state; it does
-not create a global workspace reservation. Read-only calls and writers may
-observe concurrent edits. Use separate worktrees when an application needs
-source isolation.
+Declared outputs are validated and copied into immutable content-addressed
+artifact storage when an operation completes. Capture observes current bytes; it
+does not prove which concurrent writer produced them or create an atomic
+repository snapshot. The run's ledger, input, operation evidence and shared
+session bindings are protected from artifact destinations.
 
-The workspace is shared mutable state, not a Botpipe transaction boundary.
-Botpipe does not prepare, move, back up, restore, or roll back workspace files,
-and does not take an atomic repository snapshot. Declared output capture
-validates and stores immutable versions of the current files only.
+## Read projections
 
-## Process lifecycle
+`Botpipe.inspect`, `runs show`, and `runs logs` fold a bounded ledger snapshot.
+Inspection adds derived usage, artifacts and provenance without changing the
+ledger. Run listing discovers `tasks/*/runs/*/ledger.jsonl`; run IDs remain unique
+across the state root and ambiguous or missing identities fail instead of
+selecting an arbitrary directory.
 
-The app-server runs in a POSIX process group or a Windows Job Object with
-kill-on-close. Cancellation sends `turn/interrupt`, waits up to the configured
-grace period, then attempts to terminate the process group or Job if needed.
-Escalation interrupts all turns sharing that server; each retains its own
-recovery status. Async cancellation waits for the bounded cleanup attempt before
-returning control to the caller. Because the server is shared, cancellation may
-interrupt sibling operations; Botpipe does not promise independent cancellation.
-Cleanup evidence is reconciled for each affected operation as `Completed`,
-`Stopped`, or `Unknown`. An unconfirmed stop remains `Unknown` for that operation
-and run.
-
-Codex owns the sandbox for its child commands. Botpipe adds no namespaces.
-Still-attached descendant groups are included in shutdown, with process identities
-checked before signalling. A daemon already detached from the tree is outside
-Botpipe's control, so cleanup cannot guarantee that every escaped process ended.
-Full access and explicitly enabled remote MCP tools have the effects authorized
-by that configuration; filesystem read-only is not remote isolation.
+There is one current file-native format. Botpipe has no SQLite backend, legacy
+reader, migration path or parallel receipt authority.

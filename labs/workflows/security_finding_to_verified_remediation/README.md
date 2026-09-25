@@ -7,9 +7,9 @@ Aliases: `security-remediation`, `security-finding-remediation`
 
 ## Durable function design
 
-`workflow.py` exports one ordinary Python function decorated with `@workflow`. Python controls phase order, optional passes, loops, and nested workflows. Each phase runs a producer with `Provider.run` and a read-only verifier with typed `Provider.query`. Producers return `LabPhaseDraft`; each verifier returns a package-specific `LabPhaseOutcome` subclass from `contracts.py`, so domain evidence is typed before control flow consumes it.
+`workflow.py` exports one ordinary Python function decorated with `@workflow`. Python controls phase order, optional passes, loops, and nested workflows. Each phase runs one producer with `Provider.run`; the producer returns the package-specific typed domain result from `contracts.py`. Evidence-quality and risk decisions that benefit from independent judgment add a read-only reviewer, whose result contains the review decision and findings rather than a copy of the domain handoff.
 
-Every declared output is a required `Artifact`. Botpipe snapshots the provider-written file before the operation completes, and later phases read those immutable handles. A verifier may cite only captured artifact names. The final typed `LabWorkflowResult` carries the accepted handles in `artifacts`, convenience snapshot paths in `artifact_paths`, and unique candidate identifiers. When phases reuse an artifact name, the later accepted handle wins.
+Every declared output is a required `Artifact`. Botpipe snapshots the provider-written file before the operation completes, and later phases read those immutable handles. A reviewer, when present, may cite only captured artifact names. The final typed `LabWorkflowResult` carries the accepted handles in `artifacts`, convenience snapshot paths in `artifact_paths`, and unique candidate identifiers. When phases reuse an artifact name, the later accepted handle wins.
 
 The workflow calls `investigation_request_to_evidence_pack` as a durable child. Its returned `artifacts` handles become immutable reads for the security phases, and its typed result is included in their input context.
 
@@ -38,7 +38,7 @@ Parameters are validated by the package-local Pydantic `Params` model before any
 | `plan_verified_remediation` | `remediation_plan.md`, `verification_evidence.md`, `residual_risk.json` |
 | `prepare_closure_package` | `security_remediation_package.md`, `security_remediation_summary.json`, `security_next_action.md` |
 
-Producer and verifier prompts remain phase-specific. `accepted` advances, while `needs_rework` repeats the phase with structured feedback and its previous artifact snapshots. `needs_replan` returns control to the phase's declared target through a workflow-owned Python loop. `question` and `blocked` suspend with `ask_human()` and retry the phase with the operator's `input_answer`; `failed` rejects the phase. No route table executes these outcomes.
+Producer prompts remain phase-specific; independent reviewer prompts exist only for phases where a second judgment materially improves the outcome. `accepted` advances, while `needs_rework` repeats the phase with structured feedback and its previous artifact snapshots. `needs_replan` returns control to the phase's declared target through a workflow-owned Python loop. `question` and `blocked` suspend with `ask_human()` and retry the phase with the operator's `input_answer`; `failed` rejects the phase. No route table executes these outcomes.
 
 ## Inspection and replay
 

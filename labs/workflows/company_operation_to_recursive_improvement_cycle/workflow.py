@@ -29,7 +29,6 @@ def CompanyOperationToRecursiveImprovementCycle(
 ) -> LabWorkflowResult:
     """Execute the company operation to recursive improvement cycle evidence workflow."""
     _producer = Provider()
-    _verifier = _producer.with_config(session=None)
     context = {"request": request, "parameters": params.model_dump(mode="json")}
     context["workflow_catalog"] = observe_catalog()
     context["observed_company_runs"] = observe_run_history(
@@ -49,15 +48,8 @@ def CompanyOperationToRecursiveImprovementCycle(
                 returns=CompanyOperationFramingPayload,
                 replan_target="frame_company_operation",
                 producer=_producer,
-                verifier=_verifier,
                 producer_prompt="prompts/frame_producer.md",
-                verifier_prompt="prompts/frame_verifier.md",
-                input={
-                    **context,
-                    "prior_phases": [
-                        item.evidence.model_dump(mode="json") for item in completed
-                    ],
-                },
+                input=context,
                 reads=prior_handles,
                 writes=(
                     artifact("company_operation_brief.md"),
@@ -76,16 +68,8 @@ def CompanyOperationToRecursiveImprovementCycle(
                         returns=RecursiveImprovementAnalysisPayload,
                         replan_target="frame_company_operation",
                         producer=_producer,
-                        verifier=_verifier,
                         producer_prompt="prompts/analyze_producer.md",
-                        verifier_prompt="prompts/analyze_verifier.md",
-                        input={
-                            **context,
-                            "prior_phases": [
-                                item.evidence.model_dump(mode="json")
-                                for item in completed
-                            ],
-                        },
+                        input=context,
                         reads=prior_handles,
                         writes=(
                             artifact("company_pressure_map.md"),
@@ -100,16 +84,8 @@ def CompanyOperationToRecursiveImprovementCycle(
                         returns=RecursiveImprovementCyclePayload,
                         replan_target="analyze_recursive_improvement_pressures",
                         producer=_producer,
-                        verifier=_verifier,
                         producer_prompt="prompts/package_producer.md",
-                        verifier_prompt="prompts/package_verifier.md",
-                        input={
-                            **context,
-                            "prior_phases": [
-                                item.evidence.model_dump(mode="json")
-                                for item in completed
-                            ],
-                        },
+                        input=context,
                         reads=prior_handles,
                         writes=(
                             artifact("recursive_improvement_cycle.md"),

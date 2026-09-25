@@ -26,7 +26,7 @@ from .params import Params
 def IncidentToHardeningProgram(params: Params, request: str = "") -> LabWorkflowResult:
     """Execute the incident to hardening program evidence workflow."""
     _producer = Provider()
-    _verifier = _producer.with_config(session=None)
+    _reviewer = _producer.with_config(session=None)
     context = {"request": request, "parameters": params.model_dump(mode="json")}
     completed = []
     prior_handles = ()
@@ -40,15 +40,8 @@ def IncidentToHardeningProgram(params: Params, request: str = "") -> LabWorkflow
                 returns=IncidentFramingPayload,
                 replan_target="frame_incident",
                 producer=_producer,
-                verifier=_verifier,
                 producer_prompt="prompts/frame_producer.md",
-                verifier_prompt="prompts/frame_verifier.md",
-                input={
-                    **context,
-                    "prior_phases": [
-                        item.evidence.model_dump(mode="json") for item in completed
-                    ],
-                },
+                input=context,
                 reads=prior_handles,
                 writes=(
                     artifact("incident_scope_brief.md"),
@@ -63,15 +56,10 @@ def IncidentToHardeningProgram(params: Params, request: str = "") -> LabWorkflow
                 returns=IncidentEvidencePayload,
                 replan_target="frame_incident",
                 producer=_producer,
-                verifier=_verifier,
+                reviewer=_reviewer,
                 producer_prompt="prompts/evidence_producer.md",
-                verifier_prompt="prompts/evidence_verifier.md",
-                input={
-                    **context,
-                    "prior_phases": [
-                        item.evidence.model_dump(mode="json") for item in completed
-                    ],
-                },
+                reviewer_prompt="prompts/evidence_reviewer.md",
+                input=context,
                 reads=prior_handles,
                 writes=(
                     artifact("incident_timeline.md"),
@@ -93,16 +81,10 @@ def IncidentToHardeningProgram(params: Params, request: str = "") -> LabWorkflow
                         returns=IncidentHypothesisPayload,
                         replan_target="frame_incident",
                         producer=_producer,
-                        verifier=_verifier,
                         producer_prompt="prompts/analysis_producer.md",
-                        verifier_prompt="prompts/analysis_verifier.md",
-                        input={
-                            **context,
-                            "prior_phases": [
-                                item.evidence.model_dump(mode="json")
-                                for item in completed
-                            ],
-                        },
+                        reviewer=_reviewer,
+                        reviewer_prompt="prompts/analysis_reviewer.md",
+                        input=context,
                         reads=prior_handles,
                         writes=(
                             artifact("cause_hypothesis_ranking.md"),
@@ -118,16 +100,10 @@ def IncidentToHardeningProgram(params: Params, request: str = "") -> LabWorkflow
                         returns=IncidentHardeningProgramPayload,
                         replan_target="rank_cause_hypotheses",
                         producer=_producer,
-                        verifier=_verifier,
                         producer_prompt="prompts/program_producer.md",
-                        verifier_prompt="prompts/program_verifier.md",
-                        input={
-                            **context,
-                            "prior_phases": [
-                                item.evidence.model_dump(mode="json")
-                                for item in completed
-                            ],
-                        },
+                        reviewer=_reviewer,
+                        reviewer_prompt="prompts/program_reviewer.md",
+                        input=context,
                         reads=prior_handles,
                         writes=(
                             artifact("hardening_program.md"),

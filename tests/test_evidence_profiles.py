@@ -4,12 +4,13 @@ import pytest
 
 from botpipe.dispatches import normalize_usage
 from botpipe_optimizer import (
+    OperationObservation,
+    ProviderDispatchObservation,
+    RunObservation,
     capture_evidence_snapshot,
     capture_source_manifest,
     load_run_observation,
-    OperationObservation,
     optimize_observations,
-    RunObservation,
 )
 
 
@@ -397,7 +398,7 @@ def test_cached_and_reasoning_subsets_do_not_inflate_public_optimizer_total():
     assert report.metrics[0].total_tokens == 15
 
 
-def test_direct_observation_objects_normalize_legacy_token_aliases_consistently():
+def test_direct_observation_uses_physical_dispatch_for_token_aliases():
     operation = OperationObservation(
         "direct-operation",
         "direct-run",
@@ -417,6 +418,21 @@ def test_direct_observation_objects_normalize_legacy_token_aliases_consistently(
         {},
         {},
         None,
+        dispatches=(
+            ProviderDispatchObservation(
+                dispatch_id="direct-dispatch",
+                attempt=1,
+                generation=0,
+                outcome="completed",
+                usage_availability="known_total",
+                usage={
+                    "prompt_tokens": 10,
+                    "completion_tokens": 5,
+                    "cached_input_tokens": 8,
+                },
+                elapsed_seconds=1.0,
+            ),
+        ),
     )
     run = RunObservation(
         "direct-run",

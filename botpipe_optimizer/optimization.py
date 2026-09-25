@@ -17,8 +17,9 @@ from statistics import mean
 from typing import Any, get_type_hints
 
 from botpipe.codec import decode as decode_durable
+from botpipe.codec import encoded_field
 from botpipe.dispatches import known_token_total, normalize_usage
-from botpipe.read_projection import project_execution_revision
+from botpipe.read_projection import project_execution_provenance
 
 _FAILURES = frozenset({"failed", "interrupted", "budget_exceeded", "cancelled"})
 
@@ -65,6 +66,10 @@ class OperationObservation:
     error: str | None
     artifacts: tuple[str, ...] = ()
     dispatches: tuple[ProviderDispatchObservation, ...] = ()
+    workflow_identity: str | None = None
+    surface_id: str | None = None
+    orchestration_id: str | None = None
+    provenance_state: str = "unknown"
 
 
 @dataclass(frozen=True, slots=True)
@@ -239,29 +244,34 @@ def load_run_observation(payload: Mapping[str, Any]) -> RunObservation:
     events = payload.get("events", ())
     if not isinstance(events, Sequence) or isinstance(events, (str, bytes)):
         raise TypeError("inspection events must be a sequence")
-    revision = project_execution_revision(_mapping(event) for event in events)
+    revision, operation_revisions = project_execution_provenance(
+        _mapping(event) for event in events
+    )
     raw_operations = payload.get("operations", ())
     if not isinstance(raw_operations, Sequence) or isinstance(
         raw_operations, (str, bytes)
     ):
         raise TypeError("inspection operations must be a sequence")
-    raw_dispatches: Mapping[str, Any] = {}
-    try:
-        from botpipe.dispatches import dispatch_records
+    from botpipe.dispatches import dispatch_records
 
-        raw_dispatches = dispatch_records(events)
-    except (KeyError, TypeError, ValueError):
-        raw_dispatches = {}
-    operations = tuple(
-        _load_operation(
-            item,
-            run_id,
-            raw_dispatches.get(
-                str(_mapping(item).get("operation_id") or _mapping(item).get("id")), ()
-            ),
+    raw_dispatches: Mapping[str, Any] = dispatch_records(events)
+    operations = []
+    for item in raw_operations:
+        operation_id = str(
+            _mapping(item).get("operation_id") or _mapping(item).get("id") or ""
         )
-        for item in raw_operations
-    )
+        provenance = operation_revisions.get(operation_id)
+        if provenance is None:
+            provenance = revision
+        operations.append(
+            _load_operation(
+                item,
+                run_id,
+                raw_dispatches.get(operation_id, ()),
+                provenance,
+            )
+        )
+    operations = tuple(operations)
     ids = [item.operation_id for item in operations]
     if len(ids) != len(set(ids)):
         raise ValueError("inspection contains duplicate operation ids")
@@ -477,15 +487,30 @@ def write_optimization_report(report: OptimizationReport, path: str | Path) -> P
 
 
 def _load_operation(
-    raw: Any, run_id: str, event_dispatches: Any = ()
+    raw: Any,
+    run_id: str,
+    event_dispatches: Any = (),
+    provenance: Mapping[str, Any] | None = None,
 ) -> OperationObservation:
     item = _mapping(raw)
     operation_id = _text(item.get("operation_id") or item.get("id"), "operation id")
-    result = _decode(item.get("result"))
+    encoded_result = item.get("result")
+    result = _decode(encoded_result)
     result_map = result if isinstance(result, Mapping) else {}
-    value = result_map.get("value", getattr(result, "value", result))
-    result_usage = result_map.get("usage", getattr(result, "usage", {}))
-    result_artifacts = result_map.get("artifacts", getattr(result, "artifacts", ()))
+    try:
+        encoded_value = encoded_field(encoded_result, "value")
+        encoded_usage = encoded_field(encoded_result, "usage")
+        encoded_artifacts = encoded_field(encoded_result, "artifacts")
+    except (KeyError, TypeError, ValueError):
+        value = result_map.get("value", getattr(result, "value", result))
+        result_usage = result_map.get("usage", getattr(result, "usage", {}))
+        result_artifacts = result_map.get(
+            "artifacts", getattr(result, "artifacts", ())
+        )
+    else:
+        value = _decode(encoded_value)
+        result_usage = _decode(encoded_usage)
+        result_artifacts = _decode(encoded_artifacts)
     decoded_inputs = _decode(item.get("inputs"))
     inputs = dict(_mapping(decoded_inputs))
     attempts = item.get("attempts") or item.get("attempt")
@@ -518,6 +543,10 @@ def _load_operation(
         error=None if item.get("error") is None else str(item.get("error")),
         artifacts=_artifact_names(result_artifacts or item.get("artifacts") or ()),
         dispatches=tuple(_load_dispatch(value) for value in supplied_dispatches),
+        workflow_identity=_optional_text((provenance or {}).get("workflow_identity")),
+        surface_id=_optional_text((provenance or {}).get("surface_id")),
+        orchestration_id=_optional_text((provenance or {}).get("orchestration_id")),
+        provenance_state=str((provenance or {}).get("provenance_state") or "unknown"),
     )
 
 
@@ -619,9 +648,20 @@ def _keyword_string(call: ast.Call, name: str) -> str | None:
 
 def _extract_outcome(value: Any) -> str | None:
     for key in ("outcome", "decision", "route", "tag", "status"):
-        candidate = (
-            value.get(key) if isinstance(value, Mapping) else getattr(value, key, None)
-        )
+        if isinstance(value, Mapping) and value.get("$botpipe") in {
+            "model",
+            "dataclass",
+        }:
+            try:
+                candidate = _decode(encoded_field(value, key))
+            except (KeyError, TypeError, ValueError):
+                candidate = None
+        else:
+            candidate = (
+                value.get(key)
+                if isinstance(value, Mapping)
+                else getattr(value, key, None)
+            )
         if isinstance(candidate, str) and candidate.strip():
             return candidate.strip()
     return None

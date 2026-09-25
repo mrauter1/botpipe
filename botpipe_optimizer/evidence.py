@@ -10,7 +10,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from botpipe.dispatches import known_token_total, normalize_usage
+from botpipe.dispatches import known_token_total
 
 from .optimization import RunObservation, SourceManifest, load_run_observation
 
@@ -281,32 +281,73 @@ def capture_evidence_snapshot(
     group_workflow_ids: dict[str, str] = {}
     group_orchestration_ids: dict[str, str | None] = {}
     group_order: list[str] = []
-    for run in admitted:
+
+    def provenance_group(
+        *,
+        run: RunObservation,
+        state: str,
+        workflow_identity: str | None,
+        surface_id: str | None,
+        orchestration_id: str | None,
+    ) -> tuple[str, bool]:
         known = (
-            run.provenance_state == "known"
-            and bool(run.workflow_identity)
-            and bool(run.surface_id)
-            and bool(run.orchestration_id)
+            state == "known"
+            and bool(workflow_identity)
+            and bool(surface_id)
+            and bool(orchestration_id)
         )
         group_key = (
             json.dumps(
-                [run.workflow_identity, run.surface_id, run.orchestration_id],
+                [workflow_identity, surface_id, orchestration_id],
                 separators=(",", ":"),
             )
             if known
-            else f"{run.provenance_state}:{run.run_id}"
+            else f"{state}:{run.run_id}"
         )
         group_id = "group_" + sha256(group_key.encode()).hexdigest()
         if group_id not in groups:
             group_order.append(group_id)
-        groups[group_id].append(run.run_ref)
-        group_versions[group_id] = run.surface_id if known else None
+        if run.run_ref not in groups[group_id]:
+            groups[group_id].append(run.run_ref)
+        group_versions[group_id] = surface_id if known else None
         group_workflow_ids[group_id] = (
-            run.workflow_identity or run.workflow_name or selected_workflow
+            workflow_identity or run.workflow_name or selected_workflow
         )
-        group_orchestration_ids[group_id] = run.orchestration_id if known else None
+        group_orchestration_ids[group_id] = orchestration_id if known else None
+        return group_id, known
+
+    for run in admitted:
+        run_group_id, run_known = provenance_group(
+            run=run,
+            state=run.provenance_state,
+            workflow_identity=run.workflow_identity,
+            surface_id=run.surface_id,
+            orchestration_id=run.orchestration_id,
+        )
         ids: list[str] = []
         for operation in run.operations:
+            if operation.provenance_state == "known":
+                operation_state = operation.provenance_state
+                operation_workflow_identity = operation.workflow_identity
+                operation_surface_id = operation.surface_id
+                operation_orchestration_id = operation.orchestration_id
+            elif run_known:
+                operation_state = run.provenance_state
+                operation_workflow_identity = run.workflow_identity
+                operation_surface_id = run.surface_id
+                operation_orchestration_id = run.orchestration_id
+            else:
+                operation_state = run.provenance_state
+                operation_workflow_identity = None
+                operation_surface_id = None
+                operation_orchestration_id = None
+            group_id, operation_known = provenance_group(
+                run=run,
+                state=operation_state,
+                workflow_identity=operation_workflow_identity,
+                surface_id=operation_surface_id,
+                orchestration_id=operation_orchestration_id,
+            )
             observation_payload = {
                 "run_ref": run.run_ref,
                 "operation_id": operation.operation_id,
@@ -320,9 +361,7 @@ def capture_evidence_snapshot(
             ids.append(observation_id)
             usage_state, tokens, dispatch_count = _usage(
                 operation.kind,
-                operation.usage,
                 operation.dispatches,
-                operation.attempts,
             )
             elapsed_available, elapsed_seconds = _elapsed(operation)
             dispatch_evidence = tuple(
@@ -361,13 +400,13 @@ def capture_evidence_snapshot(
                 dispatches=dispatch_evidence,
             )
             observations.append(observation)
-            if run.provenance_state != "known":
+            if not operation_known:
                 issues.append(
                     EvidenceIssue(
                         run_ref=run.run_ref,
                         observation_id=observation_id,
                         dimension="provenance",
-                        reason=f"{run.provenance_state}_workflow_surface",
+                        reason=f"{operation_state}_workflow_surface",
                     )
                 )
             if operation.kind == "provider" and usage_state != "known_total":
@@ -397,10 +436,10 @@ def capture_evidence_snapshot(
                 workflow_identity=run.workflow_identity
                 or run.workflow_name
                 or selected_workflow,
-                workflow_surface_id=run.surface_id if known else None,
-                orchestration_id=run.orchestration_id if known else None,
+                workflow_surface_id=run.surface_id if run_known else None,
+                orchestration_id=run.orchestration_id if run_known else None,
                 provenance_state=run.provenance_state,
-                structural_group_id=group_id,
+                structural_group_id=run_group_id,
                 observation_ids=tuple(ids),
             )
         )
@@ -722,7 +761,7 @@ def _dispatch_evidence(
 
 
 def _usage(
-    kind: str, usage: Mapping[str, float], dispatches: tuple[Any, ...], attempts: int
+    kind: str, dispatches: tuple[Any, ...]
 ) -> tuple[Availability, int | None, int]:
     if kind != "provider":
         return "not_attempted", None, 0
@@ -741,15 +780,7 @@ def _usage(
         if any(item.usage for item in dispatches):
             return "partial", None, len(dispatches)
         return "unknown", None, len(dispatches)
-    if attempts != 1:
-        return "unknown", None, attempts
-    state, tokens = _legacy_usage(usage)
-    return state, tokens, 1
-
-
-def _legacy_usage(usage: Mapping[str, float]) -> tuple[Availability, int | None]:
-    values, availability = normalize_usage(usage, final=True)
-    return availability, known_token_total(values)
+    return "unknown", None, 0
 
 
 def evidence_snapshot_bytes(
@@ -803,6 +834,7 @@ def _content_id(prefix: str, value: BaseModel, exclude: set[str]) -> str:
 
 
 __all__ = [
+    "DEFAULT_MAX_SNAPSHOT_BYTES",
     "Availability",
     "EvidenceBudget",
     "EvidenceGroup",
@@ -817,7 +849,6 @@ __all__ = [
     "StepMetric",
     "StepProfileMetric",
     "StepRanking",
-    "DEFAULT_MAX_SNAPSHOT_BYTES",
     "baseline_surface_id",
     "capture_evidence_snapshot",
     "evidence_snapshot_bytes",

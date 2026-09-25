@@ -4,6 +4,12 @@ Botpipe uses the installed `codex app-server`, not `codex exec`. It has no pinne
 reviewed, maximum or accepted-version list. Model names also pass through.
 Run `botpipe doctor` to check the installation that will execute your work.
 
+For the official npm package, Botpipe resolves the launcher to its installed
+native executable so disposal observes the app-server itself, including on
+Windows. An incomplete or customized package launcher fails before dispatch;
+configure the native executable directly in that case. Other custom commands
+must run the server as the directly owned process.
+
 ## Required capabilities
 
 | Capability | Requirement | Missing capability |
@@ -12,7 +18,6 @@ Run `botpipe doctor` to check the installation that will execute your work.
 | Per-turn `sandboxPolicy` | Every provider call | CapabilityError before dispatch |
 | `turn/interrupt` | Every provider call | CapabilityError before dispatch |
 | `outputSchema` | Optional | Embed schema in prompt; validate and repair locally |
-| `thread/unsubscribe` | Changing a loaded thread's configuration | CapabilityError before dispatch; unchanged calls still work |
 | `thread/backgroundTerminals/clean` | Native terminal cleanup when available | Fall back to process-group or Job cleanup |
 | `thread/backgroundTerminals/list` | Confirming native recovery cleanup | Historical interrupted work stays `Unknown` |
 | Tool-feature configuration | Calls with an explicit tool profile | CapabilityError before dispatch when the requested profile cannot be applied |
@@ -51,10 +56,21 @@ before dispatch and reports incomplete or outdated setup. Botpipe never performs
 administrator setup on the SDK user's behalf. Windows contract CI provisions the
 elevated sandbox explicitly in its isolated Codex home.
 
-Codex keeps loaded threads subscribed and ignores configuration changes on that
-resume path. Sandbox policy is sent with each turn. Tool configuration belongs
-to the thread, so when a session's tool profile changes Botpipe unsubscribes it
-before resuming the same thread and history with the new configuration.
+Botpipe starts or resumes a durable thread in a temporary app-server for each
+complete provider operation. That server remains subscribed across the
+operation's validation and repair turns, then Botpipe disposes it before the
+session is available for another operation. Sandbox policy is sent with each
+turn. A later operation resumes the recorded thread and may apply a different
+tool profile in its new server. Durable conversation history crosses this
+boundary; yielded background terminals, child processes, and live tool handles
+do not have a cross-operation survival guarantee.
+
+Codex 0.156.1 holds an [exclusive cross-process writer lease](https://github.com/openai/codex/blob/rust-v0.156.1/codex-rs/rollout/src/writer_lock.rs)
+for a loaded thread. Botpipe releases the session lock only after confirming
+operation-scoped disposal (or explicit resolution), so it does not require a
+live handoff primitive or broker writer ownership between app-server processes.
+Because a different operation uses a new server, Botpipe also does not depend on
+unsubscribe as a way to reconfigure an already loaded thread.
 
 ## Enforcement
 
@@ -77,24 +93,40 @@ cannot enforce network off, so full access also requires an explicit network
 opt-in when that native limitation applies. A named remote MCP server can have
 remote effects; filesystem read-only does not constrain that server.
 
-The app-server process uses a POSIX process group or a Windows kill-on-close Job.
-Cancellation requests `turn/interrupt` and uses Codex's native background-terminal
-cleanup when available: interrupt alone intentionally leaves those terminals
-running. Botpipe captures still-attached descendant process groups before cleanup
-and checks their process identities before signalling them. A pre-ack attempt is
-`Stopped` only when its durable receipt records failed dispatch and completed,
-verified local teardown. Native history marked failed, interrupted, or cancelled
-is `Stopped` only after background cleanup and a bounded, paginated inventory
-proves empty. The historical status or successful cleanup RPC by itself is not
-proof. Missing support, nonempty inventory, timeout, or inspection error yields
-`Unknown`; the affected operation remains unresolved. Native `Completed` history
-can still be adopted when terminal items pass the tool audit and an assistant
-message supplies the response, even if cleanup evidence is incomplete.
-A daemon already detached from the process tree is outside Botpipe's containment,
-so Botpipe cannot guarantee that every escaped daemon ended. Killing a shared
-app-server may interrupt its other active turns too. Botpipe does not claim
-independent cancellation: cleanup evidence for every affected operation is
-reconciled as `Completed`, `Stopped`, or `Unknown`.
+Each complete provider operation owns an app-server process in a POSIX process
+group or a Windows kill-on-close Job. The measured Codex behavior does not stop
+on stdin EOF. Normal idle disposal therefore closes the transport, then stops
+only the app-server parent: parent-directed `SIGINT` on POSIX or
+`TerminateProcess` on Windows. Botpipe waits to confirm parent exit. This path
+does not call `turn/interrupt`, clean background terminals, or terminate the
+contained process tree. On Windows it clears kill-on-close before closing the
+containment handle. Child survival is not guaranteed or carried as a Botpipe
+contract.
+
+Cancellation and timeout instead request `turn/interrupt` and use Codex's native
+background-terminal cleanup when available: interrupt alone may leave those
+terminals running. Botpipe captures still-attached descendant process groups
+before cleanup and checks their identities before signalling.
+
+Attempt preparation, dispatch authorization, native IDs, responses and cleanup
+evidence are recorded in the owning run's ledger. A pre-ack attempt is `Stopped`
+only when the ledger proves dispatch was not authorized or records completed,
+verified local teardown. Native history marked failed, interrupted or cancelled
+is `Stopped` only after cleanup and a bounded, paginated inventory proves empty.
+The historical status or successful cleanup RPC alone is not proof. Missing
+support, a nonempty inventory, timeout or inspection error yields `Unknown`.
+Native `Completed` history can still be adopted when terminal items pass the
+tool audit and an assistant message supplies the response.
+
+A result made durable before normal disposal fails remains `Completed` and is
+never redispatched. The separate uncertainty concerns shutdown. Botpipe blocks
+that session from another operation until shutdown succeeds on retry or an
+operator resolves the lifecycle uncertainty; it does not treat visible result
+bytes as proof that the old process is gone.
+
+A daemon already detached from the process tree is outside Botpipe's
+containment. One operation owns the process being escalated; unrelated
+operations use different app-server processes.
 
 ## Validation and release gate
 

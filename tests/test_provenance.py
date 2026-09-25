@@ -8,7 +8,10 @@ import pytest
 
 from botpipe import Botpipe
 from botpipe.discovery import resolve_workflow
-from botpipe.provenance import capture_workflow_provenance
+from botpipe.provenance import (
+    capture_workflow_provenance,
+    capture_workflow_surface_manifest,
+)
 from botpipe.providers import FakeProvider
 from botpipe.surface_identity import derive_workflow_surface_manifest
 from botpipe_optimizer.optimization import load_run_observation
@@ -87,8 +90,8 @@ def test_unexpected_observation_failure_is_explicitly_unverified(tmp_path, monke
     }
 
 
-def _package(root: Path) -> Path:
-    package = root / "sample"
+def _package(root: Path, name: str = "sample") -> Path:
+    package = root / name
     package.mkdir(parents=True)
     (package / "__init__.py").write_text("")
     source = package / "workflow.py"
@@ -128,15 +131,30 @@ def test_completed_resume_returns_record_without_reobserving_source_drift(tmp_pa
         result = client.run(flow)
         assert result.ok
         original = client.inspect(result.run_id)["run"]
-        assert original["provenance_start"]["verified"]
-        assert (
-            original["provenance_start"]["surface_id"]
-            == original["provenance_end"]["surface_id"]
-        )
+        assert original["provenance_state"] == "known"
+        assert original["surface_id"]
         (source.parent / "prompt.md").write_text("Updated external resource")
         assert client.resume(result.run_id, workflow=flow).ok
         current = client.inspect(result.run_id)["run"]
         assert current == original
+
+
+def test_ordinary_provenance_is_compact_and_full_manifest_is_explicit(tmp_path):
+    source = _package(tmp_path, "compact_sample")
+    flow = resolve_workflow(f"{source}:sample", tmp_path)
+
+    compact = capture_workflow_provenance(flow, tmp_path)
+    manifest = capture_workflow_surface_manifest(flow, tmp_path)
+
+    assert compact == {
+        "schema": "botpipe.workflow-provenance.v1",
+        "verified": True,
+        "workflow_identity": compact["workflow_identity"],
+        "surface_id": manifest["surface_id"],
+        "orchestration_id": flow.fingerprint,
+    }
+    assert "files" in manifest
+    assert "surface_manifest" not in compact
 
 
 def test_workflow_surface_rejects_linked_package_content(tmp_path):
@@ -171,7 +189,14 @@ def test_loaded_definition_cannot_claim_new_source_bytes(tmp_path, edit_global):
         result = client.run(flow)
         assert result.value == "OLD"
         record = client.inspect(result.run_id)
-        assert not record["run"]["provenance_start"]["verified"]
+        assert record["run"]["provenance_state"] == "unknown"
+        revisions = [
+            event["data"]["provenance"]
+            for event in record["events"]
+            if event["event"] == "execution_revision"
+        ]
+        assert revisions
+        assert all(not revision["verified"] for revision in revisions)
         assert load_run_observation(record).provenance_state != "known"
 
 

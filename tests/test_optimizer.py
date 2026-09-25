@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from dataclasses import asdict, replace
 from pathlib import Path
 
@@ -8,6 +7,7 @@ import pytest
 from pydantic import BaseModel
 
 from botpipe import Botpipe, Provider, current_run, workflow
+from botpipe.discovery import resolve_workflow
 from botpipe.journal import JournalSnapshot
 from botpipe.providers import FakeProvider, ProviderResponse
 from botpipe.read_projection import project_run
@@ -127,6 +127,48 @@ def test_execution_revision_history_does_not_collapse_a_b_a_to_endpoints():
     assert observation.orchestration_id is None
 
 
+def test_mixed_run_attributes_operations_to_their_producing_revision():
+    old = operation("old-operation", name="old step", status="failed")
+    new = operation("new-operation", name="new step", status="failed")
+    inspection = provenanced_run(operations=[old, new])
+    inspection["events"] = [
+        revision_event("old", phase="start"),
+        {"event": "operation_started", "operation_id": "old-operation", "data": {}},
+        revision_event("old", phase="end"),
+        revision_event("current", phase="start"),
+        {"event": "operation_started", "operation_id": "new-operation", "data": {}},
+        revision_event("current", phase="end"),
+    ]
+
+    observation = load_run_observation(inspection)
+    assert observation.provenance_state == "mixed"
+    assert [item.provenance_state for item in observation.operations] == [
+        "known",
+        "known",
+    ]
+    assert [item.surface_id for item in observation.operations] == [
+        "surface-old",
+        "surface-current",
+    ]
+
+    snapshot = capture_evidence_snapshot(
+        "example",
+        [observation],
+        source_manifest=capture_source_manifest(lambda: None),
+        current_workflow_identity="workflow-example",
+        current_surface_id="surface-current",
+        current_orchestration_id="orchestration-current",
+    )
+
+    assert snapshot.recommendation_basis == "current_verified"
+    selected = {
+        item.operation_id
+        for item in snapshot.observations
+        if item.group_id == snapshot.selected_group_id
+    }
+    assert selected == {"new-operation"}
+
+
 def test_unavailable_execution_revision_is_sticky():
     inspection = provenanced_run(operations=[])
     inspection["events"] = [
@@ -236,7 +278,7 @@ def test_optimizer_ranks_only_observed_operations_and_preserves_evidence():
     assert report.candidates[0].evidence_operation_ids == ("op-1",)
 
 
-def test_legacy_report_labels_counts_and_generic_duration_without_cost_or_latency_claims():
+def test_report_labels_counts_and_generic_duration_without_cost_or_latency_claims():
     usage_run = load_run_observation(
         inspected_run(operations=[operation("usage", name="usage step", tokens=20)])
     )
@@ -471,8 +513,24 @@ def test_v2_objective_eligibility_keeps_missing_usage_distinct_from_zero():
     manifest = capture_source_manifest(example)
     known_zero = operation("zero", tokens=0)
     unknown = operation("unknown", name="unknown")
-    unknown["usage"] = {}
     positive = operation("positive", name="positive", tokens=9)
+    for item, tokens in ((known_zero, 0), (positive, 9)):
+        item["dispatches"] = [
+            {
+                "dispatch_id": item["id"] + "-dispatch",
+                "outcome": "completed",
+                "usage_availability": "known_total",
+                "usage": {"total_tokens": tokens},
+            }
+        ]
+    unknown["dispatches"] = [
+        {
+            "dispatch_id": "unknown-dispatch",
+            "outcome": "completed",
+            "usage_availability": "unknown",
+            "usage": {},
+        }
+    ]
     snapshot = capture_evidence_snapshot(
         "example",
         [provenanced_run(operations=[known_zero, unknown, positive])],
@@ -593,6 +651,7 @@ def test_v2_mixed_and_unknown_runs_are_diagnostics_not_comparison_evidence():
     assert {issue.reason for issue in snapshot.issues} == {
         "mixed_workflow_surface",
         "unknown_workflow_surface",
+        "unknown_dispatch_usage",
         "elapsed_time_unavailable",
     }
     assert snapshot.selected_group_id is None
@@ -603,7 +662,7 @@ def test_v2_mixed_and_unknown_runs_are_diagnostics_not_comparison_evidence():
     assert snapshot.next_action == "collect_evidence"
 
 
-def test_v2_historical_fallback_skips_mixed_run():
+def test_historical_selection_skips_unattributed_mixed_run():
     manifest = capture_source_manifest(lambda: None)
     mixed = provenanced_run(
         operations=[operation("mixed-failure", status="failed")], run_id="mixed"
@@ -796,11 +855,19 @@ def test_improvement_without_eligible_evidence_uses_zero_provider_turns(tmp_path
 
 def test_improvement_file_reference_uses_canonical_name_and_exact_task_run_refs(tmp_path):
     provider = FakeProvider([])
-    reference = "test_optimizer:alias_observed_workflow"
+    source = tmp_path / "alias_observed.py"
+    source.write_text(
+        "from botpipe import current_run, workflow\n"
+        "@workflow(name='alias_observed')\n"
+        "def alias_observed_workflow():\n"
+        "    return current_run().operation(\n"
+        "        'activity', {'value': 'observed'}, lambda: 'observed',\n"
+        "        retry_safe=True, name='observed activity')\n"
+    )
+    reference = f"{source}:alias_observed_workflow"
+    selected = resolve_workflow(reference, tmp_path)
     with Botpipe(tmp_path, provider=provider) as client:
-        observed = client.run(
-            alias_observed_workflow, task_id="evidence", run_id="observed"
-        )
+        observed = client.run(selected, task_id="evidence", run_id="observed")
         assert observed.ok
         result = client.run(
             improve_workflow,

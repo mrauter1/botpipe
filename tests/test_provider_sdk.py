@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from botpipe import Botpipe, Provider, Session, StreamEvent
 from botpipe.policy import NetworkMode, SandboxMode
 from botpipe.providers import FakeProvider, ProviderResponse
+from botpipe.recovery import Unknown
 
 
 class Answer(BaseModel):
@@ -217,7 +218,7 @@ def test_capability_failure_is_preserved_before_dispatch(tmp_path: Path):
             raise AssertionError("must not dispatch")
 
         def recover(self, request):
-            return None
+            return Unknown("preflight rejected before dispatch")
 
     adapter = Adapter()
     provider = Provider(
@@ -632,7 +633,7 @@ def test_retry_safety_tightening_replays_completed_output_repair(tmp_path: Path)
     assert len(fake.calls) == 2
 
 
-def test_codex_retry_carries_thread_without_reusing_old_profile_checkpoint(
+def test_codex_retry_uses_supplied_thread_and_current_checkpoint(
     tmp_path: Path,
 ):
     from dataclasses import replace
@@ -646,6 +647,9 @@ def test_codex_retry_carries_thread_without_reusing_old_profile_checkpoint(
 
         def start_turn(self, request, on_event=None):
             self.calls.append(request)
+            request.on_checkpoint(
+                {"status": "turn_intent", "session_id": "thread-1"}
+            )
             if request.attempt == 1:
                 request.on_checkpoint(
                     {"session_id": "thread-1", "profile_hash": "old-profile"}
@@ -657,6 +661,7 @@ def test_codex_retry_carries_thread_without_reusing_old_profile_checkpoint(
 
     adapter = Adapter()
     provider = CodexProvider(adapter=adapter)
+    checkpoints = []
     request = ProviderRequest(
         operation_id="retry-thread",
         prompt="work",
@@ -665,16 +670,24 @@ def test_codex_retry_carries_thread_without_reusing_old_profile_checkpoint(
         output_schema=None,
         policy=Policy(),
         artifacts={},
-        receipt_dir=tmp_path / "receipts",
         timeout=10,
         preset="run",
+        on_checkpoint=checkpoints.append,
     )
     provider.run(request)
     current_checkpoint = {"profile_hash": "current-profile"}
-    provider.run(replace(request, attempt=2, checkpoint=current_checkpoint))
+    provider.run(
+        replace(
+            request,
+            session_id="thread-1",
+            attempt=2,
+            checkpoint=current_checkpoint,
+        )
+    )
 
     assert adapter.calls[1].session_id == "thread-1"
     assert adapter.calls[1].checkpoint == current_checkpoint
+    assert checkpoints[-1]["status"] == "completed"
 
 
 def test_stopped_policy_failure_preserves_capability_error(tmp_path: Path):
@@ -706,32 +719,55 @@ def test_stopped_policy_failure_preserves_capability_error(tmp_path: Path):
 def test_cancelled_direct_call_stops_waiting_for_shared_session(tmp_path: Path):
     import asyncio
     import threading
+    from contextlib import suppress
 
     entered = threading.Event()
+    waiting_for_session = threading.Event()
     release = threading.Event()
+
+    class ObservedTurnLock:
+        def __init__(self):
+            self.lock = threading.Lock()
+
+        def acquire(self, *args, **kwargs):
+            if entered.is_set():
+                waiting_for_session.set()
+            return self.lock.acquire(*args, **kwargs)
+
+        def release(self):
+            self.lock.release()
 
     def hold(request):
         entered.set()
-        assert release.wait(3)
+        assert release.wait(30)
         return ProviderResponse("first", "thread-1")
 
     fake = FakeProvider([hold, ProviderResponse("second", "thread-1")])
-    provider = Provider(runtime=runtime(tmp_path, fake), session=Session())
+    shared = Session()
+    shared._turn_lock = ObservedTurnLock()
+    provider = Provider(runtime=runtime(tmp_path, fake), session=shared)
 
     async def scenario():
         first = asyncio.create_task(provider.aquery("first"))
-        assert await asyncio.to_thread(entered.wait, 1)
-        waiting = asyncio.create_task(provider.aquery("second"))
-        await asyncio.sleep(0.05)
-        waiting.cancel()
+        waiting = None
+        first_result = None
         try:
-            await asyncio.wait_for(waiting, 0.5)
-        except asyncio.CancelledError:
-            pass
-        else:
-            raise AssertionError("cancelled session waiter did not stop")
-        release.set()
-        assert (await first).value == "first"
+            assert await asyncio.to_thread(entered.wait, 10)
+            waiting = asyncio.create_task(provider.aquery("second"))
+            assert await asyncio.to_thread(waiting_for_session.wait, 10)
+            waiting.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await asyncio.wait_for(waiting, 2)
+        finally:
+            release.set()
+            try:
+                if waiting is not None and not waiting.done():
+                    waiting.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await asyncio.wait_for(waiting, 2)
+            finally:
+                first_result = await asyncio.wait_for(first, 10)
+        assert first_result.value == "first"
 
     asyncio.run(scenario())
     assert len(fake.calls) == 1
@@ -788,7 +824,7 @@ def test_failed_preflight_preserves_artifacts_before_next_run(tmp_path: Path):
             raise AssertionError("must not dispatch")
 
         def recover(self, request):
-            return None
+            return Unknown("preflight rejected before dispatch")
 
     first_runtime = Botpipe(
         tmp_path, provider=Adapter(), state_dir=tmp_path / "first-state"

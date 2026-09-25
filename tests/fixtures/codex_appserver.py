@@ -14,7 +14,10 @@ SCENARIO = os.environ.get("BOTPIPE_FAKE_SCENARIO", "complete")
 
 
 def receive() -> dict:
-    value = json.loads(sys.stdin.readline())
+    line = sys.stdin.readline()
+    if not line:
+        raise EOFError
+    value = json.loads(line)
     with TRANSCRIPT.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(value, sort_keys=True) + "\n")
     return value
@@ -48,7 +51,10 @@ assert receive()["method"] == "initialized"
 turn_number = 0
 background_child = None
 while True:
-    request = receive()
+    try:
+        request = receive()
+    except EOFError:
+        break
     method = request.get("method")
     if method == "thread/backgroundTerminals/clean":
         if background_child is not None:
@@ -72,8 +78,23 @@ while True:
     if method == "thread/unsubscribe":
         send({"id": request["id"], "result": {"status": "unsubscribed"}})
         continue
-    if SCENARIO == "concurrent_stall" and method == "turn/interrupt":
-        send({"id": request["id"], "result": {}})
+    if method == "thread/read":
+        send({
+            "id": request["id"],
+            "result": {
+                "thread": {
+                    "turns": [
+                        {
+                            "id": "recorded-turn",
+                            "status": "completed",
+                            "items": [
+                                {"type": "agentMessage", "text": "recovered answer"}
+                            ],
+                        }
+                    ]
+                }
+            },
+        })
         continue
     if method in {"thread/start", "thread/resume"}:
         time.sleep(float(os.environ.get("BOTPIPE_FAKE_THREAD_DELAY", "0")))
@@ -93,15 +114,16 @@ while True:
     turn_id = f"turn-{turn_number}"
     if SCENARIO in {
         "stall_turn_start",
-        "stall_turn_start_complete",
-        "stall_turn_start_disallowed",
+        "fail_turn_start",
+        "fail_turn_start_complete",
+        "fail_turn_start_disallowed",
     }:
-        # The native turn may already be executing even though its RPC response
-        # was lost. With no turn id available, only transport-tree teardown can
-        # establish quiescence.
-        if SCENARIO == "stall_turn_start":
+        # The native turn may already be executing even though its turn/start
+        # acknowledgement is unavailable. With no turn id, only transport-tree
+        # teardown can establish quiescence.
+        if SCENARIO in {"stall_turn_start", "fail_turn_start"}:
             spawn_descendant(new_session=True)
-        elif SCENARIO == "stall_turn_start_disallowed":
+        elif SCENARIO == "fail_turn_start_disallowed":
             send(
                 {
                     "method": "item/completed",
@@ -139,19 +161,28 @@ while True:
                     },
                 }
             )
-        while True:
-            time.sleep(60)
+        if SCENARIO == "stall_turn_start":
+            while True:
+                time.sleep(60)
+        # Deliver the orphan notification(s) before an explicit RPC failure.
+        # This deterministically models a native turn that executed while its
+        # turn/start acknowledgement could not be adopted by the caller.
+        send(
+            {
+                "id": request["id"],
+                "error": {
+                    "code": -32000,
+                    "message": "fixture rejected turn/start acknowledgement",
+                },
+            }
+        )
+        continue
     send(
         {
             "id": request["id"],
             "result": {"turn": {"id": turn_id, "status": "inProgress", "items": []}},
         }
     )
-
-    if SCENARIO == "concurrent_stall":
-        # Keep accepting JSON-RPC so distinct resumed threads can have active
-        # turns at the same time. The test tears down this shared transport.
-        continue
 
     if SCENARIO == "stall_tree":
         # Match Codex's native sandbox helper: it has its own process group and
@@ -161,6 +192,11 @@ while True:
     if SCENARIO == "native_background":
         background_child = spawn_descendant(new_session=True)
         continue
+    if SCENARIO == "inherited_stdio":
+        # This child deliberately inherits the app-server's stdout/stderr.
+        # Adapter disposal must not leave its reader threads blocked on those
+        # still-open pipe handles after the app-server parent exits.
+        spawn_descendant(new_session=True)
 
     if SCENARIO == "disallowed_shell":
         send(

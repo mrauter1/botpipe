@@ -1,6 +1,6 @@
-## Durable producer result
+## Durable typed phase result
 
-After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+After writing every declared artifact, return one JSON result matching the injected phase-specific schema. Return `accepted` only when the artifacts meet this phase's positive condition and populate the domain fields in the schema. Return `needs_rework` for a local repair, `needs_replan` for a material upstream change, `question` or `blocked` for a missing prerequisite, and `failed` for a terminal domain failure. Report only captured artifact names and stable identifiers present in the artifacts.
 
 # Assemble Evidence Pack Producer
 
@@ -53,8 +53,8 @@ After writing every declared artifact, return a JSON result matching the injecte
 - Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
 - Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Outcome guidance for the verifier
-- `evidence_pack_ready`: the evidence pack is coherent, source-traced, explicit about gaps, and ready for downstream reuse.
+### Outcome selection
+- `accepted`: the evidence pack is coherent, source-traced, explicit about gaps, and ready for downstream reuse.
 - `needs_rework`: the same evidence boundary still holds, but source tracing, coverage, or gap handling needs local repair.
 - `needs_replan`: the investigation boundary or evidence plan changed materially and framing must be revisited.
 - Use `blocked` only for genuine missing prerequisites, hard source-access blockers, or irreconcilable contradictions.

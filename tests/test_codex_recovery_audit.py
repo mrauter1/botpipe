@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import sys
 import threading
 from dataclasses import replace
@@ -8,18 +7,17 @@ from pathlib import Path
 
 import pytest
 
-from botpipe import Botpipe, Provider
+from botpipe import Botpipe, Provider, codec
 from botpipe.capabilities import CapabilityError, CapabilityStatus, CodexCapabilities
 from botpipe.codex_appserver import CodexAppServerAdapter
 from botpipe.policy import NetworkMode, Policy, SandboxMode
 from botpipe.providers import (
     CodexProvider,
-    ProviderInterruptedError,
     ProviderRequest,
     ProviderResponse,
-    receipt_path,
 )
 from botpipe.recovery import Completed, Stopped, Unknown, recover_outcome
+from botpipe.session_bindings import SessionBinding
 
 
 def capabilities() -> CodexCapabilities:
@@ -41,38 +39,35 @@ def capabilities() -> CodexCapabilities:
 
 
 def interrupted_request(tmp_path: Path, *, preset: str = "generate") -> ProviderRequest:
-    request = ProviderRequest(
-        "interrupted",
-        "answer",
-        tmp_path,
-        "thread",
-        None,
-        Policy(sandbox_mode=SandboxMode.READ_ONLY, network=NetworkMode.NONE),
-        {},
-        tmp_path / "receipts",
-        1,
+    checkpoint = {
+        "status": "turn_acknowledged",
+        "session_id": "thread",
+        "turn_id": "turn",
+        "probe_hash": "original-probe",
+        "enforcement": {
+            "sandbox": "codex:read-only",
+            "codex_version": "original-version",
+        },
+    }
+
+    def save(update: dict) -> None:
+        checkpoint.update(update)
+
+    return ProviderRequest(
+        operation_id="interrupted",
+        prompt="answer",
+        workspace=tmp_path,
+        session_id="thread",
+        output_schema=None,
+        policy=Policy(sandbox_mode=SandboxMode.READ_ONLY, network=NetworkMode.NONE),
+        artifacts={},
+        timeout=1,
+        session_key="test:interrupted",
         preset=preset,
         tools=(),
+        checkpoint=checkpoint,
+        on_checkpoint=save,
     )
-    path = receipt_path(request)
-    path.parent.mkdir()
-    path.write_text(
-        json.dumps(
-            {
-                "operation_id": request.operation_id,
-                "attempt": 1,
-                "status": "turn_acknowledged",
-                "session_id": "thread",
-                "turn_id": "turn",
-                "probe_hash": "original-probe",
-                "enforcement": {
-                    "sandbox": "codex:read-only",
-                    "codex_version": "original-version",
-                },
-            }
-        )
-    )
-    return request
 
 
 def history_adapter(
@@ -164,19 +159,19 @@ def test_recovered_disallowed_tool_is_terminal_and_keeps_evidence(
         with pytest.raises(CapabilityError, match="disallowed tool 'shell'"):
             recover_outcome(provider, request)
 
-    expected = ["thread/resume", "thread/read"]
-    if status != "completed":
-        expected.extend(
-            [
-                "thread/backgroundTerminals/clean",
-                "thread/backgroundTerminals/list",
-            ]
-        )
+    expected = [
+        "thread/resume",
+        "thread/read",
+        "thread/backgroundTerminals/clean",
+        "thread/backgroundTerminals/list",
+    ]
     assert calls == expected
-    receipt = json.loads(receipt_path(request).read_text())
-    assert receipt["status"] == "failed" and receipt["policy_error"] is True
-    assert receipt["enforcement"]["audit"] == "tool-policy-violation"
-    assert receipt["audit"][0]["data"]["item"]["id"] == "forbidden-command"
+    checkpoint = request.checkpoint
+    assert checkpoint is not None
+    assert checkpoint["status"] == "failed" and checkpoint["policy_error"] is True
+    assert checkpoint["cleanup"] == {"status": "completed"}
+    assert checkpoint["enforcement"]["audit"] == "tool-policy-violation"
+    assert checkpoint["audit"][0]["data"]["item"]["id"] == "forbidden-command"
 
 
 @pytest.mark.parametrize("status", ["failed", "interrupted", "cancelled"])
@@ -195,10 +190,11 @@ def test_recovered_clean_terminal_turn_is_stopped_with_audit(
         "thread/backgroundTerminals/clean",
         "thread/backgroundTerminals/list",
     ]
-    receipt = json.loads(receipt_path(request).read_text())
-    assert receipt["status"] == "turn_acknowledged"
-    assert receipt["enforcement"]["audit"] == "no-tool-calls-observed"
-    assert receipt["audit"][0]["data"]["item"]["type"] == "agentMessage"
+    checkpoint = request.checkpoint
+    assert checkpoint is not None
+    assert checkpoint["status"] == "failed"
+    assert checkpoint["enforcement"]["audit"] == "no-tool-calls-observed"
+    assert checkpoint["audit"][0]["data"]["item"]["type"] == "agentMessage"
 
 
 def test_recovered_safe_result_keeps_audit_and_original_enforcement(
@@ -248,8 +244,9 @@ def test_running_recovery_requires_background_cleanup_before_stopped(
         "thread/backgroundTerminals/clean",
         "thread/backgroundTerminals/list",
     ]
-    receipt = json.loads(receipt_path(request).read_text())
-    assert receipt["enforcement"]["audit"] == "no-tool-calls-observed"
+    checkpoint = request.checkpoint
+    assert checkpoint is not None
+    assert checkpoint["enforcement"]["audit"] == "no-tool-calls-observed"
 
 
 def test_running_recovery_without_background_cleanup_stays_unknown(
@@ -265,8 +262,9 @@ def test_running_recovery_without_background_cleanup_stays_unknown(
     outcome = recover_outcome(CodexProvider(adapter=adapter), request)
 
     assert isinstance(outcome, Unknown)
-    receipt = json.loads(receipt_path(request).read_text())
-    assert receipt["enforcement"]["audit"] == "no-tool-calls-observed"
+    checkpoint = request.checkpoint
+    assert checkpoint is not None
+    assert checkpoint["enforcement"]["audit"] == "no-tool-calls-observed"
 
 
 def test_recovery_waits_until_native_background_inventory_is_empty(
@@ -322,8 +320,9 @@ def test_invalid_background_inventory_stays_unknown(
     outcome = recover_outcome(CodexProvider(adapter=adapter), request)
 
     assert isinstance(outcome, Unknown)
-    receipt = json.loads(receipt_path(request).read_text())
-    assert receipt["cleanup"]["status"] == "incomplete"
+    checkpoint = request.checkpoint
+    assert checkpoint is not None
+    assert checkpoint["cleanup"]["status"] == "incomplete"
 
 
 def test_cancelled_recovery_does_not_claim_terminal_cleanup(tmp_path, monkeypatch):
@@ -351,8 +350,9 @@ def test_recovered_run_policy_violation_remains_unresolved(
 
     assert isinstance(outcome, Unknown)
     assert "disallowed tool" in outcome.detail
-    receipt = json.loads(receipt_path(request).read_text())
-    assert receipt["enforcement"]["audit"] == "tool-policy-violation"
+    checkpoint = request.checkpoint
+    assert checkpoint is not None
+    assert checkpoint["enforcement"]["audit"] == "tool-policy-violation"
 
 
 def test_sdk_native_audit_violation_fails_without_becoming_unresolved(tmp_path):
@@ -374,6 +374,43 @@ def test_sdk_native_audit_violation_fails_without_becoming_unresolved(tmp_path):
         row = runtime.journal.get(caught.value.operation_id)
         assert row["status"] == "failed"
         assert row["enforcement"]["audit"] == "tool-policy-violation"
+        session_key = codec.decode(row["inputs"])["session"]
+        assert SessionBinding(runtime.journal, session_key).read()["pending"] is None
+        assert any(
+            event["event"] == "provider_call_finished"
+            and event.get("operation_id") == row["id"]
+            and event["data"]["outcome"] == "policy_failed"
+            for event in runtime.journal.events(caught.value.run_id)
+        )
+
+
+def test_independent_terminal_policy_failure_releases_cached_owner(tmp_path):
+    class Adapter:
+        def __init__(self):
+            self.closes = 0
+
+        def probe(self, *, deadline=None):
+            return capabilities()
+
+        def start_turn(self, request, on_event=None):
+            request.on_checkpoint({"status": "turn_intent"})
+            request.on_checkpoint({
+                "status": "failed",
+                "cleanup": {"status": "completed"},
+            })
+            raise CapabilityError("disallowed tool")
+
+        def close(self):
+            self.closes += 1
+
+    adapter = Adapter()
+    backend = CodexProvider(adapter=adapter)
+    with Botpipe(tmp_path, provider=backend) as runtime:
+        with pytest.raises(CapabilityError, match="disallowed tool"):
+            Provider(runtime=runtime, session=None).generate("answer")
+
+        assert backend._owners == {}
+        assert adapter.closes == 1
 
 
 @pytest.mark.parametrize("native_status", ["running", "stopped"])
@@ -381,13 +418,11 @@ def test_incomplete_cleanup_blocks_retry_even_when_native_turn_is_terminal(
     tmp_path, native_status
 ):
     request = interrupted_request(tmp_path, preset="run")
-    path = receipt_path(request)
-    record = json.loads(path.read_text())
-    record.update(
+    assert request.checkpoint is not None
+    request.checkpoint.update(
         status="failed",
         cleanup={"status": "incomplete", "error": "terminal cleanup failed"},
     )
-    path.write_text(json.dumps(record))
 
     class Adapter:
         def recover_turn(self, *args, **kwargs):
@@ -399,15 +434,29 @@ def test_incomplete_cleanup_blocks_retry_even_when_native_turn_is_terminal(
     assert "cleanup failed" in outcome.detail
 
 
+def test_checkpointed_policy_failure_with_incomplete_cleanup_is_resolvable(tmp_path):
+    request = interrupted_request(tmp_path)
+    assert request.checkpoint is not None
+    request.checkpoint.update(
+        status="failed",
+        policy_error=True,
+        error="disallowed tool",
+        cleanup={"status": "incomplete", "error": "cleanup is unverified"},
+    )
+
+    outcome = recover_outcome(CodexProvider(adapter=object()), request)
+
+    assert isinstance(outcome, Unknown)
+    assert outcome.detail == "cleanup is unverified"
+
+
 def test_incomplete_cleanup_still_allows_completed_native_adoption(tmp_path):
     request = interrupted_request(tmp_path, preset="run")
-    path = receipt_path(request)
-    record = json.loads(path.read_text())
-    record.update(
+    assert request.checkpoint is not None
+    request.checkpoint.update(
         status="failed",
         cleanup={"status": "incomplete", "error": "terminal cleanup failed"},
     )
-    path.write_text(json.dumps(record))
 
     class Adapter:
         def recover_turn(self, *args, **kwargs):
@@ -423,18 +472,13 @@ def test_completed_cleanup_with_unknown_history_stays_unknown_and_is_not_resent(
     tmp_path,
 ):
     request = interrupted_request(tmp_path, preset="run")
-    path = receipt_path(request)
-    record = json.loads(path.read_text())
-    record["cleanup"] = {"status": "completed"}
-    path.write_text(json.dumps(record))
+    assert request.checkpoint is not None
+    request.checkpoint["cleanup"] = {"status": "completed"}
 
     class Adapter:
         def recover_turn(self, *args, **kwargs):
             return "unknown", None
 
-    provider = CodexProvider(adapter=Adapter())
-    outcome = recover_outcome(provider, request)
+    outcome = recover_outcome(CodexProvider(adapter=Adapter()), request)
 
     assert isinstance(outcome, Unknown)
-    with pytest.raises(ProviderInterruptedError, match="refusing to resend"):
-        provider.run(request)

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import sys
 import time
 from pathlib import Path
@@ -18,6 +17,7 @@ from botpipe.providers import (
     ProviderResponse,
     ProviderTimeoutError,
 )
+from botpipe.recovery import Unknown
 
 
 FIXTURE = Path(__file__).parent / "fixtures" / "codex_appserver.py"
@@ -48,6 +48,15 @@ def capabilities() -> CodexCapabilities:
     )
 
 
+def budget_state(runtime, run_id):
+    operation = next(
+        row
+        for row in runtime.journal.operations(run_id)
+        if row["kind"] == "provider_budget"
+    )
+    return runtime.journal.budget(operation["id"])
+
+
 class ExpiredProbeAdapter:
     def __init__(self, expected_ceiling: float) -> None:
         self.expected_ceiling = expected_ceiling
@@ -67,11 +76,16 @@ class ExpiredProbeAdapter:
         pass
 
 
-def receipt_files(root: Path) -> list[Path]:
-    return list(root.rglob("receipts/*.json"))
+def dispatch_reservations(runtime: Botpipe) -> list[dict]:
+    return [
+        event
+        for run in runtime.journal.runs()
+        for event in runtime.journal.events(run["run_id"])
+        if event["event"] == "provider_dispatch_reserved"
+    ]
 
 
-def test_request_timeout_bounds_cold_probe_before_receipt(tmp_path: Path) -> None:
+def test_request_timeout_bounds_cold_probe_before_dispatch(tmp_path: Path) -> None:
     adapter = ExpiredProbeAdapter(0.5)
     with Botpipe(
         tmp_path,
@@ -82,7 +96,7 @@ def test_request_timeout_bounds_cold_probe_before_receipt(tmp_path: Path) -> Non
             Provider(runtime=runtime).generate("answer", timeout=0.5, session=None)
 
     assert adapter.starts == 0
-    assert receipt_files(tmp_path) == []
+    assert dispatch_reservations(runtime) == []
 
 
 def test_supplemental_validator_still_runs_capability_probe(tmp_path: Path) -> None:
@@ -110,7 +124,7 @@ def test_supplemental_validator_still_runs_capability_probe(tmp_path: Path) -> N
             raise AssertionError("rejected capability must not dispatch")
 
         def recover(self, request):
-            return None
+            return Unknown("preflight rejected before dispatch")
 
     backend = ProviderBackend()
     with Botpipe(tmp_path, provider=backend, state_dir=tmp_path / "state") as runtime:
@@ -141,17 +155,13 @@ def test_active_budget_bounds_probe_without_charging_a_turn(
         state_dir=tmp_path / "state",
     ) as runtime:
         result = runtime.run(work)
-        state = json.loads(
-            runtime.journal.db.execute(
-                "SELECT state FROM provider_budgets"
-            ).fetchone()[0]
-        )
+        state = budget_state(runtime, result.run_id)
 
     assert result.status == "failed"
     assert "capability probe timed out" in result.error
     assert state["used_turns"] == 0
     assert adapter.starts == 0
-    assert receipt_files(tmp_path) == []
+    assert dispatch_reservations(runtime) == []
 
 
 def test_probe_and_start_share_one_absolute_deadline(tmp_path: Path, monkeypatch) -> None:
@@ -215,7 +225,6 @@ def test_appserver_start_uses_existing_deadline(tmp_path: Path, monkeypatch) -> 
         output_schema=None,
         policy=Policy(sandbox_mode=SandboxMode.READ_ONLY, network=NetworkMode.NONE),
         artifacts={},
-        receipt_dir=tmp_path / "receipts",
         timeout=10,
         preset="generate",
         tools=(),
@@ -258,6 +267,69 @@ def test_cached_capability_probe_is_not_repeated_for_start(
     assert calls[0] is not None
 
 
+def test_thread_setup_failure_is_uncharged_and_resume_dispatches_once(
+    tmp_path: Path, monkeypatch
+) -> None:
+    transcript = tmp_path / "transcript.jsonl"
+    adapter = CodexAppServerAdapter(
+        (sys.executable, str(FIXTURE)),
+        env={
+            "BOTPIPE_FAKE_SCENARIO": "complete",
+            "BOTPIPE_FAKE_TRANSCRIPT": str(transcript),
+        },
+        capabilities=capabilities(),
+    )
+    original_rpc = adapter._rpc
+    fail_thread_start = True
+
+    def rpc(method, params, timeout, cancel_event=None, *, deadline=None, process=None):
+        nonlocal fail_thread_start
+        if method == "thread/start" and fail_thread_start:
+            fail_thread_start = False
+            raise TimeoutError("controlled thread/start failure")
+        return original_rpc(
+            method,
+            params,
+            timeout,
+            cancel_event,
+            deadline=deadline,
+            process=process,
+        )
+
+    monkeypatch.setattr(adapter, "_rpc", rpc)
+
+    @workflow
+    def work():
+        with provider_budget(max_turns=1):
+            return Provider().generate("answer", session=None).value
+
+    with Botpipe(
+        tmp_path,
+        provider=CodexProvider(adapter=adapter),
+        state_dir=tmp_path / "state",
+    ) as runtime:
+        first = runtime.run(work, run_id="thread-setup-retry")
+        assert first.status == "interrupted"
+        assert budget_state(runtime, first.run_id)["used_turns"] == 0
+        assert dispatch_reservations(runtime) == []
+        operation = next(
+            row
+            for row in runtime.journal.operations(first.run_id)
+            if row["kind"] == "provider"
+        )
+        attempt = runtime.journal.attempt(operation["id"], 1)
+        assert attempt["status"] == "configured"
+        assert "dispatch_authorized" not in attempt
+        assert "turn/start" not in transcript.read_text()
+
+        resumed = runtime.resume(first.run_id, workflow=work)
+
+        assert resumed.ok, resumed.error
+        assert resumed.value == "fixture answer"
+        assert budget_state(runtime, first.run_id)["used_turns"] == 1
+        assert len(dispatch_reservations(runtime)) == 1
+
+
 def test_repairs_get_fresh_deadlines_and_one_charge_each(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -282,7 +354,11 @@ def test_repairs_get_fresh_deadlines_and_one_charge_each(
         def start_turn(self, request, on_event=None):
             self.start_deadlines.append(request.deadline)
             clock[0] += 1
+            request.on_checkpoint({"status": "turn_intent"})
             return ProviderResponse(next(self.responses))
+
+        def dispose(self):
+            pass
 
         def close(self):
             pass
@@ -300,11 +376,7 @@ def test_repairs_get_fresh_deadlines_and_one_charge_each(
         state_dir=tmp_path / "state",
     ) as runtime:
         result = runtime.run(work)
-        state = json.loads(
-            runtime.journal.db.execute(
-                "SELECT state FROM provider_budgets"
-            ).fetchone()[0]
-        )
+        state = budget_state(runtime, result.run_id)
 
     assert result.value == 42
     assert adapter.probe_deadlines == [205, 207]

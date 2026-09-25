@@ -32,7 +32,6 @@ from .params import Params
 def TaskToWorkflowStrategy(params: Params, request: str = "") -> LabWorkflowResult:
     """Execute the task to workflow strategy evidence workflow."""
     _producer = Provider()
-    _verifier = _producer.with_config(session=None)
     context = {"request": request, "parameters": params.model_dump(mode="json")}
     context["workflow_catalog"] = observe_catalog()
     completed = []
@@ -47,15 +46,8 @@ def TaskToWorkflowStrategy(params: Params, request: str = "") -> LabWorkflowResu
                 returns=TaskFramingPayload,
                 replan_target="frame_task",
                 producer=_producer,
-                verifier=_verifier,
                 producer_prompt="prompts/frame_producer.md",
-                verifier_prompt="prompts/frame_verifier.md",
-                input={
-                    **context,
-                    "prior_phases": [
-                        item.evidence.model_dump(mode="json") for item in completed
-                    ],
-                },
+                input=context,
                 reads=prior_handles,
                 writes=(
                     artifact("task_strategy_brief.md"),
@@ -93,19 +85,22 @@ def TaskToWorkflowStrategy(params: Params, request: str = "") -> LabWorkflowResu
                         returns=StrategySelectionPayload,
                         replan_target="frame_task",
                         producer=_producer,
-                        verifier=_verifier,
                         producer_prompt="prompts/select_producer.md",
-                        verifier_prompt="prompts/select_verifier.md",
-                        input={
-                            **context,
-                            "prior_phases": [
-                                item.evidence.model_dump(mode="json")
-                                for item in completed
-                            ],
-                        },
+                        input=context,
                         reads=prior_handles,
                         writes=(artifact("strategy_decision.md"),),
                     )
+                    selection = StrategySelectionPayload.model_validate(phase_2.value)
+                    child_details = context["candidate_workflow_set"]["phases"][-1][
+                        "details"
+                    ]
+                    child_recommendations = set(
+                        child_details["recommended_candidate_workflows"]
+                    )
+                    if not set(selection.recommended_workflows) <= child_recommendations:
+                        raise ValueError(
+                            "strategy recommendations must come from the candidate set"
+                        )
                     completed.append(phase_2)
                     prior_handles = prior_handles + phase_2.handles
                     phase_3 = run_phase(
@@ -113,16 +108,8 @@ def TaskToWorkflowStrategy(params: Params, request: str = "") -> LabWorkflowResu
                         returns=StrategyPackagePayload,
                         replan_target="select_strategy",
                         producer=_producer,
-                        verifier=_verifier,
                         producer_prompt="prompts/package_producer.md",
-                        verifier_prompt="prompts/package_verifier.md",
-                        input={
-                            **context,
-                            "prior_phases": [
-                                item.evidence.model_dump(mode="json")
-                                for item in completed
-                            ],
-                        },
+                        input=context,
                         reads=prior_handles,
                         writes=(
                             artifact("workflow_strategy_package.md"),
@@ -130,6 +117,13 @@ def TaskToWorkflowStrategy(params: Params, request: str = "") -> LabWorkflowResu
                             artifact("strategy_next_action.md"),
                         ),
                     )
+                    package = StrategyPackagePayload.model_validate(phase_3.value)
+                    if package.selected_strategy != selection.selected_strategy:
+                        raise ValueError("strategy package changed the selected route")
+                    if package.recommended_workflows != selection.recommended_workflows:
+                        raise ValueError(
+                            "strategy package changed the recommended workflows"
+                        )
                     completed.append(phase_3)
                     prior_handles = prior_handles + phase_3.handles
                     break

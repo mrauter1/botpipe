@@ -500,21 +500,15 @@ def _verify_loaded_source(definition: Any) -> None:
 def capture_workflow_provenance(
     definition: Any, workspace: str | Path
 ) -> dict[str, Any]:
-    """Observe the current editable surface; unavailable identity stays explicit."""
+    """Observe compact source identity; unavailable identity stays explicit."""
     try:
-        _verify_loaded_source(definition)
-        manifest = derive_workflow_surface_manifest(Path(workspace), definition)
-        confirmed = derive_workflow_surface_manifest(Path(workspace), definition)
-        _verify_loaded_source(definition)
-        if confirmed["surface_id"] != manifest["surface_id"]:
-            raise ValueError("workflow surface changed during provenance capture")
+        manifest = capture_workflow_surface_manifest(definition, workspace)
         return {
             "schema": "botpipe.workflow-provenance.v1",
             "verified": True,
             "workflow_identity": canonical_workflow_identity(manifest["boundary"]),
             "surface_id": manifest["surface_id"],
             "orchestration_id": definition.fingerprint,
-            "surface_manifest": manifest,
         }
     except Exception as exc:  # noqa: BLE001 - observation cannot block execution
         return {
@@ -527,12 +521,27 @@ def capture_workflow_provenance(
         }
 
 
+def capture_workflow_surface_manifest(
+    definition: Any, workspace: str | Path
+) -> dict[str, Any]:
+    """Capture a full verified surface manifest for an explicit consumer."""
+
+    _verify_loaded_source(definition)
+    manifest = derive_workflow_surface_manifest(Path(workspace), definition)
+    confirmed = derive_workflow_surface_manifest(Path(workspace), definition)
+    _verify_loaded_source(definition)
+    if confirmed["surface_id"] != manifest["surface_id"]:
+        raise ValueError("workflow surface changed during provenance capture")
+    return manifest
+
+
 __all__ = [
     "SourceCaptureError",
     "SourceContext",
     "capture_definition_sources",
     "capture_orchestration_sources",
     "capture_workflow_provenance",
+    "capture_workflow_surface_manifest",
     "source_boundary",
     "source_context",
 ]

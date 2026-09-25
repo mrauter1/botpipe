@@ -26,7 +26,7 @@ from .params import Params
 def ReleaseCandidateToGoNoGo(params: Params, request: str = "") -> LabWorkflowResult:
     """Execute the release candidate to go no go evidence workflow."""
     _producer = Provider()
-    _verifier = _producer.with_config(session=None)
+    _reviewer = _producer.with_config(session=None)
     context = {"request": request, "parameters": params.model_dump(mode="json")}
     completed = []
     prior_handles = ()
@@ -40,15 +40,8 @@ def ReleaseCandidateToGoNoGo(params: Params, request: str = "") -> LabWorkflowRe
                 returns=ReleaseFramingPayload,
                 replan_target="frame_release",
                 producer=_producer,
-                verifier=_verifier,
                 producer_prompt="prompts/frame_producer.md",
-                verifier_prompt="prompts/frame_verifier.md",
-                input={
-                    **context,
-                    "prior_phases": [
-                        item.evidence.model_dump(mode="json") for item in completed
-                    ],
-                },
+                input=context,
                 reads=prior_handles,
                 writes=(
                     artifact("release_scope_brief.md"),
@@ -63,15 +56,10 @@ def ReleaseCandidateToGoNoGo(params: Params, request: str = "") -> LabWorkflowRe
                 returns=ReleaseEvidencePayload,
                 replan_target="frame_release",
                 producer=_producer,
-                verifier=_verifier,
+                reviewer=_reviewer,
                 producer_prompt="prompts/evidence_producer.md",
-                verifier_prompt="prompts/evidence_verifier.md",
-                input={
-                    **context,
-                    "prior_phases": [
-                        item.evidence.model_dump(mode="json") for item in completed
-                    ],
-                },
+                reviewer_prompt="prompts/evidence_reviewer.md",
+                input=context,
                 reads=prior_handles,
                 writes=(
                     artifact("release_inventory.md"),
@@ -93,16 +81,10 @@ def ReleaseCandidateToGoNoGo(params: Params, request: str = "") -> LabWorkflowRe
                         returns=ReleaseAssessmentPayload,
                         replan_target="frame_release",
                         producer=_producer,
-                        verifier=_verifier,
+                        reviewer=_reviewer,
                         producer_prompt="prompts/assessment_producer.md",
-                        verifier_prompt="prompts/assessment_verifier.md",
-                        input={
-                            **context,
-                            "prior_phases": [
-                                item.evidence.model_dump(mode="json")
-                                for item in completed
-                            ],
-                        },
+                        reviewer_prompt="prompts/assessment_reviewer.md",
+                        input=context,
                         reads=prior_handles,
                         writes=(
                             artifact("go_no_go_assessment.md"),
@@ -117,16 +99,10 @@ def ReleaseCandidateToGoNoGo(params: Params, request: str = "") -> LabWorkflowRe
                         returns=ReleaseDecisionPackagePayload,
                         replan_target="assess_go_no_go",
                         producer=_producer,
-                        verifier=_verifier,
+                        reviewer=_reviewer,
                         producer_prompt="prompts/package_producer.md",
-                        verifier_prompt="prompts/package_verifier.md",
-                        input={
-                            **context,
-                            "prior_phases": [
-                                item.evidence.model_dump(mode="json")
-                                for item in completed
-                            ],
-                        },
+                        reviewer_prompt="prompts/package_reviewer.md",
+                        input=context,
                         reads=prior_handles,
                         writes=(
                             artifact("release_decision_package.md"),

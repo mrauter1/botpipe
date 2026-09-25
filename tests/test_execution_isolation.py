@@ -308,7 +308,9 @@ def test_t16_bounded_process_reaps_children_on_timeout_and_normal_leader_exit(
     result = run_bounded_process(
         [sys.executable, "-c", program],
         cwd=tmp_path,
-        timeout_seconds=2 if leader_exits else 0.3,
+        # Leave enough time for a loaded runner to start Python, spawn the
+        # descendant, and publish its PID before testing timeout cleanup.
+        timeout_seconds=2,
         termination_grace_seconds=0.2,
     )
     child_pid = int(child_pid_path.read_text(encoding="utf-8"))

@@ -1,6 +1,6 @@
-## Durable producer result
+## Durable typed phase result
 
-After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+After writing every declared artifact, return one JSON result matching the injected phase-specific schema. Return `accepted` only when the artifacts meet this phase's positive condition and populate the domain fields in the schema. Return `needs_rework` for a local repair, `needs_replan` for a material upstream change, `question` or `blocked` for a missing prerequisite, and `failed` for a terminal domain failure. Report only captured artifact names and stable identifiers present in the artifacts.
 
 # Evaluate Package Producer
 
@@ -14,7 +14,7 @@ After writing every declared artifact, return a JSON result matching the injecte
 
 ### Current work item
 - This work item owns evaluation evidence only.
-- Do not silently repair workflow files in this step. If the build needs changes, capture the evidence and let the verifier choose the correct route.
+- Do not silently repair workflow files in this step. If the build needs changes, capture the evidence and return the correct typed phase outcome.
 
 ## Runtime bindings
 
@@ -42,8 +42,8 @@ After writing every declared artifact, return a JSON result matching the injecte
 - Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
 - Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Outcome guidance for the verifier
-- `evaluation_passed`: verification evidence and rollback evidence are strong enough for publication.
+### Outcome selection
+- `accepted`: verification evidence and rollback evidence are strong enough for publication.
 - `needs_rework`: the same design still holds, but the built workflow or evidence needs local repair.
 - `needs_replan`: evaluation proves the design boundary itself is wrong.
 

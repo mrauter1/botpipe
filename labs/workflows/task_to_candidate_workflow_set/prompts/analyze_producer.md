@@ -1,6 +1,6 @@
-## Durable producer result
+## Durable typed phase result
 
-After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+After writing every declared artifact, return one JSON result matching the injected phase-specific schema. Return `accepted` only when the artifacts meet this phase's positive condition and populate the domain fields in the schema. Return `needs_rework` for a local repair, `needs_replan` for a material upstream change, `question` or `blocked` for a missing prerequisite, and `failed` for a terminal domain failure. Report only captured artifact names and stable identifiers present in the artifacts.
 
 # Analyze Candidate Workflows Producer
 
@@ -54,8 +54,8 @@ After writing every declared artifact, return a JSON result matching the injecte
 - Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
 - Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Outcome guidance for the verifier
-- `candidate_workflows_analyzed`: the comparison is explicit, the builder baseline was considered, and the portfolio posture is justified clearly.
+### Outcome selection
+- `accepted`: the comparison is explicit, the builder baseline was considered, and the portfolio posture is justified clearly.
 - `needs_rework`: the same analysis boundary holds, but the matrix, gap analysis, or posture explanation needs local repair.
 - `needs_replan`: the framing, legal comparison boundary, or portfolio posture changed materially.
 - Use `blocked` only for true intent gaps, missing prerequisites, or irreconcilable contradictions.

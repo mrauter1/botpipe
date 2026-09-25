@@ -50,6 +50,7 @@ from .providers import (
 )
 from .recovery import Stopped, recover_outcome
 from .runtime import _cancellation_event, current_run
+from .session_bindings import SessionBinding
 
 
 class OutputValidationError(ValueError):
@@ -112,16 +113,14 @@ def execute_provider_operation(
         ctx.folder,
         workspace=target,
         allowed_roots=(ctx.task_folder,),
-        forbidden_paths=(
-            ctx.client.journal.path,
-        ),
+        forbidden_paths=ctx.client.protected_paths(ctx.folder),
+        state_dir=ctx.client.state_dir,
     )
     read_store = ArtifactStore(
         ctx.folder,
         workspace=ctx.workspace,
-        forbidden_paths=(
-            ctx.client.journal.path,
-        ),
+        forbidden_paths=ctx.client.protected_paths(ctx.folder),
+        state_dir=ctx.client.state_dir,
     )
     if isinstance(reads, ArtifactHandle):
         reads = (reads,)
@@ -159,7 +158,8 @@ def execute_provider_operation(
                 source_store = ArtifactStore(
                     ctx.folder,
                     workspace=allowed_root,
-                    forbidden_paths=(ctx.client.journal.path,),
+                    forbidden_paths=ctx.client.protected_paths(ctx.folder),
+                    state_dir=ctx.client.state_dir,
                 )
                 return source_store.publish(
                     Artifact.raw(observed, name=path.stem),
@@ -190,12 +190,71 @@ def execute_provider_operation(
     if cancellation is not None and cancellation.is_set():
         lock.__exit__(None, None, None)
         raise CancellationRequested("Cancelled while waiting for the session")
+    operation_key = f"{ctx.run_id}:{ctx.scope}:{ctx.ordinal}"
+    binding_store = SessionBinding(ctx.journal, session_key) if session_key else None
+
+    def finish_owner(operation_id: str, attempt_number: int, *, abort=False) -> None:
+        release = getattr(ctx.client.provider, "release_operation", None)
+        if not callable(release):
+            return
+        durable = ctx.journal.attempt(operation_id, attempt_number)
+        if durable is None:
+            release(operation_key, require_owner=False, abort=abort)
+            return
+        field = "cleanup" if abort else "disposal"
+        state = durable.get(field) or {}
+        cleanup = durable.get("cleanup") or {}
+        if state.get("resolved_by") == "operator" or cleanup.get("resolved_by") == "operator":
+            return
+        confirmed = state.get("status") == "completed" or cleanup.get("status") == "completed"
+        try:
+            if not confirmed:
+                ctx.journal.attempt_checkpoint(
+                    operation_id, attempt_number, {field: {"status": "pending"}},
+                )
+            # A durable exit proof permits replay without a live adapter. Any
+            # locally retained owner still has to be released before settlement.
+            release(
+                operation_key,
+                require_owner=(
+                    not confirmed and durable.get("dispatch_authorized") is True
+                ),
+                abort=abort,
+            )
+            if state.get("status") != "completed":
+                ctx.journal.attempt_checkpoint(
+                    operation_id, attempt_number, {field: {"status": "completed"}},
+                )
+        except Exception as exc:
+            try:
+                ctx.journal.attempt_checkpoint(
+                    operation_id, attempt_number,
+                    {field: {"status": "incomplete", "error": str(exc)}},
+                )
+            except Exception as checkpoint_error:
+                raise UncertainOperation(
+                    f"Codex {field} failed and its state could not be recorded",
+                    operation_id,
+                ) from checkpoint_error
+            raise UncertainOperation(
+                f"Codex {field} is unverified: {exc}", operation_id,
+            ) from exc
+    def can_repair(safe: bool) -> bool:
+        if safe:
+            return True
+        following = ctx.journal.get(f"{ctx.run_id}:{ctx.scope}:{ctx.ordinal}")
+        return following is not None and not isinstance(
+            ProviderCheckpoint.from_record(following.get("response")), EmptyCheckpoint,
+        )
+
     try:
         feedback = None
         repair_usage = {}
         repair_thread_id = None
+        retained_owner = None
         for attempt in range(output_retries + 1):
             inputs = {
+                "operation_key": operation_key,
                 "session": session_key,
                 "prompt": rendered,
                 "input": input,
@@ -212,9 +271,15 @@ def execute_provider_operation(
                 "tools": None if tools is None else list(tools),
                 "timeout": timeout,
                 "output_retries": output_retries,
+                "retained_owner": retained_owner,
             }
 
-            def execute(recover=False, feedback=feedback):
+            def execute(
+                recover=False,
+                feedback=feedback,
+                attempt=attempt,
+                repair_thread_id=repair_thread_id,
+            ):
                 operation_id = ctx.operation_id
                 fresh_response = False
                 row = ctx.journal.get(operation_id)
@@ -223,6 +288,11 @@ def execute_provider_operation(
                     retry_safe
                     and isinstance(recorded_inputs, dict)
                     and recorded_inputs.get("retry_safe") is True
+                )
+                retained = (
+                    recorded_inputs.get("retained_owner")
+                    if isinstance(recorded_inputs, dict)
+                    else None
                 )
                 checkpoint = ProviderCheckpoint.from_record(row.get("response"))
                 generation = checkpoint.generation
@@ -240,7 +310,105 @@ def execute_provider_operation(
                     )
                     ctx.save_response(operation_id, checkpoint.to_record())
 
+                def finish_retained_owner() -> None:
+                    if not isinstance(retained, dict):
+                        return
+                    retained_operation = retained.get("operation_id")
+                    retained_attempt = retained.get("attempt")
+                    if (
+                        not isinstance(retained_operation, str)
+                        or not retained_operation
+                        or type(retained_attempt) is not int
+                        or retained_attempt < 1
+                    ):
+                        raise RuntimeError("Recorded repair owner is invalid")
+                    finish_owner(retained_operation, retained_attempt, abort=True)
+                    if binding_store is not None:
+                        binding_store.finish(
+                            ctx.run_id,
+                            operation_key,
+                            operation_id=retained_operation,
+                            attempt=retained_attempt,
+                            session_id=(
+                                retained.get("session_id")
+                                if isinstance(retained.get("session_id"), str)
+                                else None
+                            ),
+                            outcome="preflight_failed",
+                        )
+
+                def retained_attempt():
+                    if not isinstance(retained, dict):
+                        return None
+                    retained_operation = retained.get("operation_id")
+                    retained_attempt_number = retained.get("attempt")
+                    if (
+                        not isinstance(retained_operation, str)
+                        or type(retained_attempt_number) is not int
+                    ):
+                        return None
+                    return ctx.journal.attempt(
+                        retained_operation, retained_attempt_number
+                    )
+
+                def record_retained_preflight_failure(error: BaseException) -> None:
+                    if not isinstance(retained, dict):
+                        return
+                    retained_operation = retained.get("operation_id")
+                    retained_attempt_number = retained.get("attempt")
+                    if (
+                        not isinstance(retained_operation, str)
+                        or type(retained_attempt_number) is not int
+                    ):
+                        return
+                    kind = (
+                        "provider_timeout"
+                        if isinstance(error, ProviderTimeoutError)
+                        else "artifact_error"
+                        if isinstance(error, ArtifactError)
+                        else "os_error"
+                        if isinstance(error, OSError)
+                        else "error"
+                    )
+                    ctx.journal.attempt_checkpoint(
+                        retained_operation,
+                        retained_attempt_number,
+                        {
+                            "repair_preflight_failure": {
+                                "kind": kind,
+                                "error": str(error),
+                            }
+                        },
+                    )
+
+                def raise_retained_preflight_failure(failure: dict[str, Any]) -> None:
+                    message = str(failure.get("error") or "Repair preflight failed")
+                    kind = failure.get("kind")
+                    if kind == "provider_timeout":
+                        raise ProviderTimeoutError(message)
+                    if kind == "artifact_error":
+                        raise ArtifactError(message)
+                    if kind == "os_error":
+                        raise OSError(message)
+                    raise RuntimeError(message)
+
+                retained_durable = retained_attempt()
+                retained_failure = (
+                    retained_durable.get("repair_preflight_failure")
+                    if isinstance(retained_durable, dict)
+                    else None
+                )
+                if isinstance(retained_failure, dict):
+                    cleanup = retained_durable.get("cleanup") or {}
+                    if (
+                        cleanup.get("status") not in {"completed"}
+                        and cleanup.get("resolved_by") != "operator"
+                    ):
+                        finish_retained_owner()
+                    raise_retained_preflight_failure(retained_failure)
+
                 if isinstance(checkpoint, NotDispatchedCheckpoint):
+                    finish_retained_owner()
                     if checkpoint.error_kind == "policy_error":
                         raise ProviderPolicyError(checkpoint.error)
                     raise BudgetExceeded(checkpoint.error)
@@ -250,6 +418,8 @@ def execute_provider_operation(
                     failure = (
                         OutputValidationError if error["retryable"] else TypeError
                     )
+                    if not error["retryable"] or attempt == output_retries or not can_repair(allow_retry):
+                        finish_owner(operation_id, checkpoint.attempt_generation + 1)
                     raise failure(error["message"])
                 if isinstance(checkpoint, ValidatedCheckpoint):
                     try:
@@ -259,6 +429,7 @@ def execute_provider_operation(
                             f"Artifact capture needs recovery: {exc}", operation_id
                         ) from exc
                     if captured is not None:
+                        finish_owner(operation_id, checkpoint.attempt_generation + 1)
                         if event_callback is not None:
                             event_callback(
                                 StreamEvent(
@@ -275,10 +446,11 @@ def execute_provider_operation(
                         )
                 fresh_attempt = isinstance(checkpoint, EmptyCheckpoint)
                 try:
-                    store.check_legacy_operation(artifact_operation)
                     destinations = store.destinations(writes)
                 except (OSError, ArtifactError) as exc:
                     if fresh_attempt:
+                        record_retained_preflight_failure(exc)
+                        finish_retained_owner()
                         raise
                     raise UncertainOperation(
                         f"Artifact destinations need reconciliation: {exc}",
@@ -326,14 +498,22 @@ def execute_provider_operation(
                         "\n\nRepair the previous output contract failure using the current workspace:\n"
                         + feedback
                     )
-                binding = ctx.journal.session(session_key) or {}
+                try:
+                    binding = (
+                        binding_store.check(operation_key) if binding_store else {}
+                    )
+                except Exception as exc:
+                    if fresh_attempt:
+                        record_retained_preflight_failure(exc)
+                        finish_retained_owner()
+                    raise
                 request_data = checkpoint.request_data or {
+                    "operation_key": operation_key,
                     "session_id": (
                         repair_thread_id
                         if session is None
                         else binding.get("session_id")
                     ),
-                    "receipt_dir": str(ctx.folder / "receipts"),
                     "prompt": complete_prompt,
                     "artifacts": {
                         name: str(path) for name, path in destinations.items()
@@ -342,14 +522,9 @@ def execute_provider_operation(
                 }
 
                 def save_provider_metadata(update):
-                    ctx.journal.provider_metadata(
-                        operation_id,
-                        thread_id=update.get("session_id"),
-                        turn_id=update.get("turn_id"),
-                        preset=update.get("preset"),
-                        enforcement=update.get("enforcement"),
-                        probe_hash=update.get("probe_hash"),
-                    )
+                    ctx.journal.attempt_checkpoint(operation_id, request.attempt, update)
+                    if binding_store is not None and update.get("session_id"):
+                        binding_store.advance(operation_key, update["session_id"])
 
                 request = ProviderRequest(
                     operation_id=operation_id,
@@ -361,7 +536,8 @@ def execute_provider_operation(
                     output_schema=schema,
                     policy=effective,
                     artifacts=destinations,
-                    receipt_dir=ctx.folder / "receipts",
+                    session_key=session_key,
+                    operation_key=operation_key,
                     timeout=(
                         min(ctx.limits.timeout, timeout)
                         if timeout is not None
@@ -376,7 +552,69 @@ def execute_provider_operation(
                     cancel_event=_cancellation_event(),
                     on_event=event_callback,
                     on_checkpoint=save_provider_metadata,
+                    checkpoint=ctx.journal.attempt(operation_id, prior_generation + 1),
                 )
+
+                def finish_policy_failure(error):
+                    if not any(
+                        event["event"] == "provider_call_stopped"
+                        and event.get("operation_id") == operation_id
+                        for event in ctx.journal.events(ctx.run_id)
+                    ):
+                        ctx.journal.event(ctx.run_id, "provider_call_stopped", {
+                            "operation_key": operation_key,
+                            "reason": str(error),
+                        }, operation_id)
+                    finish_owner(operation_id, request.attempt, abort=True)
+                    if binding_store is not None:
+                        binding_store.finish(
+                            ctx.run_id, operation_key, operation_id=operation_id,
+                            attempt=request.attempt, outcome="policy_failed",
+                        )
+
+                def recover_attempt():
+                    # Checkpoints arrive on the transport's reader thread. Read
+                    # the durable current attempt rather than the pre-dispatch
+                    # snapshot carried by the original request.
+                    attempt = ctx.journal.attempt(operation_id, request.attempt)
+                    try:
+                        return recover_outcome(ctx.client.provider, replace(
+                            request, checkpoint=attempt,
+                        ))
+                    except ProviderPolicyError as error:
+                        # Native reconciliation can discover and checkpoint a
+                        # policy violation before raising it. Classify only the
+                        # resulting durable state, not the recovery input.
+                        attempt = ctx.journal.attempt(
+                            operation_id, request.attempt
+                        )
+                        cleanup = (
+                            attempt.get("cleanup")
+                            if isinstance(attempt, dict)
+                            else None
+                        )
+                        terminal_policy_failure = (
+                            isinstance(attempt, dict)
+                            and attempt.get("dispatch_authorized") is True
+                            and attempt.get("status") == "failed"
+                            and attempt.get("policy_error") is True
+                            and isinstance(cleanup, dict)
+                            and cleanup.get("status") == "completed"
+                        )
+                        if not terminal_policy_failure:
+                            detail = (
+                                cleanup.get("error")
+                                if isinstance(cleanup, dict)
+                                and isinstance(cleanup.get("error"), str)
+                                else str(error)
+                            )
+                            raise UncertainOperation(
+                                detail or "Provider policy failure is not confirmed stopped",
+                                operation_id,
+                            ) from error
+                        finish_policy_failure(error)
+                        raise
+
                 recovery_outcome = None
                 if (
                     recover
@@ -384,9 +622,7 @@ def execute_provider_operation(
                     and not fresh_attempt
                     and not isinstance(checkpoint, RespondedCheckpoint)
                 ):
-                    recovery_outcome = recover_outcome(
-                        ctx.client.provider, request
-                    )
+                    recovery_outcome = recover_attempt()
                     action = ProviderLifecycle.recovery_action(
                         checkpoint, recovery_outcome
                     )
@@ -419,9 +655,7 @@ def execute_provider_operation(
                 if authorized:
                     # Reconcile before another dispatch: the prior turn may
                     # still be acting or have a completed response to adopt.
-                    outcome = recovery_outcome or recover_outcome(
-                        ctx.client.provider, request
-                    )
+                    outcome = recovery_outcome or recover_attempt()
                     action = ProviderLifecycle.recovery_action(checkpoint, outcome)
                     if action is RecoveryAction.USE_RESPONSE:
                         generation = prior_generation
@@ -448,9 +682,9 @@ def execute_provider_operation(
                                 "Cancelled before provider retry"
                             )
                         artifact_operation = f"{operation_id}:generation:{generation}"
-                        store.check_legacy_operation(artifact_operation)
                         request = replace(
-                            request, artifacts=destinations, attempt=generation + 1
+                            request, artifacts=destinations, attempt=generation + 1,
+                            checkpoint=ctx.journal.attempt(operation_id, generation + 1),
                         )
                     else:
                         raise UncertainOperation(
@@ -472,22 +706,49 @@ def execute_provider_operation(
                             ceiling = dispatch_timeout_ceiling(
                                 ctx.client.provider, configured_timeout
                             )
+                            request = replace(
+                                request, deadline=time.monotonic() + ceiling
+                            )
+                            _preflight_provider(ctx.client.provider, request)
+                            store.destinations(writes, create_parents=True)
                         except ProviderPolicyError as exc:
                             record_not_dispatched("policy_error", exc)
+                            finish_retained_owner()
                             raise
                         except BudgetExceeded as exc:
                             record_not_dispatched("budget_error", exc)
+                            finish_retained_owner()
                             raise
-                        request = replace(
-                            request, deadline=time.monotonic() + ceiling
-                        )
-                        _preflight_provider(ctx.client.provider, request)
-                        store.destinations(writes, create_parents=True)
+                        except BaseException as exc:
+                            # A repair still owns the server from its preceding
+                            # response until every no-dispatch setup step has
+                            # succeeded.  Settle that exact durable attempt before
+                            # exposing timeouts, filesystem failures, or other
+                            # preflight errors.
+                            record_retained_preflight_failure(exc)
+                            finish_retained_owner()
+                            raise
                         checkpoint = IntentCheckpoint(generation, request_data)
                         ctx.save_response(
                             operation_id,
                             checkpoint.to_record(),
                         )
+                        ctx.journal.prepare_attempt(operation_id, request.attempt, {
+                            **request_data,
+                            "prompt": complete_prompt,
+                            "operation_key": operation_key,
+                            "preset": operation,
+                            "policy": effective.to_dict(),
+                            "settings": dict(settings or {}),
+                            "tools": None if tools is None else list(tools),
+                            "output_schema": schema,
+                            "workspace": str(target),
+                            "instructions": instructions,
+                            "timeout": request.timeout,
+                        })
+                        if binding_store is not None:
+                            binding_store.claim(ctx.run_id, operation_key, operation_id, request.attempt)
+                        request = replace(request, checkpoint=ctx.journal.attempt(operation_id, request.attempt))
                     dispatched = False
                     try:
                         if not getattr(
@@ -536,9 +797,19 @@ def execute_provider_operation(
                                 usage=getattr(response, "usage", None),
                             )
                         else:
-                            response = _start_turn(
-                                ctx.client.provider, request, event_callback
-                            )
+                            try:
+                                response = _start_turn(
+                                    ctx.client.provider, request, event_callback
+                                )
+                            finally:
+                                durable_attempt = ctx.journal.attempt(
+                                    operation_id, request.attempt
+                                )
+                                dispatched = (
+                                    isinstance(durable_attempt, dict)
+                                    and durable_attempt.get("dispatch_authorized")
+                                    is True
+                                )
                         fresh_response = True
                     except BudgetExceeded as exc:
                         if not dispatched:
@@ -550,10 +821,9 @@ def execute_provider_operation(
                         raise
                     except ProviderPolicyError as exc:
                         if dispatched:
-                            policy_outcome = recover_outcome(
-                                ctx.client.provider, request
-                            )
+                            policy_outcome = recover_attempt()
                             if isinstance(policy_outcome, Stopped):
+                                finish_policy_failure(exc)
                                 raise
                             raise UncertainOperation(
                                 policy_outcome.detail or str(exc), operation_id
@@ -574,6 +844,9 @@ def execute_provider_operation(
                             f"Provider returned an invalid response: {exc}",
                             operation_id,
                         ) from exc
+                    ctx.journal.attempt_checkpoint(operation_id, request.attempt, {
+                        "status": "completed", "response": response.to_record(),
+                    })
                     checkpoint = RespondedCheckpoint(
                         generation, request_data, response
                     )
@@ -636,6 +909,8 @@ def execute_provider_operation(
                         checkpoint.to_record(),
                         session_key=session_key,
                     )
+                    if not retryable or attempt == output_retries or not can_repair(allow_retry):
+                        finish_owner(operation_id, request.attempt)
                     if retryable:
                         raise OutputValidationError(str(exc)) from exc
                     raise
@@ -644,6 +919,7 @@ def execute_provider_operation(
                         f"Artifact publication is incomplete; resume to finish it: {exc}",
                         operation_id,
                     ) from exc
+                finish_owner(operation_id, request.attempt)
                 return Result(
                     value,
                     artifacts,
@@ -677,6 +953,16 @@ def execute_provider_operation(
                         usage[key] = usage.get(key, 0) + value
                     else:
                         usage[key] = value
+                if binding_store is not None:
+                    final_checkpoint = ProviderCheckpoint.from_record(
+                        ctx.journal.get(result.operation_id)["response"]
+                    )
+                    binding_store.finish(
+                        ctx.run_id, operation_key,
+                        operation_id=result.operation_id,
+                        attempt=final_checkpoint.attempt_generation + 1,
+                        session_id=final_checkpoint.response.session_id,
+                    )
                 return replace(result, usage=usage)
             except OutputValidationError as exc:
                 operation_id = f"{ctx.run_id}:{ctx.scope}:{ctx.ordinal - 1}"
@@ -686,6 +972,12 @@ def execute_provider_operation(
                 if session is None and isinstance(failed, ValidationFailedCheckpoint):
                     # Rebuild call-local continuity on both execution and replay.
                     repair_thread_id = failed.response.session_id
+                if isinstance(failed, ValidationFailedCheckpoint):
+                    retained_owner = {
+                        "operation_id": operation_id,
+                        "attempt": failed.attempt_generation + 1,
+                        "session_id": failed.response.session_id,
+                    }
                 for key, value in response.get("usage", {}).items():
                     if isinstance(value, (int, float)) and not isinstance(value, bool):
                         repair_usage[key] = repair_usage.get(key, 0) + value
@@ -698,17 +990,28 @@ def execute_provider_operation(
                     and isinstance(recorded_inputs, dict)
                     and recorded_inputs.get("retry_safe") is True
                 )
-                next_id = f"{ctx.run_id}:{ctx.scope}:{ctx.ordinal}"
-                if not repair_safe:
-                    next_record = ctx.journal.get(next_id)
-                    if next_record is None:
-                        raise
-                    next_checkpoint = ProviderCheckpoint.from_record(
-                        next_record.get("response")
-                    )
-                    if isinstance(next_checkpoint, EmptyCheckpoint):
-                        raise
+                if not can_repair(repair_safe):
+                    raise
                 feedback = str(exc)
+    except Exception as exc:
+        # A known terminal response may fail its schema or exhaust repairs.
+        # Uncertain effects keep ownership until resume/operator resolution.
+        if not isinstance(exc, (UncertainOperation, CancellationRequested)):
+            current = ctx.journal.get(f"{ctx.run_id}:{ctx.scope}:{ctx.ordinal - 1}")
+            if current is not None and current.get("status") == "failed":
+                state = ProviderCheckpoint.from_record(current.get("response"))
+                if isinstance(state, (RespondedCheckpoint, NotDispatchedCheckpoint)):
+                    finish_owner(
+                        current["id"], state.attempt_generation + 1,
+                        abort=isinstance(state, NotDispatchedCheckpoint),
+                    )
+                    if binding_store is not None:
+                        binding_store.finish(
+                            ctx.run_id, operation_key, outcome="failed",
+                            operation_id=current["id"], attempt=state.attempt_generation + 1,
+                            session_id=state.response.session_id if isinstance(state, RespondedCheckpoint) else None,
+                        )
+        raise
     finally:
         lock.__exit__(None, None, None)
 

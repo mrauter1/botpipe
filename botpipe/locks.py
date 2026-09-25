@@ -42,7 +42,7 @@ def _digest(*parts: str) -> str:
 
 
 def default_state_dir(workspace: str | os.PathLike[str]) -> Path:
-    """Return the per-user journal directory for a canonical workspace."""
+    """Return the per-user state directory for a canonical workspace."""
 
     return _coordination_root().parent / "workspaces" / _digest(
         canonical_workspace(workspace)

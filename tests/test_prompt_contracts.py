@@ -23,6 +23,12 @@ from labs.workflows.security_finding_to_verified_remediation import (
 from labs.workflows.security_finding_to_verified_remediation import (
     SecurityFindingToVerifiedRemediation,
 )
+from labs.workflows.task_to_candidate_workflow_set import (
+    Params as CandidateSetParams,
+)
+from labs.workflows.task_to_candidate_workflow_set import (
+    TaskToCandidateWorkflowSet,
+)
 from labs.workflows.workflow_idea_to_workflow_package import (
     Params as WorkflowBuilderParams,
 )
@@ -59,14 +65,6 @@ def _write(request, name: str, value) -> None:
     path.write_text(value if isinstance(value, str) else json.dumps(value))
 
 
-def _producer_result() -> dict:
-    return {
-        "summary": "Wrote the complete declared artifact set.",
-        "evidence_notes": ["Used only the runtime input and declared reads."],
-        "candidate_ids": [],
-    }
-
-
 def _accepted(payload: dict, **details) -> dict:
     return {
         "outcome": "accepted",
@@ -74,6 +72,46 @@ def _accepted(payload: dict, **details) -> dict:
         "authoritative_artifacts": payload["required_artifacts"],
         **details,
     }
+
+
+def test_lab_prompts_use_typed_producers_and_selective_reviewers():
+    workflows = Path("labs/workflows")
+    sources = [
+        path
+        for path in workflows.glob("*/workflow.py")
+        if path.parent.name != "improve_workflow"
+    ]
+    text = "\n".join(path.read_text(encoding="utf-8") for path in sources)
+
+    assert text.count("run_phase(") == 35
+    assert text.count("reviewer_prompt=") == 11
+    assert "verifier_prompt=" not in text
+    assert not list(workflows.glob("*/prompts/*_verifier.md"))
+    assert len(list(workflows.glob("*/prompts/*_reviewer.md"))) == 11
+    for prompt in workflows.glob("*/prompts/*_producer.md"):
+        contents = prompt.read_text(encoding="utf-8")
+        assert "Durable typed phase result" in contents
+        assert "phase-specific schema" in contents
+
+
+def test_candidate_workflow_references_must_exist_in_the_observed_catalog(tmp_path):
+    from tests.test_labs import _successful_provider
+
+    def answer(request):
+        result = _successful_provider(request)
+        payload = _input(request)
+        if payload["phase"] == "analyze_candidate_workflows":
+            result["compared_workflows"] = ["missing_workflow"]
+            result["ranked_candidates"] = ["missing_workflow"]
+        return result
+
+    result = Botpipe(tmp_path, provider=FakeProvider([answer] * 3)).run(
+        TaskToCandidateWorkflowSet,
+        CandidateSetParams(task_title="Find a workflow"),
+    )
+
+    assert result.status == "failed"
+    assert "unknown workflow" in (result.error or "")
 
 
 def test_lab_workflow_result_uses_the_canonical_artifact_handle_json_record(tmp_path):
@@ -105,7 +143,7 @@ def test_lab_workflow_result_uses_the_canonical_artifact_handle_json_record(tmp_
     assert restored.artifacts == {"evidence": handle}
 
 
-def test_investigation_provider_and_verifier_share_the_runtime_artifact_contract(
+def test_investigation_typed_producer_and_review_share_the_artifact_contract(
     tmp_path,
 ):
     calls: list[tuple[str, bool]] = []
@@ -156,17 +194,19 @@ def test_investigation_provider_and_verifier_share_the_runtime_artifact_contract
                         "key_findings": ["The supplied test report passed."],
                     },
                 )
-            return _producer_result()
+            if phase == "frame_investigation":
+                return _accepted(payload, evidence_focus=["release evidence"])
+            return _accepted(
+                payload,
+                evidence_artifacts=payload["required_artifacts"],
+                source_count=1,
+                unresolved_gaps=[],
+                key_findings=["The supplied test report passed."],
+                ready_for_downstream_assessment=True,
+            )
 
         reads = _read_artifacts(request)
         assert tuple(reads) == tuple(payload["required_artifacts"])
-        if phase == "frame_investigation":
-            assert "Objective:" in reads["investigation_scope_brief"].read_text()
-            assert "test-results.json" in reads["evidence_intake_plan"].read_text()
-            return _accepted(
-                payload,
-                evidence_focus=["release evidence"],
-            )
         summary = json.loads(reads["investigation_summary"].read_text())
         assert summary["source_count"] == 1
         assert set(reads) == {
@@ -177,14 +217,10 @@ def test_investigation_provider_and_verifier_share_the_runtime_artifact_contract
         }
         return _accepted(
             payload,
-            evidence_artifacts=payload["required_artifacts"],
-            source_count=1,
-            unresolved_gaps=[],
-            key_findings=summary["key_findings"],
-            ready_for_downstream_assessment=True,
+            validation_findings=["Source tracing and gap handling are explicit."],
         )
 
-    result = Botpipe(tmp_path, provider=FakeProvider([answer] * 4)).run(
+    result = Botpipe(tmp_path, provider=FakeProvider([answer] * 3)).run(
         InvestigationRequestToEvidencePack,
         InvestigationParams(
             investigation_title="Release readiness",
@@ -196,7 +232,6 @@ def test_investigation_provider_and_verifier_share_the_runtime_artifact_contract
     assert result.ok, result.error
     assert calls == [
         ("frame_investigation", True),
-        ("frame_investigation", False),
         ("assemble_evidence_pack", True),
         ("assemble_evidence_pack", False),
     ]
@@ -253,22 +288,46 @@ def test_security_artifacts_carry_assessment_remediation_and_closure_evidence(
                         "authoritative_artifacts": payload["required_artifacts"],
                     }
                 _write(request, name, value)
-            return _producer_result()
+            if phase == "frame_investigation":
+                return _accepted(payload, evidence_focus=["authorization boundary"])
+            if phase == "assemble_evidence_pack":
+                return _accepted(
+                    payload,
+                    evidence_artifacts=payload["required_artifacts"],
+                    source_count=1,
+                    unresolved_gaps=[],
+                    key_findings=["The missing authorization guard is exploitable."],
+                    ready_for_downstream_assessment=True,
+                )
+            if phase == "assess_security_finding":
+                return _accepted(
+                    payload,
+                    assessment_artifacts=payload["required_artifacts"],
+                    preferred_remediation_option="Add the authorization guard.",
+                    exploitability="confirmed",
+                )
+            if phase == "plan_verified_remediation":
+                return _accepted(
+                    payload,
+                    remediation_artifacts=payload["required_artifacts"],
+                    selected_remediation="Add the authorization guard.",
+                    verification_ready=True,
+                    rollout_ready=True,
+                )
+            return _accepted(
+                payload,
+                package_artifacts=payload["required_artifacts"],
+                communication_ready=True,
+                closure_ready=True,
+            )
 
         reads = _read_artifacts(request)
         assert tuple(reads) == tuple(payload["required_artifacts"])
-        common = {"authoritative_artifacts": payload["required_artifacts"]}
-        if phase == "frame_investigation":
-            return _accepted(payload, evidence_focus=["authorization boundary"])
+        common = {"validation_findings": ["The artifacts support the decision."]}
         if phase == "assemble_evidence_pack":
-            return _accepted(
-                payload,
-                evidence_artifacts=payload["required_artifacts"],
-                source_count=1,
-                unresolved_gaps=[],
-                key_findings=["The missing authorization guard is exploitable."],
-                ready_for_downstream_assessment=True,
-            )
+            summary = json.loads(reads["investigation_summary"].read_text())
+            assert summary["ready_for_downstream_assessment"] is True
+            return _accepted(payload, **common)
         if phase == "assess_security_finding":
             assert set(reads) == {
                 "security_assessment",
@@ -277,31 +336,23 @@ def test_security_artifacts_carry_assessment_remediation_and_closure_evidence(
             }
             return _accepted(
                 payload,
-                assessment_artifacts=payload["required_artifacts"],
-                preferred_remediation_option="Add the authorization guard.",
-                exploitability="confirmed",
+                **common,
             )
         if phase == "plan_verified_remediation":
             residual = json.loads(reads["residual_risk"].read_text())
             assert residual["selected_remediation"] == "Add the authorization guard."
             return _accepted(
                 payload,
-                remediation_artifacts=payload["required_artifacts"],
-                selected_remediation="Add the authorization guard.",
-                verification_ready=True,
-                rollout_ready=True,
+                **common,
             )
         summary = json.loads(reads["security_remediation_summary"].read_text())
         assert summary["verification_ready"] and summary["rollout_ready"]
         return _accepted(
             payload,
-            package_artifacts=payload["required_artifacts"],
-            communication_ready=True,
-            closure_ready=True,
             **common,
         )
 
-    with Botpipe(tmp_path, provider=FakeProvider([answer] * 10)) as client:
+    with Botpipe(tmp_path, provider=FakeProvider([answer] * 9)) as client:
         result = client.run(
             SecurityFindingToVerifiedRemediation,
             SecurityParams(

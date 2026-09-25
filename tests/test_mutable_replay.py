@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from functools import partial
+from pathlib import Path
 
 import pytest
 
@@ -17,6 +18,28 @@ from botpipe import (
     workflow,
 )
 from botpipe.providers import FakeProvider
+
+
+def _rewrite_ledger_record(
+    run_folder: Path,
+    *,
+    operation_id: str,
+    event: str,
+    update,
+) -> None:
+    ledger = run_folder / "ledger.jsonl"
+    records = [json.loads(line) for line in ledger.read_text().splitlines()]
+    matching = [
+        record
+        for record in records
+        if record.get("event") == event
+        and record.get("operation_id") == operation_id
+    ]
+    assert len(matching) == 1
+    update(matching[0])
+    ledger.write_text(
+        "".join(json.dumps(record, separators=(",", ":")) + "\n" for record in records)
+    )
 
 
 @dataclass
@@ -468,16 +491,22 @@ def test_recorded_inputs_must_match_their_replay_fingerprint(tmp_path):
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(job, run_id="input-integrity")
         operation = client.journal.operations(paused.run_id)[0]
-        inputs = client.journal.get(operation["id"])["inputs"]
+        run_folder = Path(client.journal.run(paused.run_id)["folder"])
+        operation_id = operation["id"]
+
+    def change_inputs(record):
+        inputs = record["data"]["operation"]["inputs"]
         decoded = codec.decode(inputs)
         decoded["args"] = (2,)
-        encoded = codec.encode(decoded)
-        with client.journal.transaction() as database:
-            database.execute(
-                "UPDATE operations SET inputs=? WHERE id=?",
-                (json.dumps(encoded), operation["id"]),
-            )
+        record["data"]["operation"]["inputs"] = codec.encode(decoded)
 
+    _rewrite_ledger_record(
+        run_folder,
+        operation_id=operation_id,
+        event="operation_started",
+        update=change_inputs,
+    )
+    with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         with pytest.raises(ReplayMismatch, match="replay fingerprint"):
             client.resume(paused.run_id, workflow=job, answer="yes")
 
@@ -540,13 +569,18 @@ def test_exception_slot_layout_is_verified_before_resume(tmp_path):
     with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         paused = client.run(job, run_id="slot-layout")
         operation = client.journal.operations(paused.run_id)[0]
-        error = operation["error"]
-        error["slots"] = []
-        with client.journal.transaction() as database:
-            database.execute(
-                "UPDATE operations SET error=? WHERE id=?",
-                (json.dumps(error), operation["id"]),
-            )
+        run_folder = Path(client.journal.run(paused.run_id)["folder"])
+        operation_id = operation["id"]
 
+    def change_error_layout(record):
+        record["data"]["error"]["slots"] = []
+
+    _rewrite_ledger_record(
+        run_folder,
+        operation_id=operation_id,
+        event="operation_failed",
+        update=change_error_layout,
+    )
+    with Botpipe(tmp_path, provider=FakeProvider([])) as client:
         with pytest.raises(ReplayMismatch, match="slots no longer match"):
             client.resume(paused.run_id, workflow=job, answer="yes")

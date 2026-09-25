@@ -18,15 +18,13 @@ from botpipe.capabilities import (
     CodexCapabilities,
     probe_codex,
 )
-from botpipe.codex_appserver import CodexAppServerAdapter
+from botpipe.codex_appserver import CodexAppServerAdapter, CodexProtocolError
 from botpipe.policy import NetworkMode, Policy, SandboxMode
 from botpipe.providers import (
     CodexProvider,
-    ProviderError,
     ProviderInterruptedError,
     ProviderRequest,
     ProviderTimeoutError,
-    receipt_path,
 )
 
 FIXTURE = Path(__file__).parent / "fixtures" / "codex_appserver.py"
@@ -61,7 +59,14 @@ def capabilities(*, output_schema: bool = True) -> CodexCapabilities:
         version="codex-cli contract-fixture",
         identity="fixture-probe-hash",
         methods=frozenset(
-            {"initialize", "thread/start", "thread/resume", "thread/unsubscribe", "turn/start", "turn/interrupt"}
+            {
+                "initialize",
+                "thread/start",
+                "thread/resume",
+                "thread/unsubscribe",
+                "turn/start",
+                "turn/interrupt",
+            }
         ),
         features=(
             {"name": "apps", "stage": "stable", "enabled": True},
@@ -104,20 +109,25 @@ def request(
         output_schema=output_schema,
         policy=Policy(
             sandbox_mode=(
-                SandboxMode.READ_ONLY if preset in {"query", "generate"} else SandboxMode.WORKSPACE_WRITE
+                SandboxMode.READ_ONLY
+                if preset in {"query", "generate"}
+                else SandboxMode.WORKSPACE_WRITE
             ),
             network=NetworkMode.NONE,
         ),
         artifacts={},
-        receipt_dir=tmp_path / "receipts",
         timeout=timeout,
+        session_key=f"test:{session_id}" if session_id is not None else None,
         preset=preset,
         tools=tools,
         cancel_event=cancel_event,
+        on_checkpoint=lambda _update: None,
     )
 
 
-def adapter(tmp_path: Path, scenario: str = "complete", **extra_env: str) -> CodexAppServerAdapter:
+def adapter(
+    tmp_path: Path, scenario: str = "complete", **extra_env: str
+) -> CodexAppServerAdapter:
     transcript = tmp_path / "codex-transcript.jsonl"
     return CodexAppServerAdapter(
         (sys.executable, str(FIXTURE)),
@@ -131,10 +141,413 @@ def adapter(tmp_path: Path, scenario: str = "complete", **extra_env: str) -> Cod
     )
 
 
+_OFFICIAL_CODEX_JS = """
+const PLATFORM_PACKAGE_BY_TARGET = {};
+function findCodexExecutable() {}
+const child = spawn(binaryPath, process.argv.slice(2));
+"""
+
+
+def _write_official_codex_package(package: Path) -> None:
+    (package / "bin").mkdir(parents=True)
+    (package / "package.json").write_text(
+        '{"name":"@openai/codex","bin":{"codex":"bin/codex.js"}}'
+    )
+    (package / "bin" / "codex.js").write_text(_OFFICIAL_CODEX_JS)
+
+
+def _npm_cmd(target: str = "node_modules/@openai/codex/bin/codex.js") -> str:
+    return f'@ECHO off\nSETLOCAL\n"%_prog%" "%dp0%/{target}" %*'
+
+
+def test_official_windows_launcher_resolves_native_and_preserves_args(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from botpipe import codex_appserver as appserver
+
+    prefix = tmp_path / "npm"
+    launcher = prefix / "codex.cmd"
+    package = prefix / "node_modules" / "@openai" / "codex"
+    native = (
+        prefix
+        / "node_modules"
+        / "@openai"
+        / "codex-win32-x64"
+        / "vendor"
+        / "x86_64-pc-windows-msvc"
+        / "bin"
+        / "codex.exe"
+    )
+    native.parent.mkdir(parents=True)
+    launcher.write_text(_npm_cmd())
+    _write_official_codex_package(package)
+    native.write_bytes(b"MZ")
+    monkeypatch.setattr(appserver.sys, "platform", "win32")
+    monkeypatch.setattr(appserver.platform, "machine", lambda: "AMD64")
+
+    client = CodexAppServerAdapter(
+        (str(launcher), "-c", "model=fixture", "app-server", "--listen", "stdio://")
+    )
+
+    assert client.executable == str(native.resolve())
+    assert client.command == (
+        str(native.resolve()),
+        "-c",
+        "model=fixture",
+        "app-server",
+        "--listen",
+        "stdio://",
+    )
+
+
+def test_non_official_wrapper_is_not_rewritten(tmp_path: Path) -> None:
+    launcher = tmp_path / "codex.cmd"
+    launcher.write_text(
+        "@ECHO off\nSETLOCAL\nREM node_modules/@openai/codex/bin/codex.js\n"
+        'custom.exe "%dp0%" %*'
+    )
+    package = tmp_path / "node_modules" / "@openai" / "codex"
+    package.mkdir(parents=True)
+    (package / "package.json").write_text('{"name":"@openai/codex"}')
+
+    client = CodexAppServerAdapter((str(launcher), "custom-argument"))
+
+    assert client.command == (str(launcher), "custom-argument")
+
+
+@pytest.mark.parametrize(
+    ("platform_name", "machine", "package_name", "target", "executable"),
+    [
+        ("linux", "x86_64", "codex-linux-x64", "x86_64-unknown-linux-musl", "codex"),
+        ("linux", "arm64", "codex-linux-arm64", "aarch64-unknown-linux-musl", "codex"),
+        ("darwin", "x64", "codex-darwin-x64", "x86_64-apple-darwin", "codex"),
+        ("darwin", "arm64", "codex-darwin-arm64", "aarch64-apple-darwin", "codex"),
+        ("win32", "AMD64", "codex-win32-x64", "x86_64-pc-windows-msvc", "codex.exe"),
+        ("win32", "arm64", "codex-win32-arm64", "aarch64-pc-windows-msvc", "codex.exe"),
+    ],
+)
+def test_official_launcher_platform_aliases(
+    tmp_path: Path,
+    platform_name: str,
+    machine: str,
+    package_name: str,
+    target: str,
+    executable: str,
+) -> None:
+    from botpipe.codex_appserver import _packaged_codex_binary
+
+    prefix = tmp_path / f"{platform_name}-{machine}"
+    launcher = prefix / "codex.cmd"
+    package = prefix / "node_modules" / "@openai" / "codex"
+    native = (
+        prefix
+        / "node_modules"
+        / "@openai"
+        / package_name
+        / "vendor"
+        / target
+        / "bin"
+        / executable
+    )
+    native.parent.mkdir(parents=True)
+    launcher.write_text(_npm_cmd())
+    _write_official_codex_package(package)
+    native.write_bytes(b"native")
+
+    assert _packaged_codex_binary(
+        launcher, platform_name=platform_name, machine=machine
+    ) == native.resolve()
+
+
+def test_local_npm_bin_launcher_resolves_hoisted_package(tmp_path: Path) -> None:
+    from botpipe.codex_appserver import _packaged_codex_binary
+
+    modules = tmp_path / "node_modules"
+    launcher = modules / ".bin" / "codex.cmd"
+    package = modules / "@openai" / "codex"
+    native = (
+        modules
+        / "@openai"
+        / "codex-linux-x64"
+        / "vendor"
+        / "x86_64-unknown-linux-musl"
+        / "bin"
+        / "codex"
+    )
+    launcher.parent.mkdir(parents=True)
+    native.parent.mkdir(parents=True)
+    launcher.write_text(_npm_cmd("../@openai/codex/bin/codex.js"))
+    _write_official_codex_package(package)
+    native.write_bytes(b"native")
+
+    assert _packaged_codex_binary(
+        launcher, platform_name="linux", machine="x86_64"
+    ) == native.resolve()
+
+
+def test_launcher_resolution_uses_injected_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from botpipe import codex_appserver as appserver
+
+    prefix = tmp_path / "isolated-npm"
+    launcher = prefix / "codex.cmd"
+    package = prefix / "node_modules" / "@openai" / "codex"
+    native = (
+        prefix
+        / "node_modules"
+        / "@openai"
+        / "codex-win32-x64"
+        / "vendor"
+        / "x86_64-pc-windows-msvc"
+        / "bin"
+        / "codex.exe"
+    )
+    native.parent.mkdir(parents=True)
+    _write_official_codex_package(package)
+    launcher.write_text(_npm_cmd())
+    native.write_bytes(b"native")
+    injected_path = str(prefix / "injected-path")
+
+    def which(value: str, *, path: str | None = None):
+        assert value == "codex"
+        assert path == injected_path
+        return str(launcher)
+
+    monkeypatch.setattr(appserver.shutil, "which", which)
+    monkeypatch.setattr(appserver.sys, "platform", "win32")
+    monkeypatch.setattr(appserver.platform, "machine", lambda: "AMD64")
+
+    client = CodexAppServerAdapter("codex", env={"PATH": injected_path})
+
+    assert client.executable == str(native.resolve())
+
+
+def test_official_launcher_missing_native_fails_closed(tmp_path: Path) -> None:
+    from botpipe.codex_appserver import _packaged_codex_binary
+
+    launcher = tmp_path / "codex.cmd"
+    package = tmp_path / "node_modules" / "@openai" / "codex"
+    launcher.write_text(_npm_cmd())
+    _write_official_codex_package(package)
+
+    with pytest.raises(CapabilityError, match="missing its native"):
+        _packaged_codex_binary(
+            launcher, platform_name="win32", machine="AMD64"
+        )
+
+
+def test_dispose_exits_idle_fixture_without_abort_cleanup(tmp_path: Path) -> None:
+    client = adapter(tmp_path)
+    response = client.start_turn(request(tmp_path))
+    process = client._process
+
+    client.dispose()
+    client.close()
+
+    assert response.text == "fixture answer"
+    assert process is not None and process.poll() is not None
+    assert client._process is None
+    transcript = [
+        json.loads(line)
+        for line in (tmp_path / "codex-transcript.jsonl").read_text().splitlines()
+    ]
+    assert not any(
+        item.get("method") in {"turn/interrupt", "thread/backgroundTerminals/clean"}
+        for item in transcript
+    )
+
+
+def test_dispose_rejects_an_active_turn_without_touching_transport(
+    tmp_path: Path,
+) -> None:
+    from botpipe.codex_appserver import _Turn
+
+    class FakeStdin:
+        closed = False
+
+        def close(self) -> None:
+            self.closed = True
+
+    class FakeProcess:
+        pid = 123
+        stdin = FakeStdin()
+
+        def poll(self):
+            return None
+
+    client = adapter(tmp_path)
+    process = FakeProcess()
+    turn = _Turn(
+        "thread", "turn", None, None, process=process  # type: ignore[arg-type]
+    )
+    client._process = process  # type: ignore[assignment]
+    client._turns[(turn.thread_id, turn.turn_id)] = turn
+
+    with pytest.raises(RuntimeError, match="active work"):
+        client.dispose()
+
+    assert not process.stdin.closed
+    assert client._process is process
+
+
+def test_failed_dispose_retains_cleanup_ownership(tmp_path: Path) -> None:
+    class FakeStdin:
+        def close(self) -> None:
+            pass
+
+    class FakeProcess:
+        pid = 123
+        stdin = FakeStdin()
+
+        def poll(self):
+            return None
+
+    class RefusingContainment:
+        def release(self, process, *, grace_seconds):
+            raise subprocess.TimeoutExpired("codex", grace_seconds)
+
+    import subprocess
+
+    client = adapter(tmp_path)
+    process = FakeProcess()
+    containment = RefusingContainment()
+    client._process = process  # type: ignore[assignment]
+    client._containment = containment  # type: ignore[assignment]
+
+    with pytest.raises(subprocess.TimeoutExpired):
+        client.dispose()
+
+    assert client._process is process
+    assert client._containment is containment
+    assert not client._cleanup_complete
+
+
+def test_completed_response_survives_disposal_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from botpipe.processes import ProcessContainment
+
+    client = adapter(tmp_path)
+    response = client.start_turn(request(tmp_path))
+    process = client._process
+    containment = client._containment
+
+    def fail_release(*_args, **_kwargs) -> None:
+        raise RuntimeError("normal exit failed")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(ProcessContainment, "release", fail_release)
+        with pytest.raises(RuntimeError, match="normal exit failed"):
+            client.dispose()
+
+    assert response.text == "fixture answer"
+    assert client._process is process
+    assert client._containment is containment
+    client.close()
+
+
+@pytest.mark.parametrize(
+    "blocked_status", ["configured", "response_received"]
+)
+def test_dispose_rejects_call_during_setup_and_terminal_processing(
+    tmp_path: Path, blocked_status: str
+) -> None:
+    entered = threading.Event()
+    release = threading.Event()
+    responses = []
+    errors = []
+
+    def checkpoint(update: dict) -> None:
+        if update.get("status") == blocked_status:
+            entered.set()
+            assert release.wait(2)
+
+    client = adapter(tmp_path)
+    call = replace(request(tmp_path), on_checkpoint=checkpoint)
+
+    def run() -> None:
+        try:
+            responses.append(client.start_turn(call))
+        except BaseException as exc:  # noqa: BLE001 - thread reports to test
+            errors.append(exc)
+
+    worker = threading.Thread(target=run)
+    worker.start()
+    assert entered.wait(2)
+    try:
+        with pytest.raises(RuntimeError, match="active work"):
+            client.dispose()
+    finally:
+        release.set()
+        worker.join(timeout=3)
+        if worker.is_alive():
+            client.close()
+    assert not worker.is_alive()
+    assert not errors
+    assert responses[0].text == "fixture answer"
+    client.dispose()
+
+
+def test_dispose_rejects_recovery_setup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    entered = threading.Event()
+    release = threading.Event()
+    result = []
+    client = adapter(tmp_path)
+    original_probe = client.probe
+
+    def blocked_probe(*, deadline=None):
+        entered.set()
+        assert release.wait(2)
+        return original_probe(deadline=deadline)
+
+    monkeypatch.setattr(client, "probe", blocked_probe)
+    worker = threading.Thread(
+        target=lambda: result.append(
+            client.recover_turn(request(tmp_path), thread_id="thread", turn_id="turn")
+        )
+    )
+    worker.start()
+    assert entered.wait(2)
+    try:
+        with pytest.raises(RuntimeError, match="active work"):
+            client.dispose()
+    finally:
+        release.set()
+        worker.join(timeout=3)
+    assert result == [("unknown", None)]
+    client.dispose()
+
+
+def test_dispose_stops_readers_when_descendant_inherits_pipes(tmp_path: Path) -> None:
+    marker = tmp_path / "inherited-pipe-child"
+    client = adapter(
+        tmp_path,
+        "inherited_stdio",
+        BOTPIPE_FAKE_DESCENDANT_MARKER=str(marker),
+        BOTPIPE_FAKE_DESCENDANT_PID=str(tmp_path / "inherited-pipe-child.pid"),
+    )
+    response = client.start_turn(request(tmp_path))
+    reader, stderr_reader = client._reader, client._stderr_reader
+
+    client.dispose()
+
+    assert response.text == "fixture answer"
+    assert reader is not None and stderr_reader is not None
+    reader.join(timeout=0.5)
+    stderr_reader.join(timeout=0.5)
+    assert not reader.is_alive()
+    assert not stderr_reader.is_alive()
+
+
 def transcript(tmp_path: Path) -> list[dict]:
     return [
         json.loads(line)
-        for line in (tmp_path / "codex-transcript.jsonl").read_text(encoding="utf-8").splitlines()
+        for line in (tmp_path / "codex-transcript.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
     ]
 
 
@@ -146,7 +559,9 @@ def workspace_bytes(root: Path) -> dict[str, bytes]:
     }
 
 
-def test_default_run_routes_nested_completion_and_records_protocol(tmp_path: Path) -> None:
+def test_default_run_routes_nested_completion_and_records_protocol(
+    tmp_path: Path,
+) -> None:
     client = adapter(tmp_path)
     try:
         response = client.start_turn(request(tmp_path))
@@ -160,12 +575,16 @@ def test_default_run_routes_nested_completion_and_records_protocol(tmp_path: Pat
     assert response.metadata["codex_version"] == "codex-cli contract-fixture"
     assert response.metadata["enforcement"]["sandbox"] == "codex:workspace-write"
     assert response.metadata["enforcement"]["network"] == "codex:off"
-    assert any(event["type"] == "turn/completed" for event in response.metadata["audit"])
+    assert any(
+        event["type"] == "turn/completed" for event in response.metadata["audit"]
+    )
     methods = [entry["method"] for entry in transcript(tmp_path)]
     assert methods == ["initialize", "initialized", "thread/start", "turn/start"]
 
 
-def test_query_is_read_only_and_workspace_remains_byte_identical(tmp_path: Path) -> None:
+def test_query_is_read_only_and_workspace_remains_byte_identical(
+    tmp_path: Path,
+) -> None:
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     (workspace / "kept.bin").write_bytes(b"\x00unchanged\xff")
@@ -180,12 +599,16 @@ def test_query_is_read_only_and_workspace_remains_byte_identical(tmp_path: Path)
     assert workspace_bytes(workspace) == before
     assert response.metadata["enforcement"]["sandbox"] == "codex:read-only"
     assert response.metadata["enforcement"]["audit"] == "no-tool-calls-observed"
-    turn = next(item for item in transcript(tmp_path) if item.get("method") == "turn/start")
+    turn = next(
+        item for item in transcript(tmp_path) if item.get("method") == "turn/start"
+    )
     assert turn["params"]["sandboxPolicy"] == {
         "type": "readOnly",
         "networkAccess": False,
     }
-    thread = next(item for item in transcript(tmp_path) if item.get("method") == "thread/start")
+    thread = next(
+        item for item in transcript(tmp_path) if item.get("method") == "thread/start"
+    )
     assert thread["params"]["sandbox"] == "read-only"
     config = thread["params"]["config"]
     assert config["features.apps"] is False
@@ -199,14 +622,22 @@ def test_generate_has_exact_empty_inventory_and_rejects_disallowed_tool_with_evi
     tmp_path: Path,
 ) -> None:
     client = adapter(tmp_path, "disallowed_shell")
+    checkpoints: list[dict] = []
     with pytest.raises(CapabilityError) as caught:
-        client.start_turn(request(tmp_path, preset="generate", tools=()))
+        client.start_turn(
+            replace(
+                request(tmp_path, preset="generate", tools=()),
+                on_checkpoint=checkpoints.append,
+            )
+        )
     client.close()
 
     message = str(caught.value)
     assert "disallowed tool 'shell'" in message
     assert '"id": "forbidden-command"' in message
-    thread = next(item for item in transcript(tmp_path) if item.get("method") == "thread/start")
+    thread = next(
+        item for item in transcript(tmp_path) if item.get("method") == "thread/start"
+    )
     config = thread["params"]["config"]
     assert config["features.shell_tool"] is False
     assert config["features.standalone_web_search"] is False
@@ -218,6 +649,10 @@ def test_generate_has_exact_empty_inventory_and_rejects_disallowed_tool_with_evi
     assert config["tools.update_plan.enabled"] is False
     assert not any(key.startswith("mcp_servers.") for key in config)
     assert thread["params"]["dynamicTools"] == []
+    assert any(
+        update.get("cleanup") == {"status": "completed"}
+        for update in checkpoints
+    )
 
 
 @pytest.mark.parametrize(
@@ -282,7 +717,40 @@ def test_allowlist_accepts_new_schema_item_until_it_is_observed(tmp_path: Path) 
     assert "future-evidence" in str(observed.error)
 
 
-def test_stale_receipt_profile_does_not_veto_native_resume(tmp_path: Path) -> None:
+def test_failed_native_terminal_is_not_checkpointed_as_completed_response(
+    tmp_path: Path,
+) -> None:
+    from botpipe.codex_appserver import CodexTurnError, _Turn
+
+    updates: list[dict] = []
+    turn = _Turn("thread", "turn", None, None, updates.append)
+    client = adapter(tmp_path)
+    client._record_event(
+        turn,
+        "item/completed",
+        {
+            "threadId": "thread",
+            "turnId": "turn",
+            "item": {"type": "agentMessage", "text": "partial answer"},
+        },
+    )
+    client._record_event(
+        turn,
+        "turn/completed",
+        {
+            "threadId": "thread",
+            "turnId": "turn",
+            "turn": {"id": "turn", "status": "failed"},
+        },
+    )
+
+    assert updates[-1]["status"] == "turn_terminal"
+    assert updates[-1]["native_status"] == "failed"
+    assert updates[-1]["response"]["text"] == "partial answer"
+    assert isinstance(turn.error, CodexTurnError)
+
+
+def test_stale_ledger_profile_does_not_veto_native_resume(tmp_path: Path) -> None:
     client = adapter(tmp_path)
     resumed = replace(
         request(tmp_path, session_id="thread-fixture"),
@@ -334,7 +802,9 @@ def test_query_then_run_resumes_same_native_thread(tmp_path: Path) -> None:
 
     assert second.session_id == first.session_id == "thread-fixture"
     calls = transcript(tmp_path)
-    assert [item["method"] for item in calls if item["method"].startswith("thread/")] == [
+    assert [
+        item["method"] for item in calls if item["method"].startswith("thread/")
+    ] == [
         "thread/start",
         "thread/unsubscribe",
         "thread/resume",
@@ -348,7 +818,26 @@ def test_query_then_run_resumes_same_native_thread(tmp_path: Path) -> None:
     ]
 
 
-def test_unchanged_thread_profile_needs_no_unsubscribe_but_changes_require_it(
+def test_same_profile_resumes_without_unloading_background_state(tmp_path: Path) -> None:
+    client = adapter(tmp_path)
+    try:
+        first = client.start_turn(request(tmp_path, preset="query", tools=()))
+        client.start_turn(
+            request(tmp_path, preset="query", tools=(), session_id=first.session_id)
+        )
+    finally:
+        client.close()
+
+    calls = transcript(tmp_path)
+    assert [
+        item["method"] for item in calls if item["method"].startswith("thread/")
+    ] == [
+        "thread/start",
+        "thread/resume",
+    ]
+
+
+def test_without_unsubscribe_same_profile_can_resume_but_change_cannot(
     tmp_path: Path,
 ) -> None:
     client = adapter(tmp_path)
@@ -366,10 +855,68 @@ def test_unchanged_thread_profile_needs_no_unsubscribe_but_changes_require_it(
         client.close()
 
     calls = transcript(tmp_path)
-    assert [item["method"] for item in calls if item["method"].startswith("thread/")] == [
-        "thread/start", "thread/resume",
+    assert [
+        item["method"] for item in calls if item["method"].startswith("thread/")
+    ] == [
+        "thread/start",
+        "thread/resume",
     ]
     assert sum(item["method"] == "turn/start" for item in calls) == 2
+
+
+def test_recovery_restores_profile_for_resume_without_unsubscribe(
+    tmp_path: Path,
+) -> None:
+    from botpipe import codex_appserver as appserver_module
+
+    available = replace(
+        capabilities(),
+        methods=(capabilities().methods - {"thread/unsubscribe"}) | {"thread/read"},
+    )
+    client = CodexAppServerAdapter(
+        (sys.executable, str(FIXTURE)),
+        env={
+            "BOTPIPE_FAKE_TRANSCRIPT": str(tmp_path / "codex-transcript.jsonl"),
+            "BOTPIPE_FAKE_SCENARIO": "complete",
+        },
+        capabilities=available,
+        interrupt_grace_seconds=0.1,
+    )
+    call = replace(
+        request(tmp_path, session_id="thread-fixture"),
+        instructions="Keep the recovered thread profile.",
+    )
+    profile_hash = appserver_module._profile_hash(
+        call,
+        appserver_module._tool_config(call, available, client._mcp_servers),
+    )
+    call = replace(
+        call,
+        checkpoint={"profile_hash": profile_hash},
+    )
+    try:
+        status, recovered = client.recover_turn(
+            call, thread_id="thread-fixture", turn_id="recorded-turn"
+        )
+        continued = client.start_turn(call)
+    finally:
+        client.close()
+
+    assert status == "completed"
+    assert recovered.text == "recovered answer"
+    assert continued.text == "fixture answer"
+    assert client._thread_profiles["thread-fixture"] == profile_hash
+    resumes = [
+        item
+        for item in transcript(tmp_path)
+        if item.get("method") == "thread/resume"
+    ]
+    assert len(resumes) == 2
+    assert all(
+        item["params"]["developerInstructions"]
+        == "Keep the recovered thread profile."
+        for item in resumes
+    )
 
 
 @pytest.mark.skipif(os.name != "posix", reason="separate POSIX process group")
@@ -395,7 +942,9 @@ def test_terminal_notification_still_cleans_native_background_groups(tmp_path):
 
     calls = transcript(tmp_path)
     methods = [item["method"] for item in calls]
-    assert methods.index("turn/interrupt") < methods.index("thread/backgroundTerminals/clean")
+    assert methods.index("turn/interrupt") < methods.index(
+        "thread/backgroundTerminals/clean"
+    )
     assert {
         item["params"]["threadId"]
         for item in calls
@@ -450,74 +999,65 @@ def test_timeout_and_cancellation_kill_actual_descendant_tree(
     assert not marker.exists(), "a descendant survived adapter cleanup"
 
 
-def test_concurrent_distinct_threads_share_transport_and_teardown_receipts(
-    tmp_path: Path,
-) -> None:
+@pytest.mark.skipif(os.name != "posix", reason="separate POSIX process group")
+def test_cancelling_one_session_leaves_another_session_operational(tmp_path: Path) -> None:
+    first_root, second_root = tmp_path / "first", tmp_path / "second"
+    first_root.mkdir()
+    second_root.mkdir()
+    marker = first_root / "descendant-escaped"
+    pid_file = first_root / "descendant.pid"
     cancelled = threading.Event()
-    client = adapter(tmp_path, "concurrent_stall")
-    provider = CodexProvider(adapter=client)
-    calls = {
-        "cancelled": replace(
-            request(
-                tmp_path,
-                session_id="thread-cancelled",
-                timeout=30,
-                cancel_event=cancelled,
-            ),
-            operation_id="concurrent-cancelled",
+    owners = [
+        adapter(
+            first_root,
+            "stall_tree",
+            BOTPIPE_FAKE_DESCENDANT_MARKER=str(marker),
+            BOTPIPE_FAKE_DESCENDANT_PID=str(pid_file),
         ),
-        "sibling": replace(
-            request(tmp_path, session_id="thread-sibling", timeout=30),
-            operation_id="concurrent-sibling",
-        ),
-    }
-    errors: dict[str, BaseException] = {}
+        adapter(second_root),
+    ]
+    available = iter(owners)
+    provider = CodexProvider(adapter_factory=lambda: next(available))
+    first = replace(
+        request(first_root, timeout=3, cancel_event=cancelled),
+        operation_id="first-operation",
+        session_key="task:first",
+    )
+    second = replace(
+        request(second_root),
+        operation_id="second-operation",
+        session_key="task:second",
+    )
+    errors: list[BaseException] = []
 
-    def run(name: str) -> None:
+    def run_first() -> None:
         try:
-            provider.run(calls[name])
+            provider.run(first)
         except BaseException as exc:
-            errors[name] = exc
+            errors.append(exc)
 
-    workers = [threading.Thread(target=run, args=(name,)) for name in calls]
-    for worker in workers:
-        worker.start()
-    deadline = time.monotonic() + 30
-    observed: list[dict] = []
-    while time.monotonic() < deadline:
-        if (tmp_path / "codex-transcript.jsonl").exists():
-            observed = transcript(tmp_path)
-            if sum(item.get("method") == "turn/start" for item in observed) == 2:
-                break
-        time.sleep(0.01)
-    assert sum(item.get("method") == "turn/start" for item in observed) == 2
-
-    cancelled.set()
-    for worker in workers:
-        worker.join(timeout=30)
+    worker = threading.Thread(target=run_first, daemon=True)
     try:
-        assert all(not worker.is_alive() for worker in workers)
-        assert isinstance(errors["cancelled"], ProviderInterruptedError)
-        assert isinstance(errors["sibling"], ProviderError)
+        worker.start()
+        deadline = time.monotonic() + 2
+        while not pid_file.exists() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert pid_file.exists(), "cancelled session never dispatched"
 
-        recorded = transcript(tmp_path)
-        methods = [item.get("method") for item in recorded]
-        assert methods.count("initialize") == 1
-        assert methods.index("turn/interrupt") > max(
-            index for index, method in enumerate(methods) if method == "turn/start"
-        )
-        assert {
-            item["params"]["threadId"]
-            for item in recorded
-            if item.get("method") == "turn/start"
-        } == {"thread-cancelled", "thread-sibling"}
-        for call in calls.values():
-            receipt = json.loads(receipt_path(call).read_text())
-            assert receipt["status"] == "turn_acknowledged"
-            assert receipt["cleanup"] == {"status": "completed"}
-            assert receipt["enforcement"]["audit"] == "no-tool-calls-observed"
+        response = provider.run(second)
+        assert response.text == "fixture answer"
+        assert owners[1]._process is not None and owners[1]._process.poll() is None
+
+        cancelled.set()
+        worker.join(timeout=3)
+        assert not worker.is_alive()
+        assert len(errors) == 1 and isinstance(errors[0], ProviderInterruptedError)
+        assert owners[1]._process is not None and owners[1]._process.poll() is None
     finally:
-        client.close()
+        provider.close()
+
+    time.sleep(1.1)
+    assert not marker.exists(), "cancelled session cleanup left a descendant"
 
 
 def test_start_waits_for_in_progress_transport_teardown(tmp_path: Path) -> None:
@@ -584,9 +1124,7 @@ def test_late_turn_ack_cannot_bind_to_or_kill_replacement_transport(
     ack_ready = threading.Event()
     release_ack = threading.Event()
 
-    def rpc(
-        method, params, timeout, cancel_event=None, *, deadline=None, process=None
-    ):
+    def rpc(method, params, timeout, cancel_event=None, *, deadline=None, process=None):
         if method == "thread/resume":
             return {"thread": {"id": "thread-late-ack"}}
         if method == "turn/start":
@@ -613,7 +1151,9 @@ def test_late_turn_ack_cannot_bind_to_or_kill_replacement_transport(
     worker = threading.Thread(target=run)
     worker.start()
     assert ack_ready.wait(30)
-    client._kill_transport(CodexProtocolError("old transport stopped"), cleanup_seconds=0)
+    client._kill_transport(
+        CodexProtocolError("old transport stopped"), cleanup_seconds=0
+    )
     with client._transport_cleanup_lock, client._lock:
         client._process = new_process  # type: ignore[assignment]
         client._containment = new_containment  # type: ignore[assignment]
@@ -634,25 +1174,39 @@ def test_late_turn_ack_cannot_bind_to_or_kill_replacement_transport(
 
 def test_turn_start_ack_timeout_kills_unknown_dispatched_turn_tree(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     marker = tmp_path / "pre-ack-descendant-escaped"
     pid_file = tmp_path / "pre-ack-descendant.pid"
     client = adapter(
         tmp_path,
-        "stall_turn_start",
+        "fail_turn_start",
         BOTPIPE_FAKE_DESCENDANT_MARKER=str(marker),
         BOTPIPE_FAKE_DESCENDANT_PID=str(pid_file),
     )
+    native_rpc = client._rpc
+
+    def lose_turn_start_ack(method, *args, **kwargs):
+        try:
+            return native_rpc(method, *args, **kwargs)
+        except CodexProtocolError as exc:
+            if method == "turn/start" and "fixture rejected" in str(exc):
+                raise TimeoutError("controlled turn/start timeout") from exc
+            raise
+
+    monkeypatch.setattr(client, "_rpc", lose_turn_start_ack)
 
     checkpoints = []
-    with pytest.raises(ProviderTimeoutError, match="turn start"):
-        client.start_turn(
-            replace(
-                request(tmp_path, timeout=0.2),
-                on_checkpoint=checkpoints.append,
+    try:
+        with pytest.raises(ProviderTimeoutError, match="turn start"):
+            client.start_turn(
+                replace(
+                    request(tmp_path, timeout=30),
+                    on_checkpoint=checkpoints.append,
+                )
             )
-        )
-    client.close()
+    finally:
+        client.close()
 
     assert pid_file.exists(), "fixture never dispatched its unknown turn"
     assert not any(
@@ -667,35 +1221,40 @@ def test_turn_start_ack_timeout_kills_unknown_dispatched_turn_tree(
 def test_pre_ack_cleanup_preserves_orphaned_tool_policy_evidence(
     tmp_path: Path,
 ) -> None:
-    client = adapter(tmp_path, "stall_turn_start_disallowed")
+    client = adapter(tmp_path, "fail_turn_start_disallowed")
     checkpoints = []
 
-    with pytest.raises(CapabilityError, match="disallowed tool 'shell'"):
-        client.start_turn(
-            replace(
-                request(tmp_path, preset="generate", tools=(), timeout=0.2),
-                on_checkpoint=checkpoints.append,
+    try:
+        with pytest.raises(CapabilityError, match="disallowed tool 'shell'"):
+            client.start_turn(
+                replace(
+                    request(
+                        tmp_path,
+                        preset="generate",
+                        tools=(),
+                        timeout=30,
+                    ),
+                    on_checkpoint=checkpoints.append,
+                )
             )
-        )
-    client.close()
+    finally:
+        client.close()
 
     terminal = checkpoints[-1]
     assert terminal["status"] == "failed"
     assert terminal["cleanup"] == {"status": "completed"}
     assert terminal["policy_error"] is True
     assert terminal["enforcement"]["audit"] == "tool-policy-violation"
-    assert terminal["audit"][0]["data"]["item"]["id"] == (
-        "pre-ack-forbidden-command"
-    )
+    assert terminal["audit"][0]["data"]["item"]["id"] == ("pre-ack-forbidden-command")
 
 
 def test_completed_orphan_wins_lost_turn_start_ack(tmp_path: Path) -> None:
-    client = adapter(tmp_path, "stall_turn_start_complete")
+    client = adapter(tmp_path, "fail_turn_start_complete")
     checkpoints = []
     try:
         response = client.start_turn(
             replace(
-                request(tmp_path, timeout=0.2),
+                request(tmp_path, timeout=30),
                 on_checkpoint=checkpoints.append,
             )
         )
@@ -706,6 +1265,7 @@ def test_completed_orphan_wins_lost_turn_start_ack(tmp_path: Path) -> None:
     assert response.metadata["turn_id"] == "turn-1"
     assert response.metadata["recovered_from_lost_ack"] is True
     assert checkpoints[-1]["status"] == "response_received"
+    assert checkpoints[-1]["response"] == response.to_record()
 
 
 def test_probe_subprocess_uses_remaining_dispatch_budget(monkeypatch) -> None:
@@ -721,7 +1281,9 @@ def test_probe_subprocess_uses_remaining_dispatch_budget(monkeypatch) -> None:
     monkeypatch.setattr(capabilities.subprocess, "run", stall)
     with pytest.raises(TimeoutError, match="probe timed out"):
         capabilities._run(
-            ["codex", "--version"], env={}, timeout=30,
+            ["codex", "--version"],
+            env={},
+            timeout=30,
             deadline=time.monotonic() + 0.25,
         )
     assert 0 < timeouts[0] <= 0.25
@@ -740,9 +1302,7 @@ def test_setup_and_turn_start_share_one_timeout_budget(
     monkeypatch.setattr(client, "_start", lambda **_kwargs: None)
     monkeypatch.setattr(client, "_kill_transport", lambda *_args, **_kwargs: None)
 
-    def rpc(
-        method, params, timeout, cancel_event=None, *, deadline=None, process=None
-    ):
+    def rpc(method, params, timeout, cancel_event=None, *, deadline=None, process=None):
         calls.append((method, timeout, deadline))
         if method == "thread/start":
             clock[0] += 0.18
@@ -796,9 +1356,7 @@ def test_expired_thread_checkpoint_releases_session_lock(tmp_path: Path) -> None
         if checkpoint.get("status") == "thread_bound":
             time.sleep(0.08)
 
-    first = replace(
-        request(tmp_path, timeout=0.05), on_checkpoint=delay_thread_bound
-    )
+    first = replace(request(tmp_path, timeout=0.05), on_checkpoint=delay_thread_bound)
     responses = []
     errors: list[BaseException] = []
 
@@ -826,16 +1384,20 @@ def test_expired_thread_checkpoint_releases_session_lock(tmp_path: Path) -> None
     assert responses[0].text == "fixture answer"
 
 
-def test_terminal_audit_checkpoint_failure_releases_session_lock(tmp_path: Path) -> None:
+def test_terminal_audit_checkpoint_failure_releases_session_lock(
+    tmp_path: Path,
+) -> None:
     client = adapter(tmp_path)
 
     def fail_audit(checkpoint: dict) -> None:
         if "audit" in checkpoint:
-            raise RuntimeError("receipt audit write failed")
+            raise RuntimeError("ledger checkpoint write failed")
 
     first = replace(request(tmp_path), on_checkpoint=fail_audit)
     try:
-        with pytest.raises(RuntimeError, match="audit write failed"):
+        with pytest.raises(
+            CodexProtocolError, match="terminal response checkpoint failed"
+        ):
             client.start_turn(first)
         second = client.start_turn(
             request(tmp_path, session_id="thread-fixture", timeout=1)
@@ -849,6 +1411,7 @@ def test_cleanup_failure_checkpoints_every_affected_turn(tmp_path: Path) -> None
     from botpipe.codex_appserver import CodexProtocolError, _Turn
 
     client = adapter(tmp_path)
+
     class FakeProcess:
         pid = 123
 
@@ -891,6 +1454,108 @@ def test_cleanup_failure_checkpoints_every_affected_turn(tmp_path: Path) -> None
         assert "process inspection unavailable" in recorded[-1]["cleanup"]["error"]
 
 
+def test_close_retries_incomplete_process_tree_verification(tmp_path: Path) -> None:
+    class FakeProcess:
+        pid = 123
+
+        def __init__(self) -> None:
+            self.alive = True
+
+        def poll(self):
+            return None if self.alive else 0
+
+        def wait(self, *, timeout):
+            return 0
+
+    class FlakyContainment:
+        def __init__(self) -> None:
+            self.verifications = 0
+            self.closes = 0
+
+        def capture_descendant_groups(self, _process):
+            pass
+
+        def terminate(self, process, *, grace_seconds):
+            process.alive = False
+
+        def ensure_tree_exited(self, _process, *, grace_seconds):
+            self.verifications += 1
+            if self.verifications == 1:
+                raise RuntimeError("cleanup temporarily unverified")
+
+        def close(self):
+            self.closes += 1
+
+    client = adapter(tmp_path)
+    process = FakeProcess()
+    containment = FlakyContainment()
+    client._process = process  # type: ignore[assignment]
+    client._containment = containment  # type: ignore[assignment]
+
+    with pytest.raises(CodexProtocolError, match="cleanup temporarily unverified"):
+        client.close()
+    assert containment.closes == 0
+
+    client.close()
+    assert containment.verifications >= 3
+    assert containment.closes == 1
+    client.close()
+    assert containment.closes == 1
+
+
+def test_close_retries_rejected_cleanup_checkpoint(tmp_path: Path) -> None:
+    from botpipe.codex_appserver import _Turn
+
+    class FakeProcess:
+        pid = 123
+
+        def __init__(self) -> None:
+            self.alive = True
+
+        def poll(self):
+            return None if self.alive else 0
+
+        def wait(self, *, timeout):
+            return 0
+
+    class Containment:
+        def capture_descendant_groups(self, _process):
+            pass
+
+        def terminate(self, process, *, grace_seconds):
+            process.alive = False
+
+        def ensure_tree_exited(self, _process, *, grace_seconds):
+            pass
+
+        def close(self):
+            pass
+
+    completed_attempts = 0
+
+    def checkpoint(update: dict) -> None:
+        nonlocal completed_attempts
+        if update.get("cleanup", {}).get("status") == "completed":
+            completed_attempts += 1
+            if completed_attempts == 1:
+                raise RuntimeError("ledger temporarily unavailable")
+
+    client = adapter(tmp_path)
+    process = FakeProcess()
+    turn = _Turn(
+        "thread", "turn", None, None, checkpoint, process=process  # type: ignore[arg-type]
+    )
+    client._process = process  # type: ignore[assignment]
+    client._containment = Containment()  # type: ignore[assignment]
+    client._turns[(turn.thread_id, turn.turn_id)] = turn
+
+    with pytest.raises(CodexProtocolError, match="ledger temporarily unavailable"):
+        client.close()
+    client.close()
+
+    assert completed_attempts == 2
+
+
 @pytest.mark.skipif(os.name != "posix", reason="detached POSIX process groups")
 def test_cleanup_started_after_parent_exit_is_not_recorded_as_verified(
     tmp_path: Path,
@@ -928,7 +1593,7 @@ def test_cleanup_started_after_parent_exit_is_not_recorded_as_verified(
     assert "after the app-server exited" in updates[-1]["cleanup"]["error"]
 
 
-def test_shared_transport_failure_preserves_authoritative_completed_turn(
+def test_transport_failure_preserves_authoritative_completed_turn(
     tmp_path: Path,
 ) -> None:
     from botpipe.codex_appserver import CodexProtocolError, _Turn
@@ -940,7 +1605,7 @@ def test_shared_transport_failure_preserves_authoritative_completed_turn(
     client._turns[(completed.thread_id, completed.turn_id)] = completed
     client._turns[(active.thread_id, active.turn_id)] = active
 
-    failure = CodexProtocolError("shared transport stopped")
+    failure = CodexProtocolError("transport stopped")
     client._fail_transport(failure)
 
     assert completed.error is None
@@ -984,7 +1649,9 @@ async def test_sdk_async_cancel_waits_for_pre_ack_turn_tree_cleanup(
     client.close()
 
 
-def _write_probe_schema(root: Path, methods: set[str], *, output_schema: bool = True) -> None:
+def _write_probe_schema(
+    root: Path, methods: set[str], *, output_schema: bool = True
+) -> None:
     (root / "v2").mkdir(parents=True)
     protocol = {"properties": {"method": {"enum": sorted(methods)}}}
     (root / "codex_app_server_protocol.schemas.json").write_text(json.dumps(protocol))
@@ -993,10 +1660,26 @@ def _write_probe_schema(root: Path, methods: set[str], *, output_schema: bool = 
         return {"properties": values}
 
     (root / "v2" / "ThreadStartParams.json").write_text(
-        json.dumps(properties(cwd={"type": "string"}, sandbox={"type": "string"}, config={"type": "object"}, dynamicTools={"type": "array"}, developerInstructions={"type": "string"}))
+        json.dumps(
+            properties(
+                cwd={"type": "string"},
+                sandbox={"type": "string"},
+                config={"type": "object"},
+                dynamicTools={"type": "array"},
+                developerInstructions={"type": "string"},
+            )
+        )
     )
     (root / "v2" / "ThreadResumeParams.json").write_text(
-        json.dumps(properties(threadId={"type": "string"}, cwd={"type": "string"}, sandbox={"type": "string"}, config={"type": "object"}, developerInstructions={"type": "string"}))
+        json.dumps(
+            properties(
+                threadId={"type": "string"},
+                cwd={"type": "string"},
+                sandbox={"type": "string"},
+                config={"type": "object"},
+                developerInstructions={"type": "string"},
+            )
+        )
     )
     turn = {
         "threadId": {"type": "string"},
@@ -1007,7 +1690,9 @@ def _write_probe_schema(root: Path, methods: set[str], *, output_schema: bool = 
     if output_schema:
         turn["outputSchema"] = {"type": "object"}
     (root / "v2" / "TurnStartParams.json").write_text(json.dumps(properties(**turn)))
-    item_variants = [{"properties": {"type": {"enum": [name]}}} for name in sorted(ITEM_TYPES)]
+    item_variants = [
+        {"properties": {"type": {"enum": [name]}}} for name in sorted(ITEM_TYPES)
+    ]
     (root / "v2" / "ItemCompletedNotification.json").write_text(
         json.dumps({"definitions": {"ThreadItem": {"oneOf": item_variants}}})
     )
@@ -1079,7 +1764,9 @@ def test_output_schema_falls_back_to_prompt_when_protocol_field_is_optional(
         client.start_turn(request(tmp_path, output_schema=schema))
     finally:
         client.close()
-    turn = next(item for item in transcript(tmp_path) if item.get("method") == "turn/start")
+    turn = next(
+        item for item in transcript(tmp_path) if item.get("method") == "turn/start"
+    )
     assert "outputSchema" not in turn["params"]
     prompt = turn["params"]["input"][0]["text"]
     assert "Return only JSON matching this schema:" in prompt

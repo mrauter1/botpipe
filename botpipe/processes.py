@@ -14,6 +14,49 @@ class ProcessCleanupError(RuntimeError):
     """Owned process cleanup ran, but descendant inspection was incomplete."""
 
 
+def _windows_extended_limit_type() -> Any:
+    import ctypes
+    from ctypes import wintypes
+
+    class IO(ctypes.Structure):
+        _fields_ = [
+            (name, ctypes.c_uint64)
+            for name in (
+                "ReadOperationCount",
+                "WriteOperationCount",
+                "OtherOperationCount",
+                "ReadTransferCount",
+                "WriteTransferCount",
+                "OtherTransferCount",
+            )
+        ]
+
+    class BASIC(ctypes.Structure):
+        _fields_ = [
+            ("PerProcessUserTimeLimit", ctypes.c_int64),
+            ("PerJobUserTimeLimit", ctypes.c_int64),
+            ("LimitFlags", wintypes.DWORD),
+            ("MinimumWorkingSetSize", ctypes.c_size_t),
+            ("MaximumWorkingSetSize", ctypes.c_size_t),
+            ("ActiveProcessLimit", wintypes.DWORD),
+            ("Affinity", ctypes.c_size_t),
+            ("PriorityClass", wintypes.DWORD),
+            ("SchedulingClass", wintypes.DWORD),
+        ]
+
+    class EXT(ctypes.Structure):
+        _fields_ = [
+            ("BasicLimitInformation", BASIC),
+            ("IoInfo", IO),
+            ("ProcessMemoryLimit", ctypes.c_size_t),
+            ("JobMemoryLimit", ctypes.c_size_t),
+            ("PeakProcessMemoryUsed", ctypes.c_size_t),
+            ("PeakJobMemoryUsed", ctypes.c_size_t),
+        ]
+
+    return EXT
+
+
 def _posix_processes() -> dict[int, tuple[int, int, str, str]]:
     """Return pid -> (ppid, pgid, state, stable process identity)."""
 
@@ -209,6 +252,37 @@ class ProcessContainment:
         if process.poll() is None:
             process.wait(timeout=grace_seconds)
 
+    def release(
+        self, process: subprocess.Popen[bytes], *, grace_seconds: float = 1.0
+    ) -> None:
+        """Stop only the owned parent and relinquish descendant containment.
+
+        This is the normal idle-process path.  It deliberately does not inspect,
+        signal, or make any claim about descendants; ``terminate`` remains the
+        abort path that establishes process-tree quiescence.
+        """
+
+        if process.pid != self._owned_pid:
+            raise RuntimeError("refusing to release an unregistered process")
+        if process.poll() is None:
+            if os.name == "posix":
+                try:
+                    os.kill(process.pid, signal.SIGINT)
+                except ProcessLookupError:
+                    pass
+            else:
+                # TerminateProcess targets the app-server parent, unlike closing
+                # or terminating the Job Object which also targets descendants.
+                process.terminate()
+            process.wait(timeout=grace_seconds)
+        if self._windows_job is not None:
+            self._windows_job.release()
+            self._windows_job = None
+        self._owned_pid = None
+        self._owned_pgid = None
+        self._descendant_groups.clear()
+        self._inspection_errors.clear()
+
     def ensure_tree_exited(
         self, process: subprocess.Popen[bytes], *, grace_seconds: float = 10.0
     ) -> None:
@@ -313,42 +387,6 @@ class WindowsJobObject:
         import ctypes
         from ctypes import wintypes
 
-        class IO(ctypes.Structure):
-            _fields_ = [
-                (n, ctypes.c_uint64)
-                for n in (
-                    "ReadOperationCount",
-                    "WriteOperationCount",
-                    "OtherOperationCount",
-                    "ReadTransferCount",
-                    "WriteTransferCount",
-                    "OtherTransferCount",
-                )
-            ]
-
-        class BASIC(ctypes.Structure):
-            _fields_ = [
-                ("PerProcessUserTimeLimit", ctypes.c_int64),
-                ("PerJobUserTimeLimit", ctypes.c_int64),
-                ("LimitFlags", wintypes.DWORD),
-                ("MinimumWorkingSetSize", ctypes.c_size_t),
-                ("MaximumWorkingSetSize", ctypes.c_size_t),
-                ("ActiveProcessLimit", wintypes.DWORD),
-                ("Affinity", ctypes.c_size_t),
-                ("PriorityClass", wintypes.DWORD),
-                ("SchedulingClass", wintypes.DWORD),
-            ]
-
-        class EXT(ctypes.Structure):
-            _fields_ = [
-                ("BasicLimitInformation", BASIC),
-                ("IoInfo", IO),
-                ("ProcessMemoryLimit", ctypes.c_size_t),
-                ("JobMemoryLimit", ctypes.c_size_t),
-                ("PeakProcessMemoryUsed", ctypes.c_size_t),
-                ("PeakJobMemoryUsed", ctypes.c_size_t),
-            ]
-
         ctypes_api: Any = ctypes
         k = ctypes_api.WinDLL("kernel32", use_last_error=True)
         k.CreateJobObjectW.argtypes = [ctypes.c_void_p, wintypes.LPCWSTR]
@@ -379,7 +417,8 @@ class WindowsJobObject:
         h = k.CreateJobObjectW(None, None)
         if not h:
             raise OSError(ctypes_api.get_last_error(), "CreateJobObjectW failed")
-        info = EXT()
+        limits_type = _windows_extended_limit_type()
+        info = limits_type()
         info.BasicLimitInformation.LimitFlags = 8192
         if not k.SetInformationJobObject(h, 9, ctypes.byref(info), ctypes.sizeof(info)):
             error = ctypes_api.get_last_error()
@@ -449,9 +488,36 @@ class WindowsJobObject:
             ctypes_api: Any = ctypes
             raise OSError(ctypes_api.get_last_error(), "TerminateJobObject failed")
 
+    def release(self) -> None:
+        """Close the Job without applying its kill-on-close limit."""
+
+        import ctypes
+
+        if not self.handle:
+            return
+        limits_type = _windows_extended_limit_type()
+        info = limits_type()
+        if not self.kernel32.SetInformationJobObject(
+            self.handle, 9, ctypes.byref(info), ctypes.sizeof(info)
+        ):
+            ctypes_api: Any = ctypes
+            raise OSError(
+                ctypes_api.get_last_error(),
+                "SetInformationJobObject release failed",
+            )
+        self.close()
+
     def close(self) -> None:
         if self.handle:
-            self.kernel32.CloseHandle(self.handle)
+            if not self.kernel32.CloseHandle(self.handle):
+                import ctypes
+
+                error = (
+                    ctypes.get_last_error()
+                    if hasattr(ctypes, "get_last_error")
+                    else 0
+                )
+                raise OSError(error, "CloseHandle failed")
             self.handle = None
 
 

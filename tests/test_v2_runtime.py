@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import sqlite3
 import subprocess
 import sys
 import threading
@@ -28,29 +27,10 @@ def _wait_for(path: Path) -> None:
     assert path.exists()
 
 
-def test_v2_journal_rejects_v1_without_migrating_it(tmp_path):
-    path = tmp_path / "state.sqlite3"
-    db = sqlite3.connect(path)
-    db.execute("PRAGMA user_version=1")
-    db.execute("CREATE TABLE existing(value TEXT)")
-    db.commit()
-    db.close()
-
-    with pytest.raises(ValueError, match="1.x journals"):
-        Journal(path)
-
-    db = sqlite3.connect(path)
-    assert db.execute("PRAGMA user_version").fetchone()[0] == 1
-    assert db.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
-    ).fetchall() == [("existing",)]
-    db.close()
-
-
-def test_provider_journal_columns_retain_requested_and_adapter_evidence(tmp_path):
-    journal = Journal(tmp_path / "state.sqlite3")
+def test_provider_ledger_retains_requested_and_adapter_evidence(tmp_path):
+    journal = Journal(tmp_path / "state")
     try:
-        journal.create_run({"run_id": "run"})
+        journal.create_run({"run_id": "run", "task_id": "task"})
         journal.begin(
             operation_id="op",
             run_id="run",
@@ -98,7 +78,7 @@ def test_provider_journal_columns_retain_requested_and_adapter_evidence(tmp_path
 
 def test_run_lock_is_fail_fast_and_reusable(monkeypatch, tmp_path):
     _coordination(monkeypatch, tmp_path)
-    journal = tmp_path / "journal.sqlite3"
+    journal = tmp_path / "state"
 
     with (
         run_lock(journal, "run-1"),
@@ -113,7 +93,7 @@ def test_run_lock_is_fail_fast_and_reusable(monkeypatch, tmp_path):
 
 def test_run_lock_is_fail_fast_across_processes(monkeypatch, tmp_path):
     _coordination(monkeypatch, tmp_path)
-    journal, ready = tmp_path / "journal.sqlite3", tmp_path / "ready"
+    journal, ready = tmp_path / "state", tmp_path / "ready"
     script = (
         "import sys\n"
         "from pathlib import Path\n"
@@ -142,7 +122,7 @@ def test_empty_lock_file_contention_reports_run_busy(monkeypatch, tmp_path):
     import msvcrt
 
     _coordination(monkeypatch, tmp_path)
-    lock = run_lock(tmp_path / "journal.sqlite3", "shared")
+    lock = run_lock(tmp_path / "state", "shared")
     lock.path.parent.mkdir(parents=True, exist_ok=True)
     # An empty file is a valid Windows lock target. Contending callers must
     # acquire the byte-range lock, never write an initialization byte into it.
@@ -153,7 +133,7 @@ def test_empty_lock_file_contention_reports_run_busy(monkeypatch, tmp_path):
                 pass
         finally:
             msvcrt.locking(holder.fileno(), msvcrt.LK_UNLCK, 1)
-    with run_lock(tmp_path / "journal.sqlite3", "shared"):
+    with run_lock(tmp_path / "state", "shared"):
         pass
 
 

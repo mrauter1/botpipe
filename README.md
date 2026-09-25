@@ -37,7 +37,7 @@ class Modules(BaseModel):
 
 p = Codex(workspace=".")
 answer = p.generate("Explain dependency inversion.")
-facts = p.query("Which modules import the journal?", returns=Modules)
+facts = p.query("Which modules implement the run ledger?", returns=Modules)
 report = Artifact.md("report.md", required=True)
 change = p.run("Add CSV export, tests, and a report.", writes=(report,))
 ```
@@ -69,7 +69,15 @@ native cleanup request does not confirm a stop without durable cleanup evidence.
 Reusing `p` continues one conversation. A variant made with
 `p.with_config(instructions="Review carefully.")` shares that conversation;
 pass `session=Session()` for a separate conversation or `session=None` for an
-independent call. Each call is durable, including calls outside a workflow.
+independent call. Each complete provider operation gets a temporary app-server,
+kept through validation and output repair and then disposed before the session
+can be used again. Later operations resume the durable conversation in a new
+app-server. Each call is durable, including calls outside a workflow.
+Botpipe does not promise that background children or live tool handles survive
+between operations. Normal disposal confirms that the app-server parent exited;
+child survival remains unguaranteed. If a completed operation's server cannot be
+disposed, its result remains completed and is never redispatched; the session
+stays blocked until shutdown is retried or explicitly resolved.
 
 ## Ordinary Python workflows
 
@@ -91,7 +99,7 @@ with Botpipe(workspace=".") as runtime:
 ```
 
 Loops, conditionals, activities, nested workflows, worklists, `parallel` and
-`aparallel` use the same durable journal. Completed operations replay recorded
+`aparallel` use the same durable run ledger. Completed operations replay recorded
 results. Parallel branches with distinct sessions may run writable calls in the
 same repository at the same time; calls sharing a session serialize. An
 interrupted provider turn follows its recorded retry policy, and unresolved work
@@ -114,6 +122,33 @@ restores, or rolls back repository files around a provider call. Retries operate
 on the repository's current state. Declared `writes` are validated and captured
 immutably when an operation completes; capture is not exclusive-writer
 attribution or an atomic snapshot of the repository.
+
+## Readable history
+
+Each run is a directory under the state root:
+
+```text
+tasks/<task-id>/runs/<run-id>/
+├── ledger.jsonl
+├── input.json
+├── request.md                 # when the invocation has a textual request
+└── operations/<safe-operation-component>/attempts/<attempt>/
+    ├── prompt.md
+    ├── request.json
+    └── response.md
+```
+
+`ledger.jsonl` is the authoritative chronological history. `input.json` keeps
+the encoded positional and keyword arguments, while optional `request.md` makes
+the original textual request immediately readable. The ledger's numbered records
+cover run state, operations, attempts, dispatch reservations, responses,
+validation, recovery and resolutions. Large typed payloads remain lossless in
+referenced JSON files. Provider prompts and textual responses are plain UTF-8.
+Use `botpipe runs show RUN_ID` for the folded view or `botpipe runs logs RUN_ID`
+for JSONL events. Reading a run never contacts Codex.
+The [checked-in readable-history example](docs/examples/readable-history/README.md)
+shows a generated repair, accepted human answer, interrupted activity, and
+operator resolution.
 
 ## Configuration
 
@@ -144,10 +179,10 @@ provides the default provider-dispatch and session-wait bound.
 - [SDK](docs/sdk.md): presets, sessions, typed results, events and configuration.
 - [Authoring](docs/authoring.md): durable functions, artifacts, loops and recovery.
 - [CLI](docs/cli.md): execution, inspection, resolution and doctor.
-- [Architecture](docs/architecture.md): journal, adapter, locks and process lifecycle.
-- [Migration](docs/migration.md): the 1.x to 2.0 changes.
+- [Architecture](docs/architecture.md): ledger, sessions, locks and process lifecycle.
 - [Codex compatibility](docs/codex-compatibility.md): capabilities and validation.
 - [Testing](docs/testing.md): behavioral coverage, parallel runs and CI timings.
 - [Workflow improvement](docs/optimizer.md): diagnose, implement, and evaluate a bounded change.
 
-Version 1.x journals are rejected untouched. Use a new state directory for 2.0.
+Botpipe uses one current file-native format. It does not import or migrate older
+state formats.

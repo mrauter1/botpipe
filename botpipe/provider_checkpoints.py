@@ -1,9 +1,4 @@
-"""Typed durable checkpoints for one provider operation.
-
-The wire format intentionally remains the historical ``operations.response``
-mapping.  This module is the only place that interprets combinations of those
-fields; callers operate on variants and serialize a complete legal state.
-"""
+"""Typed durable checkpoints for one provider operation."""
 
 from __future__ import annotations
 
@@ -44,7 +39,14 @@ def _request(record: Mapping[str, Any]) -> dict[str, Any]:
         raise ProviderCheckpointError("Provider checkpoint request is missing")
     if type(value) is not dict:
         raise ProviderCheckpointError("Provider checkpoint request is invalid")
-    allowed = {"session_id", "receipt_dir", "prompt", "artifacts", "reads"}
+    allowed = {
+        "session_id",
+        "session_key",
+        "operation_key",
+        "prompt",
+        "artifacts",
+        "reads",
+    }
     unknown = set(value) - allowed
     if unknown:
         raise ProviderCheckpointError(
@@ -56,8 +58,11 @@ def _request(record: Mapping[str, Any]) -> dict[str, Any]:
         raise ProviderCheckpointError(
             "Provider checkpoint request session_id is invalid"
         )
-    for name in ("receipt_dir", "prompt"):
-        if name in value and type(value[name]) is not str:
+    for name in ("session_key", "operation_key", "prompt"):
+        if name in value and (
+            type(value[name]) is not str
+            and not (name != "prompt" and value[name] is None)
+        ):
             raise ProviderCheckpointError(
                 f"Provider checkpoint request {name} is invalid"
             )
@@ -139,12 +144,6 @@ class ProviderCheckpoint:
         generation = _generation(raw)
         if not raw:
             return EmptyCheckpoint(0)
-        if "preparing" in raw or "restoration_pending" in raw:
-            raise ProviderCheckpointError(
-                "This operation uses obsolete artifact preparation/restoration "
-                "checkpoints; it cannot be resumed by this version. "
-                "The workspace and stored files have been left untouched."
-            )
         if raw.get("retry_authorized") is True:
             _only(
                 raw,
@@ -155,7 +154,7 @@ class ProviderCheckpoint:
                     "Authorized retry must name a later generation"
                 )
             origin = raw.get("retry_origin")
-            if origin not in {None, "automatic", "operator"}:
+            if origin not in {"automatic", "operator"}:
                 raise ProviderCheckpointError(
                     "Provider retry authorization origin is invalid"
                 )
@@ -274,7 +273,7 @@ class IntentCheckpoint(ProviderCheckpoint):
 
 @dataclass(frozen=True, slots=True)
 class RetryAuthorizedCheckpoint(IntentCheckpoint):
-    origin: str | None = None
+    origin: str
 
     @property
     def attempt_generation(self) -> int:
@@ -285,7 +284,7 @@ class RetryAuthorizedCheckpoint(IntentCheckpoint):
             "retry_authorized": True,
             "generation": self.generation,
             "request": dict(self.request),
-            **({"retry_origin": self.origin} if self.origin is not None else {}),
+            "retry_origin": self.origin,
         }
 
 
@@ -400,9 +399,7 @@ class ProviderLifecycle:
                 "This provider checkpoint cannot authorize a retry"
             )
         if isinstance(checkpoint, RetryAuthorizedCheckpoint):
-            if origin == "operator" and checkpoint.origin != "operator":
-                return replace(checkpoint, origin="operator")
-            return checkpoint
+            return RetryAuthorizedCheckpoint(checkpoint.generation, request, origin)
         return RetryAuthorizedCheckpoint(checkpoint.generation + 1, request, origin)
 
     @staticmethod

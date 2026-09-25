@@ -364,7 +364,7 @@ def devloop(
     # runs use their child folder so they cannot overwrite the parent's audit
     # result or phase evidence while the parent is still returning it.
     artifact_root = ctx.task_folder if ctx.scope == "root" else ctx.folder
-    request_path = ctx.folder / "request.md"
+    request_path = artifact_root / "input" / "request.md"
     _write_text(str(request_path), request.rstrip() + "\n")
     request_artifact = Artifact.text(str(request_path), name="request", required=True)
     plan_path = artifact_root / "plan" / "phase_plan.json"

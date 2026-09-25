@@ -1,6 +1,6 @@
-## Durable producer result
+## Durable typed phase result
 
-After writing every declared artifact, return a JSON result matching the injected schema. Summarize the evidence used, and report only stable candidate identifiers that appear in the written artifacts.
+After writing every declared artifact, return one JSON result matching the injected phase-specific schema. Return `accepted` only when the artifacts meet this phase's positive condition and populate the domain fields in the schema. Return `needs_rework` for a local repair, `needs_replan` for a material upstream change, `question` or `blocked` for a missing prerequisite, and `failed` for a terminal domain failure. Report only captured artifact names and stable identifiers present in the artifacts.
 
 # Frame Task Producer
 
@@ -51,8 +51,8 @@ After writing every declared artifact, return a JSON result matching the injecte
 - Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
 - Treat question, blocked, and failure guidance as semantic validation criteria.
 
-### Outcome guidance for the verifier
-- `task_framed`: the task boundary, sponsor, terminal outcome, and selection criteria are explicit enough for portfolio comparison.
+### Outcome selection
+- `accepted`: the task boundary, sponsor, terminal outcome, and selection criteria are explicit enough for portfolio comparison.
 - `needs_rework`: the same framing boundary still holds, but the brief or criteria need local repair.
 - `needs_replan`: the trigger, sponsor, or terminal outcome changed materially and framing must restart.
 - Use `blocked` only for genuine intent gaps, missing prerequisites, or irreconcilable contradictions.

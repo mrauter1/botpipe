@@ -26,7 +26,7 @@ def InvestigationRequestToEvidencePack(
 ) -> LabWorkflowResult:
     """Execute the investigation request to evidence pack evidence workflow."""
     _producer = Provider()
-    _verifier = _producer.with_config(session=None)
+    _reviewer = _producer.with_config(session=None)
     context = {"request": request, "parameters": params.model_dump(mode="json")}
     completed = []
     prior_handles = ()
@@ -40,15 +40,8 @@ def InvestigationRequestToEvidencePack(
                 returns=InvestigationFramingPayload,
                 replan_target="frame_investigation",
                 producer=_producer,
-                verifier=_verifier,
                 producer_prompt="prompts/frame_producer.md",
-                verifier_prompt="prompts/frame_verifier.md",
-                input={
-                    **context,
-                    "prior_phases": [
-                        item.evidence.model_dump(mode="json") for item in completed
-                    ],
-                },
+                input=context,
                 reads=prior_handles,
                 writes=(
                     artifact("investigation_scope_brief.md"),
@@ -62,15 +55,10 @@ def InvestigationRequestToEvidencePack(
                 returns=InvestigationEvidencePackPayload,
                 replan_target="frame_investigation",
                 producer=_producer,
-                verifier=_verifier,
+                reviewer=_reviewer,
                 producer_prompt="prompts/evidence_producer.md",
-                verifier_prompt="prompts/evidence_verifier.md",
-                input={
-                    **context,
-                    "prior_phases": [
-                        item.evidence.model_dump(mode="json") for item in completed
-                    ],
-                },
+                reviewer_prompt="prompts/evidence_reviewer.md",
+                input=context,
                 reads=prior_handles,
                 writes=(
                     artifact("evidence_pack.md"),

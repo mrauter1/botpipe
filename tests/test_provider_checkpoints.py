@@ -30,7 +30,8 @@ from botpipe.recovery import Completed, Running, Stopped, Unknown
 
 REQUEST = {
     "session_id": None,
-    "receipt_dir": "/tmp/receipts",
+    "session_key": "task:demo",
+    "operation_key": "run:scope:1",
     "prompt": "work",
     "artifacts": {},
     "reads": [],
@@ -49,7 +50,12 @@ RESPONSE = {
         ({}, EmptyCheckpoint),
         ({"generation": 0, "request": REQUEST}, IntentCheckpoint),
         (
-            {"generation": 1, "request": REQUEST, "retry_authorized": True},
+            {
+                "generation": 1,
+                "request": REQUEST,
+                "retry_authorized": True,
+                "retry_origin": "operator",
+            },
             RetryAuthorizedCheckpoint,
         ),
         (
@@ -97,11 +103,18 @@ def test_checkpoint_states_round_trip(record, kind):
     assert ProviderCheckpoint.from_record(checkpoint.to_record()) == checkpoint
 
 
+def test_provider_identity_keys_are_optional_in_checkpoint_requests():
+    request = {**REQUEST, "session_key": None, "operation_key": None}
+
+    checkpoint = ProviderCheckpoint.from_record({"generation": 0, "request": request})
+
+    assert checkpoint == IntentCheckpoint(0, request)
+
+
 @pytest.mark.parametrize(
     "record",
     [
         {"generation": True, "request": REQUEST},
-        {"generation": 0, "preparing": True, "request": REQUEST},
         {"generation": 0, "request": REQUEST, "retry_authorized": True},
         {
             "generation": 1,
@@ -113,7 +126,6 @@ def test_checkpoint_states_round_trip(record, kind):
             "generation": 0,
             "request": REQUEST,
             "not_dispatched": True,
-            "restoration_pending": True,
             "budget_error": "budget",
             "policy_error": "policy",
         },
@@ -134,16 +146,6 @@ def test_contradictory_or_unknown_checkpoints_fail_closed(record):
     assert issubclass(ProviderCheckpointError, ReplayMismatch)
 
 
-@pytest.mark.parametrize("obsolete", [
-    {"generation": 0, "preparing": True},
-    {"generation": 0, "request": REQUEST, "not_dispatched": True,
-     "restoration_pending": False, "budget_error": "budget"},
-])
-def test_obsolete_artifact_checkpoints_are_explicitly_rejected(obsolete):
-    with pytest.raises(ProviderCheckpointError, match="obsolete artifact"):
-        ProviderCheckpoint.from_record(obsolete)
-
-
 def test_normal_recovery_and_reconciliation_share_completed_transition():
     intent = IntentCheckpoint(2, REQUEST)
     response = ProviderResponse("done", "session", {"tokens": 3})
@@ -160,13 +162,13 @@ def test_normal_recovery_and_reconciliation_share_completed_transition():
     assert recovered == RespondedCheckpoint(2, REQUEST, response)
 
 
-def test_retry_generation_is_idempotent_and_completed_receipt_wins():
+def test_retry_generation_is_idempotent_and_completed_response_wins():
     intent = IntentCheckpoint(2, REQUEST)
     authorized = ProviderLifecycle.authorize_retry(intent)
     assert authorized.generation == 3
     assert authorized.origin == "operator"
     assert authorized.attempt_generation == 2
-    assert ProviderLifecycle.authorize_retry(authorized) is authorized
+    assert ProviderLifecycle.authorize_retry(authorized) == authorized
 
     receipt = ProviderResponse("receipt")
     assert (
@@ -179,7 +181,7 @@ def test_retry_generation_is_idempotent_and_completed_receipt_wins():
 
 
 def test_running_attempt_blocks_both_recovery_paths():
-    authorized = RetryAuthorizedCheckpoint(1, REQUEST)
+    authorized = RetryAuthorizedCheckpoint(1, REQUEST, "operator")
     assert (
         ProviderLifecycle.recovery_action(authorized, Running("live"))
         is RecoveryAction.BLOCK
@@ -198,16 +200,6 @@ def test_authorized_unknown_attempt_may_start_explicit_retry():
     )
 
 
-def test_explicit_retry_promotes_legacy_authorization_origin():
-    legacy = RetryAuthorizedCheckpoint(1, REQUEST)
-
-    promoted = ProviderLifecycle.authorize_retry(legacy)
-
-    assert promoted.generation == 1
-    assert promoted.origin == "operator"
-    assert promoted.to_record()["retry_origin"] == "operator"
-
-
 def test_only_stopped_authorized_attempt_may_start_retry():
     stopped = Stopped("quiescent")
     assert (
@@ -216,9 +208,9 @@ def test_only_stopped_authorized_attempt_may_start_retry():
     )
     assert (
         ProviderLifecycle.recovery_action(
-            RetryAuthorizedCheckpoint(1, REQUEST), stopped
+            RetryAuthorizedCheckpoint(1, REQUEST, "operator"), stopped
         )
-        is RecoveryAction.BLOCK
+        is RecoveryAction.START_RETRY
     )
     assert (
         ProviderLifecycle.recovery_action(

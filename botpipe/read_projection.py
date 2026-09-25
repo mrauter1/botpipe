@@ -34,6 +34,7 @@ def project_run(snapshot: JournalSnapshot) -> RunReadProjection:
     """Build all public read fields from the same committed evidence view."""
 
     events = [dict(event) for event in snapshot.events]
+    execution, operation_revisions = project_execution_provenance(events)
     physical_dispatches = dispatch_records(events)
     operations = []
     artifacts = {}
@@ -41,7 +42,19 @@ def project_run(snapshot: JournalSnapshot) -> RunReadProjection:
 
     for source in snapshot.operations:
         record = dict(source)
-        observed = physical_dispatches.get(record["id"])
+        operation_id = str(record.get("operation_id") or record.get("id") or "")
+        record.update(
+            operation_revisions.get(
+                operation_id,
+                {
+                    "provenance_state": "unknown",
+                    "workflow_identity": None,
+                    "surface_id": None,
+                    "orchestration_id": None,
+                },
+            )
+        )
+        observed = physical_dispatches.get(operation_id)
         if observed:
             record["dispatches"] = observed
             record["usage"] = aggregate_usage(observed)
@@ -49,11 +62,7 @@ def project_run(snapshot: JournalSnapshot) -> RunReadProjection:
                 observed, record["usage"]
             )
         else:
-            # Preserve legacy/manual response usage only when no immutable
-            # physical dispatch evidence exists. It must never fill a dispatch
-            # whose usage is unknown or partial.
-            response = record.get("response") or {}
-            record["usage"] = response.get("usage", {})
+            record["usage"] = {}
         for key, value in record["usage"].items():
             if isinstance(value, (int, float)):
                 total_usage[key] = total_usage.get(key, 0) + value
@@ -61,7 +70,7 @@ def project_run(snapshot: JournalSnapshot) -> RunReadProjection:
         operations.append(record)
 
     run = dict(snapshot.run)
-    run.update(project_execution_revision(events))
+    run.update(execution)
     return RunReadProjection(
         run=run,
         operations=operations,
@@ -74,62 +83,102 @@ def project_run(snapshot: JournalSnapshot) -> RunReadProjection:
 def project_execution_revision(events: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
     """Derive the one provable run revision from its append-only observations."""
 
-    state: str | None = None
-    revision: tuple[str, str, str] | None = None
-    awaiting_end = False
-    for event in events:
-        if event.get("event") != "execution_revision":
-            continue
-        data = event.get("data")
-        phase = data.get("phase") if isinstance(data, Mapping) else None
-        if phase != "start" and phase != "end":
-            if state is None or state == "known":
-                state = "unknown"
-                revision = None
-            continue
-        if phase == "start":
-            if awaiting_end and (state is None or state == "known"):
-                state = "unknown"
-                revision = None
-            awaiting_end = True
-        elif not awaiting_end:
-            if state is None or state == "known":
-                state = "unknown"
-                revision = None
-        else:
-            awaiting_end = False
+    revision, _ = project_execution_provenance(events)
+    return revision
 
-        provenance = data.get("provenance")
-        observed = _verified_revision(provenance)
-        if observed is None:
-            if state is None or state == "known":
-                state = "unknown"
-                revision = None
-            continue
-        if state is None:
-            state = "known"
-            revision = observed
-        elif state == "known" and observed != revision:
-            state = "mixed"
-            revision = None
 
-    if awaiting_end and (state is None or state == "known"):
-        state = "unknown"
-        revision = None
+def project_execution_provenance(
+    events: Iterable[Mapping[str, Any]],
+) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
+    """Fold execution segments and attribute newly created operations to them."""
 
-    if state != "known" or revision is None:
+    observed_revisions: list[tuple[str, str, str]] = []
+    operation_revisions: dict[str, dict[str, Any]] = {}
+    open_revision: tuple[str, str, str] | None = None
+    open_operations: list[str] | None = None
+    unavailable = False
+
+    def unknown() -> dict[str, Any]:
         return {
-            "provenance_state": state or "unknown",
+            "provenance_state": "unknown",
             "workflow_identity": None,
             "surface_id": None,
             "orchestration_id": None,
         }
-    return {
-        "provenance_state": "known",
-        "workflow_identity": revision[0],
-        "surface_id": revision[1],
-        "orchestration_id": revision[2],
-    }
+
+    def known(revision: tuple[str, str, str]) -> dict[str, Any]:
+        return {
+            "provenance_state": "known",
+            "workflow_identity": revision[0],
+            "surface_id": revision[1],
+            "orchestration_id": revision[2],
+        }
+
+    for event in events:
+        event_name = event.get("event")
+        if event_name in {"operation_intent", "operation_started"}:
+            operation_id = event.get("operation_id")
+            if isinstance(operation_id, str) and operation_id:
+                if open_operations is None:
+                    operation_revisions[operation_id] = unknown()
+                    unavailable = True
+                else:
+                    open_operations.append(operation_id)
+            continue
+        if event_name != "execution_revision":
+            continue
+        data = event.get("data")
+        phase = data.get("phase") if isinstance(data, Mapping) else None
+        revision = _verified_revision(
+            data.get("provenance") if isinstance(data, Mapping) else None
+        )
+        if phase == "start":
+            if open_operations is not None:
+                for operation_id in open_operations:
+                    operation_revisions[operation_id] = unknown()
+                unavailable = True
+            open_revision = revision
+            open_operations = []
+            if revision is None:
+                unavailable = True
+            continue
+        if phase == "end" and open_operations is not None:
+            if open_revision is not None and revision == open_revision:
+                observed_revisions.append(revision)
+                attribution = known(revision)
+            else:
+                unavailable = True
+                attribution = unknown()
+            for operation_id in open_operations:
+                previous = operation_revisions.get(operation_id)
+                if previous is not None and previous != attribution:
+                    operation_revisions[operation_id] = unknown()
+                    unavailable = True
+                else:
+                    operation_revisions[operation_id] = dict(attribution)
+            open_revision = None
+            open_operations = None
+            continue
+        unavailable = True
+
+    if open_operations is not None:
+        for operation_id in open_operations:
+            operation_revisions[operation_id] = unknown()
+        unavailable = True
+
+    unique = set(observed_revisions)
+    if unavailable or not unique:
+        result = unknown()
+    elif len(unique) == 1:
+        result = known(next(iter(unique)))
+    else:
+        result = {
+            "provenance_state": "mixed",
+            "workflow_identity": None,
+            "surface_id": None,
+            "orchestration_id": None,
+        }
+    return result, operation_revisions
 
 
 def _verified_revision(value: Any) -> tuple[str, str, str] | None:

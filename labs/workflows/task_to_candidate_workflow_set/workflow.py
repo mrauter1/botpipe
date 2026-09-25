@@ -24,7 +24,6 @@ from .params import Params
 def TaskToCandidateWorkflowSet(params: Params, request: str = "") -> LabWorkflowResult:
     """Execute the task to candidate workflow set evidence workflow."""
     _producer = Provider()
-    _verifier = _producer.with_config(session=None)
     context = {"request": request, "parameters": params.model_dump(mode="json")}
     context["workflow_catalog"] = observe_catalog()
     completed = []
@@ -39,15 +38,8 @@ def TaskToCandidateWorkflowSet(params: Params, request: str = "") -> LabWorkflow
                 returns=CandidateRequestFramingPayload,
                 replan_target="frame_candidate_request",
                 producer=_producer,
-                verifier=_verifier,
                 producer_prompt="prompts/frame_producer.md",
-                verifier_prompt="prompts/frame_verifier.md",
-                input={
-                    **context,
-                    "prior_phases": [
-                        item.evidence.model_dump(mode="json") for item in completed
-                    ],
-                },
+                input=context,
                 reads=prior_handles,
                 writes=(
                     artifact("candidate_request_brief.md"),
@@ -66,22 +58,28 @@ def TaskToCandidateWorkflowSet(params: Params, request: str = "") -> LabWorkflow
                         returns=CandidateWorkflowAnalysisPayload,
                         replan_target="frame_candidate_request",
                         producer=_producer,
-                        verifier=_verifier,
                         producer_prompt="prompts/analyze_producer.md",
-                        verifier_prompt="prompts/analyze_verifier.md",
-                        input={
-                            **context,
-                            "prior_phases": [
-                                item.evidence.model_dump(mode="json")
-                                for item in completed
-                            ],
-                        },
+                        input=context,
                         reads=prior_handles,
                         writes=(
                             artifact("workflow_comparison_matrix.md"),
                             artifact("fit_gap_analysis.md"),
                         ),
                     )
+                    analysis = CandidateWorkflowAnalysisPayload.model_validate(
+                        phase_2.value
+                    )
+                    known_workflows = {
+                        entry["name"] for entry in context["workflow_catalog"]
+                    }
+                    if not set(analysis.compared_workflows) <= known_workflows:
+                        raise ValueError("candidate comparison cited an unknown workflow")
+                    if not set(analysis.ranked_candidates) <= set(
+                        analysis.compared_workflows
+                    ):
+                        raise ValueError(
+                            "ranked candidates must come from compared workflows"
+                        )
                     completed.append(phase_2)
                     prior_handles = prior_handles + phase_2.handles
                     phase_3 = run_phase(
@@ -89,16 +87,8 @@ def TaskToCandidateWorkflowSet(params: Params, request: str = "") -> LabWorkflow
                         returns=CandidateWorkflowSetPayload,
                         replan_target="analyze_candidate_workflows",
                         producer=_producer,
-                        verifier=_verifier,
                         producer_prompt="prompts/package_producer.md",
-                        verifier_prompt="prompts/package_verifier.md",
-                        input={
-                            **context,
-                            "prior_phases": [
-                                item.evidence.model_dump(mode="json")
-                                for item in completed
-                            ],
-                        },
+                        input=context,
                         reads=prior_handles,
                         writes=(
                             artifact("candidate_workflow_set.md"),
@@ -106,6 +96,21 @@ def TaskToCandidateWorkflowSet(params: Params, request: str = "") -> LabWorkflow
                             artifact("candidate_workflow_next_action.md"),
                         ),
                     )
+                    package = CandidateWorkflowSetPayload.model_validate(phase_3.value)
+                    if package.comparison_candidates != analysis.compared_workflows:
+                        raise ValueError(
+                            "packaged comparison candidates must match the analysis"
+                        )
+                    if package.ranked_candidates != analysis.ranked_candidates:
+                        raise ValueError("packaged ranking must match the analysis")
+                    if not set(package.recommended_candidate_workflows) <= set(
+                        package.ranked_candidates
+                    ):
+                        raise ValueError(
+                            "recommended workflows must come from ranked candidates"
+                        )
+                    if package.builder_baseline_workflow not in known_workflows:
+                        raise ValueError("builder baseline must name a known workflow")
                     completed.append(phase_3)
                     prior_handles = prior_handles + phase_3.handles
                     break

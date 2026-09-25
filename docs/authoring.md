@@ -59,8 +59,13 @@ setting suppresses new automatic recovery attempts and provider output-repair
 turns, while a response already completed by an earlier repair can still replay.
 Completed operations replay. An interrupted unsafe operation requires resolution.
 Activities still default to zero declared exception retries.
-`ask_human(question, returns=Model)` validates, journals and replays its typed
+`ask_human(question, returns=Model)` validates, records and replays its typed
 answer; a missing answer suspends the run.
+
+The run's `ledger.jsonl` is the durable history. Do not add a second checkpoint,
+receipt, or summary file to control replay. Provider attempt prompts, resolved
+requests and responses are stored beneath the run's `operations/` directory and
+referenced from the ledger.
 
 ## Artifacts and worklists
 
@@ -72,12 +77,18 @@ the current file, including a valid file that existed before the attempt; it
 does not prove which concurrent writer produced it. Passing an artifact handle
 through `reads` gives the next call the immutable input.
 
-Pure inspection reviews should use `query` with a typed verdict. A verifier that
+Pure inspection reviews should use `query` with a typed verdict. A reviewer that
 must execute tests or builds should use a typed `run`, usually without declared
 artifact writes. An empty `writes=()` means there are no durable output artifacts;
 it does not forbid ordinary test caches, temporary files, or other incidental
-workspace effects. Such a verifier should report failures for the producer to
+workspace effects. Such a reviewer should report failures for the producer to
 repair. If a review file is required, save the validated result in an activity.
+
+For lab workflows, let producer calls return typed stage results directly. Add
+a separate reviewer only where rejection changes the next action or protects a
+material publication boundary. Avoid a mechanical producer/reviewer pair for
+every stage. Bound repair loops in Python and carry typed reviewer feedback into
+the next producer call.
 Read-only presets cannot declare writes. Repair turns run on the same thread and
 count against budgets. A validation failure does not roll back repository edits.
 Botpipe does not prepare, move, back up, restore, or roll back workspace files
@@ -119,7 +130,7 @@ the recorded operations in the same scopes and order with matching contracts.
 Returning early, inserting an operation before a recorded one, or changing one
 of those contracts fails replay.
 
-The run's `max_operations` counts journaled operations across child and parallel
+The run's `max_operations` counts recorded operations across child and parallel
 scopes. It may be increased, but not decreased, on resume. The run `timeout` is
 the default bound for provider dispatches and session-lock waits, not a
 wall-clock deadline for arbitrary workflow Python. Use
@@ -130,9 +141,11 @@ Recovery adopts `Completed`, retries automatically only after confirmed
 `Stopped` when both recorded and current policy allow it, makes a bounded
 targeted interrupt attempt for `Running`, and leaves `Unknown` unresolved until
 operator resolution. Cancellation ends the current invocation without
-redispatch; a later explicit resume may retry within policy and limits. Because
-parallel turns can share one app-server process, cancellation escalation may
-interrupt siblings; recovery reconciles every affected operation as
-`Completed`, `Stopped`, or `Unknown`. Botpipe does not promise independent
-cancellation. Opt-in remote tools should use `retry_safe=False` when their
-effects cannot safely be repeated.
+redispatch; a later explicit resume may retry within policy and limits. Each
+complete provider operation has its own temporary app-server, retained through
+validation and repair and disposed before its session is released. Normal idle
+app-server disposal after completion is separate from cancellation/timeout interruption
+and contained-tree cleanup. A disposal failure keeps the result completed,
+blocks session reuse, and permits shutdown retry or operator resolution without
+repeating the completed work. Opt-in remote tools should use `retry_safe=False`
+when their effects cannot safely be repeated.

@@ -48,7 +48,7 @@ def _comprehension_workflow():
 def test_saved_provider_response_survives_process_restart_before_completion(
     tmp_path, monkeypatch
 ):
-    """Crash after durable receipt, before typed value/artifact commit."""
+    """Crash after a durable attempt response, before operation completion."""
 
     def produce(request):
         request.artifacts["report"].write_text("original report")
@@ -74,20 +74,20 @@ def test_saved_provider_response_survives_process_restart_before_completion(
 
     monkeypatch.setattr(first.journal, "finish", crash_at_provider_commit)
     with pytest.raises(SystemExit):
-        first.run(report, run_id="receipt-crash")
+        first.run(report, run_id="response-crash")
     assert len(first.provider.calls) == 1
-    assert first.journal.operations("receipt-crash")[-1]["status"] == "response"
+    assert first.journal.operations("response-crash")[-1]["status"] == "response"
     first.close()
 
     provider = FakeProvider([])
     with Botpipe(tmp_path, provider=provider) as restarted:
-        recovered = restarted.resume("receipt-crash", workflow=report)
+        recovered = restarted.resume("response-crash", workflow=report)
         assert recovered.ok, recovered.error
         assert recovered.value.value == Decision(accepted=True)
         assert recovered.value.artifacts["report"].read_text() == "original report"
         assert recovered.usage == {"input_tokens": 9}
         assert provider.calls == []
-        replayed = restarted.resume("receipt-crash", workflow=report)
+        replayed = restarted.resume("response-crash", workflow=report)
         assert replayed.ok
         assert replayed.usage == {"input_tokens": 9}
         assert provider.calls == []
@@ -396,43 +396,6 @@ def test_reconciliation_can_supply_none_as_an_activity_result(tmp_path):
         client.resolve("void-effect", operation["id"], response=None)
         assert client.resume("void-effect", workflow=job).value == "finished"
         assert effects == ["sent"]
-
-
-@pytest.mark.parametrize("resolution", ["retry", "fail"])
-def test_provider_resolution_rejects_legacy_artifact_state_before_recovery(
-    tmp_path, resolution
-):
-    from botpipe.artifacts import ArtifactError, ArtifactStore
-
-    @workflow
-    def job():
-        return Provider().run(
-            "write", writes=[Artifact.text("result.txt", required=True)]
-        ).value
-
-    provider = FakeProvider([SystemExit("interrupted provider")])
-    with Botpipe(tmp_path, provider=provider) as client:
-        with pytest.raises(SystemExit):
-            client.run(job, run_id=f"legacy-{resolution}")
-        operation = next(
-            row
-            for row in client.journal.operations(f"legacy-{resolution}")
-            if row["kind"] == "provider"
-        )
-        folder = Path(client.journal.run(f"legacy-{resolution}")["folder"])
-        store = ArtifactStore(folder, workspace=tmp_path)
-        legacy = store._operation(f"{operation['id']}:generation:0")
-        legacy.mkdir(parents=True)
-        (legacy / "prepare.json").write_text("{}")
-
-        with pytest.raises(ArtifactError, match="Unsupported legacy"):
-            client.resolve(
-                f"legacy-{resolution}",
-                operation["id"],
-                **{resolution: True},
-            )
-
-    assert len(provider.calls) == 1
 
 
 def test_repeated_async_cancellation_waits_until_effectful_worker_finishes(tmp_path):

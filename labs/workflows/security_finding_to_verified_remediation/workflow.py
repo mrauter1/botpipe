@@ -38,7 +38,7 @@ def SecurityFindingToVerifiedRemediation(
 ) -> LabWorkflowResult:
     """Execute the security finding to verified remediation evidence workflow."""
     _producer = Provider()
-    _verifier = _producer.with_config(session=None)
+    _reviewer = _producer.with_config(session=None)
     context = {"request": request, "parameters": params.model_dump(mode="json")}
     completed = []
     prior_handles = ()
@@ -77,16 +77,10 @@ def SecurityFindingToVerifiedRemediation(
                         returns=SecurityAssessmentPayload,
                         replan_target="compose_evidence_pack",
                         producer=_producer,
-                        verifier=_verifier,
+                        reviewer=_reviewer,
                         producer_prompt="prompts/assessment_producer.md",
-                        verifier_prompt="prompts/assessment_verifier.md",
-                        input={
-                            **context,
-                            "prior_phases": [
-                                item.evidence.model_dump(mode="json")
-                                for item in completed
-                            ],
-                        },
+                        reviewer_prompt="prompts/assessment_reviewer.md",
+                        input=context,
                         reads=prior_handles,
                         writes=(
                             artifact("security_assessment.md"),
@@ -106,16 +100,10 @@ def SecurityFindingToVerifiedRemediation(
                                 returns=VerifiedRemediationPayload,
                                 replan_target="assess_security_finding",
                                 producer=_producer,
-                                verifier=_verifier,
+                                reviewer=_reviewer,
                                 producer_prompt="prompts/remediation_producer.md",
-                                verifier_prompt="prompts/remediation_verifier.md",
-                                input={
-                                    **context,
-                                    "prior_phases": [
-                                        item.evidence.model_dump(mode="json")
-                                        for item in completed
-                                    ],
-                                },
+                                reviewer_prompt="prompts/remediation_reviewer.md",
+                                input=context,
                                 reads=prior_handles,
                                 writes=(
                                     artifact("remediation_plan.md"),
@@ -130,16 +118,10 @@ def SecurityFindingToVerifiedRemediation(
                                 returns=SecurityClosurePackagePayload,
                                 replan_target="plan_verified_remediation",
                                 producer=_producer,
-                                verifier=_verifier,
+                                reviewer=_reviewer,
                                 producer_prompt="prompts/closure_producer.md",
-                                verifier_prompt="prompts/closure_verifier.md",
-                                input={
-                                    **context,
-                                    "prior_phases": [
-                                        item.evidence.model_dump(mode="json")
-                                        for item in completed
-                                    ],
-                                },
+                                reviewer_prompt="prompts/closure_reviewer.md",
+                                input=context,
                                 reads=prior_handles,
                                 writes=(
                                     artifact("security_remediation_package.md"),
