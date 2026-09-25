@@ -1,0 +1,3 @@
+name = "adaptive_goal"
+title = "Adaptive Goal"
+description = "Verifier-driven goal runtime with a tiny static control graph and dynamic action selection."
