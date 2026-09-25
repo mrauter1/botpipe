@@ -208,7 +208,15 @@ class SessionBinding:
                 and event.get("operation_id") in members
                 for event in snapshot.events
             )
-            if settled is None and (dispatched or pending_retry):
+            # An app-server may already own the conversation before the first
+            # model dispatch. Its startup intent also requires settlement.
+            startup_recorded = any(
+                event["event"] == "attempt_checkpoint"
+                and event.get("operation_id") in members
+                and "disposal" in event["data"]["update"]
+                for event in snapshot.events
+            )
+            if settled is None and (dispatched or pending_retry or startup_recorded):
                 raise SessionError(
                     f"Session {self.key} belongs to unfinished run {pending['run_id']} "
                     f"operation {pending['operation_id']} attempt {pending['attempt']}; "

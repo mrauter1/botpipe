@@ -786,3 +786,188 @@ def test_repair_destination_failure_cleanup_resume_does_not_redispatch(
         assert inventories == 2
         assert len(owner.calls) == 1
         assert owner.closed == 2
+
+
+@pytest.mark.parametrize("crash_after_event", [False, True])
+def test_repair_preflight_settlement_replays_after_cleanup_crash(
+    tmp_path, monkeypatch, crash_after_event
+):
+    class RejectRepairAdapter(Adapter):
+        def __init__(self):
+            super().__init__("thread")
+            self.probes = 0
+
+        def probe(self, *, deadline=None):
+            self.probes += 1
+            if self.probes == 2:
+                raise RuntimeError("repair preflight rejected")
+            return super().probe(deadline=deadline)
+
+        def start_turn(self, call, on_event=None):
+            return replace(super().start_turn(call, on_event), text="invalid")
+
+    @workflow
+    def work():
+        return Provider(session=Session.task("shared")).run(
+            "work", returns=int, output_retries=1
+        ).value
+
+    original_finish, original_write = SessionBinding.finish, SessionBinding._write
+
+    def crash_before_finish(self, *args, **kwargs):
+        if kwargs.get("outcome") == "preflight_failed":
+            raise SystemExit("settlement interrupted")
+        return original_finish(self, *args, **kwargs)
+
+    def crash_before_clear(self, value):
+        if value["pending"] is None:
+            raise SystemExit("settlement interrupted")
+        return original_write(self, value)
+
+    owner = RejectRepairAdapter()
+    with Botpipe(tmp_path, provider=CodexProvider(adapter=owner)) as client:
+        with monkeypatch.context() as patch:
+            patch.setattr(
+                SessionBinding,
+                "_write" if crash_after_event else "finish",
+                crash_before_clear if crash_after_event else crash_before_finish,
+            )
+            with pytest.raises(SystemExit, match="settlement interrupted"):
+                client.run(work, run_id="original", task_id="task")
+        first = next(
+            row for row in client.journal.operations("original")
+            if row["kind"] == "provider"
+        )
+        durable = client.journal.attempt(first["id"], 1)
+        assert durable["cleanup"] == {"status": "completed"}
+        session_key = codec.decode(first["inputs"])["session"]
+        assert SessionBinding(client.journal, session_key).read()["pending"] is not None
+        assert len(owner.calls) == 1 and owner.closed == 1
+
+    class ValidAdapter(Adapter):
+        def start_turn(self, call, on_event=None):
+            return replace(super().start_turn(call, on_event), text="7")
+
+    next_owner = ValidAdapter("next-thread")
+    with Botpipe(tmp_path, provider=CodexProvider(adapter=next_owner)) as restarted:
+        resumed = restarted.resume("original", workflow=work)
+        assert resumed.status == "failed"
+        assert "repair preflight rejected" in resumed.error
+        assert next_owner.calls == []
+        assert SessionBinding(restarted.journal, session_key).read()["pending"] is None
+        settled = [
+            event for event in restarted.journal.events("original")
+            if event["event"] == "provider_call_finished"
+            and event["data"]["outcome"] == "preflight_failed"
+        ]
+        assert len(settled) == 1
+        reused = restarted.run(work, task_id="task")
+        assert reused.ok and reused.value == 7
+        assert next_owner.calls[0].session_id == "thread"
+
+
+@pytest.mark.parametrize("resolution", ["accept", "fail", "retry"])
+def test_resolution_releases_owner_after_background_cleanup(tmp_path, resolution):
+    class InterruptedOwner(Adapter):
+        def start_turn(self, call, on_event=None):
+            super().start_turn(call, on_event)
+            raise SystemExit("turn interrupted")
+
+        def recover_turn(self, call, *, thread_id, turn_id):
+            # Native terminal cleanup leaves the recovery server alive.
+            call.on_checkpoint({"cleanup": {"status": "completed"}})
+            return "stopped", None
+
+        def close(self):
+            self.pending_at_close = binding.read()["pending"]
+            super().close()
+
+    @workflow
+    def work():
+        return Provider(session=Session.task("shared")).run("work").value
+
+    owner = InterruptedOwner("thread")
+    backend = CodexProvider(adapter=owner)
+    with Botpipe(tmp_path, provider=backend) as client:
+        with pytest.raises(SystemExit, match="turn interrupted"):
+            client.run(work, run_id="original", task_id="task")
+        operation = next(
+            row for row in client.journal.operations("original")
+            if row["kind"] == "provider"
+        )
+        inputs = codec.decode(operation["inputs"])
+        binding = SessionBinding(client.journal, inputs["session"])
+        client.resolve("original", operation["id"], **{resolution: True})
+        assert owner.closed == 1
+        assert owner.pending_at_close["attempt"] == 1
+        assert backend._owners == {}
+        assert len(owner.calls) == 1
+        assert client.journal.attempt(operation["id"], 1)["disposal"] == {
+            "status": "completed"
+        }
+        pending = binding.read()["pending"]
+        if resolution == "retry":
+            assert pending["attempt"] == 2
+        else:
+            assert pending is None
+
+
+def test_background_cleanup_without_exit_proof_keeps_session_blocked(tmp_path):
+    class LostOwner(Adapter):
+        def dispose(self):
+            raise RuntimeError("server exit unverified")
+
+    @workflow
+    def work():
+        return Provider(session=Session.task("shared")).run("work").value
+
+    owner = LostOwner("thread")
+    with Botpipe(tmp_path, provider=CodexProvider(adapter=owner)) as client:
+        original = client.run(work, task_id="task")
+        assert original.status == "interrupted"
+        operation = next(
+            row for row in client.journal.operations(original.run_id)
+            if row["kind"] == "provider"
+        )
+        client.journal.attempt_checkpoint(
+            operation["id"], 1, {"cleanup": {"status": "completed"}}
+        )
+        session_key = codec.decode(operation["inputs"])["session"]
+
+    next_owner = Adapter("must-not-dispatch")
+    with Botpipe(tmp_path, provider=CodexProvider(adapter=next_owner)) as restarted:
+        resumed = restarted.resume(original.run_id, workflow=work)
+        assert resumed.status == "interrupted"
+        assert "owner" in resumed.error and "unavailable" in resumed.error
+        assert SessionBinding(restarted.journal, session_key).read()["pending"] is not None
+        assert next_owner.calls == []
+        assert len(owner.calls) == 1
+
+
+def test_resolution_without_predispatch_owner_preserves_exit_uncertainty(tmp_path):
+    class StartupCrash(Adapter):
+        def start_turn(self, call, on_event=None):
+            call.on_checkpoint({"disposal": {"status": "pending"}})
+            raise SystemExit("server startup interrupted")
+
+    @workflow
+    def work():
+        return Provider(session=Session.task("shared")).run("work").value
+
+    with Botpipe(tmp_path, provider=CodexProvider(adapter=StartupCrash("thread"))) as client:
+        with pytest.raises(SystemExit, match="server startup interrupted"):
+            client.run(work, run_id="original", task_id="task")
+        operation = next(
+            row for row in client.journal.operations("original")
+            if row["kind"] == "provider"
+        )
+        assert not client.journal.attempt(operation["id"], 1).get("dispatch_authorized")
+
+    next_owner = Adapter("must-not-dispatch")
+    with Botpipe(tmp_path, provider=CodexProvider(adapter=next_owner)) as restarted:
+        restarted.resolve("original", operation["id"], accept=True)
+        disposal = restarted.journal.attempt(operation["id"], 1)["disposal"]
+        assert disposal["status"] == "incomplete"
+        assert "owner" in disposal["error"] and "unavailable" in disposal["error"]
+        assert disposal["resolved_by"] == "operator"
+        assert next_owner.calls == []

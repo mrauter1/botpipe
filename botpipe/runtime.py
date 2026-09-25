@@ -1905,14 +1905,6 @@ class Botpipe:
                     if not attempt:
                         return
                     cleanup = attempt.get("cleanup") or {}
-                    # A completed contained-tree cleanup already proves that the
-                    # operation owner exited.  It is stronger evidence than the
-                    # normal idle-exit path and must remain distinct from it.
-                    if (
-                        cleanup.get("status") == "completed"
-                        or cleanup.get("resolved_by") == "operator"
-                    ):
-                        return
                     completed = isinstance(outcome, Completed)
                     abort_owner = not completed or cleanup.get("status") in {
                         "pending",
@@ -1920,23 +1912,32 @@ class Botpipe:
                     }
                     field = "cleanup" if abort_owner else "disposal"
                     evidence = attempt.get(field) or {}
-                    if (
-                        evidence.get("status") == "completed"
+                    disposal = attempt.get("disposal") or {}
+                    resolved = (
+                        cleanup.get("resolved_by") == "operator"
                         or evidence.get("resolved_by") == "operator"
-                    ):
-                        return
+                    )
+                    confirmed = disposal.get("status") == "completed" and (
+                        not abort_owner or cleanup.get("status") == "completed"
+                    )
                     resolution = (
                         "fail" if fail else "retry" if retry else "accept"
                     )
-                    self.journal.attempt_checkpoint(
-                        operation_id,
-                        previous + 1,
-                        {field: {"status": "pending"}},
-                    )
+                    if not (confirmed or resolved):
+                        self.journal.attempt_checkpoint(
+                            operation_id,
+                            previous + 1,
+                            {field: {"status": "pending"}, "disposal": {"status": "pending"}},
+                        )
                     try:
+                        # Recovery may own a live server even after background
+                        # cleanup, or after an earlier server's verified exit.
                         release(
                             operation_key,
-                            require_owner=bool(attempt.get("dispatch_authorized")),
+                            require_owner=(
+                                not (confirmed or resolved)
+                                and bool(disposal or attempt.get("dispatch_authorized"))
+                            ),
                             abort=abort_owner,
                         )
                     except Exception as exc:
@@ -1950,15 +1951,22 @@ class Botpipe:
                         )
                         if abort_owner and retry and callable(abandon):
                             abandon(operation_key)
+                        if resolved:
+                            return
                         evidence = {
                             "status": "incomplete", "error": str(exc),
                             "resolved_by": "operator",
                             "resolution": resolution,
                         }
                     else:
+                        if resolved:
+                            # An optional release can be a no-op after restart;
+                            # preserve the operator's uncertainty in that case.
+                            return
                         evidence = {"status": "completed"}
                     self.journal.attempt_checkpoint(
-                        operation_id, previous + 1, {field: evidence}
+                        operation_id, previous + 1,
+                        {field: evidence, "disposal": evidence},
                     )
 
                 def reconcile_provider():

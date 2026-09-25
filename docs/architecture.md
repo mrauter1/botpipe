@@ -127,6 +127,12 @@ durable, Botpipe retains the completed result and records shutdown uncertainty;
 it never redispatches the completed work. The session remains unavailable for
 unsafe reuse until shutdown is retried or an operator resolves it.
 
+An attempt's `disposal` checkpoint records verified server exit, whether from
+normal disposal or successful contained-tree shutdown. Background-terminal
+`cleanup` alone does not prove server exit. Starting a server for execution or
+recovery first invalidates any earlier exit receipt. Binding settlement replays
+independently after shutdown, including after a crash between those two steps.
+
 Cancellation and timeout use the stronger interruption path: request native
 turn interruption, perform bounded background-terminal cleanup when available,
 and contain still-attached descendants through the POSIX process group or

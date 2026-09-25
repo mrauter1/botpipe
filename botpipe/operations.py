@@ -204,32 +204,47 @@ def execute_provider_operation(
         field = "cleanup" if abort else "disposal"
         state = durable.get(field) or {}
         cleanup = durable.get("cleanup") or {}
-        if state.get("resolved_by") == "operator" or cleanup.get("resolved_by") == "operator":
-            return
-        confirmed = state.get("status") == "completed" or cleanup.get("status") == "completed"
+        disposal = durable.get("disposal") or {}
+        resolved = (
+            state.get("resolved_by") == "operator"
+            or cleanup.get("resolved_by") == "operator"
+        )
+        confirmed = disposal.get("status") == "completed" and (
+            not abort or cleanup.get("status") == "completed"
+        )
         try:
-            if not confirmed:
+            if not confirmed and not resolved:
                 ctx.journal.attempt_checkpoint(
-                    operation_id, attempt_number, {field: {"status": "pending"}},
+                    operation_id, attempt_number,
+                    {field: {"status": "pending"}, "disposal": {"status": "pending"}},
                 )
             # A durable exit proof permits replay without a live adapter. Any
             # locally retained owner still has to be released before settlement.
             release(
                 operation_key,
                 require_owner=(
-                    not confirmed and durable.get("dispatch_authorized") is True
+                    not (confirmed or resolved)
+                    and bool(disposal or durable.get("dispatch_authorized"))
                 ),
                 abort=abort,
             )
-            if state.get("status") != "completed":
+            if not resolved and not confirmed:
                 ctx.journal.attempt_checkpoint(
-                    operation_id, attempt_number, {field: {"status": "completed"}},
+                    operation_id, attempt_number,
+                    {field: {"status": "completed"}, "disposal": {"status": "completed"}},
                 )
         except Exception as exc:
+            if resolved:
+                # The recorded operator choice accepted this uncertainty. A
+                # best-effort local release does not replace it with exit proof.
+                return
             try:
                 ctx.journal.attempt_checkpoint(
                     operation_id, attempt_number,
-                    {field: {"status": "incomplete", "error": str(exc)}},
+                    {
+                        field: {"status": "incomplete", "error": str(exc)},
+                        "disposal": {"status": "incomplete", "error": str(exc)},
+                    },
                 )
             except Exception as checkpoint_error:
                 raise UncertainOperation(
@@ -399,12 +414,7 @@ def execute_provider_operation(
                     else None
                 )
                 if isinstance(retained_failure, dict):
-                    cleanup = retained_durable.get("cleanup") or {}
-                    if (
-                        cleanup.get("status") not in {"completed"}
-                        and cleanup.get("resolved_by") != "operator"
-                    ):
-                        finish_retained_owner()
+                    finish_retained_owner()
                     raise_retained_preflight_failure(retained_failure)
 
                 if isinstance(checkpoint, NotDispatchedCheckpoint):

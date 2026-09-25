@@ -112,6 +112,25 @@ def test_foreign_run_cannot_clear_dispatched_exact_owner(tmp_path):
     assert binding.path.read_bytes() == before
 
 
+@pytest.mark.parametrize("status", ["pending", "incomplete", "completed"])
+def test_server_startup_before_dispatch_requires_binding_settlement(tmp_path, status):
+    journal = Journal(tmp_path)
+    _create_run(journal, "first")
+    _begin_provider(journal, "first", "first-op", "first-key")
+    binding = SessionBinding(journal, "shared")
+    binding.claim("first", "first-key", "first-op", 1)
+    journal.attempt_checkpoint("first-op", 1, {"disposal": {"status": status}})
+    before = binding.path.read_bytes()
+
+    with pytest.raises(SessionError, match="unfinished run"):
+        binding.check("second-key")
+    assert binding.path.read_bytes() == before
+
+    journal.attempt_checkpoint("first-op", 1, {"disposal": {"status": "completed"}})
+    binding.finish("first", "first-key", operation_id="first-op", attempt=1)
+    assert binding.check("second-key")["pending"] is None
+
+
 @pytest.mark.parametrize(
     "corruption", ["missing_operation", "wrong_key", "wrong_kind", "missing_attempt"]
 )
