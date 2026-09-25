@@ -1147,6 +1147,8 @@ class CodexAppServerAdapter:
         except TimeoutError as exc:
             raise timed_out() from exc
         capabilities.require(request.preset)
+        if request.on_checkpoint is not None:
+            request.on_checkpoint({"disposal": {"status": "pending"}})
         try:
             self._start(deadline=deadline)
         except TimeoutError as exc:
@@ -1488,6 +1490,7 @@ class CodexAppServerAdapter:
                     "status": "failed",
                     "error": str(pre_ack.error or exc),
                     "cleanup": {"status": "completed"},
+                    "disposal": {"status": "completed"},
                     "enforcement": enforcement,
                     "audit": list(pre_ack.events),
                 }
@@ -1523,6 +1526,8 @@ class CodexAppServerAdapter:
                                 "status": "response_received",
                                 "session_id": thread_id,
                                 "turn_id": pre_ack.turn_id,
+                                "cleanup": {"status": "completed"},
+                                "disposal": {"status": "completed"},
                                 "enforcement": enforcement,
                                 "audit": list(pre_ack.events),
                                 "response": response.to_record(),
@@ -1654,6 +1659,10 @@ class CodexAppServerAdapter:
         capabilities = self.probe(deadline=deadline)
         if "thread/read" not in capabilities.methods:
             return "unknown", None
+        if request.on_checkpoint is not None:
+            # Native history inspection can start a replacement server. An old
+            # exit receipt must not authorize releasing this server's binding.
+            request.on_checkpoint({"disposal": {"status": "pending"}})
         self._start(deadline=deadline)
         config = _tool_config(request, capabilities, self._mcp_servers)
         sandbox_name, _ = _sandbox(request)
@@ -2157,7 +2166,10 @@ class CodexAppServerAdapter:
                     if turn.on_checkpoint is None:
                         continue
                     try:
-                        turn.on_checkpoint({"cleanup": {"status": "completed"}})
+                        turn.on_checkpoint({
+                            "cleanup": {"status": "completed"},
+                            "disposal": {"status": "completed"},
+                        })
                     except BaseException as exc:
                         checkpoint_errors.append(exc)
                 if checkpoint_errors:

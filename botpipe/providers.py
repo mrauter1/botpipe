@@ -6,6 +6,7 @@ import json
 import math
 import os
 import threading
+import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -255,8 +256,16 @@ class CodexProvider:
                 self._owners[key] = owner
             return owner
 
-    def probe(self):
-        with self._owner_lock:
+    def _probe(self, *, deadline: float | None = None) -> CodexCapabilities:
+        if deadline is None:
+            self._owner_lock.acquire()
+        else:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0 or not self._owner_lock.acquire(timeout=remaining):
+                raise TimeoutError("capability probe timed out waiting for provider cleanup")
+        try:
+            if deadline is not None and time.monotonic() >= deadline:
+                raise TimeoutError("capability probe timed out waiting for provider cleanup")
             if self._closed:
                 raise ProviderError("Codex provider is closed")
             if self._probe_adapter is None:
@@ -274,29 +283,16 @@ class CodexProvider:
                         state_dir=self.state_dir,
                         interrupt_grace_seconds=self.interrupt_grace_seconds,
                     )
-            probe_adapter = self._probe_adapter
-        return probe_adapter.probe()
+            return self._probe_adapter.probe(deadline=deadline)
+        finally:
+            self._owner_lock.release()
+
+    def probe(self):
+        return self._probe()
 
     def validate_request(self, request: ProviderRequest) -> CodexCapabilities:
         try:
-            with self._owner_lock:
-                if self._closed:
-                    raise ProviderError("Codex provider is closed")
-                if self._probe_adapter is None:
-                    if self._adapter_factory is not None:
-                        self._probe_adapter = self._adapter_factory()
-                        self._factory_probe_available = True
-                    else:
-                        from .codex_appserver import CodexAppServerAdapter
-
-                        self._probe_adapter = CodexAppServerAdapter(
-                            self.command,
-                            env=self.env,
-                            state_dir=self.state_dir,
-                            interrupt_grace_seconds=self.interrupt_grace_seconds,
-                        )
-                probe_adapter = self._probe_adapter
-            capabilities = probe_adapter.probe(deadline=request.deadline)
+            capabilities = self._probe(deadline=request.deadline)
         except TimeoutError as exc:
             raise ProviderTimeoutError(
                 f"Codex capability probe timed out (dispatch budget: {request.timeout:g} seconds)"
@@ -498,6 +494,9 @@ class CodexProvider:
             else:
                 owner.dispose()
             self._owners.pop(key, None)
+            if self._adapter_factory is not None and self._probe_adapter is owner:
+                self._probe_adapter = None
+                self._factory_probe_available = False
 
     def _abandon_operation(self, operation_key: str) -> None:
         """Forget an owner after a durable explicit retry accepts its uncertainty."""

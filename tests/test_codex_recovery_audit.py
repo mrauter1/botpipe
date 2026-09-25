@@ -193,8 +193,41 @@ def test_recovered_clean_terminal_turn_is_stopped_with_audit(
     checkpoint = request.checkpoint
     assert checkpoint is not None
     assert checkpoint["status"] == "failed"
+    assert checkpoint["cleanup"] == {"status": "completed"}
+    assert checkpoint["disposal"] == {"status": "pending"}
     assert checkpoint["enforcement"]["audit"] == "no-tool-calls-observed"
     assert checkpoint["audit"][0]["data"]["item"]["type"] == "agentMessage"
+
+
+def test_recovery_invalidates_exit_evidence_before_start(tmp_path, monkeypatch):
+    request = interrupted_request(tmp_path)
+    request.checkpoint["disposal"] = {"status": "completed"}
+    adapter, _ = history_adapter(monkeypatch, tools=False, status="failed")
+
+    def crash_at_start(**kwargs):
+        assert request.checkpoint["disposal"] == {"status": "pending"}
+        raise SystemExit("recovery startup interrupted")
+
+    monkeypatch.setattr(adapter, "_start", crash_at_start)
+    with pytest.raises(SystemExit, match="recovery startup interrupted"):
+        adapter.recover_turn(request, thread_id="thread", turn_id="turn")
+    assert request.checkpoint["disposal"] == {"status": "pending"}
+
+
+def test_recovery_requires_durable_invalidation_before_start(tmp_path, monkeypatch):
+    request = interrupted_request(tmp_path)
+    adapter, _ = history_adapter(monkeypatch, tools=False, status="failed")
+
+    def reject_checkpoint(update):
+        raise OSError("ledger unavailable")
+
+    def unexpected_start(**kwargs):
+        pytest.fail("server started before its exit evidence was invalidated")
+
+    monkeypatch.setattr(adapter, "_start", unexpected_start)
+    request = replace(request, on_checkpoint=reject_checkpoint)
+    with pytest.raises(OSError, match="ledger unavailable"):
+        adapter.recover_turn(request, thread_id="thread", turn_id="turn")
 
 
 def test_recovered_safe_result_keeps_audit_and_original_enforcement(

@@ -1167,6 +1167,7 @@ def test_late_turn_ack_cannot_bind_to_or_kill_replacement_transport(
     assert "stopped transport" in str(errors[0])
     assert checkpoints[-1]["status"] == "failed"
     assert checkpoints[-1]["cleanup"] == {"status": "completed"}
+    assert checkpoints[-1]["disposal"] == {"status": "completed"}
     assert new_process.poll() is None
     assert new_containment.terminations == 0
     assert not client._turns
@@ -1243,6 +1244,7 @@ def test_pre_ack_cleanup_preserves_orphaned_tool_policy_evidence(
     terminal = checkpoints[-1]
     assert terminal["status"] == "failed"
     assert terminal["cleanup"] == {"status": "completed"}
+    assert terminal["disposal"] == {"status": "completed"}
     assert terminal["policy_error"] is True
     assert terminal["enforcement"]["audit"] == "tool-policy-violation"
     assert terminal["audit"][0]["data"]["item"]["id"] == ("pre-ack-forbidden-command")
@@ -1266,6 +1268,8 @@ def test_completed_orphan_wins_lost_turn_start_ack(tmp_path: Path) -> None:
     assert response.metadata["recovered_from_lost_ack"] is True
     assert checkpoints[-1]["status"] == "response_received"
     assert checkpoints[-1]["response"] == response.to_record()
+    assert checkpoints[-1]["cleanup"] == {"status": "completed"}
+    assert checkpoints[-1]["disposal"] == {"status": "completed"}
 
 
 def test_probe_subprocess_uses_remaining_dispatch_budget(monkeypatch) -> None:
