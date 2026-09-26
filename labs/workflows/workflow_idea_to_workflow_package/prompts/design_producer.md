@@ -21,10 +21,16 @@ Write `workflow_design` so an implementer can build without inventing hidden beh
 - the workflow purpose and observable terminal outcome;
 - how the supplied authoring and prompting guides govern the fewest coherent steps, semantic judgment, obligations, trust boundaries, permissions, retry/replay behavior, and prompt contracts;
 - each coherent step's purpose, authoritative input evidence, work boundary, output handoff, acceptance condition, and local recovery or upstream replan condition;
+- how the next step can actually access the primary evidence it needs, including rejection reasons and rejected artifact versions where relevant, rather than receiving only statuses or summaries;
+- which operation obtains and applies the evidence for each material acceptance criterion, and what failure or unavailable evidence does to control flow; do not merely name a rubric;
 - which decisions are semantic judgments for a provider and which control decisions Python makes with ordinary conditionals, loops, nested workflows, or bounded parallelism;
 - artifact and typed-result handoffs, session continuity or independence, human-input boundaries, side effects, retry safety, and the validation plan;
 - the focused behavioral test for `tests/runtime/test_<package_name>.py` when `enforce_generated_test` is true, including meaningful route or replay behavior where relevant, without a fixed test quota or vacuous assertions; when explicit test argv is supplied, explain what it actually proves;
 - material assumptions and how the workflow detects contradictions or insufficient evidence.
+
+When the requested workflow claims improvement, design actual comparable baseline/candidate execution and a separate application of fixed criteria to the outputs. Preserve case inputs and referenced assets, distinguish measured behavior from source review, and give trials and judgments explicit limits rather than assuming subprocesses inherit the parent budget. Use blind judging only when useful and keep identities and producer rationale out of its accessible context. Do not add comparative evaluation to unrelated workflows.
+
+When domain validation consumes model-authored references or decisions, distinguish safely repairable output mistakes from integrity, authority, or uncertain-effect failures. Specify precise feedback, a bounded correction path, and exhaustion. Do not assume provider schema repair covers later domain checks. Prefer typed internal handoffs and existing replay primitives; avoid publish-and-reload ceremony without an external consumer. Generated reusable packages should not acquire experimental labs dependencies.
 
 Use the public, current Python authoring API and repository patterns. Do not introduce route tables, transition grammars, graph compilers, a generic orchestration engine, or a universal recursive-improvement stage. Add an independent reviewer only where a rejection changes the next action or protects a significant boundary. Include a diagram only when it clarifies meaningful branching or concurrency; a linear list of steps does not need one.
 

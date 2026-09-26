@@ -15,6 +15,24 @@ See the [workflow guide](../labs/workflows/improve_workflow/README.md) for Pytho
 usage, parameters, and outcomes. The workflow uses the existing durable runtime;
 there is no additional phase engine or scheduler.
 
+## Current coverage and remaining gaps
+
+The [authoring guide](authoring.md#make-evidence-and-acceptance-usable) describes
+the design standard. The current optimizer does not yet meet all of it:
+
+| Boundary | Current behavior |
+| --- | --- |
+| Historical content | Investigation receives reduced operation observations and captured source, not the recorded prompts, responses, rejection text, or artifact contents. Behavioral explanations beyond that evidence remain inferences. |
+| Rubric application | The qualitative rubric guides proposal, implementation, and review. It is not automatically applied to trial outputs by a built-in blind judge. Without an executable evaluator, success remains `candidate_ready`. |
+| Grounding repair | Provider schema repair is bounded, but an invalid observation/source citation rejected by subsequent grounding validation currently fails the run without a dedicated correction turn. |
+| Internal handoff | An accepted recommendation is published and reloaded through its receipt. The evidence record also still computes the compatibility ranking omitted from active model input. |
+
+The intended follow-up is frozen, readable run evidence; bounded grounding
+feedback; actual paired workflow trials with rubric-driven judging; and a direct
+internal handoff. These are implementation goals, not options this version
+already exposes. Keep claim strength tied to the checks below until those paths
+are implemented and tested.
+
 ## Investigation, evidence, and decisions
 
 `selected_workflow` accepts a catalog name, `module:function`, or
@@ -97,8 +115,9 @@ Passing checks and review without a comparative evaluation returns
 | `max_snapshot_bytes` | 50 MiB |
 | `max_output_bytes` | 10 MiB of recommendation records |
 
-Provider limits survive resume and are shared by the complete job. External
-checks and evaluations use their own bounded process settings. No limit is
+Provider limits survive resume and cover the orchestration's provider calls.
+They do not automatically cover model calls inside evaluator subprocesses.
+External checks and evaluations use their own bounded settings. No limit is
 reset by a semantic revision. Evaluation cases, evaluator bytes, and comparison
 criteria are frozen before the first candidate edit.
 
@@ -157,6 +176,13 @@ against isolated baseline and candidate trees. Omit it to skip comparison. The
 harness freezes the specification, evaluator, cases, ordered case IDs,
 repetitions, settings, metrics, thresholds, and limits before launching exactly
 one evaluator subprocess per arm.
+
+The supplied evaluator is responsible for actually invoking the workflow and
+measuring its behavior; protocol-valid metric output alone does not prove that
+it did so. The harness freezes the case file, not every external file or service
+it references. Supply stable fixture contents and report unavailable or changing
+dependencies honestly. Execution trees are source isolation, not a sandbox for
+remote effects: do not replay production writes merely to measure them.
 
 The evaluator receives absolute `BOTPIPE_EVAL_REQUEST` and
 `BOTPIPE_EVAL_RESULT` paths. It must atomically write one strict

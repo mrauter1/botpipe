@@ -1,10 +1,17 @@
 # Improve a workflow
 
 `improve_workflow` investigates workflow intent, source, and recorded runs before
-proposing one useful change, then implements it
-in an isolated candidate, run executable checks, and independently review the
-result. An optional fixed evaluator measures the original and the candidate.
+proposing one useful change. It implements the change in an isolated candidate,
+runs executable checks, and independently reviews the result. An optional fixed
+evaluator measures the original and the candidate.
 The authoritative workflow is never automatically edited or replaced.
+
+See [current coverage and remaining gaps](../../../docs/optimizer.md#current-coverage-and-remaining-gaps)
+before interpreting results: investigation does not yet receive historical
+prompt/response/artifact contents, the rubric is not automatically scored in
+trials, and post-response grounding errors do not yet have a repair loop. This
+workflow currently requires a supplied executable evaluator for comparison;
+source review alone cannot establish a measured improvement.
 
 ```python
 from botpipe import Botpipe
@@ -79,11 +86,13 @@ history exists, source inspection may still identify an opportunity or explain
 why execution evidence is needed.
 
 `max_revisions=2` allows at most three implementation/check/review attempts
-after one reviewed proposal. All provider work shares `max_provider_turns=12`,
+after one reviewed proposal. Orchestration provider calls share
+`max_provider_turns=12`,
 `max_provider_seconds=1800`, and `provider_timeout=600`. Provider repair turns
 are included. Executable validation has its own `validation_timeout=600`, and
-the evaluation specification carries process and evaluator limits. These are
-bounded operations, not an unbounded optimization search.
+the evaluation specification carries process and evaluator limits. The parent
+provider budget does not automatically cover calls inside those subprocesses.
+These are bounded operations, not an unbounded optimization search.
 
 The evaluation specification, evaluator, and cases are frozen before
 investigation. The model's qualitative success rubric is frozen before proposal

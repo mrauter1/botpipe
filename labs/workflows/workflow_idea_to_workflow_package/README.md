@@ -65,6 +65,14 @@ Writable producer turns run with `workspace-write` in a dedicated run-owned chil
 
 Each step has one coherent work boundary: authoritative evidence in, a defined semantic or implementation job, captured evidence out, and explicit local-rework versus upstream-replan conditions. Python owns loops and branches. The design uses a diagram only if meaningful branching or concurrency would otherwise be hard to understand.
 
+The bundled [authoring guide](../../../docs/authoring.md#make-evidence-and-acceptance-usable)
+and phase prompts ask reviewers to trace material acceptance criteria to actual
+checking operations and primary-evidence handoffs. They distinguish bounded
+output correction from integrity failures, and executed behavioral evidence from
+source inspection or comparative measurement. These model review obligations
+must be backed by the generated implementation and relevant tests; they do not
+add an automatic evaluator or a new runtime guarantee to the builder.
+
 ## Materialization and validation
 
 `workflow_package_manifest.json` is a constrained transport envelope for exact source text, not a second workflow DSL. It contains `package_name`, an explicit `.botpipe/workflows/<package_name>/flow.py:<callable>` reference, and the complete `files` inventory. The runtime rejects absolute/traversal paths, files outside the package and optional test boundary, duplicate paths, oversized inventories, symlink escapes, mismatched package names, missing `flow.py` or `workflow.toml`, and mutation of authoritative source.

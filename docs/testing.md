@@ -37,6 +37,25 @@ reasoning, incidental call counts, or one tool sequence unless that detail is
 itself the public contract. A schema-valid fake response tests orchestration and
 shape; it does not establish the semantic quality of a live provider result.
 
+Test the connections that make evidence-based decisions possible. For example,
+a rejected draft's reason and captured bytes must remain accessible to the next
+investigator or repair step, even after a replacement exists. Exercise a
+correctable reference error followed by a valid answer, bounded exhaustion, and
+an integrity violation that must not be retried as a model mistake.
+
+When a workflow claims measured improvement, test that both real entry points
+execute on the declared cases and that captured outputs reach the evaluation
+step. Include a worse or unchanged candidate, not only a success fixture. Check
+fixed inputs/criteria, judge isolation where promised, comparable limits,
+unavailable evidence, and replay without repeated completed trials or judgments.
+Distinguish a workflow failure under a valid case from a broken evaluation.
+Controlled fixtures test this contract; they do not prove a live judge's accuracy.
+
+Keep bundled authoring guides synchronized with their canonical docs using the
+existing parity check. Test executable examples and installed-package dependency
+boundaries, not the presence of preferred sentences in prompts. Disabling labs
+discovery is not proof that a shipped workflow can import without labs.
+
 Lab scenarios are individual parametrized tests. Discovery must match the
 scenario inventory so a new lab cannot silently miss behavioral coverage. Labs
 return typed producer values and use reviewers only at material decision gates.

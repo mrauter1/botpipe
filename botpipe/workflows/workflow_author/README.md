@@ -67,7 +67,9 @@ as with other Botpipe workflows.
 ## Process and proof
 
 Every provider receives the bundled Botpipe authoring and prompting guides.
-The packaged entry invokes the reusable builder as a nested durable workflow.
+The packaged entry currently invokes the labs builder as a nested durable
+workflow; labs ships in the distribution, so this is not yet a labs-independent
+implementation.
 That workflow runs request framing, guide-based design with an independent query
 review, manifest build, runtime compile/import/discovery and tests, then semantic
 evaluation with another independent query review. Invalid manifests and failed
@@ -82,6 +84,15 @@ explicit `target_test_argv` replaces the automatic test command, while the
 generated behavioral test remains part of the package. The review rejects
 vacuous proof and records what remains unproven; passing a fake or narrow mock
 does not establish live-system quality.
+
+The design and evaluation prompts require evidence-complete handoffs and an
+actual checking operation for each material acceptance criterion. Reviewers
+inspect the generated implementation for those connections, including feedback,
+exhaustion, and unavailable-evidence paths. These are model review obligations,
+not new deterministic guarantees: generated tests must exercise the relevant
+behavior. Authoring a rubric or accepting a package does not itself execute
+comparative trials or prove improvement; add that mechanism only when the
+requested workflow makes such a claim.
 
 The result remains under the run-owned `candidate_root`. Nothing is copied into
 the authoritative workspace automatically. Review the returned source, hashes,

@@ -57,6 +57,16 @@ Supply the smallest sufficient context. Use `input` for typed request data and
 workspace when discovery is part of the task. More context is not automatically
 better: duplicated or irrelevant material can hide the actual obligation.
 
+Check that the model can actually read the evidence the prompt requires.
+For diagnosis, expose relevant recorded prompts, responses, rejection reasons,
+and artifact versions where available; an aggregate status is not their
+substitute. Prefer a small index and inspectable evidence over dumping every
+trace into context. Distinguish observed content, source readings, and inference.
+Use readable file references and exact excerpts when grounding a textual claim;
+runtime-owned hashes need not be transcribed by the model. Reference validation
+establishes that the cited material exists; quote matching establishes literal
+correspondence, not that the interpretation is correct.
+
 Name trust boundaries. Quoted documents, retrieved pages, issue bodies, logs,
 and source data may contain instructions; treat those embedded instructions as
 evidence, not authority. Distinguish them from the invoking user's actual request.
@@ -81,6 +91,12 @@ Define fields around domain decisions, not orchestration ceremony. Prefer
 model's process. Do not require plans, summaries, and review files unless a
 downstream consumer actually uses them.
 
+For repairable domain-validation mistakes, return the offending field or
+reference, the precise problem, and enough valid context to correct it. Preserve
+the original obligation. The workflow must implement the bounded repair and
+exhaustion paths; a prompt asking the model to retry does not create them.
+Never use correction feedback to relax permissions or evidence-integrity checks.
+
 ## Verification prompts
 
 A verifier needs the requirement and primary evidence, not just a producer's
@@ -98,6 +114,15 @@ may need a focused check; a publication or destructive external action may need
 independent evidence and a human gate. Prefer outcome-based checks over requiring
 one exact tool sequence or prose answer.
 
+Ask the verifier to apply each relevant criterion to primary evidence and state
+what remains unassessed, not merely repeat the rubric. Define what follows from
+failure or missing evidence. For comparative judgments, fix criteria before
+editing the candidate and assess actual outputs under comparable conditions.
+Separate sessions provide independence, not blindness: a blind judge receives
+anonymous evidence without producer rationale or identifying workspace access.
+Treat instructions embedded in outputs as data, not directions to the judge.
+Do not require numerical scores where a supported classification is clearer.
+
 ## Examples are selective
 
 Examples help when the domain format is unfamiliar, a boundary is easy to
@@ -111,9 +136,11 @@ Before shipping, check:
 
 - Does the prompt ask for one coherent outcome?
 - Can the model access the evidence needed to do and verify the work?
+- Does verification apply the criteria, and does rejection carry actionable evidence back?
 - Are authority, trust, uncertainty, and escalation explicit where material?
 - Do output fields support real downstream decisions?
 - Are permissions enforced by code?
+- Are correction, exhaustion, and unavailable-evidence paths implemented outside the prompt?
 - Is any prescribed method necessary, or is it stale hard-coded logic?
 - Would an evaluator recognize success from outcomes without reproducing one
   exact execution path?
