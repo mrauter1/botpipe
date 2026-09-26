@@ -1,15 +1,15 @@
 # Security Finding To Verified Remediation
 
-Turn a security finding into an evidence-backed remediation plan, closure package, and typed closure result.
+Turn a security finding into an evidence-backed, independently reviewed remediation and verification plan; package outstanding proof without claiming premature closure.
 
 Canonical name: `security_finding_to_verified_remediation`
 Aliases: `security-remediation`, `security-finding-remediation`
 
 ## Durable function design
 
-`workflow.py` exports one ordinary Python function decorated with `@workflow`. Python controls phase order, optional passes, loops, and nested workflows. Each phase runs one producer with `Provider.run`; the producer returns the package-specific typed domain result from `contracts.py`. Evidence-quality and risk decisions that benefit from independent judgment add a read-only reviewer, whose result contains the review decision and findings rather than a copy of the domain handoff.
+`workflow.py` exports one ordinary Python workflow. A reviewed investigation child supplies evidence. Independent reviewers gate exploitability assessment and remediation/verification safety; final packaging preserves those judgments and cannot prove implementation or closure.
 
-Every declared output is a required `Artifact`. Botpipe snapshots the provider-written file before the operation completes, and later phases read those immutable handles. A reviewer, when present, may cite only captured artifact names. The final typed `LabWorkflowResult` carries the accepted handles in `artifacts`, convenience snapshot paths in `artifact_paths`, and unique candidate identifiers. When phases reuse an artifact name, the later accepted handle wins.
+Every declared output is required when a phase returns `accepted`. Botpipe snapshots those files before completion, and later phases read immutable handles. A prerequisite-seeking `question` or `blocked` result may pause before files exist; it must not fabricate placeholder artifacts. The final typed `LabWorkflowResult` carries accepted handles in `artifacts` and convenience snapshot paths in `artifact_paths`.
 
 The workflow calls `investigation_request_to_evidence_pack` as a durable child. Its returned `artifacts` handles become immutable reads for the security phases, and its typed result is included in their input context.
 
@@ -24,11 +24,15 @@ from labs.workflows.security_finding_to_verified_remediation import (
 
 client = Botpipe(workspace=".")
 result = client.run(
-    workflow_callable, Params(...), request="Describe the requested outcome"
+    workflow_callable,
+    Params(finding_title="Authorization bypass", finding_source="internal_review"),
+    request="Assess exposure and plan a verifiable, safely deployed fix",
 )
 ```
 
-Parameters are validated by the package-local Pydantic `Params` model before any operation starts. `request` contains the human-readable task or evidence request.
+Parameters are validated before work starts. `max_provider_turns` (default 32) caps parent and nested child provider work plus retries; human pauses have no wall-clock deadline. `request` supplies finding context.
+
+The parent captures declared `evidence_paths` once, then passes that typed immutable intake to the investigation child; the child never rereads the originals. The public input accepts at most 32 bounded-length paths as a resource limit, not a security-evidence quota. Unsafe, missing, and oversized sources remain unavailable records that can trigger a question or block. Provider attempts use isolated writable scratch, source inspection resolves through `source_workspace`, and any later live discovery is labeled separately from the frozen declared baseline.
 
 ## Phases and evidence
 

@@ -1,15 +1,15 @@
 # Release Candidate To Go No Go
 
-Frame a release candidate, gather evidence, assess go/no-go readiness, and publish a deterministic decision package.
+Frame a release candidate, gather evidence, assess go/no-go readiness, and publish a defensible decision package.
 
 Canonical name: `release_candidate_to_go_no_go`
 Aliases: `release-go-no-go`, `release-readiness`
 
 ## Durable function design
 
-`workflow.py` exports one ordinary Python function decorated with `@workflow`. Python controls phase order, optional passes, loops, and nested workflows. Each phase runs one producer with `Provider.run`; the producer returns the package-specific typed domain result from `contracts.py`. Evidence-quality and risk decisions that benefit from independent judgment add a read-only reviewer, whose result contains the review decision and findings rather than a copy of the domain handoff.
+`workflow.py` exports one ordinary Python workflow. Python controls framing and replanning. Independent reviewers gate evidence integrity and the go/no-go judgment; final packaging must preserve the reviewed decision and never executes or approves a release.
 
-Every declared output is a required `Artifact`. Botpipe snapshots the provider-written file before the operation completes, and later phases read those immutable handles. A reviewer, when present, may cite only captured artifact names. The final typed `LabWorkflowResult` carries the accepted handles in `artifacts`, convenience snapshot paths in `artifact_paths`, and unique candidate identifiers. When phases reuse an artifact name, the later accepted handle wins.
+Every declared output is required when a phase returns `accepted`. Botpipe snapshots those files before completion, and later phases read immutable handles. A prerequisite-seeking `question` or `blocked` result may pause before files exist; it must not fabricate placeholder artifacts. The final typed `LabWorkflowResult` carries accepted handles in `artifacts` and convenience snapshot paths in `artifact_paths`.
 
 ## Invocation
 
@@ -19,11 +19,15 @@ from labs.workflows.release_candidate_to_go_no_go import Params, workflow_callab
 
 client = Botpipe(workspace=".")
 result = client.run(
-    workflow_callable, Params(...), request="Describe the requested outcome"
+    workflow_callable,
+    Params(release_name="checkout-api 2.4.0"),
+    request="Decide whether this candidate is safe to deploy to production",
 )
 ```
 
-Parameters are validated by the package-local Pydantic `Params` model before any operation starts. `request` contains the human-readable task or evidence request.
+Parameters are validated before work starts. `max_provider_turns` (default 32) caps producers, reviewers, and retries; human pauses have no wall-clock deadline. `request` supplies release context.
+
+Declared `evidence_paths` are captured once before framing under bounded count and byte limits. The public input accepts at most 32 bounded-length paths as a resource limit, not a release-coverage requirement. Only regular, non-symlink source-workspace files become immutable reads; unavailable declarations remain visible and may prevent a decision. Provider attempts write in isolated scratch, use the injected `source_workspace` for read-only source discovery, and label live discoveries separately from the frozen release evidence.
 
 ## Phases and evidence
 

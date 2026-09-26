@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from botpipe import Provider, workflow
+from dataclasses import replace
+
+from botpipe import Provider, provider_budget, workflow
+from labs.workflows._evidence import (
+    capture_declared_evidence,
+    evidence_intake_context,
+    verify_evidence_intake,
+)
 from labs.workflows._shared import (
     LabWorkflowResult,
     ReplanRequired,
@@ -22,14 +29,21 @@ from .contracts import (
 from .params import Params
 
 
-@workflow(name="incident_to_hardening_program", version="2")
-def IncidentToHardeningProgram(params: Params, request: str = "") -> LabWorkflowResult:
+def _run_incident_to_hardening_program(
+    params: Params, request: str
+) -> LabWorkflowResult:
     """Execute the incident to hardening program evidence workflow."""
     _producer = Provider()
     _reviewer = _producer.with_config(session=None)
-    context = {"request": request, "parameters": params.model_dump(mode="json")}
+    evidence_intake = capture_declared_evidence(params.evidence_paths)
+    verify_evidence_intake(evidence_intake)
+    context = {
+        "request": request,
+        "parameters": params.model_dump(mode="json"),
+        "evidence_intake": evidence_intake_context(evidence_intake),
+    }
     completed = []
-    prior_handles = ()
+    prior_handles = evidence_intake.handles
     frame_incident_checkpoint = len(completed)
     frame_incident_reads = prior_handles
     frame_incident_context = dict(context)
@@ -101,8 +115,6 @@ def IncidentToHardeningProgram(params: Params, request: str = "") -> LabWorkflow
                         replan_target="rank_cause_hypotheses",
                         producer=_producer,
                         producer_prompt="prompts/program_producer.md",
-                        reviewer=_reviewer,
-                        reviewer_prompt="prompts/program_reviewer.md",
                         input=context,
                         reads=prior_handles,
                         writes=(
@@ -144,7 +156,19 @@ def IncidentToHardeningProgram(params: Params, request: str = "") -> LabWorkflow
         ("incident_summary",),
     )
     validate_incident_publication(publication["incident_summary"])
+    completed[0] = replace(
+        completed[0], handles=(*evidence_intake.handles, *completed[0].handles)
+    )
     return finish("incident_to_hardening_program", completed)
+
+
+@workflow(name="incident_to_hardening_program", version="3")
+def IncidentToHardeningProgram(
+    params: Params, request: str = ""
+) -> LabWorkflowResult:
+    """Execute the SOP within one durable provider-turn budget."""
+    with provider_budget(max_turns=params.max_provider_turns):
+        return _run_incident_to_hardening_program(params, request)
 
 
 workflow_callable = IncidentToHardeningProgram

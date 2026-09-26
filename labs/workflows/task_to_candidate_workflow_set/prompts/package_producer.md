@@ -1,77 +1,9 @@
-## Durable typed phase result
+# Package the candidate set
 
-After writing every declared artifact, return one JSON result matching the injected phase-specific schema. Return `accepted` only when the artifacts meet this phase's positive condition and populate the domain fields in the schema. Return `needs_rework` for a local repair, `needs_replan` for a material upstream change, `question` or `blocked` for a missing prerequisite, and `failed` for a terminal domain failure. Report only captured artifact names and stable identifiers present in the artifacts.
+Turn the accepted comparison into a clean strategy handoff. Preserve the analyzed candidates, ordering, posture, and builder-baseline facts.
 
-# Package Candidate Workflow Set Producer
+- `candidate_workflow_set` explains the criteria, evidence, ranked candidates, gaps, uncertainties, and recommended candidates.
+- `candidate_workflow_set_summary.json` contains `comparison_candidates`, `ranked_candidates`, `recommended_candidate_workflows`, `builder_baseline_workflow`, `builder_considered`, `portfolio_posture`, `authoritative_artifacts`, `next_action`, and `ready_for_strategy_selection`.
+- `candidate_workflow_next_action` tells the strategy selector what decision remains and which assumptions or missing evidence matter.
 
-## Step Contract
-
-### Role
-- You are the candidate-workflow-set packager producer for the `package_candidate_workflow_set` step.
-
-### Purpose
-- Turn the ranked candidate set into a durable human-facing package, a machine-readable summary, and a next-action artifact another workflow or operator can use directly for downstream strategy selection.
-
-### Current work item
-- This work item owns candidate-set packaging only.
-- Keep the boundary at packaging the ranked candidate set and strategy-ready handoff. Do not choose the final front-door route or execute any downstream workflow.
-
-## Runtime bindings
-
-- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
-- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
-
-## Output Requirements
-
-### Artifact handling
-- `candidate_workflow_set` must define:
-- the task trigger and sponsor,
-- the compared candidates,
-- the ranked candidate order,
-- the portfolio posture,
-- the recommended candidate workflows another strategy layer should consider first,
-- why the ranked set is credible,
-- why this building block intentionally stops at candidate-set publication instead of choosing the final route.
-- `candidate_workflow_set_summary` must be valid JSON and define at least:
-- `comparison_candidates`
-- `ranked_candidates`
-- `recommended_candidate_workflows`
-- `builder_baseline_workflow`
-- `builder_considered`
-- `portfolio_posture`
-- `authoritative_artifacts`
-- `next_action`
-- `ready_for_strategy_selection`
-- `candidate_workflow_next_action` must state exactly what the downstream strategy layer should decide next, which candidate workflows deserve immediate consideration, and which task-specific facts should be carried forward.
-
-### Expected outcome
-- Leave the workflow with a terminal candidate-workflow-set package that is inspectable, machine-readable, and ready for downstream strategy selection without auto-running or auto-selecting the final route.
-
-## Evidence
-
-- The package must preserve the ranked candidate set and portfolio posture from the analysis artifacts.
-- The summary must still show the builder baseline when it exists and at least three compared candidates when the portfolio size permits.
-- The next action must be concrete enough that another workflow or operator could continue immediately.
-
-## Phase decision criteria
-
-- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
-- Treat question, blocked, and failure guidance as semantic validation criteria.
-
-### Outcome selection
-- `accepted`: the package, summary, and next-action artifact are complete and strategy-ready.
-- `needs_rework`: the same ranked candidate set still stands, but the package or summary needs local repair.
-- `needs_replan`: packaging revealed that the ranked candidates, posture, or downstream handoff changed materially.
-- Use `blocked` only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
-
-## Out Of Scope
-
-- Choosing the final `run_existing` / `compose` / `adapt` / `create_new` route.
-- Executing the selected workflow.
-- Changing the capability snapshot.
-
-## Forbidden
-
-- Do not choose the final strategy route in this step.
-- Do not omit the machine-readable summary or next-action artifact.
-- Do not hide the package only in provider prose.
+Accept only when human and machine-readable artifacts agree and recommendations come from the ranking. Rework packaging drift locally; replan when the comparison itself must change. Stop at publication—do not select a final route or run candidates.

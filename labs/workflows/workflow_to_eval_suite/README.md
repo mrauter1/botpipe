@@ -7,9 +7,9 @@ Aliases: `workflow-eval-suite`, `eval-suite-package`
 
 ## Durable function design
 
-`workflow.py` exports one ordinary Python function decorated with `@workflow`. Python controls phase order, optional passes, loops, and nested workflows. Each phase runs one producer with `Provider.run`; the producer returns the package-specific typed domain result from `contracts.py`. Evidence-quality and risk decisions that benefit from independent judgment add a read-only reviewer, whose result contains the review decision and findings rather than a copy of the domain handoff.
+`workflow.py` exports one ordinary Python workflow. Python observes the selected contract, validates the case manifest, computes suite identity, and controls replanning. Producers design cases and package the suite but never execute it or claim measured quality.
 
-Every declared output is a required `Artifact`. Botpipe snapshots the provider-written file before the operation completes, and later phases read those immutable handles. A reviewer, when present, may cite only captured artifact names. The final typed `LabWorkflowResult` carries the accepted handles in `artifacts`, convenience snapshot paths in `artifact_paths`, and unique candidate identifiers. When phases reuse an artifact name, the later accepted handle wins.
+Every declared output is required when a phase returns `accepted`. Botpipe snapshots those files before completion, and later phases read immutable handles. A prerequisite-seeking `question` or `blocked` result may pause before files exist; it must not fabricate placeholder artifacts. The final typed `LabWorkflowResult` carries accepted handles in `artifacts` and convenience snapshot paths in `artifact_paths`.
 
 ## Invocation
 
@@ -19,11 +19,16 @@ from labs.workflows.workflow_to_eval_suite import Params, workflow_callable
 
 client = Botpipe(workspace=".")
 result = client.run(
-    workflow_callable, Params(...), request="Describe the requested outcome"
+    workflow_callable,
+    Params(
+        selected_workflow="devloop",
+        task_title="Build a regression evaluation suite",
+    ),
+    request="Design reusable cases for review accuracy and recovery behavior.",
 )
 ```
 
-Parameters are validated by the package-local Pydantic `Params` model before any operation starts. `request` contains the human-readable task or evidence request.
+Parameters are validated before work starts. `max_provider_turns` (default 32) caps all provider work and retries; human pauses have no wall-clock deadline. `request` contains the evaluation intent.
 
 An optimizer-v2 evaluation-case recommendation may be supplied with the
 `optimization_receipt_path` and `candidate_id` pair. Both fields are optional as
@@ -32,6 +37,8 @@ receipt, review, evidence snapshot, baseline surface, handoff, and candidate,
 and rejects every candidate kind except `evaluation_case`.
 
 After case design, a retry-safe activity validates the manifest before packaging. Every case must have a unique ID, one of `benchmark`, `edge`, or `adversarial`, a prompt, expected artifacts, and valid callable inputs. For the common `workflow(params: BaseModel, request: str = "")` shape, `workflow_parameters` is the flat `Params` object and the case `prompt` supplies the human request separately. Other callable shapes use a full keyword-argument mapping. The typed validation result states when expected artifact names could not be checked against a static surface because ordinary Python workflows declare outputs dynamically.
+
+The suite must contain at least one case, but need not include all three categories. Design chooses categories that add meaningful coverage and explains omitted categories in their corresponding matrices.
 
 The published suite receives a content-derived `evaluation_suite_id`. Suites
 created from an optimizer recommendation also retain the exact

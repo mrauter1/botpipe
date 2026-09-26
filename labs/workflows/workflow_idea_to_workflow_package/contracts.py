@@ -1,36 +1,60 @@
-"""Typed domain result contracts for this durable labs workflow."""
+"""Typed semantic handoffs for the workflow-builder SOP."""
 
 from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import Field
+from pydantic import BaseModel, Field
 
-from labs.workflows._shared import LabPhaseOutcome
+from botpipe_optimizer.candidate_validation import ValidationResult
+from labs.workflows._shared import LabPhaseOutcome, LabWorkflowResult
 
 
-class CandidateSelectionPayload(LabPhaseOutcome):
-    """Verifier payload for the framing step."""
+class GeneratedWorkflowFile(BaseModel):
+    """One generated file, identified from runtime-validated bytes."""
+
+    path: str
+    sha256: str
+    size_bytes: int
+
+
+class WorkflowAuthorResult(LabWorkflowResult):
+    """A reviewed candidate package and the checks that actually ran."""
+
+    package_name: str
+    candidate_root: str
+    package_path: str
+    workflow_reference: str
+    files: list[GeneratedWorkflowFile]
+    surface_boundary: dict[str, list[str]]
+    validation: ValidationResult
+
+
+class RequestFramingPayload(LabPhaseOutcome):
+    """Accepted interpretation of the workflow the user asked to build."""
 
     summary: str = Field(min_length=1)
-    evidence_artifacts: list[str] = Field(min_length=1)
-    selected_candidate: str | None = None
-    selected_kind: Literal["end_to_end", "building_block"] | None = None
+    authoritative_artifacts: list[str] = Field(min_length=1)
+    requested_workflow: str = Field(min_length=1)
+    intended_outcome: str = Field(min_length=1)
+    material_assumptions: list[str] = Field(default_factory=list)
     replan_reason: str | None = None
 
 
 class WorkflowDesignPayload(LabPhaseOutcome):
-    """Verifier payload for the design step."""
+    """Reviewed executable design and prompt handoff."""
 
     summary: str = Field(min_length=1)
     authoritative_artifacts: list[str] = Field(min_length=1)
+    step_names: list[str] = Field(min_length=1)
     prompt_files: list[str] = Field(default_factory=list)
-    next_action: str = Field(min_length=1)
+    semantic_decisions: list[str] = Field(default_factory=list)
+    unresolved_assumptions: list[str] = Field(default_factory=list)
     replan_reason: str | None = None
 
 
 class WorkflowBuildPayload(LabPhaseOutcome):
-    """Verifier payload for the build step."""
+    """Complete source manifest ready for isolated materialization."""
 
     summary: str = Field(min_length=1)
     changed_paths: list[str] = Field(min_length=1)
@@ -39,17 +63,21 @@ class WorkflowBuildPayload(LabPhaseOutcome):
 
 
 class WorkflowEvaluationPayload(LabPhaseOutcome):
-    """Verifier payload for the evaluation step."""
+    """Accepted assessment of source, executable checks, and handoffs."""
 
     summary: str = Field(min_length=1)
     evidence_artifacts: list[str] = Field(min_length=1)
     validation_commands: list[str] = Field(default_factory=list)
-    promotion_decision: Literal["promote", "rework", "replan"] | None = None
+    package_decision: Literal["accept"]
+    proven_outcomes: list[str] = Field(default_factory=list)
+    unproven_outcomes: list[str] = Field(default_factory=list)
     replan_reason: str | None = None
 
 
 __all__ = [
-    "CandidateSelectionPayload",
+    "GeneratedWorkflowFile",
+    "RequestFramingPayload",
+    "WorkflowAuthorResult",
     "WorkflowBuildPayload",
     "WorkflowDesignPayload",
     "WorkflowEvaluationPayload",

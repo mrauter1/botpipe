@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from botpipe import Provider, current_run, workflow
+from botpipe import Provider, current_run, provider_budget, workflow
 from labs.workflows._shared import (
     LabWorkflowResult,
     ReplanRequired,
@@ -25,8 +25,7 @@ from .contracts import (
 from .params import Params
 
 
-@workflow(name="workflow_to_eval_suite", version="2")
-def WorkflowToEvalSuite(params: Params, request: str = "") -> LabWorkflowResult:
+def _run_workflow_to_eval_suite(params: Params, request: str) -> LabWorkflowResult:
     """Execute the workflow to eval suite evidence workflow."""
     _producer = Provider()
     context = {"request": request, "parameters": params.model_dump(mode="json")}
@@ -199,6 +198,13 @@ def WorkflowToEvalSuite(params: Params, request: str = "") -> LabWorkflowResult:
                 "replan_artifacts": [str(handle.path) for handle in change.handles],
             }
     return finish("workflow_to_eval_suite", completed)
+
+
+@workflow(name="workflow_to_eval_suite", version="3")
+def WorkflowToEvalSuite(params: Params, request: str = "") -> LabWorkflowResult:
+    """Execute the SOP within one durable provider-turn budget."""
+    with provider_budget(max_turns=params.max_provider_turns):
+        return _run_workflow_to_eval_suite(params, request)
 
 
 workflow_callable = WorkflowToEvalSuite

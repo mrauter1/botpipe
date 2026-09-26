@@ -12,8 +12,10 @@ or make no change.
 
 The governing rule is:
 
-> Capture facts once. Models propose explanations and changes. Deterministic
-> checks bind every result to the exact evidence and files it concerns.
+> Capture facts once. A model investigates intent, source, and history before
+> choosing what matters, then freezes a context-relevant rubric before proposing
+> a change. Deterministic checks bind every result to the exact evidence and
+> files it concerns.
 > Improvement claims require a comparable experiment.
 
 Recommendation and concrete validation remain separate. The optimizer never
@@ -65,7 +67,8 @@ Consequences:
 
 | Record | Owner | Meaning |
 | --- | --- | --- |
-| `EvidenceSnapshot` | deterministic capture | admitted runs, observations, groups, metrics, shortlist, limits, and provenance |
+| `EvidenceSnapshot` | deterministic capture | admitted runs, observations, groups, optional metrics/shortlist, limits, and provenance |
+| `DiagnosticAssessment` | investigator model, then immutable workflow input | inferred intent, whole-workflow/step classifications, typed evidence links, uncertainties, and context-specific rubric |
 | `CandidateSet` | producer, then independent reviewer | proposed changes or an explicit evidence/no-change action |
 | surface/execution manifests | deterministic file enumeration | exact editable boundary and frozen runnable tree identities |
 | `ValidationResult` | isolated validation runner | derived file changes, compilation/check results, environment, and resource evidence |
@@ -82,13 +85,19 @@ metrics, or publication state. Deterministic code rejects invented citations,
 duplicate IDs, disabled kinds, and altered facts; it does not silently rewrite
 an accepted model claim.
 
-A candidate has one unique content-derived ID, kind, targets, cited observation
-IDs, proposed change, expected effect, risks, and falsifiable validation plan.
+A candidate has one unique content-derived ID, kind, targets, applicable cited
+observation IDs, proposed change, expected effect, risks, and falsifiable
+validation plan. A source-only candidate has an empty observation-ID list rather
+than a fabricated trace citation and names exact captured source paths already
+established by the frozen assessment.
+For file-target candidate kinds, the outer targets must exactly equal the typed
+payload targets, be canonical relative paths, and belong to the captured
+baseline. Evaluation-case targets retain their non-path suite semantics.
 Kinds are `producer_prompt`, `verifier_rubric`, `tokens`, `workflow`, and
 `evaluation_case`. Empty candidate sets use `collect_evidence` or `no_change`,
 not placeholder candidates.
 
-## 4. Evidence capture and prioritization
+## 4. Evidence capture and optional metrics
 
 Default selection considers the latest 25 matching terminal or paused runs.
 Explicit `run_refs` select exact runs. Automatic status filtering never
@@ -128,7 +137,7 @@ retries and steps using different profiles retain separate per-step/profile
 breakdowns. Reliability still deduplicates by affected run and step, so those
 breakdowns do not count one failure more than once.
 
-Objectives order observed burden only:
+Optional objectives order observed burden only:
 
 - `reliability`: distinct runs with direct failed/interrupted operations, then
   distinct runs with recorded rework/replan outcomes;
@@ -148,21 +157,29 @@ may be close to one second. A step with complete objective facts and unknown
 profile identity may rank by its absolute observed burden, but it cannot support
 profile-relative claims.
 
-`top_k_steps` is one total shortlist cap for the selected evidence group. No
-per-profile quota or fairness allocation modifies that global ordering. No
-eligible evidence produces zero model calls and a deterministic empty set.
-Reports must not invent probability, confidence, monetary cost, causality, or
-full-corpus claims.
+`top_k_steps` is one total shortlist cap for deterministic API consumers. No
+per-profile quota or fairness allocation modifies that global ordering. The
+active improvement workflow does not expose the shortlist, ranking basis, or
+deterministic next action to its investigator or producer. Metrics cannot gate
+model calls or preselect a target. Reports must not invent probability,
+confidence, monetary cost, causality, or full-corpus claims.
 
 ## 5. Recommendation workflow and limits
 
 The default workflow is:
 
-1. Deterministically capture provenance, bounded observations, grouping,
-   metrics, shortlist, and baseline identity.
-2. If eligible evidence exists, run one producer for one strict `CandidateSet`
-   and one independent verifier. Bounded rework stays inside that pair.
-3. Deterministically validate identities and citations, render the report, and
+1. Freeze any explicit evaluation plan, then deterministically capture
+   provenance, bounded observations, grouping, optional metrics, and baseline
+   identity.
+2. Run a model investigation even when history is empty. It may inspect the
+   frozen, rehashed source copy, must distinguish
+   observation/source/inference, may leave a
+   scope unknown or unassessed, and freezes semantic classifications and a
+   context-relevant qualitative rubric without a universal numeric score.
+3. Run a separate producer for at most one bounded experiment, followed by an
+   independent reviewer. Bounded rework cannot alter the frozen assessment or
+   rubric.
+4. Deterministically validate identities and citations, render the report, and
    atomically publish the receipt and refinement handoff.
 
 Candidate kinds are not mandatory specialist stages. Enable flags restrict
@@ -171,11 +188,12 @@ allowed kinds but do not dynamically add model conversations.
 | Limit | Default | Contract |
 | --- | ---: | --- |
 | `history_limit` | 25 | selection bound before evidence admission |
+| `metric_view` | unset | optional deterministic burden choice; evidence v3 retains a compatibility reliability view, never a target selector |
 | `top_k_steps` | 1 | one total deterministic shortlist |
-| `max_candidates` | 3 | total candidate-set cap; never silently truncate |
-| `max_provider_turns` | 6 | shared actual-dispatch cap |
-| `provider_turn_timeout_seconds` | 600 | per-dispatch timeout |
-| `max_analysis_seconds` | 1800 | absolute non-extending recommendation deadline |
+| `max_candidates` | 1 | one reversible experiment per invocation; never silently truncate |
+| `max_provider_turns` | 12 | shared actual-dispatch cap |
+| `provider_timeout` | 600 | per-dispatch timeout |
+| `max_provider_seconds` | 1800 | absolute non-extending recommendation deadline |
 | `max_evidence_bytes` | 50 MiB | complete admitted input records |
 | `max_output_bytes` | 10 MiB | accepted candidate/review/supporting records |
 
@@ -296,7 +314,7 @@ has passed.
 | T11 | Failure-only or outcome-filtered sample | Actual denominators are visible; no probability claim |
 | T12 | Reliability, usage, and latency leaders differ | Objective ordering is reproducible with one total shortlist cap |
 | T13 | Model invents citations, counts, IDs, metrics, or disabled kinds | Strict records and deterministic anchors reject publication |
-| T14 | Eligible evidence, then no eligible evidence | One proposal/review pair in the first case; zero provider calls in the second |
+| T14 | Observed failure, then zero-history workflow | Both receive model-led investigation; neutral metrics never preselect a target; source-only candidates use no fabricated observation ID; review precedes editing |
 | T15 | Repair/retry/parallel child/resume reaches a provider cap or deadline | Shared reservations persist; no extra dispatch or successful over-budget receipt |
 | T16 | Compile/test/provider hangs or emits excess output/children | Bounded diagnostics survive; owned process tree exits; sources remain unchanged |
 | T17 | Evaluator/result identity, cases, metrics, output, or frozen bytes are invalid | Comparison cannot report improvement |

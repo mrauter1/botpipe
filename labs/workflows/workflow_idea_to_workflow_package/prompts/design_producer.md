@@ -1,75 +1,39 @@
 ## Durable typed phase result
 
-After writing every declared artifact, return one JSON result matching the injected phase-specific schema. Return `accepted` only when the artifacts meet this phase's positive condition and populate the domain fields in the schema. Return `needs_rework` for a local repair, `needs_replan` for a material upstream change, `question` or `blocked` for a missing prerequisite, and `failed` for a terminal domain failure. Report only captured artifact names and stable identifiers present in the artifacts.
+Return one JSON result matching the injected phase-specific schema and follow the runtime's `artifact_requirement`. Before returning `accepted`, write every declared artifact and ensure it meets this phase's done criteria. For `needs_rework`, `needs_replan`, `question`, `blocked`, or `failed`, write only real evidence that is already available and useful; a control outcome does not require filler artifacts. Never fabricate a file to satisfy the declared acceptance outputs. Cite only artifacts actually captured.
 
-# Design Package Producer
+Resolve relative repository and evidence paths against the injected `source_workspace`. The writable working directory is disposable authoring scratch, not the source repository.
 
-## Step Contract
+# Design the executable workflow
 
-### Role
-- You are the workflow author producer for the `design_package` step.
+## Purpose
 
-### Purpose
-- Turn the selected workflow brief into an explicit Botpipe workflow design with a visible topology, route grammar, artifact contract, target authoring shape, prompt plan, and verification plan.
+Translate the accepted workflow brief into an implementable, imperative Botpipe design and a first-class prompt design. This is the review boundary before the costly whole-package build.
 
-### Current work item
-- This work item owns workflow design only.
-- Keep the work-item boundary at design artifacts. Do not author repository workflow files yet.
+## Work boundary
 
-## Runtime bindings
+Own the workflow's step boundaries, semantic decisions, handoffs, prompts, acceptance evidence, and recovery behavior. Do not write generated source files yet.
 
-- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
-- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
+## Stable obligations
 
-## Output Requirements
+Write `workflow_design` so an implementer can build without inventing hidden behavior. It must explain:
 
-### Artifact handling
-- `workflow_design` must define:
-- objective,
-- selected authoring shape (`single`, `flow_specs`, or `package`),
-- deterministic workflow responsibilities,
-- provider-owned cognitive responsibilities,
-- work-item boundary doctrine,
-- role topology,
-- control flow,
-- route grammar,
-- artifact contract,
-- runtime-injected control contract,
-- verification and evidence contract,
-- rework / replan / block / fail policy,
-- recursive self-improvement policy.
-- `workflow_contract` must be machine-readable and list each step’s legal application routes plus required evidence.
-- `workflow_contract` must name only the prompt files the generated workflow should contain and what each one must do.
-- `workflow_design` must name the validation commands, compile checks, and evidence artifacts required before promotion.
+- the workflow purpose and observable terminal outcome;
+- how the supplied authoring and prompting guides govern the fewest coherent steps, semantic judgment, obligations, trust boundaries, permissions, retry/replay behavior, and prompt contracts;
+- each coherent step's purpose, authoritative input evidence, work boundary, output handoff, acceptance condition, and local recovery or upstream replan condition;
+- which decisions are semantic judgments for a provider and which control decisions Python makes with ordinary conditionals, loops, nested workflows, or bounded parallelism;
+- artifact and typed-result handoffs, session continuity or independence, human-input boundaries, side effects, retry safety, and the validation plan;
+- the focused behavioral test for `tests/runtime/test_<package_name>.py` when `enforce_generated_test` is true, including meaningful route or replay behavior where relevant, without a fixed test quota or vacuous assertions; when explicit test argv is supplied, explain what it actually proves;
+- material assumptions and how the workflow detects contradictions or insufficient evidence.
 
-### Expected outcome
-- Produce a design package that is specific enough for the build step to create files directly without inventing hidden runtime behavior.
+Use the public, current Python authoring API and repository patterns. Do not introduce route tables, transition grammars, graph compilers, a generic orchestration engine, or a universal recursive-improvement stage. Add an independent reviewer only where a rejection changes the next action or protects a significant boundary. Include a diagram only when it clarifies meaningful branching or concurrency; a linear list of steps does not need one.
 
-## Evidence
+Write `prompt_design` as an implementation-ready plan for only the prompt files the workflow actually needs. For each prompt, define its role, purpose, available source evidence, stable obligations, expected semantic handoff, completion evidence, and contradiction/assumption policy. Leave investigation and implementation method flexible where several sound approaches exist. Prompts must assess substantive outcomes, not merely output format, and must not rely on unstated provider memory.
 
-- Keep the runtime/provider boundary crisp: the runtime injects the compact human-readable step contract, while prompt templates own the operational guidance and raw provider output never re-enters prompts.
-- Follow current repository workflow patterns; do not invent a hidden generator layer.
-- Make rework vs replan rules explicit and tied to role, artifact, and acceptance boundaries.
+When `rejected_candidate_evidence` is present, trace every relevant source, prompt, validation, or handoff finding to the supplied immutable replan artifacts and runtime records. Preserve sound design decisions, revise the defective ones, and make the next build correction explicit; do not repeat rejected candidate behavior.
 
-## Phase decision criteria
+Avoid mandatory extra manifests, schemas, prompts, or reports unless runtime discovery, validation, or a real downstream consumer requires them.
 
-- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
-- Treat question, blocked, and failure guidance as semantic validation criteria.
+## Done criteria
 
-### Outcome selection
-- `accepted`: the design is implementation-ready.
-- `needs_rework`: the same design boundary holds, but the spec or prompt matrix needs local correction.
-- `needs_replan`: the chosen addition or authoring boundary changed materially.
-- Use `blocked` only when a missing prerequisite or irreconcilable contradiction prevents safe progress.
-
-## Out Of Scope
-
-- Writing repository workflow files.
-- Running tests.
-- Editing core/runtime framework code.
-
-## Forbidden
-
-- Do not move provider-facing SOP into runtime-only structures.
-- Do not rely on undeclared artifact paths.
-- Do not hide route semantics in prose-only commentary.
+Return `accepted` only when the two artifacts agree, step boundaries are coherent, prompts are complete, recovery targets are unambiguous, and the design can be implemented with existing primitives. Populate `step_names`, `prompt_files`, `semantic_decisions`, and any `unresolved_assumptions` honestly.

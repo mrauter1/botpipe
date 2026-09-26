@@ -1,43 +1,76 @@
 # Workflow improvement
 
-The `improve_workflow` lab turns observed workflow problems into an isolated,
-validated candidate. It combines diagnosis, one reviewed proposal,
+The `improve_workflow` lab turns workflow intent, source, and available run
+history into an isolated, validated candidate. It combines model-led diagnosis,
+a context-specific frozen rubric, one reviewed proposal,
 implementation, executable checks, independent source review, and optional
 baseline/candidate evaluation. The authoritative source remains unchanged.
 
 ```bash
 botpipe run improve_workflow --workspace . \
-  --input '[{"selected_workflow":"devloop","objective":"reliability"},"Correct recurring failures without changing valid behavior"]'
+  --input '[{"selected_workflow":"devloop","objective":"Improve review accuracy without changing valid behavior"},"Correct recurring failures"]'
 ```
 
 See the [workflow guide](../labs/workflows/improve_workflow/README.md) for Python
 usage, parameters, and outcomes. The workflow uses the existing durable runtime;
 there is no additional phase engine or scheduler.
 
-## Evidence and decisions
+## Investigation, evidence, and decisions
 
 `selected_workflow` accepts a catalog name, `module:function`, or
 `file.py:function`. By default the latest 25 matching runs that are not executing
 are selected. Created and running runs do not consume the history limit.
 `run_refs` selects exact run IDs or `task/run` references.
 
-| Objective | Eligible observations | Ordering |
+The first model turn investigates before any target is chosen. It explains the
+workflow's intent, assesses the whole workflow and relevant individual steps,
+classifies each assessment as a failure, opportunity, strength, uncertainty, or
+unassessed area, and chooses only the quality dimensions that fit the workflow.
+Every diagnostic claim distinguishes direct run observation, source inspection,
+and inference. Unknown or unassessed behavior stays explicit.
+Investigation, proposal, and proposal review run against one read-only copy of
+the captured surface. Its files are rehashed between turns, so the model never
+silently switches from the recorded baseline to later authoritative bytes.
+
+The investigation also defines the qualitative success rubric before candidate
+generation. Each criterion says what evidence would support it and what would
+falsify it. Proposal revision and implementation receive that frozen rubric;
+they cannot redefine success around the candidate. An optional executable
+evaluation specification is likewise frozen before investigation.
+
+`objective` is a nonblank free-text improvement priority. The older
+`reliability`, `token_usage`, and `latency` strings remain valid priorities.
+Set the separate optional `metric_view` parameter to choose a deterministic
+burden summary. When unset, evidence v3 retains its compatibility reliability
+view, but that view still does not enter active model input as a ranking. The
+snapshot retains these summaries for consumers:
+
+| Metric view | Eligible observations | Descriptive ordering |
 | --- | --- | --- |
 | `reliability` | Failed/interrupted operations or typed rework/replan outcomes | Distinct affected runs, then deterministic ties |
 | `token_usage` | Complete, positive provider usage | Sum of reported token counts |
 | `latency` | Complete, positive provider-dispatch timing | Sum of provider-dispatch seconds |
 
-These rankings describe recorded burden. They do not estimate causality,
+These summaries describe recorded burden. They do not estimate causality,
 price, reducibility, or future benefit. Provider seconds are additive dispatch
 burden, not end-to-end elapsed time. Tokens are literal reported counts, not
 normalized across models. Unknown source provenance stays unknown; it cannot
 make unrelated runs comparable.
 
-One observed operation is shortlisted. If there is no eligible evidence, the
-workflow makes zero provider calls and returns `collect_evidence` or `no_change`.
-Otherwise it proposes at most one change. The model supplies the useful proposal
-fields; Python binds it to the exact evidence and baseline and derives its IDs.
-An independent reviewer can reject the proposal before any candidate edit.
+The snapshot's legacy shortlist remains available as a deterministic API, but
+the active workflow does not pass that shortlist, its ranking basis, or its
+deterministic next action into investigation or proposal turns. Metrics neither
+gate model investigation nor select the target. Zero-history workflows still
+receive qualitative source inspection and may yield a source-backed experiment,
+an explicit request for evidence, or no change.
+
+The producer proposes at most one bounded experiment after the investigation.
+Observation-backed claims cite exact focused observation IDs. A source-only
+opportunity uses no fabricated observation citation and remains explicitly
+source-backed in the assessment. Python binds the candidate to the exact
+evidence and baseline and derives its IDs. A separate-session reviewer can reject
+the proposal before any candidate edit. Bounded rework preserves the original
+assessment and rubric.
 
 Implementation is limited to the captured workflow surface. Each revision starts
 from a verified baseline in a separate workspace. Executable checks run on staged
@@ -54,6 +87,7 @@ Passing checks and review without a comparative evaluation returns
 | Parameter | Default |
 | --- | ---: |
 | `history_limit` | 25 runs |
+| `metric_view` | unset (v3 compatibility reliability view); optionally `reliability`, `token_usage`, or `latency` |
 | `max_revisions` | 2 additional attempts per proposal/implementation loop |
 | `max_provider_turns` | 12 total dispatches, including repairs |
 | `provider_timeout` | 600 seconds per turn |
@@ -71,7 +105,8 @@ criteria are frozen before the first candidate edit.
 ## Records and publication
 
 The workflow returns `ImproveWorkflowResult`: its outcome and summary, a
-recommendation with evidence and the reviewed proposal, an optional candidate
+recommendation with the structured diagnostic assessment, evidence, and the
+reviewed proposal, an optional candidate
 with executable validation and comparison results, and the final provider-budget
 snapshot. Accepted recommendations also have a `PublicationReceipt`. The run
 folder has one canonical recommendation commit marker:
@@ -86,11 +121,13 @@ It selects an immutable, content-addressed directory under
 - `workflow_optimization_candidates.json`
 - `workflow_optimization_candidate_review.json` when a proposal was reviewed
 - `workflow_optimization_report.md`
+- `workflow_optimization_supporting.md` with the frozen structured assessment
 - `workflow_refinement_evidence.json`
 - an immutable copy of `optimization_publication_receipt.json`
 
 `CandidateSet` is strict and content-addressed. This workflow produces one
-`workflow` candidate with target paths, cited observation IDs, a proposed change,
+`workflow` candidate with target paths, any applicable observation IDs or exact
+captured source-evidence paths, a proposed change,
 expected effect, risks, and a falsifiable validation plan. Deterministic code
 owns evidence grouping, metrics, identities, byte counts, and publication. The
 producer cannot author those facts, and the independent reviewer cannot alter

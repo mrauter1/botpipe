@@ -88,7 +88,9 @@ class CandidateBase(StrictRecord):
     candidate_id: str = Field(pattern=r"^candidate_[0-9a-f]{64}$")
     title: str = Field(min_length=1)
     targets: list[str] = Field(min_length=1)
-    cited_observation_ids: list[str] = Field(min_length=1)
+    # Empty is honest for a source-inspection-backed opportunity.  Any supplied
+    # observation ID is still checked against the immutable evidence snapshot.
+    cited_observation_ids: list[str]
     proposed_change: str = Field(min_length=1)
     expected_effect: str = Field(min_length=1)
     risks: list[str] = Field(min_length=1)

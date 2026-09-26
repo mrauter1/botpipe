@@ -1,80 +1,9 @@
-## Durable typed phase result
+# Publish the improvement cycle
 
-After writing every declared artifact, return one JSON result matching the injected phase-specific schema. Return `accepted` only when the artifacts meet this phase's positive condition and populate the domain fields in the schema. Return `needs_rework` for a local repair, `needs_replan` for a material upstream change, `question` or `blocked` for a missing prerequisite, and `failed` for a terminal domain failure. Report only captured artifact names and stable identifiers present in the artifacts.
+Package the accepted priorities as a bounded set of owned next actions, not an automatic recursive loop.
 
-# Package Recursive Improvement Cycle Producer
+- `recursive_improvement_cycle` explains scope, evidence, ranked candidates, sequencing, dependencies, review triggers, and stop conditions; name every candidate ID.
+- `recursive_improvement_summary.json` contains `workflow_name`, `focus_task_ids`, `focus_workflows`, `candidate_ids`, `priority_item_ids`, `priority_categories`, `priority_category_counts`, `authoritative_artifacts`, `next_action`, `publication_boundary`, and `ready_for_publication`. The boundary is `recursive_improvement_publication_only`.
+- `recursive_improvement_next_actions` assigns or requests ownership and states what evidence should be gathered before each follow-on decision.
 
-## Step Contract
-
-### Role
-- You are the cycle packager for the `package_recursive_improvement_cycle` step.
-
-### Purpose
-- Turn the ranked recursive-improvement analysis into a terminal cycle package, a machine-readable summary, and explicit next actions that stop at publication.
-
-### Current work item
-- This work item owns recursive-improvement packaging only.
-- Keep the boundary at publication-ready cycle artifacts and explicit next actions. Do not execute downstream workflows in this step.
-
-## Runtime bindings
-
-- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
-- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
-
-## Output Requirements
-
-### Artifact handling
-- `recursive_improvement_cycle` must be markdown and include explicit sections for:
-- `## Workflow Portfolio`
-- `## Workflow Packages`
-- `## Evaluation / Refinement / Decomposition Follow-Through`
-- `## Composition / Escalation Policy`
-- `## Operating Patterns`
-- `## Publication Boundary`
-- plus the exact boundary string `recursive_improvement_publication_only`.
-- `recursive_improvement_cycle` must explicitly name every `candidate_id`.
-- `recursive_improvement_summary` must be valid JSON and define:
-- `focus_task_ids`
-- `focus_workflows`
-- `candidate_ids`
-- `priority_item_ids`
-- `priority_categories`
-- `priority_category_counts`
-- `authoritative_artifacts`
-- `next_action`
-- `publication_boundary` with the exact value `recursive_improvement_publication_only`
-- `ready_for_publication`
-- `workflow_name`
-- `recursive_improvement_next_actions` must make the next human or workflow handoff explicit while keeping the boundary at recommendations only.
-
-### Expected outcome
-- Leave the workflow with a publication-ready recursive-improvement cycle package that another operator or workflow can consume without re-reading the raw company evidence.
-
-## Evidence
-
-- Keep the package aligned with `recursive_improvement_priority_matrix` and `recursive_improvement_candidates`.
-- Keep scoped task ids and workflow names explicit.
-- Keep the boundary explicit: this workflow publishes the package and next actions only.
-
-## Phase decision criteria
-
-- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
-- Treat question, blocked, and failure guidance as semantic validation criteria.
-
-### Outcome selection
-- `accepted`: the cycle package, JSON summary, and next-actions artifact are aligned and ready for deterministic publication.
-- `needs_rework`: the same packaging boundary still holds, but one or more packaging artifacts need local repair.
-- `needs_replan`: the package no longer matches the analyzed recursive-improvement set and analysis must be revisited.
-- Use `blocked` only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
-
-## Out Of Scope
-
-- Executing the next workflow.
-- Mutating workflow packages or `.botpipe` history.
-- Writing the publication receipt.
-
-## Forbidden
-
-- Do not create `recursive_improvement_cycle_receipt.json` in this step.
-- Do not imply automatic downstream execution.
-- Do not replace explicit artifacts with prose-only recommendations.
+Preserve scoped IDs, rankings, and categories exactly. Accept only when all artifacts agree and the actions can terminate when goals are met. Rework packaging drift; replan changed priorities. Do not execute recommendations or claim perpetual recursion is desirable.

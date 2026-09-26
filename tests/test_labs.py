@@ -34,15 +34,7 @@ def _successful_provider(request):
         path.parent.mkdir(parents=True, exist_ok=True)
         if name == "workflow_package_manifest":
             package_name = phase_input["parameters"]["package_name"]
-            authoring_shape = phase_input["parameters"].get(
-                "authoring_shape", "flow_specs"
-            )
-            if authoring_shape == "single":
-                source_path = f".botpipe/workflows/{package_name}.py"
-            elif authoring_shape == "flow_specs":
-                source_path = f".botpipe/workflows/{package_name}/flow.py"
-            else:
-                source_path = f"labs/workflows/{package_name}/flow.py"
+            source_path = f".botpipe/workflows/{package_name}/flow.py"
             function_name = "GeneratedWorkflow"
             content = (
                 "from botpipe import workflow\n\n"
@@ -60,36 +52,19 @@ def _successful_provider(request):
                     "content": content,
                 }
             ]
-            if authoring_shape == "package":
-                package_root = f"labs/workflows/{package_name}"
-                files.extend(
-                    [
-                        {
-                            "path": f"{package_root}/specs.py",
-                            "role": "contracts",
-                            "purpose": "Generated workflow contracts.",
-                            "required": True,
-                            "implements": "accepted workflow contract",
-                            "content": '"""Generated workflow contracts."""\n',
-                        },
-                        {
-                            "path": f"{package_root}/workflow.toml",
-                            "role": "manifest",
-                            "purpose": "Generated discovery manifest.",
-                            "required": True,
-                            "implements": "accepted discovery design",
-                            "content": (
-                                f'name = "{package_name}"\n'
-                                f'function = "{function_name}"\n'
-                            ),
-                        },
-                    ]
-                )
+            files.append(
+                {
+                    "path": f".botpipe/workflows/{package_name}/workflow.toml",
+                    "role": "manifest",
+                    "content": (
+                        f'name = "{package_name}"\nfunction = "{function_name}"\n'
+                    ),
+                }
+            )
             path.write_text(
                 json.dumps(
                     {
                         "package_name": package_name,
-                        "authoring_shape": authoring_shape,
                         "workflow_reference": f"{source_path}:{function_name}",
                         "files": files,
                     }
@@ -485,6 +460,51 @@ def test_labs_discovery_matches_behavioral_scenarios():
     assert set(names) == set(LAB_SCENARIOS)
 
 
+@pytest.mark.parametrize(
+    "case_kinds",
+    [["benchmark"], ["adversarial"], ["benchmark", "edge"]],
+)
+def test_eval_suite_packages_relevant_case_kinds_and_replays(tmp_path, case_kinds):
+    from labs.workflows.workflow_to_eval_suite import Params, workflow_callable
+
+    def produce(request):
+        result = _successful_provider(request)
+        manifest_path = request.artifacts.get("eval_case_manifest")
+        if manifest_path is not None:
+            manifest = json.loads(manifest_path.read_text())
+            manifest["cases"] = [
+                case for case in manifest["cases"] if case["case_kind"] in case_kinds
+            ]
+            manifest_path.write_text(json.dumps(manifest))
+            result["case_ids"] = [case["case_id"] for case in manifest["cases"]]
+            result["case_kinds"] = case_kinds
+        return result
+
+    provider = FakeProvider([produce] * 3)
+    with Botpipe(tmp_path, provider=provider) as client:
+        result = client.run(
+            workflow_callable,
+            Params(
+                selected_workflow="release_candidate_to_go_no_go",
+                task_title="Evaluate only meaningful case categories",
+            ),
+        )
+        assert result.ok, result.error
+        cases = result.value.artifacts["eval_case_manifest"].read_json()["cases"]
+        assert [case["case_kind"] for case in cases] == case_kinds
+        package = result.value.phases[-1]
+        assert package.name == "package_workflow_eval_suite"
+        assert package.details["case_kinds"] == case_kinds
+        assert package.details["case_count"] == len(cases)
+        assert package.details["case_ids"] == [case["case_id"] for case in cases]
+
+        call_count = len(provider.calls)
+        replayed = client.resume(result.run_id, workflow=workflow_callable)
+        assert replayed.ok, replayed.error
+        assert replayed.value == result.value
+        assert len(provider.calls) == call_count
+
+
 def test_release_workflow_runs_staged_typed_outcomes_and_captures_artifacts(tmp_path):
     provider = FakeProvider([_successful_provider] * 8)
     result = Botpipe(tmp_path, provider=provider).run(
@@ -517,16 +537,16 @@ def test_release_workflow_runs_staged_typed_outcomes_and_captures_artifacts(tmp_
         "run",
         "query",
         "run",
-        "query",
     ]
     assert all(not call.artifacts for call in provider.calls if call.preset == "query")
     assert result.value.phases[0].review_operation_id is None
-    assert all(phase.review_operation_id for phase in result.value.phases[1:])
+    assert all(phase.review_operation_id for phase in result.value.phases[1:3])
+    assert result.value.phases[-1].review_operation_id is None
     inspection = Botpipe(tmp_path, provider=FakeProvider([])).inspect("staged")
     provider_operations = [
         item for item in inspection["operations"] if item["kind"] == "provider"
     ]
-    assert len(provider_operations) == 7
+    assert len(provider_operations) == len(provider.calls)
     assert all(item["status"] == "completed" for item in provider_operations)
 
 
@@ -538,7 +558,17 @@ def test_lab_workflow_completes_with_captured_outputs(tmp_path, workflow_name):
     workspace = tmp_path / workflow_name
     workspace.mkdir()
     (workspace / "README.md").write_text("# Test workspace\n", encoding="utf-8")
-    provider = FakeProvider([_successful_provider] * 64)
+    if workflow_name == "improve_workflow":
+        from tests.improvement_support import (
+            ACCEPT,
+            FixtureProvider,
+            assess,
+            no_candidate,
+        )
+
+        provider = FixtureProvider([assess, no_candidate, ACCEPT])
+    else:
+        provider = FakeProvider([_successful_provider] * 64)
     result = Botpipe(workspace, provider=provider).run(
         function,
         params,
@@ -551,12 +581,11 @@ def test_lab_workflow_completes_with_captured_outputs(tmp_path, workflow_name):
         assert result.value.selected_workflow == "release_candidate_to_go_no_go"
         assert result.value.outcome == "collect_evidence"
         assert (
-            result.value.recommendation.candidate_set.next_action
-            == "collect_evidence"
+            result.value.recommendation.candidate_set.next_action == "collect_evidence"
         )
         assert result.value.candidate is None
-        assert result.value.provider_budget["used_turns"] == 0
-        assert provider.calls == []
+        assert result.value.provider_budget["used_turns"] == len(provider.calls)
+        assert provider.calls, "No history must not bypass model-led investigation."
     else:
         assert result.value.workflow_name == workflow_name
         assert result.value.phases

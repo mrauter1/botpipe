@@ -1,73 +1,13 @@
-## Durable typed phase result
+# Analyze workflow candidates
 
-After writing every declared artifact, return one JSON result matching the injected phase-specific schema. Return `accepted` only when the artifacts meet this phase's positive condition and populate the domain fields in the schema. Return `needs_rework` for a local repair, `needs_replan` for a material upstream change, `question` or `blocked` for a missing prerequisite, and `failed` for a terminal domain failure. Report only captured artifact names and stable identifiers present in the artifacts.
+Compare credible catalog workflows against the accepted fit criteria. Write `workflow_comparison_matrix` and `fit_gap_analysis`, then return the typed result.
 
-# Analyze Candidate Workflows Producer
+## Analysis
 
-## Step Contract
+- Include every serious contender needed to distinguish the routes; do not pad to a fixed count.
+- For each contender, cite observed capability, relevant constraints, contribution to the outcome, and material gaps.
+- Rank only workflows actually compared. Treat routing infrastructure as a candidate only when the task is about routing.
+- Consider `workflow_idea_to_workflow_package` only when the evidence suggests a material gap or genuinely custom authoring need. Otherwise keep it out of the comparison and ranking, and record that it was not relevant rather than forcing a self-referential candidate.
+- Conclude with one portfolio posture: `direct_fit`, `compose_needed`, `adapt_needed`, or `material_gap`, plus confidence and unresolved evidence.
 
-### Role
-- You are the workflow candidate-analysis producer for the `analyze_candidate_workflows` step.
-
-### Purpose
-- Compare the current task against the existing workflow portfolio, rank the strongest workflow candidates, and explain whether the portfolio posture is a direct fit, a composition need, an adaptation candidate, or a material gap.
-
-### Current work item
-- This work item owns candidate comparison and fit-gap analysis only.
-- Keep the boundary at ranking candidates and explaining the current portfolio posture. Do not choose the final front-door strategy route or package the terminal handoff artifacts yet.
-
-## Runtime bindings
-
-- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
-- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
-
-## Output Requirements
-
-### Artifact handling
-- `workflow_comparison_matrix` must compare at least three candidate workflows when the portfolio size permits and include for each:
-- workflow or building-block name,
-- what job it solves,
-- fit to this task,
-- key gaps,
-- why it wins or loses,
-- whether it looks like a direct fit, composition ingredient, adaptation candidate, or builder pressure.
-- Include `workflow_idea_to_workflow_package` as the builder baseline unless it is genuinely absent from `workflow_catalog`. If it is absent, record that absence explicitly as a portfolio gap.
-- Treat `task_to_workflow_strategy` and `task_to_candidate_workflow_set` as portfolio infrastructure, not downstream winners, unless the task is itself about workflow routing or workflow-candidate-set infrastructure.
-- `fit_gap_analysis` must explain whether the current portfolio fits directly, needs composition, needs adaptation, or has a material gap that should later pressure `create_new`.
-- `fit_gap_analysis` must name:
-- the ranked candidates,
-- the current portfolio posture (`direct_fit`, `compose_needed`, `adapt_needed`, or `material_gap`),
-- why the posture is credible,
-- what the downstream strategy selector should decide next.
-
-### Expected outcome
-- Leave the workflow with an explicit, inspectable ranked candidate set and a portfolio-posture artifact another workflow can package for downstream strategy selection without adding hidden runtime logic.
-
-## Evidence
-
-- Compare at least three candidates when the portfolio size permits.
-- Explicitly include the builder baseline in the comparison when it exists.
-- Make the posture explicit enough that a downstream strategy workflow can turn it into a final route without redoing candidate retrieval.
-
-## Phase decision criteria
-
-- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
-- Treat question, blocked, and failure guidance as semantic validation criteria.
-
-### Outcome selection
-- `accepted`: the comparison is explicit, the builder baseline was considered, and the portfolio posture is justified clearly.
-- `needs_rework`: the same analysis boundary holds, but the matrix, gap analysis, or posture explanation needs local repair.
-- `needs_replan`: the framing, legal comparison boundary, or portfolio posture changed materially.
-- Use `blocked` only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
-
-## Out Of Scope
-
-- Choosing the final `run_existing` / `compose` / `adapt` / `create_new` route.
-- Executing any downstream workflow.
-- Packaging the terminal candidate-workflow-set handoff.
-
-## Forbidden
-
-- Do not auto-run any downstream workflow.
-- Do not justify a material gap merely because the current framework is awkward.
-- Do not omit the workflow-builder baseline when it exists in the capability snapshot.
+Accept when the ranking and posture follow from the matrix and can be challenged from its evidence. Rework gaps in the same comparison; replan if the task criteria or eligible catalog surface changed. Do not choose the final strategy or execute a workflow.

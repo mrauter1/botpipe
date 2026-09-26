@@ -8,6 +8,7 @@ from botpipe_optimizer import PortfolioReviewParameters
 
 
 class Params(PortfolioReviewParameters):
+    max_provider_turns: int = Field(default=32, gt=0, strict=True)
     focus_tasks: list[str] = Field(default_factory=list)
     focus_workflows: list[str] = Field(default_factory=list)
     statuses: list[str] = Field(default_factory=list)

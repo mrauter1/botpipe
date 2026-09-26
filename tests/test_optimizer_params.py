@@ -18,6 +18,7 @@ def _params(**changes):
 def test_improvement_parameters_preserve_selection_and_budgets_through_journal_codec():
     params = _params(
         objective="token_usage",
+        metric_view="token_usage",
         run_refs=["task/run"],
         max_provider_turns=3,
         max_provider_seconds=30,
@@ -29,6 +30,7 @@ def test_improvement_parameters_preserve_selection_and_budgets_through_journal_c
     ("changes", "message"),
     [
         ({"selected_workflow": " "}, "must not be blank"),
+        ({"objective": " "}, "must not be blank"),
         ({"evaluation_spec_path": "\t"}, "must not be blank"),
         ({"run_refs": ["run", "run"]}, "run_refs must be unique"),
         ({"run_refs": ["task/group/run"]}, "run_refs must be unique"),
@@ -55,6 +57,12 @@ def test_improve_workflow_params_require_finite_positive_time_budgets(field, val
         _params(**{field: value})
 
 
-def test_improve_workflow_params_reject_unknown_objectives():
+def test_improve_workflow_params_accept_contextual_free_text_priority():
+    assert _params(objective="Prioritize citation accuracy").objective == (
+        "Prioritize citation accuracy"
+    )
+
+
+def test_improve_workflow_params_reject_unknown_optional_metric_view():
     with pytest.raises(ValidationError, match="reliability"):
-        _params(objective="cost")
+        _params(metric_view="cost")

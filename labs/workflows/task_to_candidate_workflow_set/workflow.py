@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from botpipe import Provider, workflow
+from botpipe import Provider, provider_budget, workflow
 from labs.workflows._shared import (
     LabWorkflowResult,
     ReplanRequired,
@@ -20,8 +20,9 @@ from .contracts import (
 from .params import Params
 
 
-@workflow(name="task_to_candidate_workflow_set", version="2")
-def TaskToCandidateWorkflowSet(params: Params, request: str = "") -> LabWorkflowResult:
+def _run_task_to_candidate_workflow_set(
+    params: Params, request: str
+) -> LabWorkflowResult:
     """Execute the task to candidate workflow set evidence workflow."""
     _producer = Provider()
     context = {"request": request, "parameters": params.model_dump(mode="json")}
@@ -138,6 +139,15 @@ def TaskToCandidateWorkflowSet(params: Params, request: str = "") -> LabWorkflow
                 "replan_artifacts": [str(handle.path) for handle in change.handles],
             }
     return finish("task_to_candidate_workflow_set", completed)
+
+
+@workflow(name="task_to_candidate_workflow_set", version="3")
+def TaskToCandidateWorkflowSet(
+    params: Params, request: str = ""
+) -> LabWorkflowResult:
+    """Execute the SOP within one durable provider-turn budget."""
+    with provider_budget(max_turns=params.max_provider_turns):
+        return _run_task_to_candidate_workflow_set(params, request)
 
 
 workflow_callable = TaskToCandidateWorkflowSet

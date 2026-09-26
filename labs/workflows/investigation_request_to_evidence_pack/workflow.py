@@ -2,7 +2,15 @@
 
 from __future__ import annotations
 
-from botpipe import Provider, workflow
+from dataclasses import replace
+
+from botpipe import Provider, provider_budget, workflow
+from labs.workflows._evidence import (
+    EvidenceIntake,
+    capture_declared_evidence,
+    evidence_intake_context,
+    verify_evidence_intake,
+)
 from labs.workflows._shared import (
     LabWorkflowResult,
     ReplanRequired,
@@ -20,16 +28,29 @@ from .contracts import (
 from .params import Params
 
 
-@workflow(name="investigation_request_to_evidence_pack", version="2")
-def InvestigationRequestToEvidencePack(
-    params: Params, request: str = ""
+def _run_investigation_request_to_evidence_pack(
+    params: Params,
+    request: str,
+    captured_evidence: EvidenceIntake | None = None,
 ) -> LabWorkflowResult:
     """Execute the investigation request to evidence pack evidence workflow."""
     _producer = Provider()
     _reviewer = _producer.with_config(session=None)
-    context = {"request": request, "parameters": params.model_dump(mode="json")}
+    evidence_intake = captured_evidence or capture_declared_evidence(
+        params.evidence_paths
+    )
+    if tuple(record.declared_path for record in evidence_intake.records) != tuple(
+        params.evidence_paths
+    ):
+        raise ValueError("captured evidence does not match declared evidence_paths")
+    verify_evidence_intake(evidence_intake)
+    context = {
+        "request": request,
+        "parameters": params.model_dump(mode="json"),
+        "evidence_intake": evidence_intake_context(evidence_intake),
+    }
     completed = []
-    prior_handles = ()
+    prior_handles = evidence_intake.handles
     frame_investigation_checkpoint = len(completed)
     frame_investigation_reads = prior_handles
     frame_investigation_context = dict(context)
@@ -88,7 +109,23 @@ def InvestigationRequestToEvidencePack(
         publication["investigation_summary"],
         expected_kind=params.investigation_kind,
     )
+    completed[0] = replace(
+        completed[0], handles=(*evidence_intake.handles, *completed[0].handles)
+    )
     return finish("investigation_request_to_evidence_pack", completed)
+
+
+@workflow(name="investigation_request_to_evidence_pack", version="3")
+def InvestigationRequestToEvidencePack(
+    params: Params,
+    request: str = "",
+    captured_evidence: EvidenceIntake | None = None,
+) -> LabWorkflowResult:
+    """Execute the SOP within one durable provider-turn budget."""
+    with provider_budget(max_turns=params.max_provider_turns):
+        return _run_investigation_request_to_evidence_pack(
+            params, request, captured_evidence
+        )
 
 
 workflow_callable = InvestigationRequestToEvidencePack

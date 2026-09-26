@@ -1,7 +1,10 @@
-# Prompt contract
+# Prompt map
 
-Each phase has one producer prompt. The producer writes the declared artifacts and returns the phase-specific typed domain result used by Python control flow. The runtime appends the input payload, artifact destinations, and JSON schema.
+- `frame_producer.md` defines the evidence question, boundary, and intake plan.
+- `evidence_producer.md` builds a provenance-aware evidence pack and typed summary.
+- `evidence_reviewer.md` independently gates traceability, contradictions, gaps, and downstream readiness.
 
-Evidence-quality, security, release, and other phases where independent judgment changes the result also have a reviewer prompt. A reviewer reads immutable artifacts, returns only its acceptance or rework decision and findings, and does not reconstruct the producer's domain facts.
+The runtime injects inputs, prior immutable artifacts, output destinations, and schemas. The reviewer is retained because evidence integrity is the workflow's material decision gate.
 
-`accepted` advances. `needs_rework` repeats the phase with feedback and prior snapshots. `needs_replan` returns to an explicit Python loop. `question` and `blocked` collect a human prerequisite; `failed` stops the workflow.
+Declared paths arrive as `evidence_intake` records and immutable read handles. Prompts preserve unavailable reasons and identify additional live discoveries separately.
+An `accepted` producer result requires every declared artifact. If a missing prerequisite makes responsible work impossible, `question` or `blocked` may pause without creating all outputs; never manufacture placeholder evidence merely to satisfy destinations.

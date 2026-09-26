@@ -43,9 +43,81 @@ def observed_workflow(root):
     return reference, source
 
 
+def assess(request):
+    """A semantic diagnosis that works with observed and source-only inputs."""
+    data = prompt_input(request)
+    evidence = data["evidence"]
+    observations = [item["observation_id"] for item in evidence["observations"]]
+    source_path = data["baseline_surface_manifest"]["files"][0]["relative_path"]
+    links = [
+        {
+            "basis": "source",
+            "statement": "The captured source defines the workflow behavior.",
+            "observation_ids": [],
+            "source_paths": [source_path],
+        }
+    ]
+    assessments = [
+        {
+            "scope": "whole_workflow",
+            "step_name": None,
+            "classification": "opportunity",
+            "dimensions": ["behavioral accuracy"],
+            "summary": "The workflow should produce its declared behavioral result.",
+            "evidence": links,
+            "uncertainty": None,
+        }
+    ]
+    if observations:
+        observed = {
+            "basis": "observation",
+            "statement": "A recorded operation did not complete successfully.",
+            "observation_ids": [observations[0]],
+            "source_paths": [],
+        }
+        assessments.append(
+            {
+                "scope": "step",
+                "step_name": evidence["observations"][0]["step_id"],
+                "classification": "failure",
+                "dimensions": ["reliability", "behavioral accuracy"],
+                "summary": "The observed step failed its executable behavior.",
+                "evidence": [observed],
+                "uncertainty": None,
+            }
+        )
+    else:
+        assessments.append(
+            {
+                "scope": "step",
+                "step_name": "runtime behavior",
+                "classification": "not_assessed",
+                "dimensions": [],
+                "summary": "No execution trace is available for step behavior.",
+                "evidence": [],
+                "uncertainty": "No historical operations were captured.",
+            }
+        )
+    return {
+        "workflow_intent": "Execute the selected workflow correctly and durably.",
+        "intent_evidence": links,
+        "scope_assessments": assessments,
+        "rubric": [
+            {
+                "name": "Preserve intended behavior",
+                "applies_to": "whole workflow and changed step",
+                "description": "The workflow produces the intended result without breaking existing behavior.",
+                "evidence_needed": ["Isolated executable checks", "independent review"],
+                "falsification": "A representative input produces an incorrect result.",
+            }
+        ],
+        "uncertainties": [] if observations else ["Runtime behavior is unobserved."],
+    }
+
+
 def propose(request):
     data = prompt_input(request)
-    evidence = data["evidence_snapshot"]
+    evidence = data["evidence"]
     observation = next(
         item["observation_id"]
         for item in evidence["observations"]
@@ -67,6 +139,14 @@ def propose(request):
         },
         "next_action": "implement_candidate",
         "reason": None,
+    }
+
+
+def no_candidate(request):
+    return {
+        "candidate": None,
+        "next_action": "collect_evidence",
+        "reason": "Source inspection found no safe change without runtime evidence.",
     }
 
 

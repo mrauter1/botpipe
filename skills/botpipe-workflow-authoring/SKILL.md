@@ -1,171 +1,130 @@
 ---
 name: botpipe-workflow-authoring
-description: Author, review, and test durable Botpipe 2.0 Python workflows. Use for Provider and Codex calls, sessions, prompts, typed results, activities, artifacts, worklists, human input, file-native ledger replay, recovery, and workflow labs.
+description: Author, review, and test durable Botpipe 2.0 Python workflows. Use for workflow design, Provider or Codex calls, prompts, sessions, typed results, activities, artifacts, worklists, human input, concurrency, replay, recovery, and workflow packages.
 ---
 
 # Botpipe workflow authoring
 
-Read the repository's current `README.md`, `docs/authoring.md`, and `docs/sdk.md`
-before editing. Inspect a relevant workflow under `botpipe/workflows/` or
-`labs/workflows/`; use `ralph_loop` for artifact/worklist composition. Consult
-`docs/cli.md` for recovery commands and `docs/testing.md` for test selection.
-Treat the current implementation as authoritative if this skill is stale.
+Start with `docs/authoring.md`, `docs/prompting.md`, and the relevant section of
+`docs/sdk.md`. Load `README.md` for repository orientation, `docs/cli.md` for
+operator recovery, `docs/testing.md` before changing tests, and
+`docs/architecture.md` for runtime internals only as needed. Inspect a packaged
+workflow and its tests when its pattern is relevant. Use the implementation as
+authority if documentation conflicts with it.
 
-Target the Codex-only 2.0 API. Use `Provider()` by default or `Codex()` explicitly;
-both are lazy and bind to the active workflow runtime. Do not introduce removed
-1.x APIs (`Session.run`, `ask`, `Session.fresh`), other provider backends,
-`decide`, `allow_commands`, or streaming iterators. Use `on_event` only for
-best-effort progress, never durable control flow. Use the current file-native
-state format; do not add a legacy reader, migration path, SQLite journal, or
-provider receipt store.
+Target the Codex-only 2.0 API. Use `Provider()` by default or `Codex()`
+explicitly. Do not introduce removed 1.x APIs, other provider backends, graph
+compilers, route tables, mutable workflow-state engines, a second checkpoint
+store, or a legacy persistence path.
 
-## Invariant
+## Design before code
 
-Python owns control flow. Every material observation or external effect goes
-through a recorded Botpipe operation.
+Answer these as design questions, not mandatory metadata or files:
 
-Use `@workflow` on an ordinary typed sync or async function. Express decisions,
-loops, composition, and returns in Python. Use a nested decorated call for a
-durable child and `parallel()` / `aparallel()` for independent branches. Do not
-introduce route tables, transition objects, graph compilation, or mutable
-workflow-state models.
-Prefer a small function composed from existing Botpipe primitives over a new
-runner, checkpoint format, or generic orchestration layer. Bound rework loops
-with explicit acceptance conditions and a provider budget or attempt limit.
+1. What outcome and obligations define success?
+2. What evidence is authoritative, untrusted, missing, or contradictory?
+3. Can one capable provider turn finish the work? What concrete benefit requires
+   a durable handoff, separate permission/session, independent review, parallel
+   branch, or human decision?
+4. What enters and leaves each step, what uncertainty remains, and what may the
+   next step assume?
+5. How do failure, exhaustion, ambiguity, and unsafe effects recover or escalate?
 
-## Choose the operation boundary
+Keep goals and obligations stable while allowing methods to adapt to discovered
+evidence. Start with one provider operation. Split only for a clear reliability,
+authority, concurrency, reuse, or recovery benefit.
 
-Choose the smallest operation that can perform the required work:
+## Keep control explicit
+
+Use `@workflow` on an ordinary typed sync or async function. Python owns
+sequence, `if`/`match` branches, bounded loops, budgets, permissions, joins,
+exception handling, and human escalation. Provider turns own semantic judgment,
+investigation, and tool-driven work.
+
+Use a nested decorated call for a durable child. Use `parallel` / `aparallel`
+only for independent required work; a conditional branch selects one path, while
+parallel work executes multiple paths and joins them. Give parallel branches
+separate sessions and isolate source when concurrent writes or stable review
+require it.
+
+Bound rework and define exhaustion. Apply `provider_budget(...)` around the
+whole provider-using workflow when a whole-workflow limit is intended; nested
+budget scopes all apply. Do not describe run `timeout` as a wall-clock deadline
+for arbitrary Python. A provider-budget breach suspends the run as
+`budget_exceeded`; return a typed domain exhaustion result only by checking an
+explicit domain bound before another dispatch.
+
+## Choose operations truthfully
 
 | Work | Operation |
 | --- | --- |
-| Implement code, execute tests or builds | `provider.run` / `arun` |
-| Inspect files or review without executing write-producing checks | `provider.query` / `aquery` |
-| Produce an answer from supplied context without tools | `provider.generate` / `agenerate` |
-| Custom I/O: API calls, subprocesses, clocks, randomness, material file reads | `@activity` |
-| Typed human decision | `ask_human(question, returns=Model)` |
+| Edit, execute tests/builds, or use write-capable tools | `run` / `arun` |
+| Inspect without write-producing checks | `query` / `aquery` |
+| Transform supplied context; opt into any tools explicitly | `generate` / `agenerate` |
+| Custom I/O, subprocesses, clocks, randomness, material reads | `@activity` |
+| Typed human authority or missing information | `ask_human` |
 
-Treat `query` and `generate` as fixed read-only, network-off presets of `run`.
-Neither accepts `writes`, `sandbox`, or `network`. Use `query(tools=...)` or
-`generate(allowed_tools=...)` for explicit tool names, not command patterns.
-An opted-in remote tool can still have remote effects; sandbox restrictions and
-tool-call auditing are not proof that those effects cannot occur.
+`query` and `generate` are fixed read-only, network-off presets. Configure
+sandbox, network, tool allowlists, retry policy, and budgets in code—not as
+prompt promises. An explicitly enabled remote tool can still have remote effects.
+`writes=()` declares no durable artifacts; it does not make a `run` read-only.
 
-Use `run` for reviewers expected to execute tests, even with `writes=()`:
-no declared outputs does not mean no workspace writes. Preserve native temporary
-directory access; do not request full access just for test caches. Make the
-reviewer report executed checks, failures, and unavailable checks distinctly;
-do not silently replace execution with inspection or let it repair the producer's
-work unless that is explicitly its role.
+Keep every material observation or effect in a recorded operation. Ordinary
+workflow Python reruns on resume. Keep custom activities narrow.
 
-For labs, return typed producer results directly. Add a reviewer only at a
-material decision or publication gate where rejection changes control flow.
-Avoid duplicating every producer with a mechanical verifier. Bound repair loops
-in Python and feed typed review findings into the next producer call.
+## Prompt and hand off evidence
 
-Keep custom effects inside activities; ordinary workflow Python reruns on
-resume. Use `current_run().operation` only for lower-level integrations.
+Design prompts around goal, authoritative evidence, obligations, output,
+uncertainty, verification, and escalation. Use direct language and only useful
+examples. Do not force chain-of-thought or hard-code a long decision procedure
+when the provider can adapt from current evidence.
 
-## Retry safety and replay
+Use `Prompt.file` for substantial colocated prompts and plain strings for short
+ones. Prefer typed `input` and `returns`. A schema validates shape, not factual
+correctness. Use artifacts only when a file is a deliverable or substantial
+handoff. Pass independent reviewers primary evidence and relevant upstream and
+current immutable artifacts, not only a producer summary.
 
-Treat `retry_safe=True`, the default for activities and all provider presets,
-as permission to repeat, not proof of idempotence. Set
-`@activity(retry_safe=False)` or `provider.run(..., retry_safe=False)` for effects
-that must not repeat, such as payments, publishing, or non-idempotent remote
-mutations. Provider configuration and `with_config` also accept `retry_safe`.
-Setting it to `False` disables new provider output-repair turns as well as
-automatic recovery attempts. Activity exception retries are separate and
-default to zero.
+Add a reviewer only when rejection changes control flow or protects a material
+boundary. Separate its session from the producer. Use `run` if it must execute
+checks and make it report passed, failed, and unavailable checks distinctly.
+Use `query` for inspection only. Persist a typed review with an activity only if
+a file consumer actually needs it. Keep rework bounded and feed exact findings
+back to the responsible producer.
 
-Let the runtime adopt completed provider responses. Automatic provider retry
-requires a confirmed stopped attempt and both recorded and current retry
-permission. Leave unknown effects unresolved; do not catch them and launch a
-replacement turn. Use operator resolution after inspecting the run. Unresolved
-work belongs to its operation and run; it does not reserve the workspace. Never
+## Preserve replay and session semantics
+
+Treat `ledger.jsonl` as the sole replay authority. Completed operations replay.
+Prompt, input, read digest, output schema, or effective-configuration changes can
+cause replay mismatch. Do not consult live files to skip recorded work or add an
+independent resume mechanism.
+
+`retry_safe=True` permits repetition after a confirmed stop; it does not prove
+idempotence. Set it false for effects that must not repeat. Do not replace an
+unknown or running effect; reconcile it or require operator resolution. Never
 claim exactly-once execution.
 
-Treat `ledger.jsonl` as the only run history and replay authority. Exact attempt
-prompts, resolved requests and responses already live under the run's
-`operations/` directory. Do not add parallel checkpoint, receipt, trace or
-summary files for durable control flow. Session continuity belongs in the
-runtime's session binding, not in workflow-authored state.
+Reuse a provider for conversation continuity. `with_config` shares its session
+unless replaced. Use `Session.task`, `Session.work_item`, or `Session()` for
+stable distinct conversations and `session=None` for independent turns. Keep
+keys and operation order stable across resume.
 
-Preserve recorded operation scopes, order, and contracts across resume. Changes
-to prompts, inputs, read digests, output schemas, or effective configuration can
-cause replay mismatches. Do not skip already-completed work by consulting live
-files or add an independent resume/checkpoint mechanism.
+Botpipe does not prepare, back up, restore, or roll back the workspace. Artifact
+capture validates current bytes but does not prove writer attribution or an
+atomic snapshot. Use returned `ArtifactHandle` values as immutable reads. Use
+`Worklist.from_artifact` for stable item selection and call `complete` only after
+acceptance.
 
-## Prompts, results, and artifacts
-
-Use a plain string for an inline prompt and `Prompt.file` for a prompt beside the
-workflow. Prefer typed `input` and `returns` contracts. A strong provider prompt
-states the goal, relevant evidence, required output, constraints, validation,
-and done criteria without prescribing unnecessary implementation details.
-Use `result.value` for the validated return. Request typed review verdicts and
-save them through an activity if a review file is needed; do not ask `query` to
-write a review file. Allow bounded output repair (`output_retries=2` by default)
-when retry policy permits it. Repairs consume provider turns and do not roll
-back edits made by invalid attempts.
-
-Declare provider destinations with `Artifact.json`, `.md`, `.text`, or `.raw` in
-`run(..., writes=...)`. Mark outputs required when later behavior depends on them.
-Read the immutable `ArtifactHandle` from `Result.artifacts`; do not treat a live
-workspace file as historical state. A valid current destination may predate the
-attempt, and capture does not establish exclusive writer attribution or an atomic
-repository snapshot. Pass captured handles through `reads` for durable inputs;
-do not claim this limits all other files Codex can inspect.
-
-Botpipe does not prepare, move, back up, restore, or roll back workspace files
-around provider work. A failed attempt leaves its edits in place, and any retry
-works from current repository state.
-
-Use `Worklist.from_artifact` when code needs durable item selection and
-completion. Item IDs must be unique. The runtime snapshots the original
-selection, including completed items on replay. Do not reselect from a changed
-live file or filter out completed items on resume. Call `items.complete(item)`
-only after acceptance; use the resulting `items.artifact` as the updated snapshot.
-
-## Sessions and concurrency
-
-Reuse a provider to continue its conversation. Use `with_config(instructions=...)`
-for roles; it shares the original session unless replaced. Pass `session=Session()`
-for a separate conversation or `session=None` for independent turns. Use
-`Session.task(key)` and `Session.work_item(item, key="default")` for durable task
-and work-item identities. Keep their keys stable across resume.
-
-Give parallel branches separate sessions. Distinct sessions may run writable
-calls concurrently in the same canonical workspace; turns sharing one session
-serialize. Design prompts and artifact destinations for shared mutable state,
-or use separate worktrees when edits require isolation. Read-only calls may
-observe a concurrent writer mid-edit, so isolate the source when a review needs
-a stable tree.
-
-Each complete provider operation owns a temporary app-server, retained through
-validation and repair and disposed before the session is released. Later
-operations resume durable conversation history in a new server; do not rely on
-background children or live tool handles surviving that boundary. Normal idle
-app-server disposal confirms the parent exited; child survival is unguaranteed.
-It is distinct from cancellation/timeout interruption and contained-tree
-cleanup. If disposal fails, retain the completed result, never redispatch it,
-and block session reuse until shutdown is retried or an operator resolves the
-uncertainty.
-
-Use `provider_budget(max_turns=..., max_seconds=..., turn_timeout_seconds=...)`
-for durable provider limits shared by nested and parallel work. Repairs count;
-replaying or adopting completed results does not dispatch again. Do not describe
-the run's `timeout` as a wall-clock deadline for arbitrary workflow Python.
-
-## Validate
-
-Before finishing:
+## Validate outcomes
 
 1. Import the workflow and inspect its typed callable contract.
-2. Run focused behavioral tests with `FakeProvider`, without live credentials.
-3. Cover acceptance, bounded rework, and relevant pause/resume or interruption
-   paths. Check that replay makes no new provider calls for completed work.
-   Assert outcomes, captured artifacts, and meaningful policies rather than
-   exact prompt wording, private call order, or timing-sensitive sleeps.
-4. Run `botpipe workflows show module:function` when the CLI is available.
-5. Report commands and results, distinguish deterministic checks from real
-   Codex validation, and state any remaining runtime-dependent risk. Do not claim
-   quality, performance, or cost improvements without measured evidence.
+2. Run focused tests with `FakeProvider`, without live credentials.
+3. Cover the useful success path plus material rejection, exhaustion,
+   pause/resume, and uncertain-effect paths. Confirm replay makes no new provider
+   call for completed work.
+4. Assert domain outcomes, artifacts, routing, budgets, and policy—not exact
+   prompt prose, private model reasoning, or one exact tool sequence.
+5. Run `botpipe workflows show module:function` when available.
+6. Distinguish deterministic checks from live-provider validation and report any
+   remaining runtime-dependent risk. Do not claim quality, cost, or performance
+   improvements without measured evidence.

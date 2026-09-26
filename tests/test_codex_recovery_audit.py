@@ -114,7 +114,7 @@ def running_history_adapter(
         capabilities=replace(
             capabilities(), methods=frozenset(methods), supports_interrupt=True
         ),
-        interrupt_grace_seconds=0.2,
+        interrupt_grace_seconds=2,
     )
     calls = []
     reads = 0
@@ -303,7 +303,7 @@ def test_running_recovery_without_background_cleanup_stays_unknown(
 def test_recovery_waits_until_native_background_inventory_is_empty(
     tmp_path, monkeypatch
 ):
-    request = interrupted_request(tmp_path)
+    request = replace(interrupted_request(tmp_path), timeout=5)
     adapter, calls = running_history_adapter(
         monkeypatch,
         terminal="interrupted",

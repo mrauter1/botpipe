@@ -65,6 +65,7 @@ def derive_surface_manifest(
         relative_paths=list(relative_paths)
         if relative_paths is not None
         else _surface_paths(root),
+        allow_empty=surface_kind == "baseline",
     )
     files = {entry["relative_path"]: entry for entry in derived["files"]}
     for relative, source in (authoritative_sources or {}).items():

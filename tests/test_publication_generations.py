@@ -510,7 +510,7 @@ def test_parallel_publications_commit_one_complete_generation(tmp_path):
 def test_receipt_switch_retries_windows_contention_without_touching_previous(
     tmp_path, monkeypatch, winerror
 ):
-    import botpipe_optimizer.recommendations as recommendations
+    from botpipe_optimizer import recommendations
 
     previous, _ = _publish(tmp_path, "previous")
     canonical = tmp_path / "optimization_publication_receipt.json"
@@ -544,7 +544,7 @@ def test_receipt_switch_retries_windows_contention_without_touching_previous(
 def test_failed_receipt_switch_preserves_bundle_and_cleans_staging(
     tmp_path, monkeypatch, winerror, expected_attempts
 ):
-    import botpipe_optimizer.recommendations as recommendations
+    from botpipe_optimizer import recommendations
 
     previous, _ = _publish(tmp_path, "previous")
     canonical = tmp_path / "optimization_publication_receipt.json"
@@ -600,7 +600,9 @@ def test_publication_rejects_self_consistent_unknown_citation(tmp_path):
     assert not list(tmp_path.iterdir())
 
 
-def test_publication_requires_each_candidate_to_cite_evidence(tmp_path):
+def test_publication_accepts_honest_source_only_candidate_without_observation_citation(
+    tmp_path,
+):
     snapshot, candidate_set, review, baseline = _records()
     candidate = candidate_set.candidates[0].model_copy(
         update={"cited_observation_ids": []}
@@ -619,7 +621,44 @@ def test_publication_requires_each_candidate_to_cite_evidence(tmp_path):
     )
     forged_review = finalize_candidate_review_payload(review_payload)
 
-    with pytest.raises(ValueError, match="(must cite|at least 1 item)"):
+    receipt = publish_recommendation(
+        output_dir=tmp_path,
+        evidence_snapshot=snapshot,
+        candidate_set=forged_set,
+        review=forged_review,
+        baseline_manifest=baseline,
+        max_output_bytes=100_000,
+    )
+    assert receipt.status == "accepted"
+    assert receipt.reviewed_candidate_ids == [candidate.candidate_id]
+
+
+def test_publication_rejects_source_evidence_outside_captured_baseline(tmp_path):
+    snapshot, candidate_set, review, baseline = _records()
+    candidate = candidate_set.candidates[0].model_copy(
+        update={
+            "cited_observation_ids": [],
+            "targets": ["outside.py"],
+            "payload": candidate_set.candidates[0].payload.model_copy(
+                update={"target_paths": ["outside.py"]}
+            ),
+        }
+    )
+    candidate = candidate.model_copy(
+        update={"candidate_id": candidate.expected_candidate_id()}
+    )
+    forged_set = candidate_set.model_copy(update={"candidates": [candidate]})
+    forged_set = forged_set.model_copy(
+        update={"candidate_set_id": forged_set.expected_candidate_set_id()}
+    )
+    review_payload = review.model_dump(mode="json", by_alias=True)
+    review_payload.update(
+        candidate_set_id=forged_set.candidate_set_id,
+        reviewed_candidate_ids=[candidate.candidate_id],
+    )
+    forged_review = finalize_candidate_review_payload(review_payload)
+
+    with pytest.raises(ValueError, match="targets are outside captured baseline"):
         publish_recommendation(
             output_dir=tmp_path,
             evidence_snapshot=snapshot,
@@ -629,6 +668,51 @@ def test_publication_requires_each_candidate_to_cite_evidence(tmp_path):
             max_output_bytes=100_000,
         )
     assert not list(tmp_path.iterdir())
+
+
+@pytest.mark.parametrize(
+    ("targets", "payload_targets", "message"),
+    [
+        (["example.py"], ["other.py"], "do not match typed payload"),
+        (["../example.py"], ["../example.py"], "canonical relative paths"),
+    ],
+)
+def test_publication_binds_candidate_targets_to_payload_and_baseline(
+    tmp_path, targets, payload_targets, message
+):
+    snapshot, candidate_set, review, baseline = _records()
+    original = candidate_set.candidates[0]
+    candidate = original.model_copy(
+        update={
+            "targets": targets,
+            "payload": original.payload.model_copy(
+                update={"target_paths": payload_targets}
+            ),
+        }
+    )
+    candidate = candidate.model_copy(
+        update={"candidate_id": candidate.expected_candidate_id()}
+    )
+    forged_set = candidate_set.model_copy(update={"candidates": [candidate]})
+    forged_set = forged_set.model_copy(
+        update={"candidate_set_id": forged_set.expected_candidate_set_id()}
+    )
+    review_payload = review.model_dump(mode="json", by_alias=True)
+    review_payload.update(
+        candidate_set_id=forged_set.candidate_set_id,
+        reviewed_candidate_ids=[candidate.candidate_id],
+    )
+    forged_review = finalize_candidate_review_payload(review_payload)
+
+    with pytest.raises(ValueError, match=message):
+        publish_recommendation(
+            output_dir=tmp_path,
+            evidence_snapshot=snapshot,
+            candidate_set=forged_set,
+            review=forged_review,
+            baseline_manifest=baseline,
+            max_output_bytes=100_000,
+        )
 
 
 @pytest.mark.parametrize(
@@ -728,7 +812,7 @@ def test_loader_rejects_fully_hashed_bundle_with_unknown_citation(
         patch.setattr(
             recommendations,
             "_validate_candidate_semantics",
-            lambda candidate_set, evidence_snapshot: None,
+            lambda candidate_set, evidence_snapshot, **kwargs: None,
         )
         publish_recommendation(
             output_dir=tmp_path,

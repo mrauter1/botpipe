@@ -186,6 +186,7 @@ def derive_surface_manifest(
     boundary: Mapping[str, Any],
     surface_kind: str,
     relative_paths: Sequence[str] | None = None,
+    allow_empty: bool = False,
 ) -> dict[str, Any]:
     _reject_symlinks(Path(root))
     _reject_symlinks(Path(expected_root))
@@ -209,7 +210,7 @@ def derive_surface_manifest(
         if not resolved.is_relative_to(actual):
             raise ValueError("surface path escapes expected root")
         files.append(_file_entry(candidate, rel))
-    if not files:
+    if not files and not allow_empty:
         raise ValueError("surface must contain at least one regular file")
     return _manifest(actual, boundary, surface_kind, files)
 

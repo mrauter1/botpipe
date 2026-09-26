@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from botpipe import Provider, current_run, workflow
+from botpipe import Provider, current_run, provider_budget, workflow
 from labs.workflows._shared import (
     LabWorkflowResult,
     ReplanRequired,
@@ -21,9 +21,8 @@ from .contracts import (
 from .params import Params
 
 
-@workflow(name="candidate_workflow_to_adapted_execution_plan", version="2")
-def CandidateWorkflowToAdaptedExecutionPlan(
-    params: Params, request: str = ""
+def _run_candidate_workflow_to_adapted_execution_plan(
+    params: Params, request: str
 ) -> LabWorkflowResult:
     """Execute the candidate workflow to adapted execution plan evidence workflow."""
     _producer = Provider()
@@ -141,6 +140,15 @@ def CandidateWorkflowToAdaptedExecutionPlan(
                 "replan_artifacts": [str(handle.path) for handle in change.handles],
             }
     return finish("candidate_workflow_to_adapted_execution_plan", completed)
+
+
+@workflow(name="candidate_workflow_to_adapted_execution_plan", version="3")
+def CandidateWorkflowToAdaptedExecutionPlan(
+    params: Params, request: str = ""
+) -> LabWorkflowResult:
+    """Execute the SOP within one durable provider-turn budget."""
+    with provider_budget(max_turns=params.max_provider_turns):
+        return _run_candidate_workflow_to_adapted_execution_plan(params, request)
 
 
 workflow_callable = CandidateWorkflowToAdaptedExecutionPlan

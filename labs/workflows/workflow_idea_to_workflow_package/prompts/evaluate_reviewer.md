@@ -1,28 +1,15 @@
 ## Independent review result
 
-Read the producer's typed result and immutable artifacts. Return one JSON result matching the injected review schema. Use `accepted` when the evidence meets the positive phase condition, `needs_rework` when this phase can repair it, `needs_replan` when accepted upstream work must change, `question` or `blocked` for missing prerequisites, and `failed` for a terminal defect. Record concise `validation_findings` and cite only captured artifact names. Do not reconstruct or restate the producer's domain fields.
+Read the producer result, all immutable upstream artifacts, and the runtime candidate records. Return one JSON result matching the injected review schema. Review only; do not repair files or reconstruct producer domain fields. Cite only captured artifact names.
 
-# Evaluate Package Reviewer
+Resolve relative repository and evidence paths against the injected `source_workspace`; inspect source read-only.
 
-## Evidence
+# Review package evaluation
 
-- Verify the declared phase artifacts—`workflow_evaluation`, `workflow_package_summary`, `workflow_next_action`—against the phase requirements and require their claims to be internally consistent.
-- Cross-check their root, file paths, hashes, compile/import discovery, and configured-test claims against runtime inputs `generated_candidate`, `candidate_manifest`, and `candidate_evaluation`.
+Accept only when the evaluation is faithful to the actual generated source and evidence. Cross-check paths, hashes, compile/import/discovery, and configured-test claims against `generated_candidate`, `candidate_manifest`, and `candidate_evaluation`. Then check that the evaluation tested the requested outcome and reviewed design rather than merely file format.
 
-## Phase decision criteria
+Require explicit findings on prompt completeness, source grounding, instruction contradictions, assumptions, step handoffs, semantic decisions, acceptance/recovery behavior, and downstream contracts. Proven and unproven outcomes must be separated; unavailable or unexecuted checks must not be presented as passes.
 
-- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
-- Treat question, blocked, and failure guidance as semantic validation criteria.
+When `enforce_generated_test` is true, verify that the focused generated-entry test exists and is substantive. If the caller supplied no explicit test argv, verify that the automatic focused pytest ran; otherwise report the command that actually ran. Check meaningful routing or replay behavior where relevant without imposing a fixed test quota. Vacuous assertions, file-shape checks, and fake or narrow mock execution do not prove live workflow quality.
 
-### Outcome selection rules
-- Choose `accepted` only if runtime validation succeeded, the evaluation artifacts faithfully record the actual isolated candidate and verified file manifest, and they provide a concrete promotion rationale and credible rollback action.
-- Choose `needs_rework` when the same accepted design still holds but the implementation or proof surface needs local correction.
-- Choose `needs_replan` when evaluation proves the design contract is wrong or incomplete in a material way.
-- Use `question` only for genuine blocking prerequisites or irrecoverable contradictions.
-
-## Forbidden
-
-- Do not publish on faith.
-- Do not accept missing rollback evidence.
-- Do not treat the provider-authored `workflow_package_manifest` as proof that files were materialized or validated; runtime inputs are authoritative for those facts.
-- Do not convert a design problem into a rework decision.
+Use `needs_rework` only when another evaluation pass can correct the evaluation report, package summary, or next-action evidence without changing the candidate. When generated source, prompts, package behavior, or implementation proof is defective, use `needs_replan` and cite the exact evidence; the workflow deliberately returns through `design_workflow` before rebuilding a fresh candidate. Also use `needs_replan` when the design boundary or prompt plan is materially wrong. Use `question` or `blocked` only for a genuine missing prerequisite. Never treat the provider-authored content manifest as proof of materialization or execution.

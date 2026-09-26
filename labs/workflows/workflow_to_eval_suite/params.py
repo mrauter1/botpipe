@@ -8,6 +8,7 @@ from botpipe_optimizer import SelectedWorkflowTaskFramingWithEvidenceParameters
 
 
 class Params(SelectedWorkflowTaskFramingWithEvidenceParameters):
+    max_provider_turns: int = Field(default=32, gt=0, strict=True)
     optimization_receipt_path: str | None = None
     candidate_id: str | None = None
     max_evidence_bytes: int = Field(default=50 * 1024 * 1024, gt=0)
