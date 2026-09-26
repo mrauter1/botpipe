@@ -10,7 +10,7 @@ import tempfile
 import time
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from botpipe.storage import sync_directory
@@ -104,8 +104,11 @@ def validate_candidate_set(
     allowed_kinds: Iterable[CandidateKind],
     expected_selected_workflow: str,
     max_output_bytes: int,
+    baseline_manifest: Mapping[str, Any] | None = None,
 ) -> CandidateSet:
-    _validate_candidate_semantics(candidate_set, evidence_snapshot)
+    _validate_candidate_semantics(
+        candidate_set, evidence_snapshot, baseline_manifest=baseline_manifest
+    )
     if candidate_set.selected_workflow != expected_selected_workflow:
         raise ValueError("CandidateSet selected_workflow does not match invocation")
     if len(candidate_set.candidates) > max_candidates:
@@ -120,7 +123,10 @@ def validate_candidate_set(
 
 
 def _validate_candidate_semantics(
-    candidate_set: CandidateSet, evidence_snapshot: EvidenceSnapshot
+    candidate_set: CandidateSet,
+    evidence_snapshot: EvidenceSnapshot,
+    *,
+    baseline_manifest: Mapping[str, Any] | None = None,
 ) -> None:
     """Validate evidence-linked semantics independent of invocation policy."""
     candidate_set.verify_identity()
@@ -137,14 +143,47 @@ def _validate_candidate_semantics(
     if len(candidate_ids) != len(set(candidate_ids)):
         raise ValueError("candidate IDs must be unique across kinds")
     citable = evidence_snapshot.citable_observation_ids()
+    manifest_files = (
+        baseline_manifest.get("files") if baseline_manifest is not None else None
+    )
+    captured_paths = (
+        {
+            str(item["relative_path"])
+            for item in manifest_files
+            if isinstance(item, Mapping) and item.get("relative_path")
+        }
+        if isinstance(manifest_files, list)
+        else None
+    )
     for candidate in candidate_set.candidates:
-        if not candidate.cited_observation_ids:
-            raise ValueError("candidate must cite at least one observation")
+        if not candidate.cited_observation_ids and captured_paths is None:
+            raise ValueError(
+                "source-only candidate requires a canonical captured baseline"
+            )
         unknown = sorted(set(candidate.cited_observation_ids) - citable)
         if unknown:
             raise ValueError(
                 f"candidate cites unknown observations: {', '.join(unknown)}"
             )
+        if candidate.kind != "evaluation_case":
+            payload_targets = _candidate_payload_targets(candidate)
+            if candidate.targets != payload_targets:
+                raise ValueError("candidate targets do not match typed payload targets")
+            invalid = sorted(
+                path for path in candidate.targets if not _safe_relative(path)
+            )
+            if invalid:
+                raise ValueError(
+                    "candidate targets must be canonical relative paths: "
+                    + ", ".join(invalid)
+                )
+            if captured_paths is not None:
+                outside = sorted(set(candidate.targets) - captured_paths)
+                if outside:
+                    raise ValueError(
+                        "candidate targets are outside captured baseline: "
+                        + ", ".join(outside)
+                    )
     if candidate_set.candidates and (
         candidate_set.next_action != "implement_candidate"
         or candidate_set.no_candidate_reason is not None
@@ -157,6 +196,27 @@ def _validate_candidate_semantics(
         or not candidate_set.no_candidate_reason
     ):
         raise ValueError("empty CandidateSet needs an evidence/no-change reason")
+
+
+def _candidate_payload_targets(candidate: Candidate) -> list[str]:
+    if candidate.kind == "producer_prompt":
+        return candidate.payload.prompt_paths
+    if candidate.kind == "verifier_rubric":
+        return candidate.payload.rubric_paths
+    if candidate.kind in {"tokens", "workflow"}:
+        return candidate.payload.target_paths
+    return [candidate.payload.suite_target]
+
+
+def _safe_relative(value: str) -> bool:
+    path = PurePosixPath(value)
+    return bool(
+        value
+        and "\\" not in value
+        and not path.is_absolute()
+        and ".." not in path.parts
+        and str(path) == value
+    )
 
 
 def _baseline_manifest_identity(baseline_manifest: Mapping[str, Any]) -> str:
@@ -239,7 +299,9 @@ def publish_recommendation(
         review = CandidateReview.model_validate(
             review.model_dump(mode="python", by_alias=True), strict=True
         )
-    _validate_candidate_semantics(candidate_set, evidence_snapshot)
+    _validate_candidate_semantics(
+        candidate_set, evidence_snapshot, baseline_manifest=baseline_manifest
+    )
     if candidate_set.candidates:
         if review is None or not review.accepted:
             raise ValueError(
@@ -554,8 +616,6 @@ def load_optimization_candidate(
         or evidence.baseline_surface_manifest_id != receipt.baseline_surface_manifest_id
     ):
         raise ValueError("evidence anchors do not match receipt")
-    _validate_candidate_semantics(candidate_set, evidence)
-
     matches = [
         item for item in candidate_set.candidates if item.candidate_id == candidate_id
     ]
@@ -568,6 +628,7 @@ def load_optimization_candidate(
         _baseline_manifest_identity(baseline) != receipt.baseline_surface_manifest_id
     ):
         raise ValueError("baseline surface identity does not match receipt")
+    _validate_candidate_semantics(candidate_set, evidence, baseline_manifest=baseline)
 
     handoff = read_refinement_handoff(handoff_path, max_output_bytes=max_output_bytes)
     expected_handoff = (

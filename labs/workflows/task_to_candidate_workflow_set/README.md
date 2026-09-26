@@ -7,9 +7,9 @@ Aliases: `candidate-workflow-set`, `workflow-candidate-set`
 
 ## Durable function design
 
-`workflow.py` exports one ordinary Python function decorated with `@workflow`. Python controls phase order, optional passes, loops, and nested workflows. Each phase runs one producer with `Provider.run`; the producer returns the package-specific typed domain result from `contracts.py`. Evidence-quality and risk decisions that benefit from independent judgment add a read-only reviewer, whose result contains the review decision and findings rather than a copy of the domain handoff.
+`workflow.py` exports one ordinary Python workflow. Python controls framing, analysis, packaging, and replanning. Producers make the domain judgments; runtime checks keep rankings within the observed catalog and preserve them through packaging.
 
-Every declared output is a required `Artifact`. Botpipe snapshots the provider-written file before the operation completes, and later phases read those immutable handles. A reviewer, when present, may cite only captured artifact names. The final typed `LabWorkflowResult` carries the accepted handles in `artifacts`, convenience snapshot paths in `artifact_paths`, and unique candidate identifiers. When phases reuse an artifact name, the later accepted handle wins.
+Every declared output is required when a phase returns `accepted`. Botpipe snapshots those files before completion, and later phases read immutable handles. A prerequisite-seeking `question` or `blocked` result may pause before files exist; it must not fabricate placeholder artifacts. The final typed `LabWorkflowResult` carries accepted handles in `artifacts` and convenience snapshot paths in `artifact_paths`.
 
 ## Invocation
 
@@ -19,11 +19,13 @@ from labs.workflows.task_to_candidate_workflow_set import Params, workflow_calla
 
 client = Botpipe(workspace=".")
 result = client.run(
-    workflow_callable, Params(...), request="Describe the requested outcome"
+    workflow_callable,
+    Params(task_title="Automate release-readiness review"),
+    request="Find and rank workflows that can support this task.",
 )
 ```
 
-Parameters are validated by the package-local Pydantic `Params` model before any operation starts. `request` contains the human-readable task or evidence request.
+Parameters are validated before work starts. `max_provider_turns` (default 32) caps the whole workflow, including retries; human pauses have no wall-clock deadline. `request` contains the human-readable task.
 
 ## Phases and evidence
 

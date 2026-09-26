@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
+import sys
 import tomllib
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
@@ -14,18 +16,21 @@ from typing import Any
 from botpipe import ArtifactHandle, activity
 
 
+class WorkflowManifestValidationError(ValueError):
+    """The provider-authored manifest is malformed and can be repaired."""
+
+
 @activity(retry_safe=True, name="prepare generated workflow candidate")
 def prepare_generated_workflow_candidate(
     repository: str,
     destination: str,
     package_name: str,
-    authoring_shape: str,
 ):
-    """Create a run-owned edit surface for the requested authoring shape."""
+    """Create a run-owned edit surface for one workspace workflow package."""
     from botpipe_optimizer import prepare_candidate_workspace
 
     repo = Path(repository).resolve()
-    package_path = _generated_package_path(package_name, authoring_shape)
+    package_path = _generated_package_path(package_name)
     test_path = f"tests/runtime/test_{package_name}.py"
     requested = []
     for relative in (package_path, test_path):
@@ -33,55 +38,74 @@ def prepare_generated_workflow_candidate(
         if source.is_symlink():
             raise ValueError(f"generated workflow target is a symlink: {relative}")
         if source.exists():
-            if relative.startswith(".botpipe/"):
-                raise ValueError(
-                    "generated workflow target already exists; choose a new "
-                    f"package_name: {relative}"
-                )
-            requested.append(relative)
-    if not requested:
-        anchors = [
-            path
-            for path in (
-                repo / "pyproject.toml",
-                repo / "README.md",
-                repo / "labs" / "workflows" / "__init__.py",
+            raise ValueError(
+                "generated workflow target already exists; choose a new "
+                f"package_name: {relative}"
             )
-            if path.is_file() and not path.is_symlink()
-        ]
-        if not anchors:
-            raise FileNotFoundError(
-                "generated workflow validation requires one existing repository file"
-            )
+    anchors = [
+        path
+        for path in (
+            repo / "pyproject.toml",
+            repo / "README.md",
+            repo / "labs" / "workflows" / "__init__.py",
+        )
+        if path.is_file() and not path.is_symlink()
+    ]
+    if anchors:
         requested.append(anchors[0].relative_to(repo).as_posix())
-    candidate = prepare_candidate_workspace(
-        repo,
-        requested,
-        destination,
-    )
-    generated_root = (
-        Path(package_path).parent.as_posix()
-        if authoring_shape == "single"
-        else package_path
-    )
+        candidate = prepare_candidate_workspace(repo, requested, destination)
+    else:
+        candidate = _prepare_empty_generated_candidate(repo, Path(destination))
     return replace(
         candidate,
-        allowed_roots=tuple(
-            sorted({*candidate.allowed_roots, generated_root, "tests/runtime"})
-        ),
+        allowed_roots=tuple(sorted({*candidate.allowed_roots, package_path})),
+        allowed_added_paths=(test_path,),
     )
 
 
-def _generated_package_path(package_name: str, authoring_shape: str) -> str:
-    if authoring_shape == "single":
-        return f".botpipe/workflows/{package_name}.py"
-    if authoring_shape == "flow_specs":
-        return f".botpipe/workflows/{package_name}"
-    if authoring_shape == "package":
-        return f"labs/workflows/{package_name}"
-    raise ValueError(
-        f"unsupported generated workflow authoring shape: {authoring_shape}"
+def _prepare_empty_generated_candidate(repo: Path, destination: Path):
+    """Create the optimizer-owned shape when authoring starts without an anchor."""
+    from botpipe_optimizer.candidates import (
+        CandidateWorkspace,
+        _reject_symlink_alias,
+        _reset_managed_root,
     )
+
+    if not repo.is_dir():
+        raise FileNotFoundError(f"repository root does not exist: {repo}")
+    destination = destination.expanduser()
+    _reject_symlink_alias(destination)
+    root = destination.resolve()
+    if root == repo or repo.is_relative_to(root):
+        raise ValueError(
+            "candidate destination must not be the repository or its ancestor"
+        )
+    _reset_managed_root(root)
+    marker = {
+        "managed_by": "botpipe-candidate-v1",
+        "repo_root": str(repo),
+        "requested_paths": [],
+        "allowed_paths": [],
+        "allowed_roots": [],
+        "authoritative_hashes": {},
+    }
+    (root / ".botpipe-candidate.json").write_text(
+        json.dumps(marker, sort_keys=True), encoding="utf-8"
+    )
+    baseline = root / "baseline"
+    candidate = root / "candidate"
+    baseline.mkdir()
+    candidate.mkdir()
+    return CandidateWorkspace(repo, root, baseline, candidate, (), (), {})
+
+
+def _generated_package_path(package_name: str) -> str:
+    if (
+        not isinstance(package_name, str)
+        or re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", package_name) is None
+    ):
+        raise ValueError("package_name must be a Python-style identifier")
+    return f".botpipe/workflows/{package_name}"
 
 
 def _generated_relative_path(value: Any) -> str:
@@ -105,7 +129,6 @@ def _materialize_generated_workflow_manifest_activity(
     candidate_workspace: Any,
     manifest_handle: ArtifactHandle,
     package_name: str,
-    authoring_shape: str,
     *,
     max_files: int = 128,
     max_bytes: int = 2 * 1024 * 1024,
@@ -114,86 +137,92 @@ def _materialize_generated_workflow_manifest_activity(
     try:
         manifest = json.loads(manifest_handle.read_bytes())
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise ValueError(
+        raise WorkflowManifestValidationError(
             "workflow_package_manifest must contain a JSON object"
         ) from exc
     if not isinstance(manifest, Mapping):
-        raise TypeError("workflow_package_manifest must contain a JSON object")
+        raise WorkflowManifestValidationError(
+            "workflow_package_manifest must contain a JSON object"
+        )
     if manifest.get("package_name") != package_name:
-        raise ValueError("workflow_package_manifest package_name must match parameters")
-    if manifest.get("authoring_shape") != authoring_shape:
-        raise ValueError(
-            "workflow_package_manifest authoring_shape must match parameters"
+        raise WorkflowManifestValidationError(
+            "workflow_package_manifest package_name must match parameters"
         )
     workflow_reference = manifest.get("workflow_reference")
     if not isinstance(workflow_reference, str) or not workflow_reference.strip():
-        raise ValueError("workflow_package_manifest requires workflow_reference")
+        raise WorkflowManifestValidationError(
+            "workflow_package_manifest requires workflow_reference"
+        )
     raw_files = manifest.get("files")
     if not isinstance(raw_files, list) or not raw_files:
-        raise ValueError("workflow_package_manifest requires a non-empty files array")
+        raise WorkflowManifestValidationError(
+            "workflow_package_manifest requires a non-empty files array"
+        )
     if len(raw_files) > max_files:
-        raise ValueError(f"workflow package exceeds max_files={max_files}")
+        raise WorkflowManifestValidationError(
+            f"workflow package exceeds max_files={max_files}"
+        )
 
-    package_prefix = _generated_package_path(package_name, authoring_shape)
-    single_path = package_prefix
+    package_prefix = _generated_package_path(package_name)
     test_path = f"tests/runtime/test_{package_name}.py"
     records: list[tuple[str, bytes, str]] = []
     seen: set[str] = set()
     total = 0
     for item in raw_files:
         if not isinstance(item, Mapping):
-            raise TypeError("workflow_package_manifest file entries must be objects")
-        relative = _generated_relative_path(item.get("path"))
+            raise WorkflowManifestValidationError(
+                "workflow_package_manifest file entries must be objects"
+            )
+        try:
+            relative = _generated_relative_path(item.get("path"))
+        except ValueError as exc:
+            raise WorkflowManifestValidationError(str(exc)) from exc
         if relative in seen:
-            raise ValueError(f"duplicate generated file path: {relative}")
-        allowed = (
-            relative == single_path
-            if authoring_shape == "single"
-            else Path(relative).is_relative_to(package_prefix)
-        ) or relative == test_path
+            raise WorkflowManifestValidationError(
+                f"duplicate generated file path: {relative}"
+            )
+        allowed = Path(relative).is_relative_to(package_prefix) or relative == test_path
         if not allowed:
-            raise ValueError(
+            raise WorkflowManifestValidationError(
                 f"generated file is outside the package boundary: {relative}"
             )
         content = item.get("content")
         if not isinstance(content, str):
-            raise TypeError(f"generated file content must be text: {relative}")
+            raise WorkflowManifestValidationError(
+                f"generated file content must be text: {relative}"
+            )
         data = content.encode("utf-8")
         total += len(data)
         if total > max_bytes:
-            raise ValueError(f"workflow package exceeds max_bytes={max_bytes}")
+            raise WorkflowManifestValidationError(
+                f"workflow package exceeds max_bytes={max_bytes}"
+            )
         role = item.get("role", "source")
         if not isinstance(role, str) or not role:
-            raise TypeError(f"generated file role must be text: {relative}")
-        if not isinstance(item.get("purpose"), str) or not item["purpose"].strip():
-            raise TypeError(f"generated file purpose must be text: {relative}")
-        if not isinstance(item.get("required"), bool):
-            raise TypeError(f"generated file required flag must be boolean: {relative}")
-        if (
-            not isinstance(item.get("implements"), str)
-            or not item["implements"].strip()
-        ):
-            raise TypeError(f"generated file implements must be text: {relative}")
+            raise WorkflowManifestValidationError(
+                f"generated file role must be text: {relative}"
+            )
         seen.add(relative)
         records.append((relative, data, role))
-    if authoring_shape == "single":
-        if single_path not in seen:
-            raise ValueError(f"single-file package requires {single_path}")
-    elif authoring_shape == "flow_specs" and f"{package_prefix}/flow.py" not in seen:
-        raise ValueError("flow_specs authoring shape requires flow.py")
-    elif authoring_shape == "package":
-        required = {
-            f"{package_prefix}/flow.py",
-            f"{package_prefix}/specs.py",
-            f"{package_prefix}/workflow.toml",
-        }
-        missing = sorted(required - seen)
-        if missing:
-            raise ValueError("package authoring shape requires: " + ", ".join(missing))
+    # A manifest declares files, so no declared file may also be a directory
+    # for another entry. Check the whole inventory before touching candidate bytes.
+    for relative in sorted(seen):
+        for parent in Path(relative).parents:
+            if parent.as_posix() in seen:
+                raise WorkflowManifestValidationError(
+                    f"generated file paths conflict: {parent.as_posix()} and {relative}"
+                )
+    required = {
+        f"{package_prefix}/flow.py",
+        f"{package_prefix}/workflow.toml",
+    }
+    missing = sorted(required - seen)
+    if missing:
+        raise WorkflowManifestValidationError(
+            "workflow package requires: " + ", ".join(missing)
+        )
 
-    entry_path = (
-        single_path if authoring_shape == "single" else f"{package_prefix}/flow.py"
-    )
+    entry_path = f"{package_prefix}/flow.py"
     reference_errors: list[str] = []
     if ":" not in workflow_reference:
         reference_errors.append(
@@ -238,7 +267,7 @@ def _materialize_generated_workflow_manifest_activity(
     # package cannot remain as hidden dependencies.  The rest of the repository
     # is left byte-for-byte as prepared from the baseline.
     managed_package = candidate_root / package_prefix
-    if authoring_shape != "single" and managed_package.exists():
+    if managed_package.exists():
         if managed_package.is_symlink() or not managed_package.is_dir():
             raise ValueError("generated package boundary is not an ordinary directory")
         shutil.rmtree(managed_package)
@@ -272,7 +301,6 @@ def _materialize_generated_workflow_manifest_activity(
     return {
         "schema": "botpipe.generated-workflow-candidate/v1",
         "package_name": package_name,
-        "authoring_shape": authoring_shape,
         "workflow_reference": derived_reference,
         "declared_workflow_reference": workflow_reference.strip(),
         "reference_errors": reference_errors,
@@ -348,20 +376,17 @@ def _revalidate_generated_workflow_materialization(
     validate_authoritative_sources_unchanged(candidate_workspace)
     actual = candidate_manifest(candidate_workspace)
     package_name = value.get("package_name")
-    authoring_shape = value.get("authoring_shape")
-    if not isinstance(package_name, str) or not isinstance(authoring_shape, str):
+    if not isinstance(package_name, str):
         raise TypeError("generated candidate package identity is missing")
-    package_prefix = _generated_package_path(package_name, authoring_shape)
+    package_prefix = _generated_package_path(package_name)
     test_path = f"tests/runtime/test_{package_name}.py"
     declared_paths = {record["path"] for record in files}
-    if authoring_shape != "single" and (root / package_prefix).is_dir():
+    if (root / package_prefix).is_dir():
         actual_package_paths = {
             path.relative_to(root).as_posix()
             for path in (root / package_prefix).rglob("*")
             if path.is_file() and not path.is_symlink()
         }
-    elif authoring_shape == "single" and (root / package_prefix).is_file():
-        actual_package_paths = {package_prefix}
     else:
         actual_package_paths = set()
     declared_package_paths = {
@@ -389,7 +414,6 @@ def materialize_generated_workflow_manifest(
     candidate_workspace: Any,
     manifest_handle: ArtifactHandle,
     package_name: str,
-    authoring_shape: str,
     *,
     max_files: int = 128,
     max_bytes: int = 2 * 1024 * 1024,
@@ -399,7 +423,6 @@ def materialize_generated_workflow_manifest(
         candidate_workspace,
         manifest_handle,
         package_name,
-        authoring_shape,
         max_files=max_files,
         max_bytes=max_bytes,
     )
@@ -418,10 +441,6 @@ def freeze_generated_workflow_candidate(candidate_workspace: Any, staging_parent
     return freeze_candidate_workspace(
         candidate_workspace,
         Path(staging_parent),
-        boundary={
-            "editable_paths": list(candidate_workspace.allowed_paths),
-            "editable_roots": list(candidate_workspace.allowed_roots),
-        },
         execution_source_root=Path(candidate_workspace.repo_root),
     )
 
@@ -435,19 +454,47 @@ def _validate_generated_workflow_candidate_activity(
     target_test_command: str | None,
     timeout: float = 300,
     manifest_diagnostics: Sequence[str] = (),
+    *,
+    target_test_argv: Sequence[str] | None = None,
+    enforce_generated_test: bool = False,
 ) -> dict[str, Any]:
-    """Compile/import one materialized candidate with the existing isolated validator."""
+    """Compile and import a candidate with the existing isolated validator."""
     from botpipe_optimizer.candidates import (
         candidate_manifest,
         candidate_surface_manifest,
         validate_candidate,
     )
 
+    package_entry = Path(workflow_reference.rsplit(":", 1)[0]).as_posix()
+    parts = Path(package_entry).parts
+    diagnostics = list(manifest_diagnostics)
+    effective_test_argv = target_test_argv
+    if enforce_generated_test:
+        if parts[:2] == (".botpipe", "workflows") and len(parts) == 4:
+            focused_test = f"tests/runtime/test_{parts[2]}.py"
+            if not (Path(candidate_workspace.candidate_root) / focused_test).is_file():
+                diagnostics.append(
+                    f"generated behavioral test is required: {focused_test}"
+                )
+            elif target_test_command is None and target_test_argv is None:
+                effective_test_argv = (
+                    sys.executable,
+                    "-m",
+                    "pytest",
+                    "-q",
+                    focused_test,
+                )
+        else:
+            diagnostics.append(
+                "generated behavioral test cannot be selected from workflow_reference"
+            )
+
     result = validate_candidate(
         candidate_workspace,
         frozen_candidate,
         workflow_refs=(workflow_reference,),
         staging_parent=Path(staging_parent),
+        target_test_argv=effective_test_argv,
         target_test_command=target_test_command,
         compile_timeout_seconds=min(timeout, 60),
         test_timeout_seconds=timeout,
@@ -455,26 +502,19 @@ def _validate_generated_workflow_candidate_activity(
     if any(check.cancelled for check in result.checks):
         raise RuntimeError("generated workflow validation was cancelled")
 
-    diagnostics = [*manifest_diagnostics, *result.errors]
+    diagnostics.extend(result.errors)
 
-    package_entry = Path(workflow_reference.rsplit(":", 1)[0]).as_posix()
     candidate_root = Path(candidate_workspace.candidate_root)
     allowed_entries = {
         path.relative_to(candidate_root).as_posix()
-        for pattern in (
-            ".botpipe/workflows/*.py",
-            ".botpipe/workflows/*/flow.py",
-            "labs/workflows/*/flow.py",
-        )
-        for path in candidate_root.glob(pattern)
+        for path in candidate_root.glob(".botpipe/workflows/*/flow.py")
         if path.is_file() and not path.is_symlink()
     }
     if package_entry not in allowed_entries:
         diagnostics.append(
-            "workflow_reference must select the generated authoring-shape entry"
+            "workflow_reference must select the generated package flow.py"
         )
-    parts = Path(package_entry).parts
-    if parts[:2] == ("labs", "workflows") and len(parts) >= 4:
+    if parts[:2] == (".botpipe", "workflows") and len(parts) == 4:
         manifest_path = (
             Path(candidate_workspace.candidate_root)
             / Path(*parts[:3])
@@ -501,7 +541,8 @@ def _validate_generated_workflow_candidate_activity(
                 or entries[0].name != parts[2]
             ):
                 diagnostics.append(
-                    "catalog metadata must name the package and select its flow.py callable"
+                    "catalog metadata must name the package and select its "
+                    "flow.py callable"
                 )
         except (OSError, tomllib.TOMLDecodeError, ValueError, LookupError) as exc:
             diagnostics.append(f"catalog: {exc}")
@@ -611,6 +652,9 @@ def validate_generated_workflow_candidate(
     target_test_command: str | None,
     timeout: float = 300,
     manifest_diagnostics: Sequence[str] = (),
+    *,
+    target_test_argv: Sequence[str] | None = None,
+    enforce_generated_test: bool = False,
 ) -> dict[str, Any]:
     """Validate once and recheck source identity after every activity replay."""
     result = _validate_generated_workflow_candidate_activity(
@@ -621,6 +665,8 @@ def validate_generated_workflow_candidate(
         target_test_command,
         timeout,
         manifest_diagnostics,
+        target_test_argv=target_test_argv,
+        enforce_generated_test=enforce_generated_test,
     )
     return _revalidate_generated_workflow_validation(
         result,
@@ -630,6 +676,7 @@ def validate_generated_workflow_candidate(
 
 
 __all__ = [
+    "WorkflowManifestValidationError",
     "freeze_generated_workflow_candidate",
     "materialize_generated_workflow_manifest",
     "prepare_generated_workflow_candidate",

@@ -1,0 +1,6 @@
+name = "workflow_author"
+function = "workflow_author"
+version = "1"
+title = "Workflow Author"
+description = "Design, implement, test, and independently review a workflow package using the Botpipe authoring guide."
+aliases = ["workflow-author"]

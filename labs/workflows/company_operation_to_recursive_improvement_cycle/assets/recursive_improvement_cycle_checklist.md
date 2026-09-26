@@ -4,6 +4,7 @@
 - Keep the workflow boundary at recursive-improvement publication only; recommendations may name downstream workflows, but this workflow must not execute them.
 - Keep scoped task ids explicit from `company_operation_snapshot.json` through `recursive_improvement_summary.json`.
 - Keep every `candidate_id` explicit in both `recursive_improvement_priority_matrix.md` and `recursive_improvement_cycle.md`.
-- Keep workflow portfolio, workflow package, follow-through, composition/escalation policy, and operating-pattern pressure visible in the package where the evidence supports them.
+- Include only pressure categories supported by evidence; do not manufacture category coverage.
 - Ensure `recursive_improvement_summary.json` matches `recursive_improvement_candidates.json` without category-count drift.
 - Keep `recursive_improvement_next_actions.md` explicit about the publication boundary and the exact next action another operator or workflow should take.
+- Give the cycle review triggers and a stopping condition rather than assuming perpetual recursion.

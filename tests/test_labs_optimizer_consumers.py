@@ -19,15 +19,20 @@ from botpipe_optimizer.recommendations import (
     finalize_candidate_set_payload,
     publish_recommendation,
 )
+from labs.workflows.improve_workflow import ImproveWorkflowParams, improve_workflow
 from labs.workflows.optimizer_integration import (
     evaluation_suite_identity,
     load_optimizer_candidate_handoff,
     staged_workflow_reference,
     validate_materialized_handoff,
 )
-from labs.workflows.improve_workflow import ImproveWorkflowParams, improve_workflow
+from labs.workflows.workflow_to_eval_suite import Params as EvalSuiteParams
+from labs.workflows.workflow_to_eval_suite import (
+    workflow_callable as eval_suite_workflow,
+)
 from tests.improvement_support import (
     ACCEPT,
+    assess,
     evaluation_spec,
     implement,
     observed_workflow,
@@ -35,10 +40,6 @@ from tests.improvement_support import (
     validation_argv,
 )
 from tests.improvement_support import FixtureProvider as FakeProvider
-from labs.workflows.workflow_to_eval_suite import Params as EvalSuiteParams
-from labs.workflows.workflow_to_eval_suite import (
-    workflow_callable as eval_suite_workflow,
-)
 
 
 def test_eval_selection_requires_complete_receipt_identity():
@@ -256,7 +257,7 @@ def _interrupt_paired_cache(tmp_path, monkeypatch, *, cache_saved):
         return atomic_json(path, payload)
 
     with Botpipe(
-        tmp_path, provider=FakeProvider([propose, ACCEPT, implement, ACCEPT])
+        tmp_path, provider=FakeProvider([assess, propose, ACCEPT, implement, ACCEPT])
     ) as client:
         with monkeypatch.context() as patched:
             patched.setattr(optimizer_integration, "_atomic_json", interrupt_cache)

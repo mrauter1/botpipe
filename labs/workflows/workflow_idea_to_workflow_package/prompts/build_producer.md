@@ -1,65 +1,33 @@
 ## Durable typed phase result
 
-After writing every declared artifact, return one JSON result matching the injected phase-specific schema. Return `accepted` only when the artifacts meet this phase's positive condition and populate the domain fields in the schema. Return `needs_rework` for a local repair, `needs_replan` for a material upstream change, `question` or `blocked` for a missing prerequisite, and `failed` for a terminal domain failure. Report only captured artifact names and stable identifiers present in the artifacts.
+Return one JSON result matching the injected phase-specific schema and follow the runtime's `artifact_requirement`. Before returning `accepted`, write every declared artifact and ensure it meets this phase's done criteria. For `needs_rework`, `needs_replan`, `question`, `blocked`, or `failed`, write only real evidence that is already available and useful; a control outcome does not require filler artifacts. Never fabricate a file to satisfy the declared acceptance outputs. Cite only artifacts actually captured.
 
-# Build Package Producer
+Resolve relative repository and evidence paths against the injected `source_workspace`. The writable working directory is disposable authoring scratch, not the source repository; represent generated package files only through the declared content manifest.
 
-## Step Contract
+# Build the workflow package
 
-### Role
-- You are the package builder producer for the `build_package` step.
+## Purpose
 
-### Purpose
-- Author the complete workflow files in a content manifest that the runtime will materialize into a run-owned isolated candidate and validate before evaluation.
+Author the complete source bytes for the reviewed design. The runtime will materialize them into a run-owned isolated candidate and execute deterministic validation before evaluation.
 
-### Current work item
-- This work item owns the complete package representation in the two declared artifacts.
-- Keep the work-item boundary at build outputs. Do not redefine the design here.
+## Work boundary
 
-## Runtime bindings
+Implement the reviewed design and prompt plan. Do not silently redesign the workflow or claim that validation has run.
 
-- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
-- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
+## Stable obligations
 
-## Output Requirements
+- Write `workflow_package_manifest` as JSON with `package_name`, `workflow_reference`, and a non-empty `files` array. Each file entry requires only repo-relative `path` and complete text `content`; `role` is optional descriptive metadata.
+- Keep generated package files under `.botpipe/workflows/<package_name>/`. The only permitted path outside it is the focused test at `tests/runtime/test_<package_name>.py`. Include that test when `enforce_generated_test` is true; direct lab callers that leave the flag false may omit it only when the reviewed design does not need it.
+- Include `.botpipe/workflows/<package_name>/flow.py` and `.botpipe/workflows/<package_name>/workflow.toml`. Set `workflow_reference` to `.botpipe/workflows/<package_name>/flow.py:<callable>`.
+- Make `workflow.toml` name the requested package and select the generated callable; carry over the supplied title and aliases when present.
+- Add contracts, prompts, assets, documentation, or tests only when the reviewed design needs them. Implement every prompt named by `prompt_design`, and do not add ceremonial prompt files.
+- Use ordinary Python and the current public Botpipe API. Keep control flow visible. Do not generate route tables, graph frameworks, or a new generic engine.
+- Preserve stable prompt obligations from `prompt_design` while allowing the executing provider to choose sound methods. Ground prompt work in supplied evidence, require contradiction and assumption handling, define semantic handoffs, and test substantive completion rather than format alone.
+- Implement behavioral tests around the generated workflow entry point. Cover meaningful routing or replay behavior where relevant; do not satisfy the requirement with import-only checks, a fixed quota of assertions, vacuous assertions, or claims that fakes prove live-system quality.
+- When `runtime_validation_feedback` is present, repair every relevant manifest, compile, import, discovery, metadata, or test failure in the next complete manifest. Do not repeat rejected bytes.
+- When `rejected_candidate_evidence` is present after an evaluation replan, implement the reviewed correction against its exact candidate paths, hashes, checks, and captured findings. Do not repeat the rejected source or prompt behavior.
+- Write `implementation_notes` mapping the generated files to the reviewed steps and prompts, explaining deliberate deviations and any remaining limitation.
 
-### Artifact handling
-- `workflow_package_manifest` must be valid JSON with `package_name`, `authoring_shape`, `workflow_reference`, and a non-empty `files` array that records the complete desired final inventory for the generated package boundary. Files omitted from this inventory are removed when an existing package is rebuilt.
-- For each file, the manifest must state its repo-relative path, purpose, whether it is required or optional, the design or contract requirement it implements, and its complete intended text content.
-- Use the selected shape's exact boundary: `.botpipe/workflows/<package_name>.py` for `single`, `.botpipe/workflows/<package_name>/` with required `flow.py` for `flow_specs`, or `labs/workflows/<package_name>/` with required `flow.py`, `specs.py`, and `workflow.toml` for `package`. A test may additionally use `tests/runtime/test_<package_name>.py`.
-- Set `workflow_reference` to the explicit repo-relative `file.py:function` reference for the generated callable in the selected shape's entry file: `.botpipe/workflows/<package_name>.py:<function>` for `single`, `.botpipe/workflows/<package_name>/flow.py:<function>` for `flow_specs`, or `labs/workflows/<package_name>/flow.py:<function>` for `package`.
-- Include `workflow.toml`, prompt, asset, package-init, documentation, and test entries only when the selected shape requires them.
-- When `runtime_validation_feedback` is present, repair its syntax, import, catalog metadata, discovery, or test diagnostics in the next complete manifest. Do not repeat a candidate that the isolated validator rejected.
-- `implementation_notes` must describe the intended contents and relationships of the manifest entries, summarize how the package realizes `workflow_design` and `workflow_contract`, and call out deliberate deviations.
-- Keep workflow semantics explicit in the manifest and notes. Do not hide generated behavior behind unspecified generators, wrappers, or runner branches.
+## Done criteria
 
-### Expected outcome
-- Leave the runtime with complete source bytes it can materialize, compile, import-discover, and pass to evaluation as a verified candidate without relying on provider memory.
-
-## Evidence
-
-- Every manifest path must stay inside the exact boundary for the selected authoring shape or the single optional runtime-test path.
-- The manifest and implementation notes must make the chosen shape and complete file set obvious.
-- The implementation notes must be sufficient to check completeness without guessing.
-
-## Phase decision criteria
-
-- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
-- Treat question, blocked, and failure guidance as semantic validation criteria.
-
-### Outcome selection
-- `accepted`: the package manifest contains the complete workflow files and build evidence for the chosen shape.
-- `needs_rework`: the same design still holds, but the represented files or evidence need local correction.
-- `needs_replan`: the accepted design cannot be implemented as written and must change materially first.
-
-## Out Of Scope
-
-- Framework code changes.
-- Editing the current workflow-builder package unless the accepted design explicitly targets self-improvement.
-- Promotion decisions.
-
-## Forbidden
-
-- Do not hide file inventory in chatty raw output only; put it in `implementation_notes`.
-- Do not add unused clutter that the chosen shape does not require.
-- Do not change the accepted design silently.
+Return `accepted` when the manifest is a complete, internally consistent package representation suitable for isolated materialization. Populate `changed_paths` and `evidence_artifacts` from the artifacts; they are proposed build evidence, not proof of runtime validation. If the reviewed design still cannot correct an upstream source or prompt defect, use `needs_replan`; do not use local rework to evade a required redesign.

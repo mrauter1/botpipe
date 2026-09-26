@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
 from pathlib import Path
-
-import pytest
 
 from botpipe import ArtifactHandle, Botpipe
 from botpipe.providers import FakeProvider
@@ -52,7 +51,9 @@ def _read_artifacts(request) -> dict[str, Path]:
 def _write_artifacts(request) -> dict[str, Path]:
     # Check the actual artifact contract without pinning explanatory wording.
     sections = request.prompt.split("\n\n")
-    section = next(part for part in sections if part.startswith("Write the declared artifacts"))
+    section = next(
+        part for part in sections if part.startswith("Write the declared artifacts")
+    )
     return {
         item["name"]: Path(item["path"])
         for item in json.loads(section.split("\n", 1)[1])
@@ -74,24 +75,30 @@ def _accepted(payload: dict, **details) -> dict:
     }
 
 
-def test_lab_prompts_use_typed_producers_and_selective_reviewers():
+def test_lab_phase_prompt_files_resolve_and_review_is_explicit():
     workflows = Path("labs/workflows")
     sources = [
         path
         for path in workflows.glob("*/workflow.py")
         if path.parent.name != "improve_workflow"
     ]
-    text = "\n".join(path.read_text(encoding="utf-8") for path in sources)
-
-    assert text.count("run_phase(") == 35
-    assert text.count("reviewer_prompt=") == 11
-    assert "verifier_prompt=" not in text
-    assert not list(workflows.glob("*/prompts/*_verifier.md"))
-    assert len(list(workflows.glob("*/prompts/*_reviewer.md"))) == 11
-    for prompt in workflows.glob("*/prompts/*_producer.md"):
-        contents = prompt.read_text(encoding="utf-8")
-        assert "Durable typed phase result" in contents
-        assert "phase-specific schema" in contents
+    for source in sources:
+        phases = [
+            node
+            for node in ast.walk(ast.parse(source.read_text(encoding="utf-8")))
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "run_phase"
+        ]
+        assert phases, source
+        for phase in phases:
+            arguments = {item.arg: item.value for item in phase.keywords}
+            assert "returns" in arguments, source
+            assert ("reviewer" in arguments) == ("reviewer_prompt" in arguments)
+            for name in ("producer_prompt", "reviewer_prompt"):
+                if name in arguments:
+                    prompt = source.parent / ast.literal_eval(arguments[name])
+                    assert prompt.read_text(encoding="utf-8").strip(), prompt
 
 
 def test_candidate_workflow_references_must_exist_in_the_observed_catalog(tmp_path):
@@ -206,10 +213,12 @@ def test_investigation_typed_producer_and_review_share_the_artifact_contract(
             )
 
         reads = _read_artifacts(request)
-        assert tuple(reads) == tuple(payload["required_artifacts"])
+        assert set(payload["required_artifacts"]).issubset(reads)
         summary = json.loads(reads["investigation_summary"].read_text())
         assert summary["source_count"] == 1
         assert set(reads) == {
+            "investigation_scope_brief",
+            "evidence_intake_plan",
             "evidence_pack",
             "source_register",
             "evidence_gaps",
@@ -322,18 +331,19 @@ def test_security_artifacts_carry_assessment_remediation_and_closure_evidence(
             )
 
         reads = _read_artifacts(request)
-        assert tuple(reads) == tuple(payload["required_artifacts"])
+        assert set(payload["required_artifacts"]).issubset(reads)
         common = {"validation_findings": ["The artifacts support the decision."]}
         if phase == "assemble_evidence_pack":
             summary = json.loads(reads["investigation_summary"].read_text())
             assert summary["ready_for_downstream_assessment"] is True
             return _accepted(payload, **common)
         if phase == "assess_security_finding":
-            assert set(reads) == {
+            assert {
                 "security_assessment",
                 "threat_scenario",
                 "remediation_acceptance_criteria",
-            }
+            }.issubset(reads)
+            assert "evidence_pack" in reads
             return _accepted(
                 payload,
                 **common,
@@ -412,15 +422,14 @@ def test_workflow_builder_materializes_validates_and_retains_completed_result(tm
         assert [check["kind"] for check in validation["checks"]] == ["compile_probe"]
         assert verified["root"] == str(candidate_root)
         assert verified["changed_paths"] == [
-            ".botpipe/workflows/generated_fixture/flow.py"
+            ".botpipe/workflows/generated_fixture/flow.py",
+            ".botpipe/workflows/generated_fixture/workflow.toml",
         ]
-        assert verified["files"] == [
-            {
-                "path": ".botpipe/workflows/generated_fixture/flow.py",
-                "sha256": hashlib.sha256(generated.read_bytes()).hexdigest(),
-                "size_bytes": generated.stat().st_size,
-            }
-        ]
+        assert {
+            "path": ".botpipe/workflows/generated_fixture/flow.py",
+            "sha256": hashlib.sha256(generated.read_bytes()).hexdigest(),
+            "size_bytes": generated.stat().st_size,
+        } in verified["files"]
         authored = result.value.artifacts["workflow_package_manifest"].read_json()
         assert authored["files"][0]["content"] == generated.read_text()
         clean_replay = client.resume(result.run_id)
@@ -499,46 +508,3 @@ def test_workflow_builder_repairs_recorded_candidate_validation_failure(tmp_path
     assert replay.ok, replay.error
     assert build_attempts == 2
     assert saw_runtime_feedback is True
-
-
-@pytest.mark.parametrize(
-    ("authoring_shape", "expected_paths"),
-    [
-        ("single", {".botpipe/workflows/shaped_fixture.py"}),
-        (
-            "package",
-            {
-                "labs/workflows/shaped_fixture/flow.py",
-                "labs/workflows/shaped_fixture/specs.py",
-                "labs/workflows/shaped_fixture/workflow.toml",
-            },
-        ),
-    ],
-)
-def test_workflow_builder_preserves_authoring_shape_boundaries(
-    tmp_path, authoring_shape, expected_paths
-):
-    from tests.test_labs import _successful_provider
-
-    workspace = tmp_path / authoring_shape
-    workspace.mkdir()
-    (workspace / "README.md").write_text("# Candidate source repository\n")
-    observed = []
-
-    def answer(request):
-        payload = _input(request)
-        if payload["phase"] == "evaluate_package" and request.artifacts:
-            observed.append(payload["candidate_manifest"])
-        return _successful_provider(request)
-
-    result = Botpipe(workspace, provider=FakeProvider([answer] * 8)).run(
-        WorkflowIdeaToWorkflowPackage,
-        WorkflowBuilderParams(
-            package_name="shaped_fixture",
-            workflow_kind="end_to_end",
-            authoring_shape=authoring_shape,
-        ),
-        request=f"Build the {authoring_shape} workflow shape.",
-    )
-    assert result.ok, result.error
-    assert set(observed[0]["changed_paths"]) == expected_paths

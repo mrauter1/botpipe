@@ -28,10 +28,23 @@ fails, process termination, and working installed packages. Exercise real
 persistence and real child processes where those are the behavior under test.
 Use controlled clocks for deadline arithmetic rather than short sleeps.
 
+For an authored workflow, use `FakeProvider` to exercise outcomes rather than a
+single exact model path. Cover the useful success path and material rejection,
+bounded exhaustion, human pause/resume, or uncertain-effect paths. Assert typed
+domain results, artifact contents, routing, budgets, permissions, and absence of
+new provider calls on replay. Avoid assertions on exact prompt prose, private
+reasoning, incidental call counts, or one tool sequence unless that detail is
+itself the public contract. A schema-valid fake response tests orchestration and
+shape; it does not establish the semantic quality of a live provider result.
+
 Lab scenarios are individual parametrized tests. Discovery must match the
 scenario inventory so a new lab cannot silently miss behavioral coverage. Labs
 return typed producer values and use reviewers only at material decision gates.
 Reviews that claim to run checks use `run`; inspection-only reviews use `query`.
+For workflows using the shared artifact-only phase helper, also verify that
+producer attempts use distinct run-owned workspaces, destinations cannot escape
+those workspaces, source inspection does not write to the source workspace,
+control outcomes need no complete artifact set, and acceptance does.
 
 Use CI's slowest-test timings to guide further changes. Do not disable `fsync`,
 weaken ledger durability, or drop a platform to make the suite appear faster.

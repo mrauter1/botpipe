@@ -21,6 +21,11 @@ Use `run` when you need those controls.
 All three methods accept `timeout`, `output_retries`, `retry_safe`, and
 `on_event`. Their async forms are `arun`, `aquery`, and `agenerate`.
 
+Select the preset by the work actually required. An inspection-only verifier
+uses `query`; a verifier expected to execute tests or builds uses `run`, even
+when it declares no output artifacts. See [Authoring](authoring.md) for operation
+boundaries and [Prompting](prompting.md) for provider prompt contracts.
+
 ```python
 from pydantic import BaseModel
 from botpipe import Codex
@@ -42,6 +47,7 @@ starting a new output-repair turn.
 
 When Codex supports `outputSchema`, Botpipe sends it natively; otherwise it adds
 the schema to the prompt. Local validation runs in both cases.
+A schema validates response shape, not the factual correctness of its fields.
 
 `retry_safe=True` permits repetition; it does not make an operation idempotent.
 After interruption, Botpipe adopts a completed result when it can, retries only
@@ -107,6 +113,21 @@ writer attribution or an atomic repository snapshot. It does not prepare,
 backup, restore, or roll back workspace files. A retry runs against current
 state.
 
+The default artifact-map key is the path's exact stem. For
+`Artifact.md("evidence-brief.md")`, access
+`result.artifacts["evidence-brief"]`; use `name="evidence_brief"` when attribute
+access as `result.artifacts.evidence_brief` is desired. `required=False` is the
+default and permits a conditional artifact to be absent. Set `required=True`
+when completion is invalid without that file. An optional file is still
+validated and captured when present.
+
+The shared labs helper intentionally specializes this behavior. Its
+artifact-only producers run in distinct, run-owned writable directories and
+receive the source workspace separately for read-only inspection. It remaps all
+declared destinations into the attempt directory, allows missing artifacts for
+`question` or `blocked`, and requires the full declared set for `accepted`. This
+is not a general `Provider.run` workspace-isolation guarantee.
+
 `on_event` receives `StreamEvent(type, data)`. Notifications are best effort;
 callback exceptions do not change the operation outcome. Replay emits one
 `replayed` event. Durable evidence is recorded separately from callbacks.
@@ -126,6 +147,27 @@ permits the workspace, declared artifact parents, and Codex's temporary roots.
 
 Direct calls are one-operation durable runs, visible through `botpipe runs` and
 recoverable through `resume` and `resolve`, just like workflow operations.
+
+To test replay, resume the completed run and pass its workflow definition. Do
+not call `run` again with the same ID.
+
+```python
+from botpipe import Botpipe, Provider, workflow
+from botpipe.providers import FakeProvider
+
+
+@workflow(name="replay_example")
+def work():
+    return Provider().generate("Return done.").value
+
+backend = FakeProvider(["done"])
+with Botpipe(tmp_path, provider=backend) as client:
+    first = client.run(work, task_id="docs", run_id="first")
+    call_count = len(backend.calls)
+    replayed = client.resume(first.run_id, workflow=work)
+    assert replayed.value == first.value
+    assert len(backend.calls) == call_count
+```
 
 The call timeout covers setup as well as execution. Async cancellation performs
 a bounded interrupt and contained-tree cleanup attempt before the task finishes

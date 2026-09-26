@@ -7,9 +7,9 @@ Aliases: `adapted-execution-plan`, `workflow-adaptation-plan`
 
 ## Durable function design
 
-`workflow.py` exports one ordinary Python function decorated with `@workflow`. Python controls phase order, optional passes, loops, and nested workflows. Each phase runs one producer with `Provider.run`; the producer returns the package-specific typed domain result from `contracts.py`. Evidence-quality and risk decisions that benefit from independent judgment add a read-only reviewer, whose result contains the review decision and findings rather than a copy of the domain handoff.
+`workflow.py` exports one ordinary Python workflow. Python observes the selected contract, controls phases and replanning, and validates proposed parameters against the selected callable. Producers cannot change the selected workflow or its analyzed artifact surface.
 
-Every declared output is a required `Artifact`. Botpipe snapshots the provider-written file before the operation completes, and later phases read those immutable handles. A reviewer, when present, may cite only captured artifact names. The final typed `LabWorkflowResult` carries the accepted handles in `artifacts`, convenience snapshot paths in `artifact_paths`, and unique candidate identifiers. When phases reuse an artifact name, the later accepted handle wins.
+Every declared output is required when a phase returns `accepted`. Botpipe snapshots those files before completion, and later phases read immutable handles. A prerequisite-seeking `question` or `blocked` result may pause before files exist; it must not fabricate placeholder artifacts. The final typed `LabWorkflowResult` carries accepted handles in `artifacts` and convenience snapshot paths in `artifact_paths`.
 
 ## Invocation
 
@@ -22,11 +22,16 @@ from labs.workflows.candidate_workflow_to_adapted_execution_plan import (
 
 client = Botpipe(workspace=".")
 result = client.run(
-    workflow_callable, Params(...), request="Describe the requested outcome"
+    workflow_callable,
+    Params(
+        selected_workflow="devloop",
+        task_title="Adapt devloop for an API migration",
+    ),
+    request="Produce an execution-ready plan for the migration.",
 )
 ```
 
-Parameters are validated by the package-local Pydantic `Params` model before any operation starts. `request` contains the human-readable task or evidence request.
+Parameters are validated before work starts. `max_provider_turns` (default 32) caps all provider work and retries; human pauses have no wall-clock deadline. `request` contains the human-readable task.
 
 Before completion, the workflow reads the captured `proposed_workflow_parameters.json` artifact and validates it against the selected callable. A first Pydantic parameter accepts the ergonomic flat model mapping only when every remaining callable argument is optional. Other signatures require a complete keyword-argument mapping. The canonical validated mapping is retained as the typed activity result in the durable journal.
 

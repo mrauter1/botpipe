@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from botpipe import Provider, workflow
+from dataclasses import replace
+
+from botpipe import Provider, provider_budget, workflow
+from labs.workflows._evidence import (
+    capture_declared_evidence,
+    evidence_intake_context,
+    verify_evidence_intake,
+)
 from labs.workflows._shared import (
     LabWorkflowResult,
     ReplanRequired,
@@ -22,14 +29,21 @@ from .contracts import (
 from .params import Params
 
 
-@workflow(name="release_candidate_to_go_no_go", version="2")
-def ReleaseCandidateToGoNoGo(params: Params, request: str = "") -> LabWorkflowResult:
+def _run_release_candidate_to_go_no_go(
+    params: Params, request: str
+) -> LabWorkflowResult:
     """Execute the release candidate to go no go evidence workflow."""
     _producer = Provider()
     _reviewer = _producer.with_config(session=None)
-    context = {"request": request, "parameters": params.model_dump(mode="json")}
+    evidence_intake = capture_declared_evidence(params.evidence_paths)
+    verify_evidence_intake(evidence_intake)
+    context = {
+        "request": request,
+        "parameters": params.model_dump(mode="json"),
+        "evidence_intake": evidence_intake_context(evidence_intake),
+    }
     completed = []
-    prior_handles = ()
+    prior_handles = evidence_intake.handles
     frame_release_checkpoint = len(completed)
     frame_release_reads = prior_handles
     frame_release_context = dict(context)
@@ -99,9 +113,7 @@ def ReleaseCandidateToGoNoGo(params: Params, request: str = "") -> LabWorkflowRe
                         returns=ReleaseDecisionPackagePayload,
                         replan_target="assess_go_no_go",
                         producer=_producer,
-                        reviewer=_reviewer,
                         producer_prompt="prompts/package_producer.md",
-                        reviewer_prompt="prompts/package_reviewer.md",
                         input=context,
                         reads=prior_handles,
                         writes=(
@@ -140,7 +152,19 @@ def ReleaseCandidateToGoNoGo(params: Params, request: str = "") -> LabWorkflowRe
         ("decision_summary",),
     )
     validate_release_publication(publication["decision_summary"])
+    completed[0] = replace(
+        completed[0], handles=(*evidence_intake.handles, *completed[0].handles)
+    )
     return finish("release_candidate_to_go_no_go", completed)
+
+
+@workflow(name="release_candidate_to_go_no_go", version="3")
+def ReleaseCandidateToGoNoGo(
+    params: Params, request: str = ""
+) -> LabWorkflowResult:
+    """Execute the SOP within one durable provider-turn budget."""
+    with provider_budget(max_turns=params.max_provider_turns):
+        return _run_release_candidate_to_go_no_go(params, request)
 
 
 workflow_callable = ReleaseCandidateToGoNoGo

@@ -9,8 +9,9 @@ p = Provider()
 print(p.generate("Explain what a database index is.").value)
 ```
 
-Python owns control flow. Providers perform work, sessions carry conversation
-history, and the runtime records operations and their outcomes.
+Python owns control flow and permissions. Providers perform semantic work and
+gather evidence with tools, sessions carry conversation history, and the runtime
+records operations and their outcomes.
 
 ## Install
 
@@ -98,10 +99,13 @@ with Botpipe(workspace=".") as runtime:
     print(result.status, result.run_id)
 ```
 
-Loops, conditionals, activities, nested workflows, worklists, `parallel` and
-`aparallel` use the same durable run ledger. Completed operations replay recorded
-results. Parallel branches with distinct sessions may run writable calls in the
-same repository at the same time; calls sharing a session serialize. An
+Start with the outcome, obligations, evidence, and failure policy, then use the
+fewest coherent provider operations that can satisfy them. Loops, conditionals,
+activities, nested workflows, worklists, `parallel` and `aparallel` use the same
+durable run ledger. A conditional chooses one path; parallel calls execute
+multiple independent required paths and join them. Completed operations replay
+recorded results. Parallel branches with distinct sessions may run writable
+calls in the same repository at the same time; calls sharing a session serialize. An
 interrupted provider turn follows its recorded retry policy, and unresolved work
 remains attached to that operation and run until recovery or operator resolution.
 It does not reserve the workspace globally.
@@ -122,6 +126,15 @@ restores, or rolls back repository files around a provider call. Retries operate
 on the repository's current state. Declared `writes` are validated and captured
 immutably when an operation completes; capture is not exclusive-writer
 attribution or an atomic snapshot of the repository.
+
+## Author a workflow package
+
+The packaged [`workflow_author`](botpipe/workflows/workflow_author/README.md)
+workflow turns a request into a reviewed, executable workflow candidate. It
+uses the authoring and prompting guides as provider instructions, builds in a
+run-owned candidate root, and returns typed file identities and validation
+evidence. It does not install or copy the candidate into the authoritative
+workspace; inspect the returned package before promoting it deliberately.
 
 ## Readable history
 
@@ -177,12 +190,14 @@ provides the default provider-dispatch and session-wait bound.
 ## Documentation
 
 - [SDK](docs/sdk.md): presets, sessions, typed results, events and configuration.
-- [Authoring](docs/authoring.md): durable functions, artifacts, loops and recovery.
+- [Authoring](docs/authoring.md): design, topology, steps, review and recovery.
+- [Prompting](docs/prompting.md): goals, evidence, trust, outputs and verification.
 - [CLI](docs/cli.md): execution, inspection, resolution and doctor.
 - [Architecture](docs/architecture.md): ledger, sessions, locks and process lifecycle.
 - [Codex compatibility](docs/codex-compatibility.md): capabilities and validation.
 - [Testing](docs/testing.md): behavioral coverage, parallel runs and CI timings.
 - [Workflow improvement](docs/optimizer.md): diagnose, implement, and evaluate a bounded change.
+- [Workflow author](botpipe/workflows/workflow_author/README.md): build and validate an isolated workflow package candidate.
 
 Botpipe uses one current file-native format. It does not import or migrate older
 state formats.

@@ -1,7 +1,8 @@
-# Prompt contract
+# Prompt map
 
-Each phase has one producer prompt. The producer writes the declared artifacts and returns the phase-specific typed domain result used by Python control flow. The runtime appends the input payload, artifact destinations, and JSON schema.
+- `frame_producer.md` defines workflow-specific evaluation claims and constraints.
+- `design_producer.md` authors discriminating typed cases and a judgment rubric.
+- `package_producer.md` publishes the validated suite for later execution.
 
-Evidence-quality, security, release, and other phases where independent judgment changes the result also have a reviewer prompt. A reviewer reads immutable artifacts, returns only its acceptance or rework decision and findings, and does not reconstruct the producer's domain facts.
-
-`accepted` advances. `needs_rework` repeats the phase with feedback and prior snapshots. `needs_replan` returns to an explicit Python loop. `question` and `blocked` collect a human prerequisite; `failed` stops the workflow.
+The runtime supplies the selected-workflow contract, validated manifest, optimizer handoff when present, artifact destinations, and result schemas. Case counts and kinds follow semantic coverage rather than a universal quota.
+An `accepted` producer result requires every declared artifact. If a missing prerequisite makes responsible work impossible, `question` or `blocked` may pause without creating all outputs; never manufacture placeholder evidence merely to satisfy destinations.

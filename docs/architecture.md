@@ -4,6 +4,14 @@ Botpipe has three responsibilities: authoring ordinary Python workflows,
 recording durable operations, and talking to Codex. Python expresses the
 process; there is no graph language or scheduler DSL.
 
+Authoring separates deterministic control from semantic work. Python owns
+routing, bounds, joins, permissions and escalation; provider operations inspect,
+reason and act through tools. A conditional selects one path, whereas parallel
+operations execute multiple independent paths. Step boundaries are authoring
+choices, not ledger requirements: prefer one coherent provider operation unless
+a durable handoff, authority boundary, independent decision, safe parallelism or
+failure isolation supplies a concrete benefit.
+
 ## Run ledger
 
 The state root contains one directory per task and run:

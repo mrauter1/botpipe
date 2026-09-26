@@ -1,7 +1,12 @@
-# Prompt contract
+# Prompt map
 
-Each phase has one producer prompt. The producer writes the declared artifacts and returns the phase-specific typed domain result used by Python control flow. The runtime appends the input payload, artifact destinations, and JSON schema.
+The investigation child workflow first supplies a reviewed evidence pack.
 
-Evidence-quality, security, release, and other phases where independent judgment changes the result also have a reviewer prompt. A reviewer reads immutable artifacts, returns only its acceptance or rework decision and findings, and does not reconstruct the producer's domain facts.
+- `assessment_producer.md` determines exploitability and security acceptance criteria; `assessment_reviewer.md` challenges scope and threat reasoning.
+- `remediation_producer.md` designs safe implementation and proof; `remediation_reviewer.md` gates fix relevance, validation strength, rollout, and rollback.
+- `closure_producer.md` packages the reviewed plan and outstanding closure obligations.
 
-`accepted` advances. `needs_rework` repeats the phase with feedback and prior snapshots. `needs_replan` returns to an explicit Python loop. `question` and `blocked` collect a human prerequisite; `failed` stops the workflow.
+Independent review stays on the two security judgments that can change risk. Final packaging has no extra reviewer and cannot claim implementation or closure.
+
+The parent and investigation child share one typed declared-evidence intake. Security prompts use those immutable handles and keep subsequent live discoveries distinct.
+An `accepted` producer result requires every declared artifact. If a missing prerequisite makes responsible work impossible, `question` or `blocked` may pause without creating all outputs; never manufacture placeholder evidence merely to satisfy destinations.

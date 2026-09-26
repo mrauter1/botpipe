@@ -7,9 +7,9 @@ Aliases: `incident-hardening`, `incident-response-package`
 
 ## Durable function design
 
-`workflow.py` exports one ordinary Python function decorated with `@workflow`. Python controls phase order, optional passes, loops, and nested workflows. Each phase runs one producer with `Provider.run`; the producer returns the package-specific typed domain result from `contracts.py`. Evidence-quality and risk decisions that benefit from independent judgment add a read-only reviewer, whose result contains the review decision and findings rather than a copy of the domain handoff.
+`workflow.py` exports one ordinary Python workflow. Python controls framing and replanning. Independent reviewers gate evidence integrity and causal/mitigation judgment; final program packaging preserves those reviewed decisions and is validated at publication.
 
-Every declared output is a required `Artifact`. Botpipe snapshots the provider-written file before the operation completes, and later phases read those immutable handles. A reviewer, when present, may cite only captured artifact names. The final typed `LabWorkflowResult` carries the accepted handles in `artifacts`, convenience snapshot paths in `artifact_paths`, and unique candidate identifiers. When phases reuse an artifact name, the later accepted handle wins.
+Every declared output is required when a phase returns `accepted`. Botpipe snapshots those files before completion, and later phases read immutable handles. A prerequisite-seeking `question` or `blocked` result may pause before files exist; it must not fabricate placeholder artifacts. The final typed `LabWorkflowResult` carries accepted handles in `artifacts` and convenience snapshot paths in `artifact_paths`.
 
 ## Invocation
 
@@ -19,11 +19,15 @@ from labs.workflows.incident_to_hardening_program import Params, workflow_callab
 
 client = Botpipe(workspace=".")
 result = client.run(
-    workflow_callable, Params(...), request="Describe the requested outcome"
+    workflow_callable,
+    Params(incident_title="Checkout error-rate spike"),
+    request="Establish impact, likely causes, and safe hardening follow-through",
 )
 ```
 
-Parameters are validated by the package-local Pydantic `Params` model before any operation starts. `request` contains the human-readable task or evidence request.
+Parameters are validated before work starts. `max_provider_turns` (default 32) caps producers, reviewers, and retries; human pauses have no wall-clock deadline. `request` supplies incident context.
+
+Declared `evidence_paths` are captured once before framing under small file-count and byte limits. The public input accepts at most 32 bounded-length paths as a resource limit, not a required evidence count. Only regular, non-symlink files inside the source workspace become immutable reads; every missing, unsafe, or oversized declaration remains an explicit unavailable record. Each provider attempt writes to isolated scratch, resolves source paths through `source_workspace`, and distinguishes frozen declared evidence from time-bound live discovery.
 
 ## Phases and evidence
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+from dataclasses import replace
 
 import pytest
 
@@ -51,6 +52,37 @@ def test_native_workflow_validation_runs_modified_bytes_and_isolated_test(tmp_pa
     assert result.compiled_workflows[0]["workflow_name"] == "demo"
     assert result.environment["interpreter"]
     assert (project / "workflow.py").read_text().endswith("return 1\n")
+
+
+def test_exact_added_path_preserves_siblings_and_rejects_source_collision(tmp_path):
+    project = source_project(tmp_path)
+    tests = project / "tests/runtime"
+    tests.mkdir(parents=True)
+    existing = tests / "test_existing.py"
+    existing.write_text("# existing test\n")
+    added = "tests/runtime/test_generated.py"
+    workspace = replace(
+        prepare_candidate_workspace(project, ["workflow.py"], tmp_path / "surface"),
+        allowed_added_paths=(added,),
+    )
+    frozen = freeze_candidate_workspace(workspace, tmp_path / "frozen")
+    candidate_test = workspace.candidate_root / added
+    candidate_test.parent.mkdir(parents=True)
+    candidate_test.write_text("# generated test\n")
+
+    surface = candidate_surface_manifest(workspace, frozen)
+    assert surface["boundary"]["added_paths"] == [added]
+    assert set(surface["relative_paths"]) == {"workflow.py", added}
+    unexpected = candidate_test.with_name("test_other.py")
+    unexpected.write_text("# outside the exact addition\n")
+    with pytest.raises(ValueError, match="outside the allowlist"):
+        candidate_surface_manifest(workspace, frozen)
+    unexpected.unlink()
+
+    (project / added).write_text("# created while authoring was in progress\n")
+    with pytest.raises(ValueError, match="source appeared at generated target"):
+        candidate_surface_manifest(workspace, frozen)
+    assert existing.read_text() == "# existing test\n"
 
 
 def test_invalid_candidate_cannot_hide_behind_imported_original(tmp_path):
