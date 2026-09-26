@@ -922,6 +922,12 @@ def test_recovery_restores_profile_for_resume_without_unsubscribe(
 @pytest.mark.skipif(os.name != "posix", reason="separate POSIX process group")
 def test_terminal_notification_still_cleans_native_background_groups(tmp_path):
     marker = tmp_path / "background-survived"
+    cancelled = threading.Event()
+
+    def cancel_after_ack(checkpoint):
+        if checkpoint.get("status") == "turn_acknowledged":
+            cancelled.set()
+
     client = adapter(
         tmp_path,
         "native_background",
@@ -935,8 +941,14 @@ def test_terminal_notification_still_cleans_native_background_groups(tmp_path):
     try:
         client._start()
         client._thread_profiles["previous-thread"] = "previous-profile"
-        with pytest.raises(ProviderTimeoutError):
-            client.start_turn(request(tmp_path, timeout=0.2))
+        # Both threads must be registered before cancellation tests their cleanup.
+        call = replace(
+            request(tmp_path, timeout=5, cancel_event=cancelled),
+            on_checkpoint=cancel_after_ack,
+        )
+        with pytest.raises(ProviderInterruptedError):
+            client.start_turn(call)
+        assert cancelled.is_set()
     finally:
         client.close()
 

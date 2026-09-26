@@ -309,6 +309,26 @@ def _start_or_skip_local_sandbox(
         raise
 
 
+def _wait_for_text(path: Path, expected: str, *, timeout: float) -> None:
+    deadline = time.monotonic() + timeout
+    last_observation = "file did not exist"
+    while True:
+        try:
+            actual = path.read_text(encoding="utf-8")
+        except (FileNotFoundError, PermissionError) as exc:
+            last_observation = f"{type(exc).__name__}: {exc}"
+        else:
+            if actual == expected:
+                return
+            last_observation = f"content was {actual!r}"
+        if time.monotonic() >= deadline:
+            pytest.fail(
+                f"{path} did not contain {expected!r} within {timeout}s; "
+                f"last observation: {last_observation}"
+            )
+        time.sleep(0.02)
+
+
 def _native_adapter_factory(
     template: CodexAppServerAdapter,
     created: list[CodexAppServerAdapter] | None = None,
@@ -511,10 +531,7 @@ def test_latest_native_background_continuity_within_logical_operation(native) ->
     )
     try:
         started = _start_or_skip_local_sandbox(client, first)
-        deadline = time.monotonic() + 5
-        while not readiness.exists() and time.monotonic() < deadline:
-            time.sleep(0.02)
-        assert readiness.read_text(encoding="utf-8") == "ready"
+        _wait_for_text(readiness, "ready", timeout=5)
         assert not marker.exists()
         second = _start_or_skip_local_sandbox(
             client,
@@ -533,10 +550,7 @@ def test_latest_native_background_continuity_within_logical_operation(native) ->
         assert not marker.exists()
         release.write_text("finish", encoding="utf-8")
 
-        deadline = time.monotonic() + 5
-        while not marker.exists() and time.monotonic() < deadline:
-            time.sleep(0.02)
-        assert marker.read_text(encoding="utf-8") == "alive"
+        _wait_for_text(marker, "alive", timeout=5)
     finally:
         if not marker.exists():
             print("Native fixture diagnostics:", server.diagnostics())
@@ -578,10 +592,7 @@ def test_latest_native_dispose_records_background_outcome(
             tools=("shell",),
         ),
     )
-    deadline = time.monotonic() + 5
-    while not readiness.exists() and time.monotonic() < deadline:
-        time.sleep(0.02)
-    assert readiness.read_text(encoding="utf-8") == "ready"
+    _wait_for_text(readiness, "ready", timeout=5)
     process = client._process
 
     client.dispose()
