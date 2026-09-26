@@ -325,7 +325,9 @@ def _bootstrap(
         )
         process = run_bounded_process(
             [str(interpreter), "-I", "-S", str(bootstrap), str(config), str(result)],
-            cwd=arm.root,
+            # Windows cannot launch a process with an overlong cwd. The isolated
+            # bootstrap enters arm.root itself before loading any candidate code.
+            cwd=Path(arm.root.anchor),
             timeout_seconds=timeout,
             max_stream_bytes=max_bytes,
             termination_grace_seconds=grace,

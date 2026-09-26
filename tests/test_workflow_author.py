@@ -66,7 +66,7 @@ def test_author_is_discoverable_without_labs_and_guides_match_sources(tmp_path):
     assert resolve_workflow("workflow-author", tmp_path) is workflow_author
     guidance = load_authoring_guidance.__wrapped__()
     for name in ("authoring.md", "prompting.md"):
-        source = Path("docs", name).read_text()
+        source = Path("docs", name).read_text(encoding="utf-8")
         assert source in guidance
 
 

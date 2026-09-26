@@ -482,10 +482,12 @@ def test_latest_native_background_continuity_within_logical_operation(native) ->
         ready_target = str(readiness).replace("'", "''")
         release_target = str(release).replace("'", "''")
         command = (
-            f"[IO.File]::WriteAllText('{ready_target}', 'ready'); "
+            f"Set-Content -LiteralPath '{ready_target}' -Value 'ready' "
+            "-NoNewline -Encoding ascii; "
             f"while (-not (Test-Path -LiteralPath '{release_target}')) "
             "{ Start-Sleep -Milliseconds 50 }; "
-            f"[IO.File]::WriteAllText('{target}', 'alive')"
+            f"Set-Content -LiteralPath '{target}' -Value 'alive' "
+            "-NoNewline -Encoding ascii"
         )
     else:
         command = (
@@ -552,10 +554,12 @@ def test_latest_native_dispose_records_background_outcome(
         ready_target = str(readiness).replace("'", "''")
         release_target = str(release).replace("'", "''")
         command = (
-            f"[IO.File]::WriteAllText('{ready_target}', 'ready'); "
+            f"Set-Content -LiteralPath '{ready_target}' -Value 'ready' "
+            "-NoNewline -Encoding ascii; "
             f"while (-not (Test-Path -LiteralPath '{release_target}')) "
             "{ Start-Sleep -Milliseconds 50 }; "
-            f"[IO.File]::WriteAllText('{target}', 'alive')"
+            f"Set-Content -LiteralPath '{target}' -Value 'alive' "
+            "-NoNewline -Encoding ascii"
         )
     else:
         command = (
