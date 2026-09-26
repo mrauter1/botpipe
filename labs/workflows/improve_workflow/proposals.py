@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import json
+import os
 from dataclasses import asdict, dataclass
+from hashlib import sha256
+from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -17,7 +21,12 @@ from botpipe_optimizer.records import (
     ValidationPlan,
 )
 
-from .models import ChangeReview, ImproveWorkflowParams, Recommendation
+from .models import (
+    ChangeReview,
+    DiagnosticAssessment,
+    ImproveWorkflowParams,
+    Recommendation,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,6 +38,14 @@ class _SourceCapture:
     baseline_manifest: dict[str, Any]
 
 
+@dataclass(frozen=True, slots=True)
+class _FrozenAnalysisSource:
+    root: str
+    managed_root: str
+    marker_sha256: str
+    hashes: dict[str, str]
+
+
 class ChangeIdea(BaseModel):
     """Provider-owned semantics for one change; runtime owns record identity."""
 
@@ -36,7 +53,8 @@ class ChangeIdea(BaseModel):
 
     title: str = Field(min_length=1)
     targets: list[str] = Field(min_length=1)
-    cited_observation_ids: list[str] = Field(min_length=1)
+    cited_observation_ids: list[str] = Field(default_factory=list)
+    source_evidence_paths: list[str] = Field(default_factory=list)
     proposed_change: str = Field(min_length=1)
     expected_effect: str = Field(min_length=1)
     risks: list[str] = Field(min_length=1)
@@ -83,8 +101,7 @@ def _capture_source(selected_workflow: str) -> _SourceCapture:
     provenance = capture_workflow_provenance(selected, context.workspace)
     if not provenance["verified"]:
         raise ValueError(
-            "Cannot capture an attributable optimizer baseline: "
-            + provenance["error"]
+            "Cannot capture an attributable optimizer baseline: " + provenance["error"]
         )
     baseline_manifest = capture_workflow_surface_manifest(selected, context.workspace)
     if baseline_manifest["surface_id"] != provenance["surface_id"]:
@@ -137,11 +154,127 @@ def _capture_history(
     return tuple(matching)
 
 
+@activity(retry_safe=True, name="freeze improvement analysis source")
+def _freeze_analysis_source(
+    source: _SourceCapture, destination: str
+) -> _FrozenAnalysisSource:
+    """Copy the exact captured surface used by all model analysis turns."""
+
+    from botpipe_optimizer import prepare_candidate_workspace
+
+    manifest = source.baseline_manifest
+    files = manifest.get("files", ())
+    relative_paths = tuple(
+        str(item["relative_path"])
+        for item in files
+        if isinstance(item, dict) and item.get("relative_path")
+    )
+    if not relative_paths:
+        raise ValueError("captured workflow surface has no analysis source files")
+    prepared = prepare_candidate_workspace(
+        manifest["root"], relative_paths, destination
+    )
+    expected = {
+        str(item["relative_path"]): str(item["surface_sha256"]) for item in files
+    }
+    actual = {
+        relative: sha256((prepared.baseline_root / relative).read_bytes()).hexdigest()
+        for relative in relative_paths
+    }
+    if actual != expected:
+        raise ValueError("workflow source changed while freezing analysis baseline")
+    for relative in relative_paths:
+        os.chmod(prepared.baseline_root / relative, 0o444)
+    return _FrozenAnalysisSource(
+        root=str(prepared.baseline_root),
+        managed_root=str(prepared.root),
+        marker_sha256=sha256(
+            (prepared.root / ".botpipe-candidate.json").read_bytes()
+        ).hexdigest(),
+        hashes=actual,
+    )
+
+
+def _verify_analysis_source(frozen: _FrozenAnalysisSource) -> None:
+    raw_root = Path(frozen.root)
+    raw_managed = Path(frozen.managed_root)
+    if raw_managed.is_symlink() or raw_root.is_symlink():
+        raise ValueError("frozen workflow analysis paths must not be symlinks")
+    if raw_root.parent != raw_managed:
+        raise ValueError("frozen workflow analysis root has an invalid owner")
+    marker = raw_managed / ".botpipe-candidate.json"
+    if marker.is_symlink() or not marker.is_file():
+        raise ValueError("frozen workflow analysis ownership marker is invalid")
+    if sha256(marker.read_bytes()).hexdigest() != frozen.marker_sha256:
+        raise ValueError("frozen workflow analysis ownership marker changed")
+    managed = raw_managed.resolve(strict=True)
+    root = raw_root.resolve(strict=True)
+    if root != managed / "baseline":
+        raise ValueError("frozen workflow analysis root escaped its managed directory")
+    entries = tuple(root.rglob("*"))
+    if any(path.is_symlink() for path in entries):
+        raise ValueError("frozen workflow analysis source contains a symlink")
+    actual_paths = {
+        path.relative_to(root).as_posix()
+        for path in entries
+        if path.is_file() and not path.is_symlink()
+    }
+    if actual_paths != set(frozen.hashes):
+        raise ValueError("frozen workflow analysis source file set changed")
+    actual = {
+        relative: sha256(_ordinary_frozen_file(root, relative).read_bytes()).hexdigest()
+        for relative in frozen.hashes
+    }
+    if actual != frozen.hashes:
+        raise ValueError("frozen workflow analysis source changed")
+
+
+def _ordinary_frozen_file(root: Path, relative: str) -> Path:
+    path = root / relative
+    if path.is_symlink():
+        raise ValueError("frozen workflow analysis source contains a symlink")
+    resolved = path.resolve(strict=True)
+    if not resolved.is_file() or not resolved.is_relative_to(root):
+        raise ValueError("frozen workflow analysis source escaped its root")
+    return resolved
+
+
+def _model_baseline_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
+    """Expose exact relative identities without authoritative absolute paths."""
+
+    value = json.loads(json.dumps(manifest))
+    value["root"] = "."
+    value["surface_root"] = "."
+    for item in value.get("files", ()):
+        if isinstance(item, dict):
+            item.pop("surface_path", None)
+    return value
+
+
+def _model_source_manifest(
+    manifest: SourceManifest, baseline_manifest: dict[str, Any]
+) -> dict[str, Any]:
+    value = asdict(manifest)
+    original = manifest.source_path
+    value["source_path"] = next(
+        (
+            str(item["relative_path"])
+            for item in baseline_manifest.get("files", ())
+            if isinstance(item, dict)
+            and original
+            and item.get("surface_path")
+            and Path(str(item["surface_path"])).resolve() == Path(original).resolve()
+        ),
+        None,
+    )
+    return value
+
+
 @activity(retry_safe=True, name="capture bounded improvement evidence")
 def _capture_evidence(
     source: _SourceCapture,
     inspections: tuple[dict[str, Any], ...],
-    objective: str,
+    metric_view: str | None,
     max_evidence_bytes: int,
     max_snapshot_bytes: int,
     explicit_run_refs: bool,
@@ -153,7 +286,9 @@ def _capture_evidence(
         source.manifest.workflow_name,
         inspections,
         source_manifest=source.manifest,
-        objective=objective,
+        # Evidence v3 requires a concrete legacy view. It remains descriptive
+        # and is removed from active model input when the user did not request it.
+        objective=metric_view or "reliability",
         top_k_steps=1,
         max_evidence_bytes=max_evidence_bytes,
         max_snapshot_bytes=max_snapshot_bytes,
@@ -169,6 +304,7 @@ def _capture_evidence(
 def _publish(
     output_dir: str,
     evidence_snapshot: EvidenceSnapshot,
+    assessment: DiagnosticAssessment,
     candidate_set: CandidateSet,
     review: CandidateReview | None,
     baseline_manifest: dict[str, Any],
@@ -187,26 +323,11 @@ def _publish(
         max_output_bytes=max_output_bytes,
         max_evidence_bytes=max_evidence_bytes,
         max_snapshot_bytes=max_snapshot_bytes,
-    )
-
-
-def _empty_candidate_set(
-    source: _SourceCapture, snapshot: EvidenceSnapshot
-) -> CandidateSet:
-    from botpipe_optimizer.recommendations import build_empty_candidate_set
-
-    if snapshot.next_action == "no_change":
-        reason = "The admitted evidence contains no objective-eligible change signal."
-    else:
-        reason = "No objective-eligible evidence was available in the admitted sample."
-    return build_empty_candidate_set(
-        selected_workflow=source.manifest.workflow_name,
-        evidence_snapshot_id=snapshot.snapshot_id,
-        baseline_surface_manifest_id=snapshot.baseline_surface_manifest_id,
-        next_action=(
-            "no_change" if snapshot.next_action == "no_change" else "collect_evidence"
-        ),
-        reason=reason,
+        supporting_content=(
+            "# Diagnostic assessment\n\n```json\n"
+            + json.dumps(assessment.model_dump(mode="json"), indent=2, sort_keys=True)
+            + "\n```\n"
+        ).encode(),
     )
 
 
@@ -215,12 +336,38 @@ def _finalize_candidate_set(
     *,
     selected_workflow: str,
     snapshot: EvidenceSnapshot,
+    assessment: DiagnosticAssessment,
 ) -> CandidateSet:
     from botpipe_optimizer.recommendations import finalize_candidate_set_payload
 
     candidates: list[dict[str, Any]] = []
     if proposal.candidate is not None:
         idea = proposal.candidate
+        assessed_sources = {
+            path for link in assessment.intent_evidence for path in link.source_paths
+        }
+        for scoped in assessment.scope_assessments:
+            assessed_sources.update(
+                path for link in scoped.evidence for path in link.source_paths
+            )
+        unknown_sources = sorted(set(idea.source_evidence_paths) - assessed_sources)
+        if unknown_sources:
+            raise ValueError(
+                "candidate source evidence was not established by assessment: "
+                + ", ".join(unknown_sources)
+            )
+        if not idea.cited_observation_ids and not idea.source_evidence_paths:
+            raise ValueError("source-only candidate must name assessed source evidence")
+        unsupported_targets = sorted(
+            set(idea.targets) - set(idea.source_evidence_paths)
+            if not idea.cited_observation_ids
+            else ()
+        )
+        if unsupported_targets:
+            raise ValueError(
+                "source-only candidate targets lack assessed source evidence: "
+                + ", ".join(unsupported_targets)
+            )
         candidates.append(
             {
                 "kind": "workflow",
@@ -248,6 +395,67 @@ def _finalize_candidate_set(
             "no_candidate_reason": proposal.reason,
         }
     )
+
+
+def _neutral_evidence(snapshot: EvidenceSnapshot) -> dict[str, Any]:
+    """Return model evidence without a preselected target or action."""
+
+    return {
+        "schema": snapshot.schema_version,
+        "snapshot_id": snapshot.snapshot_id,
+        "selected_workflow": snapshot.selected_workflow,
+        "baseline_surface_manifest_id": snapshot.baseline_surface_manifest_id,
+        "selection": snapshot.selection.model_dump(mode="json"),
+        "runs": [item.model_dump(mode="json") for item in snapshot.runs],
+        "excluded_runs": [
+            item.model_dump(mode="json") for item in snapshot.excluded_runs
+        ],
+        "issues": [item.model_dump(mode="json") for item in snapshot.issues],
+        "observations": [
+            item.model_dump(mode="json") for item in snapshot.observations
+        ],
+        "groups": [item.model_dump(mode="json") for item in snapshot.groups],
+        "selected_group_id": snapshot.selected_group_id,
+        "recommendation_basis": snapshot.recommendation_basis,
+        # These are neutral aggregates.  The deterministic objective shortlist,
+        # ranking basis, and next action are intentionally not model inputs.
+        "descriptive_step_metrics": [
+            item.model_dump(mode="json") for item in snapshot.step_metrics
+        ],
+        "budget": snapshot.budget.model_dump(mode="json"),
+    }
+
+
+def _validate_assessment(
+    assessment: DiagnosticAssessment,
+    *,
+    snapshot: EvidenceSnapshot,
+    baseline_manifest: dict[str, Any],
+) -> DiagnosticAssessment:
+    observations = {item.observation_id for item in snapshot.observations}
+    raw_files = baseline_manifest.get("files", ())
+    source_paths = {
+        str(item["relative_path"])
+        for item in raw_files
+        if isinstance(item, dict) and item.get("relative_path")
+    }
+    links = list(assessment.intent_evidence)
+    for scoped in assessment.scope_assessments:
+        links.extend(scoped.evidence)
+    for link in links:
+        unknown_observations = sorted(set(link.observation_ids) - observations)
+        if unknown_observations:
+            raise ValueError(
+                "assessment cites unknown observations: "
+                + ", ".join(unknown_observations)
+            )
+        unknown_paths = sorted(set(link.source_paths) - source_paths)
+        if unknown_paths:
+            raise ValueError(
+                "assessment cites source outside captured baseline: "
+                + ", ".join(unknown_paths)
+            )
+    return assessment
 
 
 def _finalize_review(
@@ -310,32 +518,41 @@ def propose_improvement(params: ImproveWorkflowParams, request: str) -> Recommen
     snapshot = _capture_evidence(
         source,
         inspections,
-        params.objective,
+        params.metric_view,
         params.max_evidence_bytes,
         params.max_snapshot_bytes,
         bool(params.run_refs),
     )
+    frozen_source = _freeze_analysis_source(
+        source, str(context.folder / "analysis-source")
+    )
+    model_manifest = _model_baseline_manifest(source.baseline_manifest)
+    model_source_manifest = _model_source_manifest(
+        source.manifest, source.baseline_manifest
+    )
+    _verify_analysis_source(frozen_source)
+    investigator = Provider(workspace=frozen_source.root)
+    assessment = investigator.query(
+        Prompt.file("prompts/investigate.md"),
+        input={
+            "request": request,
+            "selected_workflow_reference": source.manifest.workflow_name,
+            "analysis_source_root": frozen_source.root,
+            "priority": params.objective,
+            "evidence": _neutral_evidence(snapshot),
+            "selected_workflow_source_manifest": model_source_manifest,
+            "baseline_surface_manifest": model_manifest,
+        },
+        returns=DiagnosticAssessment,
+    ).value
+    assessment = _validate_assessment(
+        assessment,
+        snapshot=snapshot,
+        baseline_manifest=source.baseline_manifest,
+    )
+    _verify_analysis_source(frozen_source)
 
-    if snapshot.next_action != "propose_changes" or not snapshot.shortlist:
-        candidate_set = _empty_candidate_set(source, snapshot)
-        receipt = _publish(
-            str(context.folder),
-            snapshot,
-            candidate_set,
-            None,
-            source.baseline_manifest,
-            params.max_output_bytes,
-            params.max_evidence_bytes,
-            params.max_snapshot_bytes,
-        )
-        return Recommendation(
-            evidence_snapshot=snapshot,
-            candidate_set=candidate_set,
-            review=None,
-            receipt=receipt,
-        )
-
-    producer = Provider()
+    producer = investigator.with_config(session=None)
     reviewer = producer.with_config(session=None)
     review: CandidateReview | None = None
     candidate_set: CandidateSet | None = None
@@ -346,11 +563,13 @@ def propose_improvement(params: ImproveWorkflowParams, request: str) -> Recommen
             Prompt.file("prompts/propose.md"),
             input={
                 "request": request,
-                "selected_workflow_reference": params.selected_workflow,
-                "objective": params.objective,
-                "evidence_snapshot": snapshot.model_dump(mode="json"),
-                "selected_workflow_source_manifest": asdict(source.manifest),
-                "baseline_surface_manifest": source.baseline_manifest,
+                "selected_workflow_reference": source.manifest.workflow_name,
+                "analysis_source_root": frozen_source.root,
+                "priority": params.objective,
+                "evidence": _neutral_evidence(snapshot),
+                "assessment": assessment.model_dump(mode="json"),
+                "selected_workflow_source_manifest": model_source_manifest,
+                "baseline_surface_manifest": model_manifest,
                 "max_candidates": 1,
                 "max_output_bytes": params.max_output_bytes,
                 "revision": revision,
@@ -363,6 +582,7 @@ def propose_improvement(params: ImproveWorkflowParams, request: str) -> Recommen
             proposal.value,
             selected_workflow=source.manifest.workflow_name,
             snapshot=snapshot,
+            assessment=assessment,
         )
         candidate_set = validate_candidate_set(
             candidate_set,
@@ -371,16 +591,20 @@ def propose_improvement(params: ImproveWorkflowParams, request: str) -> Recommen
             allowed_kinds=("workflow",),
             expected_selected_workflow=source.manifest.workflow_name,
             max_output_bytes=params.max_output_bytes,
+            baseline_manifest=source.baseline_manifest,
         )
+        _verify_analysis_source(frozen_source)
         decision = reviewer.query(
             Prompt.file("prompts/review_proposal.md"),
             input={
                 "request": request,
-                "objective": params.objective,
-                "evidence_snapshot": snapshot.model_dump(mode="json"),
+                "priority": params.objective,
+                "analysis_source_root": frozen_source.root,
+                "evidence": _neutral_evidence(snapshot),
+                "assessment": assessment.model_dump(mode="json"),
                 "candidate_set": candidate_set.model_dump(mode="json", by_alias=True),
-                "selected_workflow_source_manifest": asdict(source.manifest),
-                "baseline_surface_manifest": source.baseline_manifest,
+                "selected_workflow_source_manifest": model_source_manifest,
+                "baseline_surface_manifest": model_manifest,
                 "max_candidates": 1,
                 "max_output_bytes": params.max_output_bytes,
             },
@@ -392,10 +616,12 @@ def propose_improvement(params: ImproveWorkflowParams, request: str) -> Recommen
             candidate_set=candidate_set,
             max_output_bytes=params.max_output_bytes,
         )
+        _verify_analysis_source(frozen_source)
         if review.accepted:
             receipt = _publish(
                 str(context.folder),
                 snapshot,
+                assessment,
                 candidate_set,
                 review,
                 source.baseline_manifest,
@@ -405,6 +631,7 @@ def propose_improvement(params: ImproveWorkflowParams, request: str) -> Recommen
             )
             return Recommendation(
                 evidence_snapshot=snapshot,
+                assessment=assessment,
                 candidate_set=candidate_set,
                 review=review,
                 receipt=receipt,
@@ -414,6 +641,7 @@ def propose_improvement(params: ImproveWorkflowParams, request: str) -> Recommen
     assert candidate_set is not None and review is not None
     return Recommendation(
         evidence_snapshot=snapshot,
+        assessment=assessment,
         candidate_set=candidate_set,
         review=review,
         receipt=None,

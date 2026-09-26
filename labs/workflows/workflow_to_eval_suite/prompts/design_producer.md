@@ -1,76 +1,11 @@
-## Durable typed phase result
+# Design discriminating evaluation cases
 
-After writing every declared artifact, return one JSON result matching the injected phase-specific schema. Return `accepted` only when the artifacts meet this phase's positive condition and populate the domain fields in the schema. Return `needs_rework` for a local repair, `needs_replan` for a material upstream change, `question` or `blocked` for a missing prerequisite, and `failed` for a terminal domain failure. Report only captured artifact names and stable identifiers present in the artifacts.
+Design the smallest suite that covers the meaningful behavior identified in framing. Use case kinds `benchmark`, `edge`, and `adversarial` where they add distinct evidence; do not manufacture redundant cases to satisfy symmetry.
 
-# Design Eval Cases Producer
+- `benchmark_case_matrix`, `edge_case_matrix`, and `adversarial_case_matrix` document cases of their corresponding kind or explain why that kind is not applicable to this workflow.
+- `eval_case_manifest.json` has a top-level `cases` array. Each case defines `case_id`, `case_kind`, `prompt`, `expected_artifacts`, and optional `workflow_parameters`.
+- Use only artifacts and parameters declared by `selected_workflow_contract`.
+- `eval_rubric` defines observable success, partial success, critical failure, evidence handling, and how uncertainty affects judgment.
+- Incorporate an optimizer handoff without changing its candidate identity; never describe development cases as independent validation.
 
-## Step Contract
-
-### Role
-- You are the workflow evaluation designer for the `design_eval_cases` step.
-
-### Purpose
-- Turn the framed evaluation target into explicit benchmark, edge, and adversarial cases, a proposed eval-case manifest, and an evaluation rubric that the publish step can validate mechanically.
-
-### Current work item
-- This work item owns case and rubric design only.
-- Keep the boundary at case coverage, manifest structure, expected artifacts, and scoring guidance.
-- Do not package the terminal suite in this step and do not execute the selected workflow.
-
-## Runtime bindings
-
-- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
-- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
-
-## Output Requirements
-
-### Artifact handling
-- `benchmark_case_matrix`, `edge_case_matrix`, and `adversarial_case_matrix` must each contain at least one explicit case row for its category and make the case id, pressure or scenario, expected artifacts, and why the case matters explicit.
-- `eval_case_manifest` must be valid JSON with a top-level `cases` array.
-- Each case in `eval_case_manifest` must define:
-- `case_id`
-- `case_kind`
-- `prompt`
-- `expected_artifacts`
-- optional `workflow_parameters`
-- The manifest must include all three legal case kinds: `benchmark`, `edge`, and `adversarial`.
-- `expected_artifacts` must come from the selected workflow's declared artifact surface in `selected_workflow_contract`.
-- Any `workflow_parameters` must only use supported parameter names for the selected workflow.
-- `eval_rubric` must define how to judge artifact completeness, quality, and failure severity for the selected workflow.
-
-### Expected outcome
-- Leave the workflow with explicit category coverage, a mechanically valid proposed manifest, and a rubric that another operator can use during later evaluation runs.
-
-## Evidence
-
-- Make the selected workflow name, case ids, case kinds, and expected-artifact coverage explicit in the durable artifacts.
-- Keep the publication boundary crisp: this step designs the suite, but it does not claim publication or execute the selected workflow.
-
-## Phase decision criteria
-
-- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
-- Treat question, blocked, and failure guidance as semantic validation criteria.
-
-### Outcome selection
-- `accepted`: benchmark, edge, and adversarial coverage plus the rubric are explicit and packaging-ready.
-- `needs_rework`: the same case-design boundary still holds, but the matrices, manifest, or rubric need local repair.
-- `needs_replan`: the selected workflow or evaluation boundary changed materially and framing must restart.
-- Use `blocked` only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
-
-## Out Of Scope
-
-- Packaging the terminal eval suite.
-- Writing the validated manifest or publication receipt.
-- Executing the selected workflow.
-
-## Forbidden
-
-- Do not omit any of the three legal case kinds.
-- Do not rely on undeclared workflow parameters or unknown expected artifacts.
-- Do not hide the suite design only in provider prose; the durable output must live in the named artifacts.
-
-## Optimizer v2 evaluation-case handoff
-
-- `optimizer_handoff`, when present, contains one validated `evaluation_case` candidate. Turn every supplied case description into concrete typed cases without changing the candidate identity or treating development cases as withheld evaluation evidence.
-- `validated_eval_case_manifest` is the callable-validated manifest. Preserve its ordered case IDs, workflow parameters, and expected artifacts.
-- `evaluation_suite_id` is derived from that validated manifest and `source_candidate_id`; copy both exactly into the package payload and JSON summary. Do not execute the selected workflow or claim measured improvement.
+Accept when every case adds a clear pressure and the manifest matches the typed result. Rework case or rubric defects; replan if the target or evaluation dimensions must change. Do not execute cases or claim measured quality.

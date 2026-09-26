@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from botpipe import Provider, workflow
+from botpipe import Provider, provider_budget, workflow
 from labs.workflows._shared import (
     LabWorkflowResult,
     ReplanRequired,
@@ -23,9 +23,8 @@ from .contracts import (
 from .params import Params
 
 
-@workflow(name="workflow_portfolio_to_operating_system", version="2")
-def WorkflowPortfolioToOperatingSystem(
-    params: Params, request: str = ""
+def _run_workflow_portfolio_to_operating_system(
+    params: Params, request: str
 ) -> LabWorkflowResult:
     """Execute the workflow portfolio to operating system evidence workflow."""
     _producer = Provider()
@@ -134,6 +133,15 @@ def WorkflowPortfolioToOperatingSystem(
         expected_focus_workflows=params.focus_workflows or None,
     )
     return finish("workflow_portfolio_to_operating_system", completed)
+
+
+@workflow(name="workflow_portfolio_to_operating_system", version="3")
+def WorkflowPortfolioToOperatingSystem(
+    params: Params, request: str = ""
+) -> LabWorkflowResult:
+    """Execute the SOP within one durable provider-turn budget."""
+    with provider_budget(max_turns=params.max_provider_turns):
+        return _run_workflow_portfolio_to_operating_system(params, request)
 
 
 workflow_callable = WorkflowPortfolioToOperatingSystem

@@ -32,6 +32,8 @@ class CandidateWorkspace:
     allowed_paths: tuple[str, ...]
     allowed_roots: tuple[str, ...]
     authoritative_hashes: dict[str, str]
+    # Exact new files, absent from the authoritative workspace and its baseline.
+    allowed_added_paths: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -160,7 +162,8 @@ def candidate_manifest(workspace: CandidateWorkspace) -> CandidateManifest:
     outside = sorted(
         relative
         for relative in actual - baseline
-        if not any(
+        if relative not in workspace.allowed_added_paths
+        and not any(
             Path(relative).is_relative_to(root) for root in workspace.allowed_roots
         )
     )
@@ -195,6 +198,12 @@ def candidate_manifest(workspace: CandidateWorkspace) -> CandidateManifest:
 
 def validate_authoritative_sources_unchanged(workspace: CandidateWorkspace) -> None:
     """Fail when original sources drift or a bounded authoritative tree changes shape."""
+    for relative in workspace.allowed_added_paths:
+        source = workspace.repo_root / relative
+        if source.exists() or source.is_symlink():
+            raise ValueError(
+                f"authoritative source appeared at generated target: {relative}"
+            )
     for relative, expected in workspace.authoritative_hashes.items():
         source = _ordinary_source(workspace.repo_root, relative)
         actual = _digest(source)
@@ -309,6 +318,8 @@ def freeze_candidate_workspace(
             "editable_roots": list(workspace.allowed_roots),
         }
     )
+    if workspace.allowed_added_paths:
+        identity_boundary["added_paths"] = list(workspace.allowed_added_paths)
     baseline_kind = identity_boundary.pop("surface_kind", "baseline")
     baseline = derive_surface_manifest(
         workspace.baseline_root,
@@ -368,6 +379,7 @@ def candidate_surface_manifest(
         expected_surface_kind="candidate",
         baseline_manifest=bundle.baseline_surface_manifest,
         allowed_added_path_prefixes=workspace.allowed_roots,
+        allowed_added_exact_paths=workspace.allowed_added_paths,
         allowed_removed_paths=manifest.removed_paths,
     )
 
@@ -398,6 +410,7 @@ def validate_candidate(
         workflow_refs=workflow_refs,
         staging_parent=staging_parent,
         allowed_added_path_prefixes=workspace.allowed_roots,
+        allowed_added_exact_paths=workspace.allowed_added_paths,
         allowed_removed_paths=candidate_manifest(workspace).removed_paths,
         target_test_argv=target_test_argv,
         target_test_command=target_test_command,

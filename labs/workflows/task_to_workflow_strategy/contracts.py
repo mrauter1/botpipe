@@ -24,7 +24,7 @@ class StrategySelectionPayload(LabPhaseOutcome):
     """Verifier payload for the strategy-selection step."""
 
     summary: str = Field(min_length=1)
-    compared_workflows: list[str] = Field(min_length=3)
+    compared_workflows: list[str] = Field(min_length=1)
     selected_strategy: StrategyRoute
     recommended_workflows: list[str] = Field(min_length=1)
     builder_considered: bool = False

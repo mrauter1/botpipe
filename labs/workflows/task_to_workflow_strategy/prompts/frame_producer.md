@@ -1,70 +1,18 @@
-## Durable typed phase result
+# Frame the workflow decision
 
-After writing every declared artifact, return one JSON result matching the injected phase-specific schema. Return `accepted` only when the artifacts meet this phase's positive condition and populate the domain fields in the schema. Return `needs_rework` for a local repair, `needs_replan` for a material upstream change, `question` or `blocked` for a missing prerequisite, and `failed` for a terminal domain failure. Report only captured artifact names and stable identifiers present in the artifacts.
+Turn the request, parameters, and observed workflow catalog into a decision brief. On acceptance, write only to the declared artifact paths and return the injected typed result.
 
-# Frame Task Producer
+## Responsibility
 
-## Step Contract
+- In `task_strategy_brief`, state the trigger, sponsor or consumer, terminal outcome, constraints, and the handoff the eventual route must provide.
+- In `workflow_selection_criteria`, define task-specific tests for using one workflow, composing workflows, adapting one, or creating a new package.
+- Separate hard constraints from preferences and identify assumptions or missing facts that could change the route.
+- Do not select a route or workflow yet.
 
-### Role
-- You are the workflow strategist producer for the `frame_task` step.
+## Evidence and judgment
 
-### Purpose
-- Turn the incoming task and the current workflow portfolio into an explicit framing package that the next step can use to choose among `run_existing`, `compose`, `adapt`, or `create_new`.
+Ground the criteria in the supplied request and catalog. A material gap means the required outcome or safety boundary cannot credibly be met by reuse, composition, or adaptation; inconvenience is not a gap. Do not require an arbitrary number of candidates.
 
-### Current work item
-- This work item owns task framing only.
-- Keep the boundary at problem framing, sponsor intent, outcome definition, and strategy-selection criteria. Do not choose the route or the downstream workflow in this step.
+## Completion and exceptions
 
-## Runtime bindings
-
-- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
-- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
-
-## Output Requirements
-
-### Artifact handling
-- `task_strategy_brief` must define:
-- the concrete task trigger,
-- who would sponsor or consume the result,
-- what terminal outcome the task needs,
-- why multi-turn orchestration is or is not needed,
-- what kind of downstream handoff another workflow or operator should receive.
-- `workflow_selection_criteria` must define how the next step should judge:
-- fit to the terminal outcome,
-- need for composition,
-- need for adaptation,
-- what counts as a material fit gap that justifies `create_new`,
-- what evidence must exist before a route can be selected credibly.
-
-### Expected outcome
-- Leave the workflow with a decisive framing package that turns an arbitrary task into an explicit portfolio-selection problem.
-
-## Evidence
-
-- Anchor the framing in the current portfolio snapshot and the runtime input.
-- Keep the runtime/provider boundary crisp: the runtime injects the compact human-readable step contract, while prompt templates own the operational guidance and raw provider output never re-enters prompts.
-- Make the next-step comparison criteria specific enough that at least three candidate workflows can be compared without guessing.
-
-## Phase decision criteria
-
-- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
-- Treat question, blocked, and failure guidance as semantic validation criteria.
-
-### Outcome selection
-- `accepted`: the task boundary, sponsor, terminal outcome, and selection criteria are explicit enough for portfolio comparison.
-- `needs_rework`: the same framing boundary still holds, but the brief or criteria need local repair.
-- `needs_replan`: the trigger, sponsor, or terminal outcome changed materially and framing must restart.
-- Use `blocked` only for genuine intent gaps, missing prerequisites, or irreconcilable contradictions.
-
-## Out Of Scope
-
-- Selecting the route.
-- Executing any downstream workflow.
-- Authoring the final strategy package.
-
-## Forbidden
-
-- Do not pick the route in this step.
-- Do not hide the framing only in provider prose; the durable output must be in the named artifacts.
-- Do not invent new runtime-owned metadata or a provider-facing packet abstraction.
+Return `accepted` when the next phase can compare plausible routes without guessing the objective or constraints. Use `needs_rework` for defects within this framing, `needs_replan` only if the task boundary itself changed, and `question` or `blocked` only when a missing prerequisite prevents a defensible comparison. Never invent intent or claim downstream work ran.

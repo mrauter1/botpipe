@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from botpipe import Provider, workflow
+from botpipe import Provider, provider_budget, workflow
 from labs.workflows._shared import (
     LabWorkflowResult,
     ReplanRequired,
@@ -28,8 +28,7 @@ from .contracts import (
 from .params import Params
 
 
-@workflow(name="task_to_workflow_strategy", version="2")
-def TaskToWorkflowStrategy(params: Params, request: str = "") -> LabWorkflowResult:
+def _run_task_to_workflow_strategy(params: Params, request: str) -> LabWorkflowResult:
     """Execute the task to workflow strategy evidence workflow."""
     _producer = Provider()
     context = {"request": request, "parameters": params.model_dump(mode="json")}
@@ -151,6 +150,13 @@ def TaskToWorkflowStrategy(params: Params, request: str = "") -> LabWorkflowResu
                 "replan_artifacts": [str(handle.path) for handle in change.handles],
             }
     return finish("task_to_workflow_strategy", completed)
+
+
+@workflow(name="task_to_workflow_strategy", version="3")
+def TaskToWorkflowStrategy(params: Params, request: str = "") -> LabWorkflowResult:
+    """Execute the SOP within one durable provider-turn budget."""
+    with provider_budget(max_turns=params.max_provider_turns):
+        return _run_task_to_workflow_strategy(params, request)
 
 
 workflow_callable = TaskToWorkflowStrategy

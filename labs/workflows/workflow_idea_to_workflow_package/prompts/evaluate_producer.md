@@ -1,58 +1,31 @@
 ## Durable typed phase result
 
-After writing every declared artifact, return one JSON result matching the injected phase-specific schema. Return `accepted` only when the artifacts meet this phase's positive condition and populate the domain fields in the schema. Return `needs_rework` for a local repair, `needs_replan` for a material upstream change, `question` or `blocked` for a missing prerequisite, and `failed` for a terminal domain failure. Report only captured artifact names and stable identifiers present in the artifacts.
+Return one JSON result matching the injected phase-specific schema and follow the runtime's `artifact_requirement`. Before returning `accepted`, write every declared artifact and ensure it meets this phase's done criteria. For `needs_rework`, `needs_replan`, `question`, `blocked`, or `failed`, write only real evidence that is already available and useful; a control outcome does not require filler artifacts. Never fabricate a file to satisfy the declared acceptance outputs. Cite only artifacts actually captured.
 
-# Evaluate Package Producer
+Resolve relative repository and evidence paths against the injected `source_workspace`. The writable working directory is disposable authoring scratch, not the source repository.
 
-## Step Contract
+# Evaluate the materialized package
 
-### Role
-- You are the evaluator producer for the `evaluate_package` step.
+## Purpose
 
-### Purpose
-- Evaluate the runtime-materialized workflow candidate and produce explicit validation, promotion, and rollback evidence.
+Decide whether the actual generated source and prompts implement the reviewed workflow and whether executable evidence supports the intended outcome. Format compliance alone is not success.
 
-### Current work item
-- This work item owns evaluation evidence only.
-- Do not silently repair workflow files in this step. If the build needs changes, capture the evidence and return the correct typed phase outcome.
+## Work boundary
 
-## Runtime bindings
+Produce honest evaluation and downstream handoff evidence. Do not edit generated files or imply promotion into the authoritative repository.
 
-- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
-- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
+## Stable obligations
 
-## Output Requirements
+- Treat `candidate_manifest` as authority for materialized paths and hashes, `candidate_evaluation` as authority for checks that actually ran, and `generated_candidate.root` as the isolated location. The provider-authored content manifest is design evidence, not validation proof.
+- Compare the generated source and prompts in `workflow_package_manifest` with `workflow_brief`, `workflow_design`, and `prompt_design`.
+- Evaluate substantive purpose, step boundaries, Python control flow, semantic decisions, artifact and typed-result handoffs, downstream input/output contracts, acceptance conditions, recovery behavior, and retry safety.
+- Evaluate every generated prompt for sufficient source context, stable obligations, flexible method choice, assumption handling, instruction contradictions, semantic completion evidence, and consistency with upstream/downstream prompts.
+- Record compile/import/discovery and configured-test results exactly. Distinguish actual executed outcomes from static source inspection, artifact-shape checks, and claims that remain unproven.
+- When `enforce_generated_test` is true, require the focused test at `tests/runtime/test_<package_name>.py` to exist and assess whether it exercises generated-entry behavior, including routing or replay where relevant. If no explicit test argv was supplied, require the automatic focused test to have run successfully; otherwise report exactly what the explicit command ran. Reject vacuous proof. Never claim a fake or narrowly mocked execution establishes live workflow quality.
+- Write `workflow_evaluation` with findings and residual risks. Write `workflow_package_summary` with the package identity, callable, generated paths, executed checks, decision, proven outcomes, unproven outcomes, and honest downstream interface. Write `workflow_next_action` with concrete repair/redesign work or the later promotion action and reversal scope.
 
-### Artifact handling
-- `workflow_evaluation` must summarize the complete Python syntax checks recorded in `generated_candidate.compiled_python_paths`, the isolated workflow import/discovery check in runtime input `candidate_evaluation`, any explicitly configured test result, the verified paths and hashes in runtime input `candidate_manifest`, and residual risks.
-- `workflow_package_summary` must record the actual isolated root from `generated_candidate`, explain why the materialized workflow is ready or not ready for later promotion, and name the runtime records and immutable artifacts that justify that decision.
-- `workflow_next_action` must list the generated paths and support files that would need removal or reversion if promotion is reversed.
+## Done criteria
 
-### Expected outcome
-- Leave the workflow with an evidence pack strong enough for a publish gate to act deterministically.
+Return `accepted` with `package_decision="accept"` only when runtime validation succeeded, the source implements the reviewed design, prompts are complete and consistent, and downstream consumers can rely on the summary without guessing.
 
-## Evidence
-
-- Use the accepted `workflow_design`, `workflow_contract`, immutable `workflow_package_manifest`, and runtime inputs `generated_candidate`, `candidate_manifest`, and `candidate_evaluation`.
-- Treat `candidate_manifest` as authority for actual paths and hashes, `candidate_evaluation` as authority for checks that ran, and `generated_candidate.root` as the run-owned candidate location. Report any conflict with the provider-authored manifest.
-- Call out missing proof explicitly instead of hiding it.
-
-## Phase decision criteria
-
-- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
-- Treat question, blocked, and failure guidance as semantic validation criteria.
-
-### Outcome selection
-- `accepted`: verification evidence and rollback evidence are strong enough for publication.
-- `needs_rework`: the same design still holds, but the built workflow or evidence needs local repair.
-- `needs_replan`: evaluation proves the design boundary itself is wrong.
-
-## Out Of Scope
-
-- Rewriting the workflow.
-- Editing framework code.
-
-## Forbidden
-
-- Do not create a promotion recommendation without a rollback plan.
-- Do not claim checks ran unless they appear in `candidate_evaluation`.
+Use `needs_rework` only when this evaluator can correct its own report, summary, or next-action evidence without changing the materialized candidate. A source, generated prompt, package behavior, or implementation-proof defect cannot be repaired by rerunning evaluation against unchanged bytes: return `needs_replan` with exact findings. The workflow deliberately routes that evidence through `design_workflow` and then builds and validates a fresh isolated candidate. Use `needs_replan` for a design-boundary defect as well.

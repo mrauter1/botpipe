@@ -602,6 +602,43 @@ def test_native_candidate_uses_staged_behavior_and_package_origins(
         _cleanup_snapshot(inputs)
 
 
+def test_native_validation_runs_from_a_long_staging_path(tmp_path):
+    inputs = _native_inputs(tmp_path)
+    staging = inputs["staging"]
+    while len(str(staging)) <= 280:
+        staging /= "nested-validation-" + "x" * 32
+    inputs["staging"] = staging
+    candidate_workflow = inputs["candidate"] / inputs["workflow_relative"]
+    candidate_workflow.write_text(
+        candidate_workflow.read_text(encoding="utf-8").replace(
+            "VERSION = 1", "VERSION = 2"
+        ),
+        encoding="utf-8",
+    )
+    try:
+        result = _native_validate(
+            inputs,
+            target_test_argv=[
+                sys.executable,
+                "-c",
+                (
+                    "from pathlib import Path\n"
+                    "from isolated_demo.workflow import demo\n"
+                    "assert len(str(Path.cwd())) > 260\n"
+                    f"assert Path.cwd().parent == Path({str(staging)!r})\n"
+                    "assert demo.fn() == (2, 'baseline')\n"
+                    "assert 'VERSION = 2' in Path('isolated_demo/workflow.py').read_text(encoding='utf-8')\n"
+                ),
+            ],
+        )
+        assert result.success, result.model_dump()
+        assert [check.phase for check in result.checks] == ["compile", "test"]
+        assert result.checks[-1].result["python_exit_code"] == 0
+        assert not list(staging.glob("execution-arm-*"))
+    finally:
+        _cleanup_snapshot(inputs)
+
+
 def test_imported_original_cannot_hide_invalid_native_candidate(tmp_path, monkeypatch):
     inputs = _native_inputs(tmp_path)
     monkeypatch.syspath_prepend(str(inputs["source"]))

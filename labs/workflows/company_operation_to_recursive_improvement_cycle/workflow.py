@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from botpipe import Provider, workflow
+from botpipe import Provider, provider_budget, workflow
 from labs.workflows._shared import (
     LabWorkflowResult,
     ReplanRequired,
@@ -23,9 +23,8 @@ from .contracts import (
 from .params import Params
 
 
-@workflow(name="company_operation_to_recursive_improvement_cycle", version="2")
-def CompanyOperationToRecursiveImprovementCycle(
-    params: Params, request: str = ""
+def _run_company_operation_to_recursive_improvement_cycle(
+    params: Params, request: str
 ) -> LabWorkflowResult:
     """Execute the company operation to recursive improvement cycle evidence workflow."""
     _producer = Provider()
@@ -143,6 +142,15 @@ def CompanyOperationToRecursiveImprovementCycle(
         expected_focus_task_ids=params.focus_tasks or observed_task_ids,
     )
     return finish("company_operation_to_recursive_improvement_cycle", completed)
+
+
+@workflow(name="company_operation_to_recursive_improvement_cycle", version="3")
+def CompanyOperationToRecursiveImprovementCycle(
+    params: Params, request: str = ""
+) -> LabWorkflowResult:
+    """Execute the SOP within one durable provider-turn budget."""
+    with provider_budget(max_turns=params.max_provider_turns):
+        return _run_company_operation_to_recursive_improvement_cycle(params, request)
 
 
 workflow_callable = CompanyOperationToRecursiveImprovementCycle

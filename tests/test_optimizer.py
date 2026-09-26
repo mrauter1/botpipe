@@ -32,6 +32,7 @@ from botpipe_optimizer.recommendations import (
     validate_candidate_set,
 )
 from labs.workflows.improve_workflow import ImproveWorkflowParams, improve_workflow
+from tests.improvement_support import ACCEPT, FixtureProvider, assess, no_candidate
 
 
 class EvalInputs(BaseModel):
@@ -830,31 +831,30 @@ def test_v2_evidence_and_candidate_bytes_are_bounded_and_identities_are_verified
         )
 
 
-def test_improvement_without_eligible_evidence_uses_zero_provider_turns(tmp_path):
-    provider = FakeProvider([])
+def test_improvement_without_metric_signal_still_runs_model_investigation(tmp_path):
+    provider = FixtureProvider([assess, no_candidate, ACCEPT])
     with Botpipe(tmp_path, provider=provider) as client:
         result = client.run(
             improve_workflow,
-            ImproveWorkflowParams(
-                selected_workflow="release_candidate_to_go_no_go"
-            ),
+            ImproveWorkflowParams(selected_workflow="release_candidate_to_go_no_go"),
             request="Recommend the next useful action.",
             task_id="optimizer",
             run_id="empty",
         )
-        inspection = client.inspect(result.run_id)
-
     assert result.ok
     assert result.value.outcome == "collect_evidence"
     assert result.value.recommendation.candidate_set.next_action == "collect_evidence"
     assert result.value.recommendation.candidate_set.candidates == []
-    assert result.value.recommendation.review is None
-    assert result.value.provider_budget["used_turns"] == 0
-    assert not [item for item in inspection["operations"] if item["kind"] == "provider"]
+    assert result.value.recommendation.review.accepted
+    assert result.value.recommendation.assessment.workflow_intent
+    assert result.value.provider_budget["used_turns"] == 3
+    assert len(provider.calls) == 3
 
 
-def test_improvement_file_reference_uses_canonical_name_and_exact_task_run_refs(tmp_path):
-    provider = FakeProvider([])
+def test_improvement_file_reference_uses_canonical_name_and_exact_task_run_refs(
+    tmp_path,
+):
+    provider = FixtureProvider([assess, no_candidate, ACCEPT])
     source = tmp_path / "alias_observed.py"
     source.write_text(
         "from botpipe import current_run, workflow\n"
@@ -889,6 +889,6 @@ def test_improvement_file_reference_uses_canonical_name_and_exact_task_run_refs(
     snapshot = result.value.recommendation.evidence_snapshot
     assert snapshot.selected_workflow == "alias_observed"
     assert snapshot.selection.admitted_run_count == 1
-    assert result.value.provider_budget["used_turns"] == 0
+    assert result.value.provider_budget["used_turns"] == 3
     assert not mismatch.ok
     assert "run reference task does not match journal" in mismatch.error

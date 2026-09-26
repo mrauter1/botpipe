@@ -3,8 +3,14 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 
-from botpipe import Provider, workflow
+from botpipe import Provider, provider_budget, workflow
+from labs.workflows._evidence import (
+    capture_declared_evidence,
+    evidence_intake_context,
+    verify_evidence_intake,
+)
 from labs.workflows._shared import (
     LabWorkflowResult,
     ReplanRequired,
@@ -32,16 +38,21 @@ from .contracts import (
 from .params import Params
 
 
-@workflow(name="security_finding_to_verified_remediation", version="2")
-def SecurityFindingToVerifiedRemediation(
-    params: Params, request: str = ""
+def _run_security_finding_to_verified_remediation(
+    params: Params, request: str
 ) -> LabWorkflowResult:
     """Execute the security finding to verified remediation evidence workflow."""
     _producer = Provider()
     _reviewer = _producer.with_config(session=None)
-    context = {"request": request, "parameters": params.model_dump(mode="json")}
+    evidence_intake = capture_declared_evidence(params.evidence_paths)
+    verify_evidence_intake(evidence_intake)
+    context = {
+        "request": request,
+        "parameters": params.model_dump(mode="json"),
+        "evidence_intake": evidence_intake_context(evidence_intake),
+    }
     completed = []
-    prior_handles = ()
+    prior_handles = evidence_intake.handles
     compose_evidence_pack_checkpoint = len(completed)
     compose_evidence_pack_reads = prior_handles
     compose_evidence_pack_context = dict(context)
@@ -63,10 +74,17 @@ def SecurityFindingToVerifiedRemediation(
                         "artifacts": context.get("replan_artifacts", []),
                     }
                 ),
+                captured_evidence=evidence_intake,
             )
             validate_security_child_result(evidence_pack.model_dump(mode="json"))
             context["security_evidence_pack"] = evidence_pack.model_dump(mode="json")
-            prior_handles = prior_handles + tuple(evidence_pack.artifacts.values())
+            intake_names = {handle.name for handle in evidence_intake.handles}
+            child_handles = tuple(
+                evidence_pack.artifacts[name]
+                for name in evidence_pack.artifact_names
+                if name not in intake_names
+            )
+            prior_handles = prior_handles + child_handles
             assess_security_finding_checkpoint = len(completed)
             assess_security_finding_reads = prior_handles
             assess_security_finding_context = dict(context)
@@ -118,9 +136,7 @@ def SecurityFindingToVerifiedRemediation(
                                 returns=SecurityClosurePackagePayload,
                                 replan_target="plan_verified_remediation",
                                 producer=_producer,
-                                reviewer=_reviewer,
                                 producer_prompt="prompts/closure_producer.md",
-                                reviewer_prompt="prompts/closure_reviewer.md",
                                 input=context,
                                 reads=prior_handles,
                                 writes=(
@@ -172,7 +188,10 @@ def SecurityFindingToVerifiedRemediation(
             }
     publication = read_publication_json(
         (
-            *tuple(evidence_pack.artifacts.values()),
+            *tuple(
+                evidence_pack.artifacts[name]
+                for name in evidence_pack.artifact_names
+            ),
             *tuple(handle for phase in completed for handle in phase.handles),
         ),
         ("investigation_summary", "security_remediation_summary"),
@@ -181,7 +200,19 @@ def SecurityFindingToVerifiedRemediation(
         publication["investigation_summary"],
         publication["security_remediation_summary"],
     )
+    completed[0] = replace(
+        completed[0], handles=(*evidence_intake.handles, *completed[0].handles)
+    )
     return finish("security_finding_to_verified_remediation", completed)
+
+
+@workflow(name="security_finding_to_verified_remediation", version="3")
+def SecurityFindingToVerifiedRemediation(
+    params: Params, request: str = ""
+) -> LabWorkflowResult:
+    """Execute the SOP within one durable provider-turn budget."""
+    with provider_budget(max_turns=params.max_provider_turns):
+        return _run_security_finding_to_verified_remediation(params, request)
 
 
 workflow_callable = SecurityFindingToVerifiedRemediation

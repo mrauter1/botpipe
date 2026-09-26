@@ -5,7 +5,7 @@ import pytest
 from botpipe import Botpipe, workflow
 from labs.workflows.improve_workflow import ImproveWorkflowParams, improve_workflow
 from labs.workflows.improve_workflow.proposals import _capture_history
-from tests.improvement_support import ACCEPT, FixtureProvider, observed_workflow
+from tests.improvement_support import ACCEPT, FixtureProvider, assess, observed_workflow
 
 
 @workflow
@@ -59,6 +59,7 @@ def test_stopped_runs_remain_eligible_history(tmp_path, status):
 def test_self_improvement_selects_historical_failure_not_itself(tmp_path):
     provider = FixtureProvider(
         [
+            assess,
             {
                 "candidate": None,
                 "next_action": "no_change",
@@ -83,5 +84,6 @@ def test_self_improvement_selects_historical_failure_not_itself(tmp_path):
         assert result.ok, result.error
         snapshot = result.value.recommendation.evidence_snapshot
         assert [run.run_id for run in snapshot.runs] == [failed.run_id]
+        assert snapshot.observations
         assert snapshot.shortlist
-        assert len(provider.calls) == 2
+        assert len(provider.calls) == 3

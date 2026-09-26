@@ -1,61 +1,9 @@
-## Durable typed phase result
+# Frame the release decision
 
-After writing every declared artifact, return one JSON result matching the injected phase-specific schema. Return `accepted` only when the artifacts meet this phase's positive condition and populate the domain fields in the schema. Return `needs_rework` for a local repair, `needs_replan` for a material upstream change, `question` or `blocked` for a missing prerequisite, and `failed` for a terminal domain failure. Report only captured artifact names and stable identifiers present in the artifacts.
+Define what is being released and the evidence required for a responsible decision.
 
-# Frame Release Producer
+- `release_scope_brief` states candidate identity, owner, target environment and date, user or system impact, change boundary, dependencies, and exclusions.
+- `decision_criteria` defines mandatory gates, risk tolerances, approval and change-window requirements, rollback expectations, and the semantics of `go`, `conditional_go`, and `no_go` for this release.
+- `evidence_intake_register` maps each criterion to immutable declared sources in `evidence_intake`, explicit unavailable records, or permitted live discovery, and names access, freshness, or ownership gaps.
 
-## Step Contract
-
-### Role
-- You are the release strategist producer for the `frame_release` step.
-
-### Purpose
-- Define the release boundary, decision criteria, and evidence intake plan before any readiness assessment starts.
-
-### Current work item
-- This work item owns release framing only.
-- Keep the work-item boundary at the release brief and release-gating criteria. Do not gather the full evidence pack or make the final go/no-go decision yet.
-
-## Runtime bindings
-
-- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
-- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
-
-## Output Requirements
-
-### Artifact handling
-- `release_scope_brief` must define the release trigger, sponsor goal, release boundary, target environment, target date, release owner, and explicit out-of-scope items.
-- `decision_criteria` must define the concrete go/no-go gates, blocker thresholds, rollback expectations, and what evidence is mandatory before publication.
-- `evidence_intake_register` must list the evidence sources you expect to inspect, include any `evidence_paths` hints from the runtime input, and name missing or weak evidence sources explicitly.
-
-### Expected outcome
-- Leave the workflow with an authoritative framing package that downstream evidence work can use without guessing the release boundary or success criteria.
-
-## Evidence
-
-- Use the current repository layout and runtime input; do not rely on retired source-tree paths.
-- Make missing evidence explicit instead of inventing it.
-- Keep release framing concrete enough that another operator could gather evidence from the brief and criteria alone.
-
-## Phase decision criteria
-
-- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
-- Treat question, blocked, and failure guidance as semantic validation criteria.
-
-### Outcome selection
-- `accepted`: the release boundary, criteria, and evidence intake plan are explicit and usable.
-- `needs_rework`: the same framing boundary still holds, but one or more framing artifacts need local repair.
-- `needs_replan`: the release boundary, target outcome, or evidence intake surface changed materially and must be reframed.
-- Use `blocked` only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
-
-## Out Of Scope
-
-- Full evidence gathering.
-- Final readiness assessment.
-- Final package assembly and communications drafting.
-
-## Forbidden
-
-- Do not invent release evidence or approvals.
-- Do not hide the framing in provider prose only; the durable output must be in the listed artifacts.
-- Do not make the terminal go/no-go recommendation in this step.
+Accept when evidence collection can test concrete release criteria. Rework local ambiguity; replan a changed release boundary or risk policy; ask or block when missing authority or intent prevents a defensible gate. Do not gather full evidence or recommend a decision yet.

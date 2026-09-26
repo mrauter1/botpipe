@@ -26,7 +26,7 @@ from .models import (
 from .proposals import propose_improvement
 
 
-@workflow(name="improve_workflow", version="1")
+@workflow(name="improve_workflow", version="2")
 def improve_workflow(
     params: ImproveWorkflowParams, request: str = ""
 ) -> ImproveWorkflowResult:
@@ -37,6 +37,17 @@ def improve_workflow(
         max_seconds=params.max_provider_seconds,
         turn_timeout_seconds=params.provider_timeout,
     ) as budget:
+        evaluation_spec = None
+        if params.evaluation_spec_path is not None:
+            # Freeze executable success criteria before diagnosis or candidate
+            # generation so later turns cannot move the measurement goalposts.
+            frozen_evaluation = freeze_improvement_evaluation(
+                workspace=str(run.workspace),
+                evaluation_spec_path=params.evaluation_spec_path,
+                staging_parent=str(run.folder / "evaluation-plan"),
+                invocation_id=run.run_id,
+            )
+            evaluation_spec = frozen_evaluation["evaluation_spec_path"]
         recommendation = propose_improvement(params, request)
 
         def result(outcome, summary, candidate=None):
@@ -75,16 +86,6 @@ def improve_workflow(
             max_evidence_bytes=params.max_evidence_bytes,
             max_snapshot_bytes=params.max_snapshot_bytes,
         )
-        evaluation_spec = None
-        if params.evaluation_spec_path is not None:
-            frozen_evaluation = freeze_improvement_evaluation(
-                workspace=str(run.workspace),
-                evaluation_spec_path=params.evaluation_spec_path,
-                staging_parent=str(run.folder / "evaluation-plan"),
-                invocation_id=run.run_id,
-            )
-            evaluation_spec = frozen_evaluation["evaluation_spec_path"]
-
         feedback = None
         for revision in range(params.max_revisions + 1):
             folder = run.folder / "candidates" / str(revision + 1)
@@ -115,6 +116,7 @@ def improve_workflow(
                 input={
                     "request": request,
                     "proposal": proposal.model_dump(mode="json"),
+                    "assessment": recommendation.assessment.model_dump(mode="json"),
                     "baseline_root": str(candidate.baseline_root),
                     "allowed_paths": list(candidate.allowed_paths),
                     "feedback": feedback,
@@ -142,6 +144,9 @@ def improve_workflow(
                         input={
                             "request": request,
                             "proposal": proposal.model_dump(mode="json"),
+                            "assessment": recommendation.assessment.model_dump(
+                                mode="json"
+                            ),
                             "baseline_root": str(candidate.baseline_root),
                             "changed_paths": changed,
                             "validation": validation.model_dump(mode="json"),

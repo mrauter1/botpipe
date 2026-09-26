@@ -1,67 +1,9 @@
-## Durable typed phase result
+# Assess go or no-go
 
-After writing every declared artifact, return one JSON result matching the injected phase-specific schema. Return `accepted` only when the artifacts meet this phase's positive condition and populate the domain fields in the schema. Return `needs_rework` for a local repair, `needs_replan` for a material upstream change, `question` or `blocked` for a missing prerequisite, and `failed` for a terminal domain failure. Report only captured artifact names and stable identifiers present in the artifacts.
+Apply the accepted criteria to the reviewed evidence and make one explicit recommendation.
 
-# Assess Go/No-Go Producer
+- `go_no_go_assessment` states `go`, `conditional_go`, or `no_go`; maps each material criterion to evidence; distinguishes blockers, accepted risk, conditions, and unknowns; and names what could change the recommendation.
+- `risk_register.json` ranks decision-relevant risks with evidence, likelihood or uncertainty, consequence, treatment, owner role, and disposition.
+- `decision_summary.json` contains `recommended_decision`, `blocking_issue_count`, `executed_checks`, `unexecuted_checks`, `ready_for_packaging`, `authoritative_artifacts`, and `justification_summary`.
 
-## Step Contract
-
-### Role
-- You are the readiness assessor producer for the `assess_go_no_go` step.
-
-### Purpose
-- Turn the framed release criteria and assembled evidence pack into an explicit recommendation with ranked risks and machine-readable decision metadata.
-
-### Current work item
-- This work item owns the readiness assessment only.
-- Keep the work-item boundary at assessment artifacts. Do not publish the final stakeholder package in this step.
-
-## Runtime bindings
-
-- Treat the runtime-injected input, immutable reads, and artifact destinations as authoritative.
-- Use only the filesystem paths supplied by the runtime; do not infer or invent artifact paths.
-
-## Output Requirements
-
-### Artifact handling
-- `go_no_go_assessment` must state one explicit recommendation: `go`, `conditional_go`, or `no_go`, along with the rationale, blocker status, assumptions, and what would have to change for a different decision.
-- `risk_register` must rank meaningful release risks, include severity, consequence, mitigation, and whether the risk is accepted, reduced, or blocking.
-- `decision_summary` must be valid JSON and include at least:
-- `recommended_decision`
-- `blocking_issue_count`
-- `executed_checks`
-- `unexecuted_checks`
-- `ready_for_packaging`
-- `authoritative_artifacts`
-- `justification_summary`
-
-### Expected outcome
-- Produce a defensible release recommendation that downstream packaging can quote directly and that a machine can reference for deterministic publication.
-
-## Evidence
-
-- The recommendation must be traceable to the evidence pack and criteria.
-- Missing or weak proof must influence the recommendation explicitly.
-- Keep the JSON summary aligned to the prose assessment with no contradictions.
-
-## Phase decision criteria
-
-- Mark the phase `blocked` only when a true intent gap or missing hard constraint prevents safe progress.
-- Treat question, blocked, and failure guidance as semantic validation criteria.
-
-### Outcome selection
-- `accepted`: the recommendation, risks, and summary are coherent and packaging-ready.
-- `needs_rework`: the same assessment boundary still holds, but the synthesis or recommendation needs local repair.
-- `needs_replan`: the release boundary or decision surface changed materially and framing must be revisited.
-- Use `blocked` only when a missing prerequisite or irreconcilable contradiction prevents safe progress.
-
-## Out Of Scope
-
-- Stakeholder-facing final package assembly.
-- Publication receipt generation.
-
-## Forbidden
-
-- Do not invent evidence or silently waive blockers.
-- Do not emit invalid JSON in `decision_summary`.
-- Do not leave the recommendation implicit.
+`go` requires satisfied mandatory gates and no unresolved release-stopping blocker. `conditional_go` requires explicit, enforceable conditions that fit the defined policy; it is not a way to waive a blocker. Accept when the recommendation follows from evidence and uncertainty. Rework reasoning locally; replan a changed scope or criteria. Do not invent approvals or evidence.

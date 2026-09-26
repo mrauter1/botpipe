@@ -86,11 +86,18 @@ def test_local_rework_and_backward_replan_preserve_history_and_replay(tmp_path):
             produced.append(phase)
             inputs.append(payload)
         outcome = "accepted"
-        if role == "reviewer" and seen[phase, role] == 1:
-            if phase == "assemble_evidence_pack":
-                outcome = "needs_rework"
-            elif phase == "prepare_decision_package":
-                outcome = "needs_replan"
+        if (
+            role == "reviewer"
+            and seen[phase, role] == 1
+            and phase == "assemble_evidence_pack"
+        ):
+            outcome = "needs_rework"
+        if (
+            role == "producer"
+            and phase == "prepare_decision_package"
+            and seen[phase, role] == 1
+        ):
+            outcome = "needs_replan"
         return _release_answer(request, outcome=outcome)
 
     provider = FakeProvider([provider_response] * 20)
@@ -112,7 +119,7 @@ def test_local_rework_and_backward_replan_preserve_history_and_replay(tmp_path):
         assert len(result.value.phases) == 4
         assert result.value.phases[-1].details["decision"] == "go"
         operations = _provider_operations(client, result.run_id)
-        assert len(operations) == 13
+        assert len(operations) == len(provider.calls)
         assert all(row["status"] == "completed" for row in operations)
         before = len(provider.calls)
         replayed = client.resume(result.run_id)
@@ -187,7 +194,7 @@ def test_domain_producer_contract_repairs_invalid_payload_in_the_same_operation(
         assert result.value.phases[2].details["recommended_decision"] == "go"
         assert len([request for request in provider.calls if request.artifacts]) == 5
         assert assessment_turns == 2
-        assert len(provider.calls) == 8
+        assert len(provider.calls) == 7
         operations = _provider_operations(client, result.run_id)
         assert sum(row["status"] == "failed" for row in operations) == 1
 
@@ -231,7 +238,7 @@ def test_missing_prerequisite_pauses_then_resumes_same_phase_with_answer(
             paused.run_id, answer="Production rollback evidence is in rollback.json."
         )
         assert result.ok, result.error
-        assert len(provider.calls) == 8
+        assert len(provider.calls) == 7
         assert "rollback.json" in json.dumps(producer_inputs[1])
         assert len(result.value.phases) == 4
 
@@ -296,5 +303,141 @@ def test_security_child_passes_immutable_handles_with_external_state_directory(
         )
         replayed = client.resume(result.run_id)
         assert replayed.ok, replayed.error
-        assert len(provider.calls) == 9
+        assert len(provider.calls) == 8
         assert replayed.value.artifacts == result.value.artifacts
+
+
+@pytest.mark.parametrize("repeat", ["rework", "replan"])
+def test_provider_budget_bounds_all_rework_and_replanning(tmp_path, repeat):
+    def answer(request):
+        phase = _input(request)["phase"]
+        outcome = "accepted"
+        if repeat == "rework" and phase == "frame_release":
+            outcome = "needs_rework"
+        if repeat == "replan" and phase == "assess_go_no_go" and not request.artifacts:
+            outcome = "needs_replan"
+        return _release_answer(request, outcome=outcome)
+
+    provider = FakeProvider([answer] * 20)
+    with Botpipe(tmp_path, provider=provider) as client:
+        result = client.run(
+            ReleaseCandidateToGoNoGo,
+            Params(release_name="bounded", max_provider_turns=7),
+        )
+        assert result.status == "budget_exceeded", result.error
+        assert len(provider.calls) == 7
+        replayed = client.resume(result.run_id)
+        assert replayed.status == "budget_exceeded", replayed.error
+        assert len(provider.calls) == 7
+
+
+def test_producer_cannot_hide_uncaptured_citations_behind_a_reviewer(tmp_path):
+    reviewed = []
+
+    def answer(request):
+        result = _release_answer(request)
+        phase = _input(request)["phase"]
+        if not request.artifacts:
+            reviewed.append(phase)
+        if phase == "assemble_evidence_pack" and request.artifacts:
+            result["authoritative_artifacts"] = ["invented_verification"]
+        return result
+
+    result = Botpipe(tmp_path, provider=FakeProvider([answer] * 8)).run(
+        ReleaseCandidateToGoNoGo, Params(release_name="citation-integrity")
+    )
+    assert result.status == "failed"
+    assert "producer cited uncaptured artifacts: invented_verification" in result.error
+    assert reviewed == []
+
+
+def test_run_phase_preserves_explicit_no_output_repair(tmp_path):
+    from pathlib import Path
+
+    from botpipe import Provider, workflow
+    from labs.workflows._shared import LabPhaseOutcome, artifact, run_phase
+
+    @workflow
+    def one_phase():
+        return run_phase(
+            phase="fixture",
+            producer=Provider(output_retries=0),
+            producer_prompt=str(
+                Path(__file__).parent.parent
+                / "labs/workflows/release_candidate_to_go_no_go/prompts/frame_producer.md"
+            ),
+            input={},
+            writes=(artifact("fixture.md"),),
+            returns=LabPhaseOutcome,
+        ).value
+
+    def invalid(request):
+        for path in request.artifacts.values():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("Evidence.")
+        return {"outcome": "invalid"}
+
+    provider = FakeProvider([invalid] * 4)
+    result = Botpipe(tmp_path, provider=provider).run(one_phase)
+    assert result.status == "failed"
+    assert len(provider.calls) == 1
+
+
+@pytest.mark.parametrize("outcome", ["blocked", "question"])
+def test_missing_prerequisite_can_pause_without_fabricated_artifacts(tmp_path, outcome):
+    def unavailable(_request):
+        return {
+            "outcome": outcome,
+            "summary": "The release scope has not been supplied.",
+            "question": "What release is under review?",
+            "authoritative_artifacts": [],
+        }
+
+    provider = FakeProvider([unavailable, *([_release_answer] * 6)])
+    with Botpipe(tmp_path, provider=provider) as client:
+        paused = client.run(ReleaseCandidateToGoNoGo, Params(release_name="unknown"))
+        assert paused.status == "awaiting_input", paused.error
+        assert len(provider.calls) == 1
+        assert not client.inspect(paused.run_id)["artifacts"]
+        result = client.resume(paused.run_id, answer="Release 2026.09.")
+        assert result.ok, result.error
+        assert set(result.value.artifact_names) == set(result.value.artifacts)
+        assert all(handle.read_bytes() for handle in result.value.artifacts.values())
+
+
+def test_accepted_phase_still_requires_all_declared_artifacts(tmp_path):
+    def incomplete(_request):
+        return {
+            "outcome": "accepted",
+            "summary": "Claiming completion without evidence.",
+            "evidence_focus": ["tests"],
+            "authoritative_artifacts": ["release_scope_brief"],
+        }
+
+    result = Botpipe(tmp_path, provider=FakeProvider([incomplete])).run(
+        ReleaseCandidateToGoNoGo, Params(release_name="incomplete")
+    )
+    assert result.status == "failed"
+    assert "did not capture required artifacts" in result.error
+
+
+def test_replay_cannot_redirect_a_producer_workspace_to_authoritative_source(tmp_path):
+    from botpipe.providers import ProviderError
+
+    source = tmp_path / "authoritative.txt"
+    source.write_text("Original source.")
+    provider = FakeProvider([ProviderError("interrupted"), _release_answer])
+    with Botpipe(tmp_path, provider=provider) as client:
+        first = client.run(ReleaseCandidateToGoNoGo, Params(release_name="isolated"))
+        assert first.status == "interrupted", first.error
+        working = provider.calls[0].workspace
+        assert not list(working.iterdir())
+        working.rmdir()
+        working.symlink_to(tmp_path, target_is_directory=True)
+        resumed = client.resume(first.run_id)
+        assert resumed.status == "failed", resumed.error
+        # Replay may surface the unconsumed provider operation as ReplayMismatch;
+        # the security contract is rejection before another write-capable turn.
+        assert resumed.error
+        assert len(provider.calls) == 1
+        assert source.read_text() == "Original source."
