@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
+import tempfile
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
@@ -86,12 +88,16 @@ def freeze_analysis_evidence(
     """Materialize journal projections and every referenced artifact version."""
 
     managed = Path(destination)
-    root = managed / "evidence"
-    if managed.is_symlink() or root.is_symlink():
+    if managed.is_symlink() or (managed / "evidence").is_symlink():
         raise AnalysisIntegrityError(
             "analysis evidence destination must not be a symlink"
         )
-    root.mkdir(parents=True, exist_ok=True)
+    input_id = sha256(
+        _json_bytes({"inspections": inspections, "max_bytes": max_bytes})
+    ).hexdigest()
+    published = _published_generation(managed, input_id=input_id, max_bytes=max_bytes)
+    if published is not None:
+        return published
     files: dict[str, bytes] = {}
     total_bytes = 0
     catalog: list[dict[str, Any]] = []
@@ -282,22 +288,142 @@ def freeze_analysis_evidence(
         )
     index = _json_bytes({"runs": catalog, "omissions": omissions})
     add("index.json", index, required=True)
-    for relative, data in sorted(files.items()):
-        path = root / relative
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(data)
-        os.chmod(path, 0o444)
     hashes = {relative: sha256(data).hexdigest() for relative, data in files.items()}
-    marker = _json_bytes({"schema": "botpipe.analysis-evidence/v1", "hashes": hashes})
+    marker = _json_bytes(
+        {
+            "schema": "botpipe.analysis-evidence/v1",
+            "input_id": input_id,
+            "max_bytes": max_bytes,
+            "hashes": hashes,
+        }
+    )
+    completed = _completed_generation(managed, marker, hashes)
+    if completed is not None:
+        return completed
+    managed.parent.mkdir(parents=True, exist_ok=True)
+    # Stage outside the frozen source root that owns ``destination``. A hard
+    # interruption can leave an inert generation, but cannot expose a partial
+    # final tree or perturb the source inventory checked by the caller.
+    staging_parent = managed.parent.parent
+    staging = Path(
+        tempfile.mkdtemp(prefix=f".{managed.name}.pending-", dir=staging_parent)
+    )
+    staging_marker = staging / ".botpipe-analysis-evidence.json"
+    installed = False
+    try:
+        # This exact final marker is also the ownership proof for cleanup of the
+        # unique staging directory created by this invocation.
+        staging_marker.write_bytes(marker)
+        staging_root = staging / "evidence"
+        for relative, data in sorted(files.items()):
+            path = staging_root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        for path in staging_root.rglob("*"):
+            if path.is_file():
+                os.chmod(path, 0o444)
+        os.chmod(staging_marker, 0o444)
+        try:
+            os.replace(staging, managed)
+            installed = True
+        except OSError:
+            # A concurrent/replayed invocation may have installed the exact
+            # generation. Anything else remains an integrity conflict.
+            completed = _completed_generation(managed, marker, hashes)
+            if completed is None:
+                raise
+            return completed
+    finally:
+        if not installed and staging.exists():
+            _remove_owned_staging(staging, marker)
+    completed = _completed_generation(managed, marker, hashes)
+    assert completed is not None
+    return completed
+
+
+def _completed_generation(
+    managed: Path, marker: bytes, hashes: dict[str, str]
+) -> FrozenAnalysisEvidence | None:
+    if not managed.exists() and not managed.is_symlink():
+        return None
+    if managed.is_symlink() or not managed.is_dir():
+        raise AnalysisIntegrityError("analysis evidence destination is not owned")
     marker_path = managed / ".botpipe-analysis-evidence.json"
-    marker_path.write_bytes(marker)
-    os.chmod(marker_path, 0o444)
-    return FrozenAnalysisEvidence(
-        root=str(root),
+    if marker_path.is_symlink() or not marker_path.is_file():
+        raise AnalysisIntegrityError("analysis evidence destination is not owned")
+    if marker_path.read_bytes() != marker:
+        raise AnalysisIntegrityError("existing analysis evidence generation differs")
+    frozen = FrozenAnalysisEvidence(
+        root=str(managed / "evidence"),
         managed_root=str(managed),
         marker_sha256=sha256(marker).hexdigest(),
         hashes=hashes,
     )
+    verify_analysis_evidence(frozen)
+    return frozen
+
+
+def _published_generation(
+    managed: Path, *, input_id: str, max_bytes: int
+) -> FrozenAnalysisEvidence | None:
+    if not managed.exists() and not managed.is_symlink():
+        return None
+    if managed.is_symlink() or not managed.is_dir():
+        raise AnalysisIntegrityError("analysis evidence destination is not owned")
+    marker_path = managed / ".botpipe-analysis-evidence.json"
+    if marker_path.is_symlink() or not marker_path.is_file():
+        raise AnalysisIntegrityError("analysis evidence destination is not owned")
+    marker = marker_path.read_bytes()
+    try:
+        record = json.loads(marker)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise AnalysisIntegrityError(
+            "analysis evidence ownership marker is invalid"
+        ) from exc
+    if (
+        not isinstance(record, dict)
+        or set(record) != {"schema", "input_id", "max_bytes", "hashes"}
+        or record.get("schema") != "botpipe.analysis-evidence/v1"
+        or record.get("input_id") != input_id
+        or record.get("max_bytes") != max_bytes
+        or not isinstance(record.get("hashes"), dict)
+    ):
+        raise AnalysisIntegrityError("existing analysis evidence generation differs")
+    hashes = record["hashes"]
+    if any(
+        not isinstance(relative, str)
+        or not isinstance(digest, str)
+        or not re.fullmatch(r"[0-9a-f]{64}", digest)
+        for relative, digest in hashes.items()
+    ):
+        raise AnalysisIntegrityError("analysis evidence ownership marker is invalid")
+    frozen = FrozenAnalysisEvidence(
+        root=str(managed / "evidence"),
+        managed_root=str(managed),
+        marker_sha256=sha256(marker).hexdigest(),
+        hashes=hashes,
+    )
+    verify_analysis_evidence(frozen)
+    return frozen
+
+
+def _remove_owned_staging(staging: Path, marker: bytes) -> None:
+    marker_path = staging / ".botpipe-analysis-evidence.json"
+    try:
+        if (
+            marker_path.is_symlink()
+            or not marker_path.is_file()
+            or marker_path.read_bytes() != marker
+        ):
+            return
+        for path in sorted(staging.rglob("*"), reverse=True):
+            if not path.is_symlink():
+                os.chmod(path, 0o700 if path.is_dir() else 0o600)
+        shutil.rmtree(staging)
+    except OSError:
+        # An incomplete cleanup is an inert uniquely named generation. It is
+        # never mistaken for the final destination or deleted by a later call.
+        return
 
 
 def verify_analysis_evidence(frozen: FrozenAnalysisEvidence) -> None:

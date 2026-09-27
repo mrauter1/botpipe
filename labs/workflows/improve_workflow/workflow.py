@@ -220,10 +220,25 @@ def improve_workflow(
     context = candidate.evaluation.get("trial_context")
     if context is None:
         reasons = [case["reason"] for case in plan["cases"] if not case["available"]]
+        reason = "No trial case is executable. " + (
+            "; ".join(reasons) or "No cases were proposed."
+        )
+        evaluation = {
+            "schema": "botpipe.rubric-evaluation/v1",
+            "evaluation": "rubric_trials",
+            "plan_id": plan["plan_id"],
+            "comparison": {"state": "inconclusive", "reason": reason},
+            "trials": [],
+            "pairs": [],
+            "scope": plan["case_scope"],
+            "automatic_promotion": False,
+        }
         return result.model_copy(
             update={
-                "summary": "Candidate passed checks and review, but no trial case is executable. "
-                + ("; ".join(reasons) or "No cases were proposed.")
+                "outcome": "inconclusive",
+                "summary": "Candidate passed checks and review, but evaluation is inconclusive. "
+                + reason,
+                "candidate": candidate.model_copy(update={"evaluation": evaluation}),
             }
         )
     evaluation = evaluate_trial_plan(

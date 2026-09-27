@@ -73,7 +73,9 @@ then changes only the captured workflow surface in a candidate workspace. Each
 revision starts from the same verified baseline. Compilation, discovery/import,
 the caller's `target_test_argv`, and independent source review run before a
 candidate is accepted. `max_revisions=2` permits three implementation attempts.
-Passing these checks without a valid comparison produces `candidate_ready`.
+Passing these checks with evaluation disabled produces `candidate_ready`.
+When trials are requested but no frozen case is executable, the result is
+`inconclusive` and records the missing inputs or cases.
 
 The workflow returns `ImproveWorkflowResult`. Its candidate includes changed
 paths, exact validation evidence, independent review, and any evaluation record.

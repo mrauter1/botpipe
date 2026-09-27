@@ -354,6 +354,40 @@ def test_missing_fixture_is_unavailable_instead_of_invented_historical_state(tmp
     assert "initial workspace" in run.value["cases"][0]["reason"]
 
 
+def test_requested_trials_with_no_executable_cases_are_inconclusive(tmp_path):
+    source = _source(tmp_path, "quality")
+    provider = FixtureProvider(
+        [_assessment("quality"), _proposal, ACCEPT, _implementation("quality"), ACCEPT]
+    )
+    params = ImproveWorkflowParams(
+        selected_workflow=f"{source}:subject",
+        execute_trials=True,
+        trial_cases=[
+            TrialCase(
+                case_id="repository",
+                description="Requires an explicit initial workspace",
+                args=["topic"],
+                workspace="fixture",
+            )
+        ],
+        target_test_argv=[
+            sys.executable,
+            "-c",
+            "import runpy; runpy.run_path('subject.py')",
+        ],
+    )
+    with Botpipe(tmp_path, provider=provider) as client:
+        run = client.run(improve_workflow, params)
+    assert run.ok, run.error
+    assert run.value.outcome == "inconclusive"
+    measured = run.value.candidate.evaluation
+    assert measured["evaluation"] == "rubric_trials"
+    assert measured["comparison"]["state"] == "inconclusive"
+    assert "initial workspace" in measured["comparison"]["reason"]
+    assert measured["trials"] == []
+    assert len(provider.calls) == 5  # No trial or judge is dispatched.
+
+
 @workflow
 def _paused_pair_admission():
     run = current_run()

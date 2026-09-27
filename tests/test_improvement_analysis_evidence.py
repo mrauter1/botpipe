@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
 from hashlib import sha256
 from pathlib import Path
+
+import pytest
 
 from labs.workflows.improve_workflow.analysis_evidence import (
     freeze_analysis_evidence,
@@ -115,3 +118,78 @@ def test_analysis_bundle_marks_bounded_and_unavailable_content(tmp_path):
         sum((Path(frozen.root) / relative).stat().st_size for relative in frozen.hashes)
         <= 3000
     )
+
+
+def _single_response_inspection():
+    return (
+        {
+            "run": {"run_id": "run", "status": "completed"},
+            "operations": [
+                {
+                    "id": "run:root:0",
+                    "kind": "provider",
+                    "inputs": {"value": {"prompt": "draft"}},
+                    "response": {"text": "completed response"},
+                    "result": None,
+                }
+            ],
+        },
+    )
+
+
+def test_interrupted_partial_generation_replays_from_fresh_staging(
+    tmp_path, monkeypatch
+):
+    destination = tmp_path / "nested" / "bundle"
+    original_write = Path.write_bytes
+
+    def interrupt_response(path, data):
+        if path.name == "response.md":
+            raise KeyboardInterrupt("interrupt staged evidence write")
+        return original_write(path, data)
+
+    monkeypatch.setattr(Path, "write_bytes", interrupt_response)
+    with pytest.raises(KeyboardInterrupt, match="staged evidence write"):
+        freeze_analysis_evidence(_single_response_inspection(), destination)
+    assert not destination.exists()
+    assert not list(tmp_path.glob(".bundle.pending-*"))
+
+    monkeypatch.setattr(Path, "write_bytes", original_write)
+    frozen = freeze_analysis_evidence(_single_response_inspection(), destination)
+    verify_analysis_evidence(frozen)
+    assert (
+        Path(frozen.root) / "runs/001-run/operations/001-run-root-0/response.md"
+    ).read_text() == ("completed response")
+
+
+def test_installed_generation_replays_after_completion_before_activity_commit(
+    tmp_path, monkeypatch
+):
+    destination = tmp_path / "nested" / "bundle"
+    history = tmp_path / "history"
+    history.mkdir()
+    ledger = history / "ledger.jsonl"
+    ledger.write_text("original immutable history\n")
+    inspection = _single_response_inspection()
+    inspection[0]["run"]["folder"] = str(history)
+    original_replace = os.replace
+
+    def interrupt_after_install(source, target):
+        original_replace(source, target)
+        if Path(target) == destination:
+            raise KeyboardInterrupt("interrupt after atomic install")
+
+    monkeypatch.setattr(os, "replace", interrupt_after_install)
+    with pytest.raises(KeyboardInterrupt, match="after atomic install"):
+        freeze_analysis_evidence(inspection, destination)
+    assert destination.is_dir()
+
+    # Activity replay must restore the installed generation without consulting
+    # mutable historical locations again.
+    ledger.write_text("history changed after the completed activity side effect\n")
+    monkeypatch.setattr(os, "replace", original_replace)
+    replayed = freeze_analysis_evidence(inspection, destination)
+    verify_analysis_evidence(replayed)
+    assert replayed.managed_root == str(destination)
+    frozen_ledger = next(Path(replayed.root).glob("runs/*/journal/ledger.jsonl"))
+    assert frozen_ledger.read_text() == "original immutable history\n"

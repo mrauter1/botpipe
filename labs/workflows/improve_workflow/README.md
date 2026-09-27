@@ -117,7 +117,9 @@ is omitted. Binary, oversized, or missing declared input/output bytes are
 explicit essential-evidence omissions. Cases needing those files must supply
 bounded judgeable text/JSON content; otherwise the comparison is
 `inconclusive`. Infrastructure failures, unavailable cases, conflicting results,
-unknown criteria, or exhausted judge allowance are also inconclusive.
+unknown criteria, or exhausted judge allowance are also inconclusive. This
+includes requested evaluations with no executable frozen case; they record why
+the cases are unavailable and dispatch no trials or judges.
 
 All native trial results are scoped to the frozen development cases. Improvement
 requires at least one candidate win, no losses, and every required obligation
