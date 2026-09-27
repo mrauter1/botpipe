@@ -62,6 +62,7 @@ from .parameters import (
 )
 from .recommendations import (
     OptimizationCandidateSelection,
+    RecordLimitExceeded,
     build_empty_candidate_set,
     finalize_candidate_review_payload,
     finalize_candidate_set_payload,
@@ -103,6 +104,7 @@ __all__ = [
     "ProviderDispatchEvidence",
     "ProviderDispatchObservation",
     "PublicationReceipt",
+    "RecordLimitExceeded",
     "RefinementHandoff",
     "RunObservation",
     "SelectedWorkflowTaskFramingParameters",

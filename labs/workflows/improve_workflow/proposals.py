@@ -10,7 +10,14 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from botpipe import OutputValidationError, Prompt, Provider, activity, current_run
 from botpipe_optimizer.evidence import EvidenceSnapshot
@@ -18,7 +25,6 @@ from botpipe_optimizer.optimization import SourceManifest
 from botpipe_optimizer.records import (
     CandidateReview,
     CandidateSet,
-    ValidationPlan,
 )
 
 from .analysis_evidence import (
@@ -54,6 +60,30 @@ class _FrozenAnalysisSource:
     hashes: dict[str, str]
 
 
+class ChangeValidationPlan(BaseModel):
+    """Provider plan with stable normalization before strict record projection."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    description: str = Field(min_length=1)
+    checks: list[str] = Field(min_length=1)
+    falsification: str = Field(min_length=1)
+
+    @field_validator("checks")
+    @classmethod
+    def normalized_checks(cls, value: list[str]) -> list[str]:
+        if any(not item.strip() for item in value):
+            raise ValueError("validation checks must be non-empty")
+        return list(dict.fromkeys(value))
+
+    @field_validator("description", "falsification")
+    @classmethod
+    def nonblank_text(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("validation plan text must be non-empty")
+        return value
+
+
 class ChangeIdea(BaseModel):
     """Provider-owned semantics for one change; runtime owns record identity."""
 
@@ -66,7 +96,23 @@ class ChangeIdea(BaseModel):
     proposed_change: str = Field(min_length=1)
     expected_effect: str = Field(min_length=1)
     risks: list[str] = Field(min_length=1)
-    validation_plan: ValidationPlan
+    validation_plan: ChangeValidationPlan
+
+    @field_validator(
+        "targets", "cited_observation_ids", "source_evidence_paths", "risks"
+    )
+    @classmethod
+    def normalized_setlike_lists(cls, value: list[str]) -> list[str]:
+        if any(not item.strip() for item in value):
+            raise ValueError("change idea list entries must be non-empty")
+        return list(dict.fromkeys(value))
+
+    @field_validator("title", "proposed_change", "expected_effect")
+    @classmethod
+    def nonblank_text(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("change idea text must be non-empty")
+        return value
 
 
 class Proposal(BaseModel):
@@ -365,6 +411,13 @@ def _finalize_candidate_set(
     )
 
 
+def _assessed_source_paths(assessment: DiagnosticAssessment) -> set[str]:
+    links = list(assessment.intent_evidence)
+    for scoped in assessment.scope_assessments:
+        links.extend(scoped.evidence)
+    return {path for link in links for path in link.source_paths}
+
+
 def _safe_model_path(value: str) -> bool:
     raw = Path(value)
     return bool(
@@ -379,6 +432,7 @@ def _safe_model_path(value: str) -> bool:
 def _validate_proposal_grounding(
     proposal: Proposal,
     *,
+    assessment: DiagnosticAssessment,
     snapshot: EvidenceSnapshot,
     baseline_manifest: dict[str, Any],
 ) -> None:
@@ -403,6 +457,14 @@ def _validate_proposal_grounding(
             "candidate cites paths outside the captured baseline: "
             + ", ".join(unknown_paths)
         )
+    unassessed_sources = sorted(
+        set(idea.source_evidence_paths) - _assessed_source_paths(assessment)
+    )
+    if unassessed_sources:
+        raise GroundingError(
+            "candidate cites source paths not established by the frozen assessment: "
+            + ", ".join(unassessed_sources)
+        )
     unknown_observations = sorted(
         set(idea.cited_observation_ids) - snapshot.citable_observation_ids()
     )
@@ -411,6 +473,23 @@ def _validate_proposal_grounding(
             "candidate cites unavailable or unfocused observations: "
             + ", ".join(unknown_observations)
         )
+    if not idea.cited_observation_ids and not idea.source_evidence_paths:
+        raise GroundingError(
+            "candidate must cite a focused observation or assessed source path"
+        )
+
+
+def _candidate_source_evidence(
+    proposal: Proposal, candidate_set: CandidateSet
+) -> dict[str, list[str]]:
+    """Keep validated source citations visible despite the v2 record projection."""
+
+    if proposal.candidate is None:
+        return {}
+    return {
+        candidate.candidate_id: list(proposal.candidate.source_evidence_paths)
+        for candidate in candidate_set.candidates
+    }
 
 
 def _neutral_evidence(snapshot: EvidenceSnapshot) -> dict[str, Any]:
@@ -533,10 +612,6 @@ def _finalize_review(
     from botpipe_optimizer.recommendations import finalize_candidate_review_payload
 
     required_changes = change_review.required_changes
-    if any(not item.strip() for item in required_changes) or len(
-        required_changes
-    ) != len(set(required_changes)):
-        raise ValueError("review required_changes must be non-empty and unique")
     candidate_ids = [item.candidate_id for item in candidate_set.candidates]
     accepted = change_review.accepted and not required_changes
     findings = []
@@ -573,6 +648,7 @@ def propose_improvement(params: ImproveWorkflowParams, request: str) -> Recommen
     """
 
     from botpipe_optimizer.recommendations import (
+        RecordLimitExceeded,
         validate_candidate_review,
         validate_candidate_set,
     )
@@ -759,14 +835,20 @@ def propose_improvement(params: ImproveWorkflowParams, request: str) -> Recommen
             try:
                 _validate_proposal_grounding(
                     proposal.value,
+                    assessment=assessment,
                     snapshot=snapshot,
                     baseline_manifest=source.baseline_manifest,
                 )
-                candidate_set = _finalize_candidate_set(
-                    proposal.value,
-                    selected_workflow=source.manifest.workflow_name,
-                    snapshot=snapshot,
-                )
+                try:
+                    candidate_set = _finalize_candidate_set(
+                        proposal.value,
+                        selected_workflow=source.manifest.workflow_name,
+                        snapshot=snapshot,
+                    )
+                except ValidationError as exc:
+                    raise GroundingError(
+                        f"candidate finalization error: {exc}"
+                    ) from exc
                 candidate_set = validate_candidate_set(
                     candidate_set,
                     evidence_snapshot=snapshot,
@@ -777,7 +859,7 @@ def propose_improvement(params: ImproveWorkflowParams, request: str) -> Recommen
                     baseline_manifest=source.baseline_manifest,
                 )
                 break
-            except GroundingError as exc:
+            except (GroundingError, RecordLimitExceeded) as exc:
                 if grounding_attempt >= params.max_grounding_repairs:
                     raise GroundingError(
                         "proposal grounding remained invalid after "
@@ -804,6 +886,9 @@ def propose_improvement(params: ImproveWorkflowParams, request: str) -> Recommen
                         "candidate_set": candidate_set.model_dump(
                             mode="json", by_alias=True
                         ),
+                        "candidate_source_evidence_paths": _candidate_source_evidence(
+                            proposal.value, candidate_set
+                        ),
                         "selected_workflow_source_manifest": model_source_manifest,
                         "baseline_surface_manifest": model_manifest,
                         "max_candidates": 1,
@@ -813,7 +898,6 @@ def propose_improvement(params: ImproveWorkflowParams, request: str) -> Recommen
                     returns=ChangeReview,
                     output_retries=0,
                 )
-                break
             except OutputValidationError as exc:
                 verify_frozen_analysis()
                 if grounding_attempt >= params.max_grounding_repairs:
@@ -822,13 +906,29 @@ def propose_improvement(params: ImproveWorkflowParams, request: str) -> Recommen
                         f"{params.max_grounding_repairs} repair(s): {exc}"
                     ) from exc
                 review_grounding_feedback = f"review schema error: {exc}"
-        review = _finalize_review(decision.value, candidate_set)
-        review = validate_candidate_review(
-            review,
-            candidate_set=candidate_set,
-            max_output_bytes=params.max_output_bytes,
-        )
-        verify_frozen_analysis()
+                continue
+            verify_frozen_analysis()
+            try:
+                try:
+                    review = _finalize_review(decision.value, candidate_set)
+                except ValidationError as exc:
+                    raise GroundingError(
+                        f"proposal review finalization error: {exc}"
+                    ) from exc
+                review = validate_candidate_review(
+                    review,
+                    candidate_set=candidate_set,
+                    max_output_bytes=params.max_output_bytes,
+                )
+                break
+            except (GroundingError, RecordLimitExceeded) as exc:
+                if grounding_attempt >= params.max_grounding_repairs:
+                    raise GroundingError(
+                        "proposal review grounding remained invalid after "
+                        f"{params.max_grounding_repairs} repair(s): {exc}"
+                    ) from exc
+                review_grounding_feedback = str(exc)
+        assert review is not None
         if review.accepted:
             return Recommendation(
                 evidence_snapshot=snapshot,

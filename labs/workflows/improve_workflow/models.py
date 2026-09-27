@@ -207,6 +207,20 @@ class ChangeReview(BaseModel):
     summary: str = Field(min_length=1)
     required_changes: list[str] = Field(default_factory=list)
 
+    @field_validator("required_changes")
+    @classmethod
+    def normalized_required_changes(cls, value: list[str]) -> list[str]:
+        if any(not item.strip() for item in value):
+            raise ValueError("required changes must be non-empty")
+        return list(dict.fromkeys(value))
+
+    @field_validator("summary")
+    @classmethod
+    def summary_is_nonblank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("review summary must be non-empty")
+        return value
+
     @model_validator(mode="after")
     def consistent_verdict(self):
         if self.accepted and self.required_changes:

@@ -112,6 +112,11 @@ Judging starts after trial execution under a separate
 `max_judge_turns=12`, `max_judge_seconds=600`, and
 `judge_timeout_seconds=120` allowance. A fresh, tool-free judge applies the
 frozen rubric to a bounded anonymous behavior packet. Anonymous labels cannot
+hide inherited instructions, so judging overrides provider/native instructions
+and suppresses project instructions, skills, and memories in an empty workspace.
+If native isolation cannot be enforced (including configured global Codex
+`AGENTS.md` instructions), the comparison is `inconclusive` without a fallback
+judge call. Anonymous labels also cannot
 hide identity revealed intrinsically by output content. Binary artifact content
 is omitted. Binary, oversized, or missing declared input/output bytes are
 explicit essential-evidence omissions. Cases needing those files must supply

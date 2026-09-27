@@ -6,6 +6,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import tempfile
 from dataclasses import dataclass
 from hashlib import sha256
@@ -41,42 +42,110 @@ def _slug(value: Any, fallback: str) -> str:
     return (cleaned or fallback)[:96]
 
 
-def _plain_file(path: Path, *, label: str) -> bytes:
+def _plain_file(path: Path, *, label: str, max_bytes: int) -> tuple[bytes | None, int]:
+    """Read one stable regular file without exceeding the caller's byte bound."""
+
     if path.is_symlink():
         raise AnalysisIntegrityError(f"{label} is a symlink")
+    descriptor = None
     try:
         before = path.lstat()
-        data = path.read_bytes()
+        if not stat.S_ISREG(before.st_mode):
+            raise AnalysisIntegrityError(f"{label} is not a regular file")
+        flags = (
+            os.O_RDONLY
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_NONBLOCK", 0)
+            | getattr(os, "O_BINARY", 0)
+        )
+        descriptor = os.open(path, flags)
+        opened = os.fstat(descriptor)
+        if before.st_dev != opened.st_dev or before.st_ino != opened.st_ino:
+            raise AnalysisIntegrityError(f"{label} changed while being captured")
+        if opened.st_size > max_bytes:
+            data = None
+        else:
+            with os.fdopen(descriptor, "rb", closefd=False) as stream:
+                data = stream.read(max_bytes + 1)
+            if len(data) > max_bytes:
+                data = None
+        closed = os.fstat(descriptor)
         after = path.lstat()
     except OSError as exc:
         raise AnalysisIntegrityError(f"{label} is unavailable") from exc
-    identity = lambda stat: (
-        stat.st_dev,
-        stat.st_ino,
-        stat.st_mode,
-        stat.st_size,
-        stat.st_mtime_ns,
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+    identity = lambda info: (
+        info.st_dev,
+        info.st_ino,
+        info.st_mode,
+        info.st_size,
+        info.st_mtime_ns,
+        info.st_ctime_ns,
     )
-    if identity(before) != identity(after) or not path.is_file():
+    if (
+        identity(before) != identity(opened)
+        or identity(opened) != identity(closed)
+        or identity(closed) != identity(after)
+        or not stat.S_ISREG(after.st_mode)
+    ):
         raise AnalysisIntegrityError(f"{label} changed while being captured")
-    return data
+    return data, after.st_size
 
 
 def _artifact_records(value: Any):
-    if isinstance(value, dict):
-        if {
-            "name",
-            "path",
-            "source_path",
-            "kind",
-            "digest",
-        } <= value.keys():
-            yield value
-        for nested in value.values():
-            yield from _artifact_records(nested)
-    elif isinstance(value, list):
+    """Yield handles only from child slots defined by the durable codec grammar."""
+
+    if isinstance(value, list):
         for nested in value:
             yield from _artifact_records(nested)
+        return
+    if not isinstance(value, dict):
+        return
+    kind = value.get("$botpipe")
+    if kind == "artifact":
+        record = value.get("value")
+        keys = {"name", "path", "source_path", "kind", "digest", "schema"}
+        if (
+            set(value) != {"$botpipe", "value"}
+            or not isinstance(record, dict)
+            or set(record) != keys
+            or any(
+                not isinstance(record.get(key), str)
+                for key in ("name", "path", "source_path", "kind", "digest")
+            )
+            or not (
+                record.get("schema") is None or isinstance(record.get("schema"), dict)
+            )
+        ):
+            raise AnalysisIntegrityError("recorded artifact tag is malformed")
+        yield record
+        return
+    if kind in {"dict", "mappingproxy", "artifacts"}:
+        children = value.get("value")
+        if isinstance(children, dict):
+            for nested in children.values():
+                yield from _artifact_records(nested)
+        return
+    if kind in {"tuple", "set", "frozenset"}:
+        children = value.get("value")
+        if isinstance(children, list):
+            for nested in children:
+                yield from _artifact_records(nested)
+        return
+    if kind == "enum":
+        yield from _artifact_records(value.get("value"))
+        return
+    if kind in {"model", "dataclass"}:
+        fields = value.get("fields")
+        if isinstance(fields, dict):
+            for nested in fields.values():
+                yield from _artifact_records(nested)
+        extra = value.get("extra")
+        if kind == "model" and isinstance(extra, dict):
+            for nested in extra.values():
+                yield from _artifact_records(nested)
 
 
 def freeze_analysis_evidence(
@@ -126,6 +195,30 @@ def freeze_analysis_evidence(
             total_bytes += len(data)
         files[relative] = data
         return True
+
+    def add_file(
+        relative: str,
+        source: Path,
+        *,
+        label: str,
+        known_sha256: str | None = None,
+    ) -> bool:
+        remaining = max(max_bytes - total_bytes, 0)
+        data, size = _plain_file(source, label=label, max_bytes=remaining)
+        if data is None:
+            omissions.append(
+                {
+                    "path": relative,
+                    "reason": "max_evidence_bytes",
+                    "bytes": size,
+                    "sha256": known_sha256,
+                }
+            )
+            return False
+        actual_sha256 = sha256(data).hexdigest()
+        if known_sha256 is not None and actual_sha256 != known_sha256:
+            raise AnalysisIntegrityError("recorded artifact version digest changed")
+        return add(relative, data)
 
     for run_index, inspection in enumerate(inspections, 1):
         run = inspection.get("run") if isinstance(inspection, dict) else None
@@ -184,12 +277,10 @@ def freeze_analysis_evidence(
                             f"recorded journal evidence escaped its run: {relative_source}"
                         )
                     bundle_path = f"{prefix}/journal/{relative_source}"
-                    captured = add(
+                    captured = add_file(
                         bundle_path,
-                        _plain_file(
-                            source_path,
-                            label=f"recorded journal evidence {relative_source}",
-                        ),
+                        source_path,
+                        label=f"recorded journal evidence {relative_source}",
                     )
                     if captured:
                         journal_paths.append(bundle_path)
@@ -254,26 +345,31 @@ def freeze_analysis_evidence(
                 if identity in seen_artifacts:
                     continue
                 seen_artifacts.add(identity)
+                original_name = str(artifact.get("name"))
+                name = _slug(original_name, "artifact")
+                name_sha256 = sha256(original_name.encode()).hexdigest()
+                bundle_path = f"artifacts/{digest}-{name_sha256}-{name}"
                 artifact_source = Path(artifact_path)
+                if artifact_source.is_symlink():
+                    raise AnalysisIntegrityError(
+                        f"recorded artifact {artifact.get('name')} is a symlink"
+                    )
                 if not artifact_source.exists():
                     omissions.append(
                         {
-                            "path": f"artifacts/{digest}-{_slug(artifact.get('name'), 'artifact')}",
+                            "path": bundle_path,
                             "reason": "recorded_artifact_unavailable",
                             "bytes": None,
                             "sha256": digest,
                         }
                     )
                     continue
-                data = _plain_file(
-                    artifact_source, label=f"recorded artifact {artifact.get('name')}"
+                add_file(
+                    bundle_path,
+                    artifact_source,
+                    label=f"recorded artifact {artifact.get('name')}",
+                    known_sha256=digest,
                 )
-                if sha256(data).hexdigest() != digest:
-                    raise AnalysisIntegrityError(
-                        "recorded artifact version digest changed"
-                    )
-                name = _slug(artifact.get("name"), "artifact")
-                add(f"artifacts/{digest}-{name}", data)
         catalog.append(
             {
                 "run_ref": run_ref,

@@ -5,8 +5,9 @@ from dataclasses import dataclass
 
 import pytest
 
+from botpipe import Botpipe, current_run, workflow
 from botpipe.errors import BudgetExceeded
-from botpipe.providers import ProviderError
+from botpipe.providers import FakeProvider, ProviderError
 from botpipe_optimizer.judging import (
     aggregate_judgments,
     build_judge_packet,
@@ -252,6 +253,35 @@ def test_runtime_ledger_omission_does_not_make_packet_incomplete():
 
     assert packet["complete"] is True
     assert packet["A"]["operations"] == [{"response": "done"}]
+    assert any("worker stdout was truncated" in item for item in packet["omissions"])
+
+
+@pytest.mark.parametrize("kind", ["return value", "artifact content", "trial evidence"])
+def test_projection_loss_in_essential_evidence_prevents_judging(kind):
+    packet = _packet(a=_trial(omissions=[f"{kind} omitted: maximum projection depth"]))
+
+    assert packet["complete"] is False
+    assert any("maximum projection depth" in item for item in packet["omissions"])
+    assert judge_pair(packet=packet)["status"] == "inconclusive"
+
+
+def test_optional_projection_loss_is_reported_without_blocking_judgment(monkeypatch):
+    provider = _Provider([_judgment()])
+    monkeypatch.setattr("botpipe_optimizer.judging.Provider", lambda **_: provider)
+    packet = _packet(
+        a=_trial(omissions=["operation details omitted: maximum projection depth"])
+    )
+
+    assert packet["complete"] is True
+    assert any("operation details omitted" in item for item in packet["omissions"])
+    assert judge_pair(packet=packet)["status"] == "judged"
+
+
+def test_literal_omission_marker_in_user_output_is_not_a_projection_loss():
+    packet = _packet(a=_trial(value="<omitted: maximum depth>"))
+
+    assert packet["complete"] is True
+    assert packet["A"]["value"] == "<omitted: maximum depth>"
 
 
 def test_missing_selected_artifact_content_makes_packet_incomplete():
@@ -304,24 +334,143 @@ def test_judge_uses_fresh_session_no_tools_and_repairs_bad_quote(monkeypatch):
             _judgment(),
         ]
     )
-    monkeypatch.setattr("botpipe_optimizer.judging.Provider", lambda: provider)
+    monkeypatch.setattr("botpipe_optimizer.judging.Provider", lambda **_: provider)
 
     result = judge_pair(packet=_packet(), max_repairs=1, timeout=17)
 
     assert result["status"] == "judged"
-    assert provider.config_calls == [{"session": None}]
+    config = provider.config_calls[0]
+    assert config["session"] is None
+    assert "independent evaluator" in config["instructions"]
+    assert config["settings"] == {"botpipe.isolated_context": True}
+    assert config["workspace"].name.startswith("botpipe-judge-")
     assert len(provider.generate_calls) == 2
     assert all(call[1]["allowed_tools"] == () for call in provider.generate_calls)
     assert all(call[1]["output_retries"] == 0 for call in provider.generate_calls)
     assert all(call[1]["timeout"] == 17.0 for call in provider.generate_calls)
     assert "not an exact excerpt" in provider.generate_calls[1][0]
+    assert len(provider.config_calls) == 1
+
+
+def test_judge_overrides_runtime_context_but_keeps_backend_and_model(tmp_path):
+    @workflow
+    def evaluate():
+        return judge_pair(packet=_packet(), max_repairs=1)
+
+    def respond(request):
+        assert request.workspace.is_dir()
+        assert not any(request.workspace.iterdir())
+        return _judgment()
+
+    routing = {
+        "model": "configured-judge-model",
+        "model_provider": "local",
+        "chatgpt_base_url": "http://127.0.0.1:45679",
+        "model_providers.local.base_url": "http://127.0.0.1:45678/v1",
+        "model_providers.local.wire_api": "responses",
+    }
+    backend = FakeProvider([_judgment() | {"evidence_quotes": ["invented"]}, respond])
+    with Botpipe(
+        tmp_path,
+        provider=backend,
+        provider_config={
+            "instructions": "PRIVATE_IMPLEMENTATION_CONTEXT",
+            "workspace": str(tmp_path),
+            "model": "configured-judge-model",
+            "settings": {
+                **routing,
+                "developer_instructions": "PRIVATE_NATIVE_CONTEXT",
+                "model_instructions_file": "PRIVATE_BASE_INSTRUCTIONS.md",
+                "model_catalog_json": "PRIVATE_MODEL_CATALOG.json",
+                "profile": "PRIVATE_PROFILE",
+                "profiles": {"PRIVATE_PROFILE": {"developer_instructions": "PRIVATE"}},
+                "botpipe.isolated_context": False,
+            },
+        },
+    ) as client:
+        run = client.run(evaluate)
+        assert run.ok, run.error
+        assert run.value["status"] == "judged", run.value
+        assert len(backend.calls) == 2
+        for request in backend.calls:
+            assert "PRIVATE_" not in request.instructions
+            assert "PRIVATE_" not in request.prompt
+            assert request.settings == {**routing, "botpipe.isolated_context": True}
+            assert request.workspace != tmp_path
+            assert request.policy.model == "configured-judge-model"
+            assert request.session_id is None
+            assert request.tools == ()
+        assert backend.calls[0].workspace == backend.calls[1].workspace
+        resumed = client.resume(run.run_id, workflow=evaluate)
+        assert resumed.ok, resumed.error
+        assert resumed.value == run.value
+        assert len(backend.calls) == 2
+
+
+def test_judge_rejects_nonempty_neutral_workspace_without_dispatch(tmp_path):
+    @workflow
+    def evaluate():
+        workspace = current_run().folder / "judge-workspace"
+        workspace.mkdir()
+        (workspace / "private.txt").write_text("IMPLEMENTATION_CONTEXT")
+        return judge_pair(packet=_packet())
+
+    backend = FakeProvider([])
+    with Botpipe(tmp_path, provider=backend) as client:
+        run = client.run(evaluate)
+
+    assert run.ok, run.error
+    assert run.value["status"] == "inconclusive"
+    assert "workspace must be empty" in run.value["reason"]
+    assert backend.calls == []
+
+
+def test_standalone_judge_keeps_caller_configuration_before_isolating_cwd(
+    tmp_path, monkeypatch
+):
+    (tmp_path / "botpipe.toml").write_text(
+        '[codex]\nmodel = "configured-model"\n'
+        '[codex.settings]\nmodel_provider = "local"\n'
+        'developer_instructions = "PRIVATE_NATIVE_CONTEXT"\n'
+        '[codex.settings.model_providers.local]\nname = "Local"\n'
+        'base_url = "http://127.0.0.1:45678/v1"\nwire_api = "responses"\n'
+    )
+    backend = FakeProvider([_judgment()])
+    configurations = []
+
+    def configured_provider(provider, *, config):
+        configurations.append((provider, config))
+        return backend
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("botpipe.providers.get_provider", configured_provider)
+
+    result = judge_pair(packet=_packet())
+
+    assert result["status"] == "judged", result
+    assert configurations[0][0] == "codex"
+    assert configurations[0][1]["model"] == "configured-model"
+    assert backend.calls[0].policy.model == "configured-model"
+    assert backend.calls[0].settings == {
+        "botpipe.isolated_context": True,
+        "model_provider": "local",
+        "model_providers": {
+            "local": {
+                "name": "Local",
+                "base_url": "http://127.0.0.1:45678/v1",
+                "wire_api": "responses",
+            }
+        },
+    }
+    assert backend.calls[0].workspace != tmp_path
+    assert not backend.calls[0].workspace.exists()
 
 
 def test_judge_repairs_missing_and_duplicate_criteria(monkeypatch):
     invalid = _judgment()
     invalid["criteria"] = [invalid["criteria"][0], invalid["criteria"][0]]
     provider = _Provider([invalid, _judgment()])
-    monkeypatch.setattr("botpipe_optimizer.judging.Provider", lambda: provider)
+    monkeypatch.setattr("botpipe_optimizer.judging.Provider", lambda **_: provider)
 
     result = judge_pair(packet=_packet(), max_repairs=1)
 
@@ -334,7 +483,7 @@ def test_judge_repairs_missing_and_duplicate_criteria(monkeypatch):
 def test_judge_exhaustion_is_inconclusive(monkeypatch):
     invalid = _judgment() | {"evidence_quotes": ["invented"]}
     provider = _Provider([invalid, invalid])
-    monkeypatch.setattr("botpipe_optimizer.judging.Provider", lambda: provider)
+    monkeypatch.setattr("botpipe_optimizer.judging.Provider", lambda **_: provider)
 
     result = judge_pair(packet=_packet(), max_repairs=1)
 
@@ -344,7 +493,7 @@ def test_judge_exhaustion_is_inconclusive(monkeypatch):
 
 def test_judge_does_not_swallow_budget_suspension(monkeypatch):
     provider = _Provider([BudgetExceeded("judge turn budget")])
-    monkeypatch.setattr("botpipe_optimizer.judging.Provider", lambda: provider)
+    monkeypatch.setattr("botpipe_optimizer.judging.Provider", lambda **_: provider)
 
     with pytest.raises(BudgetExceeded):
         judge_pair(packet=_packet())
@@ -352,7 +501,7 @@ def test_judge_does_not_swallow_budget_suspension(monkeypatch):
 
 def test_judge_reports_provider_dispatch_failure_as_infrastructure(monkeypatch):
     provider = _Provider([ProviderError("adapter unavailable")])
-    monkeypatch.setattr("botpipe_optimizer.judging.Provider", lambda: provider)
+    monkeypatch.setattr("botpipe_optimizer.judging.Provider", lambda **_: provider)
 
     result = judge_pair(packet=_packet())
 
