@@ -67,10 +67,9 @@ as with other Botpipe workflows.
 ## Process and proof
 
 Every provider receives the bundled Botpipe authoring and prompting guides.
-The packaged entry currently invokes the labs builder as a nested durable
-workflow; labs ships in the distribution, so this is not yet a labs-independent
-implementation.
-That workflow runs request framing, guide-based design with an independent query
+The packaged workflow owns its contracts, prompts, guides, materialization, and
+validation implementation and does not import the experimental labs package.
+It runs request framing, guide-based design with an independent query
 review, manifest build, runtime compile/import/discovery and tests, then semantic
 evaluation with another independent query review. Invalid manifests and failed
 executable validation get at most three complete build attempts. Source, prompt, implementation-proof,

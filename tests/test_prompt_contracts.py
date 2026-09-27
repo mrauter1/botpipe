@@ -80,7 +80,11 @@ def test_lab_phase_prompt_files_resolve_and_review_is_explicit():
     sources = [
         path
         for path in workflows.glob("*/workflow.py")
-        if path.parent.name != "improve_workflow"
+        if path.parent.name
+        not in {
+            "improve_workflow",
+            "workflow_idea_to_workflow_package",
+        }
     ]
     for source in sources:
         phases = [

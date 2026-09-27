@@ -1,17 +1,10 @@
 # Improve a workflow
 
-`improve_workflow` investigates workflow intent, source, and recorded runs before
-proposing one useful change. It implements the change in an isolated candidate,
-runs executable checks, and independently reviews the result. An optional fixed
-evaluator measures the original and the candidate.
-The authoritative workflow is never automatically edited or replaced.
-
-See [current coverage and remaining gaps](../../../docs/optimizer.md#current-coverage-and-remaining-gaps)
-before interpreting results: investigation does not yet receive historical
-prompt/response/artifact contents, the rubric is not automatically scored in
-trials, and post-response grounding errors do not yet have a repair loop. This
-workflow currently requires a supplied executable evaluator for comparison;
-source review alone cannot establish a measured improvement.
+`improve_workflow` diagnoses one workflow from frozen source and run evidence,
+reviews one bounded proposal, implements it in an isolated candidate, runs
+executable checks, and performs independent source review. Comparative
+measurement is optional. The authoritative workflow is never edited or promoted
+automatically.
 
 ```python
 from botpipe import Botpipe
@@ -23,16 +16,22 @@ with Botpipe(workspace=".") as runtime:
         ImproveWorkflowParams(
             selected_workflow="devloop",
             objective="Improve review accuracy while preserving valid behavior",
-            metric_view="reliability",
             run_refs=["failed-run"],
-            evaluation_spec_path="evaluation-spec.json",
+            execute_trials=True,
+            trial_cases=[
+                {
+                    "case_id": "review_failure",
+                    "description": "Handle the recorded review failure",
+                    "kwargs": {"request": "Review the fixture change"},
+                    "workspace": "fixture",
+                    "judge_input_paths": ["change.diff"],
+                    "output_paths": ["review.json"],
+                }
+            ],
+            trial_fixture_path="tests/fixtures/review_case",
         ),
         request="Fix the recurring review failure while preserving valid behavior.",
     )
-    if run.ok:
-        print(run.value.outcome, run.value.summary)
-        if run.value.candidate:
-            print(run.value.candidate.root)
 ```
 
 The CLI accepts the same validated parameter object:
@@ -45,66 +44,124 @@ botpipe run improve_workflow --workspace . \
 `selected_workflow` accepts a catalog name, `module:function`, or
 `file.py:function`. `run_refs` selects exact run IDs or `task/run` references;
 otherwise the latest 25 matching runs that are not executing are selected.
-Created and running runs do not consume that limit; explicit references remain exact.
-`objective` is a free-text priority; the older `reliability`, `token_usage`, and
-`latency` values remain valid. `metric_view` optionally selects one of those
-three deterministic summaries. When it is unset, the evidence-v3 record retains
-its compatibility reliability view; active model inputs still omit its ranking.
-Deterministic summaries describe recorded burden, not predicted benefit, and do
-not gate investigation or choose its target. Source identity and evidence checks
-prevent
-unrelated runs from being treated as observations of the selected workflow.
-The workflow captures one canonical full surface manifest for the optimizer
-baseline and fails clearly when that attribution is unavailable or changes
-during capture.
+Created and running runs do not consume that limit.
+
+## Evidence and proposal
+
+The workflow freezes two read-only inputs for every analysis turn: the selected
+workflow's complete captured source surface and a journal-evidence tree with run
+and operation records, recorded prompts, responses, errors, and referenced
+artifact versions. Deterministic facts such as recorded status, counts, and
+usage cite focused observation IDs. Textual trace claims about prompts,
+responses, rejection reasons, and artifact contents cite a root-relative frozen
+path plus an exact quote. Source claims name captured source paths and may use
+the same exact-quote form. Inference remains explicitly separate from direct
+evidence. Python validates each basis and citation.
+
+Correctable citation and model-proposed case errors receive bounded feedback.
+`max_grounding_repairs=2` allows two additional attempts. Changed frozen bytes,
+path escapes, and other integrity failures stop rather than being treated as
+model typos. The investigator freezes the rubric and any native trial cases
+before proposing a candidate.
+
+The accepted recommendation passes directly into implementation as a typed
+value. The workflow does not publish and reload an internal recommendation
+receipt; its `receipt` field is `None`. A separate-session reviewer may reject
+the proposal before any edit. Each implementation revision starts from the same
+verified baseline and can change only the captured workflow surface.
+
+## Evaluation choices
+
+With neither option selected, successful checks and review return
+`candidate_ready`.
+
+Set `execute_trials=true` for native paired trials of the selected workflow. This
+is explicit authorization to execute both baseline and candidate with the
+configured provider, tools, inputs, and policy. Use it only when those executions
+and their possible external effects are authorized. Trial processes have
+separate code trees, workspaces, state, timeouts, and owned-process containment;
+they do not isolate remote side effects.
+Native subprocesses reconstruct the configured Codex provider. An unsupported
+in-process provider produces `inconclusive` instead of silently switching providers.
+
+Caller supplied `trial_cases` take precedence. Otherwise the investigator may
+propose cases. They are validated and frozen with the rubric. Cases use an empty
+workspace or a snapshot of the explicit `trial_fixture_path` directory taken
+when the plan is frozen. Historical runs do not retain their initial workspace,
+so they cannot reconstruct this fixture. Each case must be self-contained in its
+`args`/`kwargs`, captured `assets`, or that explicit fixture.
+
+`assets` maps a case-workspace destination to frozen analysis evidence. Every
+asset destination is automatically inlined as judge reference evidence.
+`judge_input_paths` adds other fixture-relative reference files needed to apply
+the rubric. `output_paths` declares result files to capture after each arm, even
+when the workflow does not publish them as Botpipe artifacts. These bounded
+relative-path lists are frozen with the cases and rubric. Evaluation records the
+exact declared result bytes and a deterministic comparison with the frozen
+fixture. The caller or investigating model must name every reference and output
+file the rubric requires; the tool-free judge cannot follow an otherwise
+unreadable filename.
+
+Each arm has `max_provider_turns=12` and `timeout_seconds=180` by default. The
+trial phase has `max_elapsed_seconds=1200` and admits a pair only when enough
+allowance remains for both arm caps. Execution order and anonymous A/B labels are
+deterministic hashes of the run, case, and repetition and are recorded per pair.
+The plan binds source and fixture tree hashes; it does not add a Git HEAD record.
+
+Judging starts after trial execution under a separate
+`max_judge_turns=12`, `max_judge_seconds=600`, and
+`judge_timeout_seconds=120` allowance. A fresh, tool-free judge applies the
+frozen rubric to a bounded anonymous behavior packet. Anonymous labels cannot
+hide identity revealed intrinsically by output content. Binary artifact content
+is omitted. Binary, oversized, or missing declared input/output bytes are
+explicit essential-evidence omissions. Cases needing those files must supply
+bounded judgeable text/JSON content; otherwise the comparison is
+`inconclusive`. Infrastructure failures, unavailable cases, conflicting results,
+unknown criteria, or exhausted judge allowance are also inconclusive.
+
+All native trial results are scoped to the frozen development cases. Improvement
+requires at least one candidate win, no losses, and every required obligation
+met. A baseline win reports `regressed`; all ties report
+`no_material_change`. Nothing here claims performance on untested inputs.
+
+Alternatively, `evaluation_spec_path` runs the existing caller supplied external
+evaluator. It is mutually exclusive with `execute_trials`. Native trials do not
+require an external script, and neither evaluation mode is required to build a
+validated candidate.
 
 ## Outcomes
 
 | Outcome | Meaning |
 | --- | --- |
 | `collect_evidence` | More relevant evidence is needed; no candidate was edited. |
-| `no_change` | No change was proposed or the candidate left the source unchanged. |
-| `rejected` | The proposal or implementation exhausted its revision allowance. |
-| `candidate_ready` | Executable checks and independent review passed; improvement was not measured. |
-| `improved`, `regressed`, `no_material_change`, `inconclusive` | The fixed baseline/candidate comparison produced this result. |
+| `no_change` | No change was proposed or the candidate left source unchanged. |
+| `rejected` | Proposal or implementation exhausted its revision allowance. |
+| `candidate_ready` | Checks and independent review passed; improvement was not measured. |
+| `improved` | Frozen evaluated cases include a candidate win, no loss, and no required-criterion failure. |
+| `regressed` | At least one frozen evaluated pair favors the baseline and none favors the candidate. |
+| `no_material_change` | Every frozen evaluated comparison is a tie. |
+| `inconclusive` | Evidence, availability, infrastructure, judgment, or consistency was insufficient. |
 
-The typed result includes the structured intent/diagnostic assessment and its
-frozen context-specific rubric, evidence, optional candidate
-validation/review/comparison, and the consumed provider budget. A completed run
-can therefore be a useful negative result. Runtime failures, unsafe recovery,
-or exhausted provider budgets still fail or suspend the Botpipe run normally.
+The typed result contains the assessment, rubric, evidence identities, reviewed
+proposal, optional frozen trial plan, candidate validation/review/evaluation,
+and orchestration provider-budget snapshot. Runtime failures, unsafe recovery,
+or exhausted orchestration budgets still fail or suspend the Botpipe run.
 
-## Checks and limits
+## Checks and bounds
 
-The default executable check is `python -m pytest -q`. Supply
-`target_test_argv` for the project's actual checks; it is an argument list, never
-a shell command. Discovery/import and compilation checks also run in isolation.
-The model investigates, proposes, implements, and reviews in separate bounded
-turns; deterministic code owns identities, metrics, validation, and comparison
-outcomes. A source-only proposal carries no invented observation ID. When no run
-history exists, source inspection may still identify an opportunity or explain
-why execution evidence is needed.
+The default validation command is `python -m pytest -q`. Supply
+`target_test_argv` for the selected project's checks; it is an argument list,
+not a shell string. Compilation and discovery/import checks also run against the
+staged candidate.
 
-`max_revisions=2` allows at most three implementation/check/review attempts
-after one reviewed proposal. Orchestration provider calls share
-`max_provider_turns=12`,
-`max_provider_seconds=1800`, and `provider_timeout=600`. Provider repair turns
-are included. Executable validation has its own `validation_timeout=600`, and
-the evaluation specification carries process and evaluator limits. The parent
-provider budget does not automatically cover calls inside those subprocesses.
-These are bounded operations, not an unbounded optimization search.
+Orchestration defaults are `max_provider_turns=12`,
+`max_provider_seconds=1800`, `provider_timeout=600`, `max_revisions=2`, and
+`validation_timeout=600`. Provider repairs count toward these bounds. Native
+trials and judges use the separate `TrialSettings` bounds above. An external
+evaluator uses the bounds in its frozen specification.
 
-The evaluation specification, evaluator, and cases are frozen before
-investigation. The model's qualitative success rubric is frozen before proposal
-generation. Both remain fixed through editing and review.
-Each implementation revision starts from the same verified source baseline and
-gets its own workspace and evaluation records. Interrupted external evaluations
-are reconciled from their exact attempt/result records; an unknown result is
-never silently rerun. Completed Botpipe operations replay without provider calls.
-
-An improvement claim is limited to the supplied cases and thresholds. Keep
-development cases distinct from independent evaluation cases. Without a
-comparative evaluator, passing tests produces `candidate_ready`.
+See [Workflow improvement](../../../docs/optimizer.md) for the evidence layout,
+all limits, judge-packet behavior, and lower-level APIs.
 
 ## Replacement of earlier labs
 
@@ -113,7 +170,4 @@ This workflow replaces `workflow_run_history_to_failure_modes`,
 `workflow_and_eval_to_refined_workflow_package`, and
 `workflow_package_to_composable_building_blocks`. Their entry points and legacy
 parameter aliases were removed. Start a fresh `improve_workflow` run; old lab
-journals are not rewritten or replayed as this workflow.
-
-Other labs remain separate experiments. This change does not introduce a new
-runtime, phase language, or generic lab controller.
+journals are not rewritten or migrated.

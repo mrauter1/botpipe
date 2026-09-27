@@ -189,8 +189,8 @@ class EvidenceSnapshot(EvidenceRecord):
     snapshot_id: str = Field(pattern=r"^evidence_[0-9a-f]{64}$")
     selected_workflow: str
     baseline_surface_manifest_id: str
-    objective: Objective
-    selection_basis: SelectionBasis
+    objective: Objective | None
+    selection_basis: SelectionBasis | None
     profile_comparison: Literal["none"] = "none"
     selection: SelectionPolicy
     runs: tuple[RunEvidence, ...]
@@ -229,7 +229,7 @@ def capture_evidence_snapshot(
     inspections: Iterable[Mapping[str, Any] | RunObservation],
     *,
     source_manifest: SourceManifest,
-    objective: Objective = "reliability",
+    objective: Objective | None = "reliability",
     top_k_steps: int = 1,
     max_evidence_bytes: int = 50 * 1024 * 1024,
     max_snapshot_bytes: int = DEFAULT_MAX_SNAPSHOT_BYTES,
@@ -245,7 +245,7 @@ def capture_evidence_snapshot(
         raise ValueError(
             "top_k_steps, max_evidence_bytes, and max_snapshot_bytes must be positive"
         )
-    if objective not in {"reliability", "token_usage", "latency"}:
+    if objective not in {None, "reliability", "token_usage", "latency"}:
         raise ValueError("unsupported optimizer objective")
     supplied = tuple(inspections)
     routes = tuple(dict.fromkeys(route_tags))
@@ -476,7 +476,9 @@ def capture_evidence_snapshot(
         if item.group_id == selected_group and item.focused
     ]
     metrics = _metrics(comparable)
-    shortlist, measure_first = _rank(metrics, objective, top_k_steps)
+    shortlist, measure_first = (
+        _rank(metrics, objective, top_k_steps) if objective is not None else ((), ())
+    )
     if shortlist:
         next_action = "propose_changes"
     elif objective == "reliability" and comparable:
@@ -497,7 +499,9 @@ def capture_evidence_snapshot(
         "selected_workflow": selected_workflow,
         "baseline_surface_manifest_id": baseline_id,
         "objective": objective,
-        "selection_basis": _selection_basis(objective),
+        "selection_basis": (
+            _selection_basis(objective) if objective is not None else None
+        ),
         "profile_comparison": "none",
         "selection": SelectionPolicy(
             explicit_run_refs=explicit_run_refs,

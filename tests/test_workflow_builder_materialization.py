@@ -7,17 +7,17 @@ import pytest
 from botpipe import Botpipe
 from botpipe.policy import SandboxMode
 from botpipe.providers import FakeProvider
-from labs.workflows.workflow_idea_to_workflow_package import (
-    Params,
-    WorkflowIdeaToWorkflowPackage,
-)
-from labs.workflows.workflow_idea_to_workflow_package.materialization import (
+from botpipe.workflows.workflow_author import Params
+from botpipe.workflows.workflow_author.materialization import (
     WorkflowManifestValidationError,
     _materialize_generated_workflow_manifest_activity,
     _revalidate_generated_workflow_materialization,
     _validate_generated_workflow_candidate_activity,
     freeze_generated_workflow_candidate,
     prepare_generated_workflow_candidate,
+)
+from labs.workflows.workflow_idea_to_workflow_package import (
+    WorkflowIdeaToWorkflowPackage,
 )
 
 

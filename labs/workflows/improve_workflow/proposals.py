@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import asdict, dataclass
 from hashlib import sha256
 from pathlib import Path
@@ -11,16 +12,23 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from botpipe import Prompt, Provider, activity, current_run
+from botpipe import OutputValidationError, Prompt, Provider, activity, current_run
 from botpipe_optimizer.evidence import EvidenceSnapshot
 from botpipe_optimizer.optimization import SourceManifest
 from botpipe_optimizer.records import (
     CandidateReview,
     CandidateSet,
-    PublicationReceipt,
     ValidationPlan,
 )
 
+from .analysis_evidence import (
+    AnalysisIntegrityError,
+    FrozenAnalysisEvidence,
+    GroundingError,
+    freeze_analysis_evidence,
+    validate_exact_quote,
+    verify_analysis_evidence,
+)
 from .models import (
     ChangeReview,
     DiagnosticAssessment,
@@ -171,6 +179,12 @@ def _freeze_analysis_source(
     )
     if not relative_paths:
         raise ValueError("captured workflow surface has no analysis source files")
+    if any(
+        relative == ".analysis-evidence-bundle"
+        or relative.startswith(".analysis-evidence-bundle/")
+        for relative in relative_paths
+    ):
+        raise ValueError("captured workflow surface uses a reserved analysis path")
     prepared = prepare_candidate_workspace(
         manifest["root"], relative_paths, destination
     )
@@ -218,6 +232,9 @@ def _verify_analysis_source(frozen: _FrozenAnalysisSource) -> None:
         path.relative_to(root).as_posix()
         for path in entries
         if path.is_file() and not path.is_symlink()
+        and not path.relative_to(root).as_posix().startswith(
+            ".analysis-evidence-bundle/"
+        )
     }
     if actual_paths != set(frozen.hashes):
         raise ValueError("frozen workflow analysis source file set changed")
@@ -286,9 +303,7 @@ def _capture_evidence(
         source.manifest.workflow_name,
         inspections,
         source_manifest=source.manifest,
-        # Evidence v3 requires a concrete legacy view. It remains descriptive
-        # and is removed from active model input when the user did not request it.
-        objective=metric_view or "reliability",
+        objective=metric_view,
         top_k_steps=1,
         max_evidence_bytes=max_evidence_bytes,
         max_snapshot_bytes=max_snapshot_bytes,
@@ -300,35 +315,11 @@ def _capture_evidence(
     )
 
 
-@activity(retry_safe=True, name="publish improvement recommendation")
-def _publish(
-    output_dir: str,
-    evidence_snapshot: EvidenceSnapshot,
-    assessment: DiagnosticAssessment,
-    candidate_set: CandidateSet,
-    review: CandidateReview | None,
-    baseline_manifest: dict[str, Any],
-    max_output_bytes: int,
-    max_evidence_bytes: int,
-    max_snapshot_bytes: int,
-) -> PublicationReceipt:
-    from botpipe_optimizer.recommendations import publish_recommendation
-
-    return publish_recommendation(
-        output_dir=output_dir,
-        evidence_snapshot=evidence_snapshot,
-        candidate_set=candidate_set,
-        review=review,
-        baseline_manifest=baseline_manifest,
-        max_output_bytes=max_output_bytes,
-        max_evidence_bytes=max_evidence_bytes,
-        max_snapshot_bytes=max_snapshot_bytes,
-        supporting_content=(
-            "# Diagnostic assessment\n\n```json\n"
-            + json.dumps(assessment.model_dump(mode="json"), indent=2, sort_keys=True)
-            + "\n```\n"
-        ).encode(),
-    )
+@activity(retry_safe=True, name="freeze improvement journal evidence")
+def _freeze_journal_evidence(
+    inspections: tuple[dict[str, Any], ...], destination: str, max_bytes: int
+) -> FrozenAnalysisEvidence:
+    return freeze_analysis_evidence(inspections, destination, max_bytes=max_bytes)
 
 
 def _finalize_candidate_set(
@@ -336,38 +327,14 @@ def _finalize_candidate_set(
     *,
     selected_workflow: str,
     snapshot: EvidenceSnapshot,
-    assessment: DiagnosticAssessment,
 ) -> CandidateSet:
     from botpipe_optimizer.recommendations import finalize_candidate_set_payload
 
     candidates: list[dict[str, Any]] = []
     if proposal.candidate is not None:
         idea = proposal.candidate
-        assessed_sources = {
-            path for link in assessment.intent_evidence for path in link.source_paths
-        }
-        for scoped in assessment.scope_assessments:
-            assessed_sources.update(
-                path for link in scoped.evidence for path in link.source_paths
-            )
-        unknown_sources = sorted(set(idea.source_evidence_paths) - assessed_sources)
-        if unknown_sources:
-            raise ValueError(
-                "candidate source evidence was not established by assessment: "
-                + ", ".join(unknown_sources)
-            )
         if not idea.cited_observation_ids and not idea.source_evidence_paths:
-            raise ValueError("source-only candidate must name assessed source evidence")
-        unsupported_targets = sorted(
-            set(idea.targets) - set(idea.source_evidence_paths)
-            if not idea.cited_observation_ids
-            else ()
-        )
-        if unsupported_targets:
-            raise ValueError(
-                "source-only candidate targets lack assessed source evidence: "
-                + ", ".join(unsupported_targets)
-            )
+            raise GroundingError("candidate must cite a trace or captured source file")
         candidates.append(
             {
                 "kind": "workflow",
@@ -395,6 +362,54 @@ def _finalize_candidate_set(
             "no_candidate_reason": proposal.reason,
         }
     )
+
+
+def _safe_model_path(value: str) -> bool:
+    raw = Path(value)
+    return bool(
+        value
+        and not raw.is_absolute()
+        and ".." not in raw.parts
+        and "\\" not in value
+        and value == raw.as_posix()
+    )
+
+
+def _validate_proposal_grounding(
+    proposal: Proposal,
+    *,
+    snapshot: EvidenceSnapshot,
+    baseline_manifest: dict[str, Any],
+) -> None:
+    idea = proposal.candidate
+    if idea is None:
+        return
+    paths = (*idea.targets, *idea.source_evidence_paths)
+    unsafe = sorted({path for path in paths if not _safe_model_path(path)})
+    if unsafe:
+        raise AnalysisIntegrityError(
+            "candidate path escapes the captured workflow boundary: "
+            + ", ".join(unsafe)
+        )
+    allowed = {
+        str(item["relative_path"])
+        for item in baseline_manifest.get("files", ())
+        if isinstance(item, dict) and item.get("relative_path")
+    }
+    unknown_paths = sorted(set(paths) - allowed)
+    if unknown_paths:
+        raise GroundingError(
+            "candidate cites paths outside the captured baseline: "
+            + ", ".join(unknown_paths)
+        )
+    unknown_observations = sorted(
+        set(idea.cited_observation_ids) - snapshot.citable_observation_ids()
+    )
+    if unknown_observations:
+        raise GroundingError(
+            "candidate cites unavailable or unfocused observations: "
+            + ", ".join(unknown_observations)
+        )
 
 
 def _neutral_evidence(snapshot: EvidenceSnapshot) -> dict[str, Any]:
@@ -431,6 +446,8 @@ def _validate_assessment(
     *,
     snapshot: EvidenceSnapshot,
     baseline_manifest: dict[str, Any],
+    frozen_source: _FrozenAnalysisSource,
+    frozen_evidence: FrozenAnalysisEvidence,
 ) -> DiagnosticAssessment:
     observations = {item.observation_id for item in snapshot.observations}
     raw_files = baseline_manifest.get("files", ())
@@ -443,18 +460,63 @@ def _validate_assessment(
     for scoped in assessment.scope_assessments:
         links.extend(scoped.evidence)
     for link in links:
+        unsafe_sources = sorted(
+            path for path in link.source_paths if not _safe_model_path(path)
+        )
+        if unsafe_sources:
+            raise AnalysisIntegrityError(
+                "assessment source path escapes the captured workflow boundary: "
+                + ", ".join(unsafe_sources)
+            )
         unknown_observations = sorted(set(link.observation_ids) - observations)
         if unknown_observations:
-            raise ValueError(
+            raise GroundingError(
                 "assessment cites unknown observations: "
                 + ", ".join(unknown_observations)
             )
         unknown_paths = sorted(set(link.source_paths) - source_paths)
         if unknown_paths:
-            raise ValueError(
+            raise GroundingError(
                 "assessment cites source outside captured baseline: "
                 + ", ".join(unknown_paths)
             )
+        if link.basis == "trace":
+            assert link.evidence_path is not None and link.quote is not None
+            validate_exact_quote(Path(frozen_evidence.root), link.evidence_path, link.quote)
+        elif link.basis == "observation" and link.evidence_path is not None:
+            assert link.quote is not None
+            validate_exact_quote(
+                Path(frozen_evidence.root), link.evidence_path, link.quote
+            )
+            cited = [
+                item for item in snapshot.observations
+                if item.observation_id in link.observation_ids
+            ]
+            operation_path_identities = {
+                identity
+                for item in cited
+                for identity in (
+                    re.sub(r"[^A-Za-z0-9_.-]+", "-", item.operation_id)
+                    .strip("-.")[:96],
+                    sha256(item.operation_id.encode()).hexdigest(),
+                )
+            }
+            if not any(
+                identity and identity in link.evidence_path
+                for identity in operation_path_identities
+            ):
+                raise GroundingError(
+                    "observation citation path does not identify a cited operation record"
+                )
+        elif link.basis == "source" and link.evidence_path is not None:
+            if link.evidence_path not in link.source_paths:
+                raise GroundingError(
+                    "source citation path must be one of the link's source_paths"
+                )
+            assert link.quote is not None
+            validate_exact_quote(Path(frozen_source.root), link.evidence_path, link.quote)
+        elif link.basis == "inference" and link.evidence_path is not None:
+            raise GroundingError("inference must not carry a direct evidence citation")
     return assessment
 
 
@@ -526,31 +588,121 @@ def propose_improvement(params: ImproveWorkflowParams, request: str) -> Recommen
     frozen_source = _freeze_analysis_source(
         source, str(context.folder / "analysis-source")
     )
+    admitted_run_refs = {item.run_ref for item in snapshot.runs}
+    admitted_inspections = tuple(
+        inspection
+        for inspection in inspections
+        if (
+            f"{inspection.get('run', {}).get('task_id')}/"
+            f"{inspection.get('run', {}).get('run_id')}"
+            if inspection.get("run", {}).get("task_id")
+            else str(inspection.get("run", {}).get("run_id"))
+        )
+        in admitted_run_refs
+    )
+    frozen_evidence = _freeze_journal_evidence(
+        admitted_inspections,
+        str(Path(frozen_source.root) / ".analysis-evidence-bundle"),
+        params.max_evidence_bytes,
+    )
     model_manifest = _model_baseline_manifest(source.baseline_manifest)
     model_source_manifest = _model_source_manifest(
         source.manifest, source.baseline_manifest
     )
-    _verify_analysis_source(frozen_source)
+    def verify_frozen_analysis() -> None:
+        _verify_analysis_source(frozen_source)
+        verify_analysis_evidence(frozen_evidence)
+
+    verify_frozen_analysis()
     investigator = Provider(workspace=frozen_source.root)
-    assessment = investigator.query(
-        Prompt.file("prompts/investigate.md"),
-        input={
-            "request": request,
-            "selected_workflow_reference": source.manifest.workflow_name,
-            "analysis_source_root": frozen_source.root,
-            "priority": params.objective,
-            "evidence": _neutral_evidence(snapshot),
-            "selected_workflow_source_manifest": model_source_manifest,
-            "baseline_surface_manifest": model_manifest,
-        },
-        returns=DiagnosticAssessment,
-    ).value
-    assessment = _validate_assessment(
-        assessment,
-        snapshot=snapshot,
-        baseline_manifest=source.baseline_manifest,
-    )
-    _verify_analysis_source(frozen_source)
+    assessment: DiagnosticAssessment | None = None
+    frozen_trial_plan: dict[str, Any] | None = None
+    grounding_feedback: str | None = None
+    for grounding_attempt in range(params.max_grounding_repairs + 1):
+        try:
+            result = investigator.with_config(session=None).query(
+                Prompt.file("prompts/assess.md"),
+                input={
+                    "request": request,
+                    "selected_workflow_reference": source.manifest.workflow_name,
+                    "analysis_source_root": frozen_source.root,
+                    "analysis_evidence_root": frozen_evidence.root,
+                    "analysis_evidence_index": "index.json",
+                    "priority": params.objective,
+                    "evidence": _neutral_evidence(snapshot),
+                    "selected_workflow_source_manifest": model_source_manifest,
+                    "baseline_surface_manifest": model_manifest,
+                    "executable_contract": {
+                        "function": source.manifest.qualname,
+                        "signature": source.manifest.signature,
+                        "input_schema": source.manifest.input_schema,
+                        "return_annotation": source.manifest.return_annotation,
+                    },
+                    "caller_trial_inputs": {
+                        "trial_cases": [
+                            item.model_dump(mode="json")
+                            for item in params.trial_cases
+                        ],
+                        "fixture_supplied": params.trial_fixture_path is not None,
+                        "settings": params.trial_settings.model_dump(mode="json"),
+                    },
+                    "grounding_feedback": grounding_feedback,
+                    "grounding_attempt": grounding_attempt,
+                    "max_grounding_repairs": params.max_grounding_repairs,
+                },
+                returns=DiagnosticAssessment,
+                output_retries=0,
+            )
+        except OutputValidationError as exc:
+            verify_frozen_analysis()
+            if grounding_attempt >= params.max_grounding_repairs:
+                raise GroundingError(
+                    "investigation output remained malformed after "
+                    f"{params.max_grounding_repairs} repair(s): {exc}"
+                ) from exc
+            grounding_feedback = f"assessment schema error: {exc}"
+            continue
+        verify_frozen_analysis()
+        try:
+            candidate_assessment = _validate_assessment(
+                result.value,
+                snapshot=snapshot,
+                baseline_manifest=source.baseline_manifest,
+                frozen_source=frozen_source,
+                frozen_evidence=frozen_evidence,
+            )
+            from .evaluation import (
+                TrialIntegrityError,
+                TrialPlanError,
+                freeze_trial_plan,
+            )
+
+            try:
+                candidate_plan = freeze_trial_plan(
+                    params=params,
+                    assessment=candidate_assessment,
+                    analysis_root=Path(frozen_evidence.root),
+                    analysis_hashes=frozen_evidence.hashes,
+                    source_manifest=source.baseline_manifest,
+                )
+            except TrialIntegrityError:
+                raise
+            except TrialPlanError as exc:
+                if params.trial_cases:
+                    raise
+                raise GroundingError(str(exc)) from exc
+            assessment = candidate_assessment
+            frozen_trial_plan = candidate_plan
+            break
+        except GroundingError as exc:
+            if grounding_attempt >= params.max_grounding_repairs:
+                raise GroundingError(
+                    "investigation grounding remained invalid after "
+                    f"{params.max_grounding_repairs} repair(s): {exc}"
+                ) from exc
+            grounding_feedback = str(exc)
+    assert assessment is not None
+    verify_frozen_analysis()
 
     producer = investigator.with_config(session=None)
     reviewer = producer.with_config(session=None)
@@ -559,82 +711,128 @@ def propose_improvement(params: ImproveWorkflowParams, request: str) -> Recommen
     feedback: dict[str, Any] | None = None
 
     for revision in range(params.max_revisions + 1):
-        proposal = producer.query(
-            Prompt.file("prompts/propose.md"),
-            input={
-                "request": request,
-                "selected_workflow_reference": source.manifest.workflow_name,
-                "analysis_source_root": frozen_source.root,
-                "priority": params.objective,
-                "evidence": _neutral_evidence(snapshot),
-                "assessment": assessment.model_dump(mode="json"),
-                "selected_workflow_source_manifest": model_source_manifest,
-                "baseline_surface_manifest": model_manifest,
-                "max_candidates": 1,
-                "max_output_bytes": params.max_output_bytes,
-                "revision": revision,
-                "max_revisions": params.max_revisions,
-                "review_feedback": feedback,
-            },
-            returns=Proposal,
-        )
-        candidate_set = _finalize_candidate_set(
-            proposal.value,
-            selected_workflow=source.manifest.workflow_name,
-            snapshot=snapshot,
-            assessment=assessment,
-        )
-        candidate_set = validate_candidate_set(
-            candidate_set,
-            evidence_snapshot=snapshot,
-            max_candidates=1,
-            allowed_kinds=("workflow",),
-            expected_selected_workflow=source.manifest.workflow_name,
-            max_output_bytes=params.max_output_bytes,
-            baseline_manifest=source.baseline_manifest,
-        )
-        _verify_analysis_source(frozen_source)
-        decision = reviewer.query(
-            Prompt.file("prompts/review_proposal.md"),
-            input={
-                "request": request,
-                "priority": params.objective,
-                "analysis_source_root": frozen_source.root,
-                "evidence": _neutral_evidence(snapshot),
-                "assessment": assessment.model_dump(mode="json"),
-                "candidate_set": candidate_set.model_dump(mode="json", by_alias=True),
-                "selected_workflow_source_manifest": model_source_manifest,
-                "baseline_surface_manifest": model_manifest,
-                "max_candidates": 1,
-                "max_output_bytes": params.max_output_bytes,
-            },
-            returns=ChangeReview,
-        )
+        proposal_feedback = feedback
+        for grounding_attempt in range(params.max_grounding_repairs + 1):
+            try:
+                proposal = producer.query(
+                    Prompt.file("prompts/propose.md"),
+                    input={
+                        "request": request,
+                        "selected_workflow_reference": source.manifest.workflow_name,
+                        "analysis_source_root": frozen_source.root,
+                        "analysis_evidence_root": frozen_evidence.root,
+                        "priority": params.objective,
+                        "evidence": _neutral_evidence(snapshot),
+                        "assessment": assessment.model_dump(mode="json"),
+                        "frozen_trial_plan": frozen_trial_plan,
+                        "selected_workflow_source_manifest": model_source_manifest,
+                        "baseline_surface_manifest": model_manifest,
+                        "max_candidates": 1,
+                        "max_output_bytes": params.max_output_bytes,
+                        "revision": revision,
+                        "max_revisions": params.max_revisions,
+                        "review_feedback": proposal_feedback,
+                    },
+                    returns=Proposal,
+                    output_retries=0,
+                )
+            except OutputValidationError as exc:
+                verify_frozen_analysis()
+                if grounding_attempt >= params.max_grounding_repairs:
+                    raise GroundingError(
+                        "proposal output remained malformed after "
+                        f"{params.max_grounding_repairs} repair(s): {exc}"
+                    ) from exc
+                proposal_feedback = {
+                    "grounding_error": f"proposal schema error: {exc}",
+                    "prior_feedback": feedback,
+                }
+                continue
+            verify_frozen_analysis()
+            try:
+                _validate_proposal_grounding(
+                    proposal.value,
+                    snapshot=snapshot,
+                    baseline_manifest=source.baseline_manifest,
+                )
+                candidate_set = _finalize_candidate_set(
+                    proposal.value,
+                    selected_workflow=source.manifest.workflow_name,
+                    snapshot=snapshot,
+                )
+                candidate_set = validate_candidate_set(
+                    candidate_set,
+                    evidence_snapshot=snapshot,
+                    max_candidates=1,
+                    allowed_kinds=("workflow",),
+                    expected_selected_workflow=source.manifest.workflow_name,
+                    max_output_bytes=params.max_output_bytes,
+                    baseline_manifest=source.baseline_manifest,
+                )
+                break
+            except GroundingError as exc:
+                if grounding_attempt >= params.max_grounding_repairs:
+                    raise GroundingError(
+                        "proposal grounding remained invalid after "
+                        f"{params.max_grounding_repairs} repair(s): {exc}"
+                    ) from exc
+                proposal_feedback = {
+                    "grounding_error": str(exc),
+                    "prior_feedback": feedback,
+                }
+        assert candidate_set is not None
+        review_grounding_feedback: str | None = None
+        for grounding_attempt in range(params.max_grounding_repairs + 1):
+            try:
+                decision = reviewer.query(
+                    Prompt.file("prompts/review_proposal.md"),
+                    input={
+                        "request": request,
+                        "priority": params.objective,
+                        "analysis_source_root": frozen_source.root,
+                        "analysis_evidence_root": frozen_evidence.root,
+                        "evidence": _neutral_evidence(snapshot),
+                        "assessment": assessment.model_dump(mode="json"),
+                        "frozen_trial_plan": frozen_trial_plan,
+                        "candidate_set": candidate_set.model_dump(
+                            mode="json", by_alias=True
+                        ),
+                        "selected_workflow_source_manifest": model_source_manifest,
+                        "baseline_surface_manifest": model_manifest,
+                        "max_candidates": 1,
+                        "max_output_bytes": params.max_output_bytes,
+                        "grounding_feedback": review_grounding_feedback,
+                    },
+                    returns=ChangeReview,
+                    output_retries=0,
+                )
+                break
+            except OutputValidationError as exc:
+                verify_frozen_analysis()
+                if grounding_attempt >= params.max_grounding_repairs:
+                    raise GroundingError(
+                        "proposal review output remained malformed after "
+                        f"{params.max_grounding_repairs} repair(s): {exc}"
+                    ) from exc
+                review_grounding_feedback = f"review schema error: {exc}"
         review = _finalize_review(decision.value, candidate_set)
         review = validate_candidate_review(
             review,
             candidate_set=candidate_set,
             max_output_bytes=params.max_output_bytes,
         )
-        _verify_analysis_source(frozen_source)
+        verify_frozen_analysis()
         if review.accepted:
-            receipt = _publish(
-                str(context.folder),
-                snapshot,
-                assessment,
-                candidate_set,
-                review,
-                source.baseline_manifest,
-                params.max_output_bytes,
-                params.max_evidence_bytes,
-                params.max_snapshot_bytes,
-            )
             return Recommendation(
                 evidence_snapshot=snapshot,
                 assessment=assessment,
                 candidate_set=candidate_set,
                 review=review,
-                receipt=receipt,
+                receipt=None,
+                baseline_manifest=source.baseline_manifest,
+                frozen_trial_plan=frozen_trial_plan,
+                analysis_root=frozen_evidence.root,
+                analysis_hashes=frozen_evidence.hashes,
             )
         feedback = decision.value.model_dump(mode="json")
 
@@ -645,6 +843,10 @@ def propose_improvement(params: ImproveWorkflowParams, request: str) -> Recommen
         candidate_set=candidate_set,
         review=review,
         receipt=None,
+        baseline_manifest=source.baseline_manifest,
+        frozen_trial_plan=frozen_trial_plan,
+        analysis_root=frozen_evidence.root,
+        analysis_hashes=frozen_evidence.hashes,
     )
 
 

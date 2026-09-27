@@ -56,7 +56,13 @@ def test_stopped_runs_remain_eligible_history(tmp_path, status):
         assert [item["run"]["run_id"] for item in result.value] == ["observed"]
 
 
-def test_self_improvement_selects_historical_failure_not_itself(tmp_path):
+def test_self_improvement_selects_historical_failure_not_itself(
+    tmp_path, monkeypatch
+):
+    def ranked_legacy_view(*_args, **_kwargs):
+        raise AssertionError("neutral investigation must not compute a legacy ranking")
+
+    monkeypatch.setattr("botpipe_optimizer.evidence._rank", ranked_legacy_view)
     provider = FixtureProvider(
         [
             assess,
@@ -85,5 +91,7 @@ def test_self_improvement_selects_historical_failure_not_itself(tmp_path):
         snapshot = result.value.recommendation.evidence_snapshot
         assert [run.run_id for run in snapshot.runs] == [failed.run_id]
         assert snapshot.observations
-        assert snapshot.shortlist
+        assert snapshot.objective is None
+        assert snapshot.selection_basis is None
+        assert snapshot.shortlist == ()
         assert len(provider.calls) == 3
