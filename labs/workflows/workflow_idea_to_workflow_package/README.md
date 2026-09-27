@@ -1,6 +1,9 @@
-# Workflow Idea To Workflow Package
+# Workflow Idea To Workflow Package (compatibility alias)
 
-Turn the workflow the user selected into a reviewed, executable workspace workflow package. The SOP preserves the request instead of inventing a candidate competition, treats prompts as part of the design, and distinguishes deterministic executable proof from semantic assessment.
+This experimental entry preserves the historical discovery name and delegates
+to the packaged [`workflow_author`](../../../botpipe/workflows/workflow_author/README.md)
+implementation. Its contracts, prompts, guides, materialization, and validation
+live in the packaged workflow.
 
 Canonical name: `workflow_idea_to_workflow_package`
 
@@ -64,6 +67,14 @@ Writable producer turns run with `workspace-write` in a dedicated run-owned chil
 | `evaluate_package` | Compare actual source and prompts with the request and design, report executable checks, and separate proven from unproven outcomes. An independent read-only query reviewer protects the downstream handoff. | `workflow_evaluation.md`, `workflow_package_summary.json`, `workflow_next_action.md` |
 
 Each step has one coherent work boundary: authoritative evidence in, a defined semantic or implementation job, captured evidence out, and explicit local-rework versus upstream-replan conditions. Python owns loops and branches. The design uses a diagram only if meaningful branching or concurrency would otherwise be hard to understand.
+
+The bundled [authoring guide](../../../docs/authoring.md#make-evidence-and-acceptance-usable)
+and phase prompts ask reviewers to trace material acceptance criteria to actual
+checking operations and primary-evidence handoffs. They distinguish bounded
+output correction from integrity failures, and executed behavioral evidence from
+source inspection or comparative measurement. These model review obligations
+must be backed by the generated implementation and relevant tests; they do not
+add an automatic evaluator or a new runtime guarantee to the builder.
 
 ## Materialization and validation
 

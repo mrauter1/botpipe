@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from botpipe_optimizer.candidate_validation import ValidationResult
 from botpipe_optimizer.evidence import EvidenceSnapshot
 from botpipe_optimizer.records import CandidateReview, CandidateSet, PublicationReceipt
+from botpipe_optimizer.trial_models import TrialCase, TrialSettings
 
 
 class EvidenceLink(BaseModel):
@@ -17,10 +18,12 @@ class EvidenceLink(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    basis: Literal["observation", "source", "inference"]
+    basis: Literal["observation", "trace", "source", "inference"]
     statement: str = Field(min_length=1)
     observation_ids: list[str] = Field(default_factory=list)
     source_paths: list[str] = Field(default_factory=list)
+    evidence_path: str | None = None
+    quote: str | None = None
 
     @model_validator(mode="after")
     def basis_is_explicit(self):
@@ -28,6 +31,15 @@ class EvidenceLink(BaseModel):
             raise ValueError("observation evidence must name an observation")
         if self.basis == "source" and not self.source_paths:
             raise ValueError("source evidence must name a captured source path")
+        if self.basis == "trace" and (
+            self.evidence_path is None
+            or self.quote is None
+            or self.observation_ids
+            or self.source_paths
+        ):
+            raise ValueError(
+                "trace evidence uses a frozen relative path and exact quote"
+            )
         if self.basis == "observation" and self.source_paths:
             raise ValueError("observation evidence cannot also claim source inspection")
         if self.basis == "source" and self.observation_ids:
@@ -38,6 +50,14 @@ class EvidenceLink(BaseModel):
             raise ValueError("observation evidence IDs must be unique")
         if len(self.source_paths) != len(set(self.source_paths)):
             raise ValueError("source evidence paths must be unique")
+        if (self.evidence_path is None) != (self.quote is None):
+            raise ValueError(
+                "an evidence path and exact quote must be supplied together"
+            )
+        if self.evidence_path is not None and (
+            not self.evidence_path.strip() or not self.quote or not self.quote.strip()
+        ):
+            raise ValueError("evidence paths and quotes must be non-empty")
         return self
 
 
@@ -85,6 +105,7 @@ class SuccessCriterion(BaseModel):
     description: str = Field(min_length=1)
     evidence_needed: list[str] = Field(min_length=1)
     falsification: str = Field(min_length=1)
+    must_preserve: bool = False
 
 
 class DiagnosticAssessment(BaseModel):
@@ -96,6 +117,11 @@ class DiagnosticAssessment(BaseModel):
     intent_evidence: list[EvidenceLink] = Field(min_length=1)
     scope_assessments: list[ScopeAssessment] = Field(min_length=1)
     rubric: list[SuccessCriterion] = Field(min_length=1)
+    trial_cases: list[TrialCase] = Field(default_factory=list)
+    comparison_rule: str = Field(
+        default="Prefer a meaningful gain in the objective while preserving required obligations.",
+        min_length=1,
+    )
     uncertainties: list[str] = Field(default_factory=list)
 
 
@@ -111,6 +137,11 @@ class ImproveWorkflowParams(BaseModel):
     run_refs: list[str] = Field(default_factory=list)
     history_limit: int = Field(default=25, gt=0)
     evaluation_spec_path: str | None = None
+    execute_trials: bool = False
+    trial_settings: TrialSettings = Field(default_factory=TrialSettings)
+    trial_cases: list[TrialCase] = Field(default_factory=list)
+    trial_fixture_path: str | None = None
+    max_grounding_repairs: int = Field(default=2, ge=0)
     target_test_argv: list[str] = Field(
         default_factory=lambda: [sys.executable, "-m", "pytest", "-q"]
     )
@@ -123,7 +154,9 @@ class ImproveWorkflowParams(BaseModel):
     max_snapshot_bytes: int = Field(default=50 * 1024 * 1024, gt=0)
     max_output_bytes: int = Field(default=10 * 1024 * 1024, gt=0)
 
-    @field_validator("selected_workflow", "evaluation_spec_path", "objective")
+    @field_validator(
+        "selected_workflow", "evaluation_spec_path", "trial_fixture_path", "objective"
+    )
     @classmethod
     def nonblank(cls, value: str | None) -> str | None:
         if value is not None and not value.strip():
@@ -148,6 +181,14 @@ class ImproveWorkflowParams(BaseModel):
             raise ValueError("target_test_argv must be a nonempty argument list")
         return value
 
+    @model_validator(mode="after")
+    def evaluation_mode_is_unambiguous(self):
+        if self.execute_trials and self.evaluation_spec_path is not None:
+            raise ValueError(
+                "execute_trials and evaluation_spec_path cannot be used together"
+            )
+        return self
+
 
 class Recommendation(BaseModel):
     evidence_snapshot: EvidenceSnapshot
@@ -155,6 +196,10 @@ class Recommendation(BaseModel):
     candidate_set: CandidateSet
     review: CandidateReview | None = None
     receipt: PublicationReceipt | None = None
+    baseline_manifest: dict[str, Any] = Field(default_factory=dict)
+    frozen_trial_plan: dict[str, Any] | None = None
+    analysis_root: str | None = None
+    analysis_hashes: dict[str, str] = Field(default_factory=dict)
 
 
 class ChangeReview(BaseModel):

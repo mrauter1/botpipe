@@ -61,6 +61,40 @@ Preserve continuity across handoffs. Pass the actual decision, evidence, and ope
 uncertainty—not a vague summary or an unsupported claim that work passed. See
 [Prompting provider operations](prompting.md) for prompt design.
 
+## Make evidence and acceptance usable
+
+A downstream operation must be able to inspect the primary evidence needed for
+its decision, within its actual permissions. A review outcome such as
+`needs_rework` does not explain why a draft failed: pass the rejection findings
+and the rejected draft's immutable handle, not just the status or the latest
+replacement. Summaries and metrics help locate problems; they do not replace
+the recorded content needed to diagnose them. Report unavailable evidence
+explicitly instead of reconstructing it as fact.
+
+For each material acceptance criterion, identify what would establish or falsify
+it, which operation obtains that evidence, where the criterion is applied, and
+how failure or uncertainty changes the next action. These are design questions,
+not a required matrix, metadata schema, or extra review stage. A rubric passed
+through several prompts but never applied is not verification.
+
+Match the final claim to the checks that actually ran:
+
+- Schema and import checks establish structural validity, not task success.
+- Behavioral tests establish the outcomes exercised under their test conditions.
+- Source review can assess an implementation but does not measure its outputs.
+- A comparative improvement claim needs actual baseline/candidate evidence
+  evaluated against criteria fixed before the candidate is changed.
+
+Only workflows making a comparative claim need a comparison stage. For those,
+preserve the case inputs and referenced artifact versions, settings, criteria,
+and decision rule; give both versions comparable conditions and limits. Separate
+execution from judging. Let providers interpret task-specific quality rather
+than inventing universal scores in Python. Distinguish workflow failures from
+evaluation failures and limit conclusions to the evaluated cases. Missing
+evidence is neither a pass nor a zero-valued measurement. Isolated directories
+do not make external effects safe to repeat; use authorized fixtures or an
+explicit human gate where needed.
+
 ## Express topology in Python
 
 | Relationship | Form | Rule |
@@ -141,6 +175,17 @@ material boundary. Give it a session separate from the producer and direct
 access to source, diff, artifacts, and checks. Do not ask it merely to endorse a
 producer summary. Isolate the source when review needs a stable tree.
 
+Independent source review is not blind output judging. When identities would
+bias a comparison, give a fresh judge only the task, fixed criteria, reference
+material, and anonymous outputs with sufficient supporting evidence. A
+tool-disabled `generate(..., allowed_tools=(), session=None)` over that packet
+avoids workspace browsing; also keep identities out of its instructions and
+inputs. This does not conceal identity that an output reveals through its own
+names, text, or behavior, so describe blindness only to the boundary actually
+enforced. Source reviewers still need source access. Choose extra judgments or
+repetitions for the task's uncertainty and consequence before seeing trial
+results, not a fixed panel quota or a search for a favorable verdict.
+
 ## Choose the operation boundary
 
 | Work | Operation |
@@ -198,6 +243,22 @@ attempt after a confirmed stop; it does not prove idempotence or exactly-once
 execution. Set it false for effects that must not repeat. Unknown or running
 effects require reconciliation or operator resolution, not a replacement call.
 
+Treat correctable model output separately from integrity or authority failures.
+An unknown evidence reference or malformed domain result should receive precise
+field-level feedback in a bounded repair loop, when repair is safe. A path
+escape, modified frozen evidence, or unresolved effect is not a citation typo.
+Do not blanket-catch validation exceptions or imply that domain grounding checks
+automatically receive provider schema retries. Keep prior findings and evidence
+available, count repairs against the enclosing limits, and define exhaustion.
+
+When diagnosis uses both current source and recorded execution evidence, expose
+them as distinct roots. Cite source relative to the captured source root and
+traces or artifact versions relative to the frozen evidence root. For textual
+claims, require an exact quote that deterministic code can locate in the named
+UTF-8 file. A matching quote proves correspondence with captured bytes; it does
+not prove the model's interpretation. Recheck both frozen inventories between
+turns. Keep integrity failures outside the model-correction loop.
+
 Bound rework in Python and provider work with
 `provider_budget(max_turns=..., max_seconds=..., turn_timeout_seconds=...)`.
 Repairs consume budget. Run `timeout` supplies provider-dispatch and session-wait
@@ -222,7 +283,10 @@ quality.
 
 - Outcome, obligations, evidence, and human authority are explicit.
 - Every step has coherent inputs, output, uncertainty, and done condition.
+- Downstream decisions can access primary evidence, including rejected versions when needed.
+- Material acceptance criteria have a checking operation and a failure/unknown path.
 - A split, branch, parallel join, loop, or review has a concrete reason.
 - Permissions are code, not prompt promises; external effects have honest retry policy.
 - Review is independent where needed and its validation claim matches the operation.
+- Repairable output mistakes, integrity failures, and uncertain effects have distinct handling.
 - Tests assert outcomes, artifacts, routing, and replay—not exact prose or one path.

@@ -36,6 +36,7 @@ class _RpcCancelled(RuntimeError):
 
 
 _CLOSED = object()
+_PROCESS_REAP_GRACE_SECONDS = 5.0
 _TOOL_ITEMS = {
     "commandExecution": "shell",
     "fileChange": "apply_patch",
@@ -1105,6 +1106,49 @@ class CodexAppServerAdapter:
             with self._lock:
                 self._pending.pop(request_id, None)
 
+    def _dispatch_cleanup_requests(
+        self,
+        requests: Sequence[tuple[str, Mapping[str, Any]]],
+        deadline: float,
+        *,
+        process: subprocess.Popen[bytes],
+    ) -> None:
+        """Dispatch every cleanup request, then wait within one shared window."""
+
+        if time.monotonic() >= deadline:
+            return
+        pending: list[tuple[int, queue.Queue[Any]]] = []
+        try:
+            for method, params in requests:
+                response_queue: queue.Queue[Any] = queue.Queue(maxsize=1)
+                with self._lock:
+                    self._next_id += 1
+                    request_id = self._next_id
+                    self._pending[request_id] = response_queue
+                try:
+                    self._send(
+                        {"id": request_id, "method": method, "params": params},
+                        process=process,
+                    )
+                except Exception:  # noqa: BLE001 - containment still closes below
+                    with self._lock:
+                        self._pending.pop(request_id, None)
+                else:
+                    pending.append((request_id, response_queue))
+
+            for _request_id, response_queue in pending:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                try:
+                    response_queue.get(timeout=remaining)
+                except queue.Empty:
+                    break
+        finally:
+            with self._lock:
+                for request_id, _response_queue in pending:
+                    self._pending.pop(request_id, None)
+
     def start_turn(
         self, request: Any, on_event: Callable[[Any], None] | None = None
     ) -> Any:
@@ -1962,17 +2006,20 @@ class CodexAppServerAdapter:
             containment.capture_descendant_groups(process)
             if process.poll() is None:
                 self._pre_exit_captured.add(process)
-        cleanup_deadline = time.monotonic() + self.interrupt_grace_seconds
         try:
             self.interrupt(turn.thread_id, turn.turn_id, process=process)
         except Exception:  # noqa: BLE001,S110 - escalation below is authoritative
             pass
         # Codex deliberately keeps background terminals alive after interruption.
-        # Give its native cleanup the grace period, including after turn/completed.
+        # Interruption, native cleanup acknowledgement, and OS process reaping are
+        # separate bounded phases.  Spending the interruption window must not
+        # starve cleanup for this or another registered thread.
         self._kill_transport(
             CodexTurnError(reason),
-            grace_seconds=0.1,
-            cleanup_seconds=max(0.0, cleanup_deadline - time.monotonic()),
+            grace_seconds=max(
+                _PROCESS_REAP_GRACE_SECONDS, self.interrupt_grace_seconds
+            ),
+            cleanup_seconds=self.interrupt_grace_seconds,
             expected_process=process,
         )
 
@@ -2075,7 +2122,7 @@ class CodexAppServerAdapter:
                     if parent_alive_at_entry:
                         self._pre_exit_captured.add(process)
                 if process is not None and process.poll() is None:
-                    deadline = time.monotonic() + cleanup_seconds
+                    cleanup_deadline = time.monotonic() + cleanup_seconds
                     if (
                         self._capabilities is not None
                         and "thread/backgroundTerminals/clean"
@@ -2100,17 +2147,23 @@ class CodexAppServerAdapter:
                             )
                             for thread_id in sorted(threads)
                         )
-                        for method, params in requests:
-                            remaining = deadline - time.monotonic()
-                            if remaining <= 0:
-                                break
-                            try:
-                                self._rpc(method, params, remaining)
-                            except Exception:  # noqa: BLE001,S110 - containment still closes below
-                                pass
+                        # Dispatch the whole batch before waiting so a missing
+                        # acknowledgement cannot starve a later thread, while
+                        # the acknowledgement phase keeps one bounded deadline.
+                        self._dispatch_cleanup_requests(
+                            requests, cleanup_deadline, process=process
+                        )
                     # The cleanup RPC acknowledges acceptance before native jobs exit.
-                    while process.poll() is None and time.monotonic() < deadline:
-                        time.sleep(max(0.0, min(0.02, deadline - time.monotonic())))
+                    while (
+                        process.poll() is None
+                        and time.monotonic() < cleanup_deadline
+                    ):
+                        time.sleep(
+                            max(
+                                0.0,
+                                min(0.02, cleanup_deadline - time.monotonic()),
+                            )
+                        )
                     if containment is not None:
                         containment.capture_descendant_groups(process)
                 cleanup_errors: list[BaseException] = []
@@ -2122,9 +2175,12 @@ class CodexAppServerAdapter:
                         )
                     )
                 if process is not None and containment is not None:
+                    termination_timeout: subprocess.TimeoutExpired | None = None
                     if process.poll() is None:
                         try:
                             containment.terminate(process, grace_seconds=grace_seconds)
+                        except subprocess.TimeoutExpired as exc:
+                            termination_timeout = exc
                         except BaseException as exc:  # cleanup still continues below
                             cleanup_errors.append(exc)
                     try:
@@ -2132,7 +2188,18 @@ class CodexAppServerAdapter:
                             process, grace_seconds=grace_seconds
                         )
                     except BaseException as exc:
+                        if termination_timeout is not None:
+                            cleanup_errors.append(termination_timeout)
                         cleanup_errors.append(exc)
+                    else:
+                        # A Windows Job termination may finish just after its
+                        # first bounded wait. Accept that timeout only when the
+                        # strict follow-up verification has reaped the parent.
+                        if (
+                            termination_timeout is not None
+                            and process.poll() is None
+                        ):
+                            cleanup_errors.append(termination_timeout)
                 with self._lock:
                     affected_turns = [
                         turn

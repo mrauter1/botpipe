@@ -934,6 +934,9 @@ def test_terminal_notification_still_cleans_native_background_groups(tmp_path):
         BOTPIPE_FAKE_DESCENDANT_MARKER=str(marker),
         BOTPIPE_FAKE_DESCENDANT_PID=str(tmp_path / "background.pid"),
     )
+    # The fixture synchronously reaps its native child before reading the next
+    # cleanup request, so give that real process transition its full test budget.
+    client.interrupt_grace_seconds = 2.0
     client._capabilities = replace(
         capabilities(),
         methods=capabilities().methods | {"thread/backgroundTerminals/clean"},
@@ -964,6 +967,135 @@ def test_terminal_notification_still_cleans_native_background_groups(tmp_path):
     } == {"previous-thread", "thread-fixture"}
     time.sleep(1.1)
     assert not marker.exists(), "native background group survived turn cancellation"
+
+
+def test_transport_cleanup_does_not_starve_later_registered_threads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class FakeProcess:
+        pid = 123
+
+        def __init__(self) -> None:
+            self.alive = True
+
+        def poll(self):
+            return None if self.alive else 0
+
+    class Containment:
+        def capture_descendant_groups(self, _process):
+            pass
+
+        def terminate(self, process, *, grace_seconds):
+            process.alive = False
+
+        def ensure_tree_exited(self, _process, *, grace_seconds):
+            pass
+
+    process = FakeProcess()
+    client = adapter(tmp_path)
+    client._process = process  # type: ignore[assignment]
+    client._containment = Containment()  # type: ignore[assignment]
+    client._capabilities = replace(
+        capabilities(),
+        methods=capabilities().methods | {"thread/backgroundTerminals/clean"},
+    )
+    client._thread_profiles.update({"thread-one": "one", "thread-two": "two"})
+    cleaned: list[str] = []
+
+    def send(message, *, process):
+        assert process is client._process
+        assert message["method"] == "thread/backgroundTerminals/clean"
+        cleaned.append(message["params"]["threadId"])
+        # Deliberately send no acknowledgement. All requests still have to be
+        # dispatched before the one shared cleanup window expires.
+
+    monkeypatch.setattr(client, "_send", send)
+
+    client._kill_transport(CodexProtocolError("stop"), cleanup_seconds=0.01)
+
+    assert cleaned == ["thread-one", "thread-two"]
+
+
+def test_stop_turn_separates_cleanup_from_process_reaping_grace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from botpipe.codex_appserver import _Turn
+
+    class FakeProcess:
+        pid = 123
+
+        def poll(self):
+            return None
+
+    class Containment:
+        def capture_descendant_groups(self, _process):
+            pass
+
+    process = FakeProcess()
+    client = adapter(tmp_path)
+    client.interrupt_grace_seconds = 0.75
+    client._process = process  # type: ignore[assignment]
+    client._containment = Containment()  # type: ignore[assignment]
+    monkeypatch.setattr(client, "interrupt", lambda *_args, **_kwargs: None)
+    cleanup: list[dict] = []
+    monkeypatch.setattr(
+        client,
+        "_kill_transport",
+        lambda *_args, **kwargs: cleanup.append(kwargs),
+    )
+
+    client._stop_turn(
+        _Turn("thread", "turn", None, None, process=process),  # type: ignore[arg-type]
+        "timed out",
+    )
+
+    assert cleanup == [
+        {
+            "grace_seconds": 5.0,
+            "cleanup_seconds": 0.75,
+            "expected_process": process,
+        }
+    ]
+
+
+def test_late_process_reap_is_accepted_after_strict_verification(
+    tmp_path: Path,
+) -> None:
+    import subprocess
+
+    class FakeProcess:
+        pid = 123
+
+        def __init__(self) -> None:
+            self.alive = True
+
+        def poll(self):
+            return None if self.alive else 0
+
+    class Containment:
+        verified = False
+
+        def capture_descendant_groups(self, _process):
+            pass
+
+        def terminate(self, process, *, grace_seconds):
+            raise subprocess.TimeoutExpired("codex", grace_seconds)
+
+        def ensure_tree_exited(self, process, *, grace_seconds):
+            process.alive = False
+            assert process.poll() == 0
+            self.verified = True
+
+    process = FakeProcess()
+    containment = Containment()
+    client = adapter(tmp_path)
+    client._process = process  # type: ignore[assignment]
+    client._containment = containment  # type: ignore[assignment]
+
+    client._kill_transport(CodexProtocolError("stop"), cleanup_seconds=0)
+
+    assert containment.verified
+    assert client._transport_cleanup_results[process] is None  # type: ignore[index]
 
 
 @pytest.mark.parametrize("cancel", [False, True], ids=["timeout", "cancellation"])

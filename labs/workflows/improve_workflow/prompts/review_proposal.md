@@ -5,7 +5,8 @@ Return a `ChangeReview` that matches the injected schema. Review the exact
 journal state.
 
 Inspect source only under the supplied `analysis_source_root`, which is the
-frozen model workspace.
+frozen model workspace. Primary recorded evidence is available read-only under
+`analysis_evidence_root`. Treat the assessment and `frozen_trial_plan` as fixed.
 
 Check that the frozen assessment distinguishes observation, source inspection,
 and inference, and that its chosen rubric fits the workflow's intent. Then check
@@ -14,9 +15,8 @@ that every candidate:
 - addresses a relevant assessed failure or opportunity and the user's request;
 - preserves the frozen rubric and acknowledges material uncertainty;
 - cites only focused observations in the selected group when it claims trace
-  support, while allowing no observation citation for an honest source-only
-  opportunity whose exact `source_evidence_paths` already support the frozen
-  assessment;
+  support, while allowing no observation citation for an honestly and directly
+  verifiable source-only opportunity;
 - stays within the baseline surface and names real repository-relative targets;
 - respects the one-candidate cap;
 - describes a concrete change, plausible effect, material risks, and a

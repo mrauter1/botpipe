@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import importlib
+import importlib.abc
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -19,7 +21,7 @@ from botpipe.workflows.workflow_author import (
     WorkflowAuthorResult,
     workflow_author,
 )
-from labs.workflows.workflow_idea_to_workflow_package.guidance import (
+from botpipe.workflows.workflow_author.guidance import (
     load_authoring_guidance,
 )
 from tests.test_labs import _successful_provider
@@ -68,6 +70,33 @@ def test_author_is_discoverable_without_labs_and_guides_match_sources(tmp_path):
     for name in ("authoring.md", "prompting.md"):
         source = Path("docs", name).read_text(encoding="utf-8")
         assert source in guidance
+
+
+def test_author_runs_when_labs_cannot_be_imported(tmp_path):
+    class BlockLabs(importlib.abc.MetaPathFinder):
+        def find_spec(self, fullname, path=None, target=None):
+            if fullname == "labs" or fullname.startswith("labs."):
+                raise ModuleNotFoundError("labs disabled for packaged-entry test")
+
+    loaded_labs = {
+        name: module for name, module in sys.modules.items() if name.startswith("labs")
+    }
+    for name in loaded_labs:
+        sys.modules.pop(name)
+    blocker = BlockLabs()
+    sys.meta_path.insert(0, blocker)
+    try:
+        result = Botpipe(tmp_path, provider=FakeProvider([_answer] * 6)).run(
+            workflow_author,
+            Params(package_name="without_labs"),
+            request="Echo the request.",
+        )
+    finally:
+        sys.meta_path.remove(blocker)
+        sys.modules.update(loaded_labs)
+
+    assert result.ok, result.error
+    assert result.value.validation.success
 
 
 def test_author_builds_tests_and_returns_runtime_evidence_from_empty_workspace(

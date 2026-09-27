@@ -30,10 +30,11 @@ wheel/sdist, and full-suite jobs.
 | T20 | `test_eval_selection_requires_complete_receipt_identity`; `test_handoff_and_eval_suite_identities_are_exact`; `test_strict_optimizer_receipt_routes_candidate_kind` | Evaluation-case consumers require complete receipt identity, preserve exact handoff identities, and route strict receipts by candidate kind. Packaged-import smoke remains a release gate. |
 
 Focused helper tests are insufficient by themselves. Final verification must
-also exercise the default optimizer workflow, strict receipt loading through
-`load_optimization_candidate(...)`, both downstream handoffs, isolated real
-subprocesses, resume behavior, and packaged imports. A passing contract proves
-integrity and bounded behavior; it does not prove that a recommendation improves
-an unseen workload. Recommendation receipts therefore remain
-`improvement = not_evaluated` unless the optional evaluator completes a valid
-paired comparison.
+also exercise the default optimizer workflow, its direct typed recommendation
+handoff, strict receipt loading for lower-level publication consumers, isolated
+real trial subprocesses, rubric judging, resume behavior, and packaged imports.
+A passing contract proves integrity and bounded behavior; it does not prove that
+a recommendation improves an unseen workload. Native rubric outcomes remain
+scoped to their frozen development cases. Lower-level recommendation receipts
+remain external export records rather than the internal `improve_workflow`
+handoff.
