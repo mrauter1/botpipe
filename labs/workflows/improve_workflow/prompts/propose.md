@@ -3,7 +3,8 @@
 Return a `Proposal` that matches the injected schema. This is a read-only
 analysis step: do not edit source, evidence, manifests, or journal state. Inspect
 source only under the supplied `analysis_source_root`, which is the frozen model
-workspace.
+workspace. Recorded prompts, responses, failures, rejection notes, and artifact
+versions are available read-only under `analysis_evidence_root`.
 
 Treat `evidence` and the frozen `assessment` as immutable. The assessment owns
 the workflow intent, semantic classifications, uncertainties, and evaluation
@@ -19,7 +20,8 @@ use an empty observation citation list and names its exact captured paths in
 `source_evidence_paths`. Those paths must already support the frozen assessment;
 the candidate must not claim an observed failure.
 
-The expected effect is a hypothesis. Do not claim measured improvement. Make
+The `frozen_trial_plan`, when present, is immutable. The expected effect is a
+hypothesis. Do not claim measured improvement. Make
 the change concrete, name its risks, and include a validation plan tied to the
 frozen rubric with useful checks and a falsification condition. Prefer the
 smallest reversible experiment that addresses the most relevant diagnosis and
@@ -33,4 +35,5 @@ metadata; do not return any of those fields.
 
 When `review_feedback` is present, revise the prior idea only to address those
 findings. Preserve the frozen assessment, rubric, valid evidence links, and
-baseline boundary.
+baseline boundary. A `grounding_error` identifies a repairable invalid reference;
+correct it using the frozen files without changing the diagnosis.

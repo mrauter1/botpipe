@@ -69,9 +69,14 @@ def assess(request):
         }
     ]
     if observations:
+        failed = evidence["observations"][0]["status"] == "failed"
         observed = {
             "basis": "observation",
-            "statement": "A recorded operation did not complete successfully.",
+            "statement": (
+                "A recorded operation did not complete successfully."
+                if failed
+                else "A recorded operation completed successfully."
+            ),
             "observation_ids": [observations[0]],
             "source_paths": [],
         }
@@ -79,9 +84,13 @@ def assess(request):
             {
                 "scope": "step",
                 "step_name": evidence["observations"][0]["step_id"],
-                "classification": "failure",
+                "classification": "failure" if failed else "strength",
                 "dimensions": ["reliability", "behavioral accuracy"],
-                "summary": "The observed step failed its executable behavior.",
+                "summary": (
+                    "The observed step failed its executable behavior."
+                    if failed
+                    else "The observed step completed its executable behavior."
+                ),
                 "evidence": [observed],
                 "uncertainty": None,
             }

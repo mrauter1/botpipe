@@ -18,14 +18,16 @@ Stable runtime code and shipped reusable workflows should not depend on
 experimental `labs` implementations. Put reusable behavior and its required
 prompts/assets in a stable package; labs may import it, not the reverse. Check
 transitive imports and installed-package behavior, not only catalog visibility.
-The current `workflow_author` entry still delegates to a labs builder shipped in
-the distribution; moving that implementation is pending architectural cleanup.
+The packaged `workflow_author` owns its builder, contracts, materialization,
+prompts, and guides. The historical labs entry delegates to that stable package.
 
 Within a run, prefer typed values and immutable artifact handles over publishing
 an export receipt only to reload it in the next step. Preserve baseline and
 integrity checks at the handoff. Export records when an external consumer needs
-them; do not make them a second replay authority. The optimizer currently still
-uses the publication handoff described in [Workflow improvement](optimizer.md).
+them; do not make them a second replay authority. `improve_workflow` passes its
+typed recommendation directly into implementation. Lower-level optimizer
+publication receipts remain available when a separate consumer needs a durable
+export.
 
 ## Run ledger
 
@@ -96,6 +98,13 @@ covered by the parent budget. Comparative trials need equivalent allowances,
 with insufficient resources reported as incomplete evaluation rather than a
 behavioral regression. Reuse recorded completed work; an uncertain interrupted
 execution needs reconciliation, not an automatic replacement invocation.
+
+The native optimizer trial path gives each baseline/candidate arm an isolated
+code tree, mutable workspace, state root, per-trial provider-turn limit, and
+process timeout. A trial-phase elapsed allowance admits only complete pairs.
+Rubric judging starts afterward under a separate provider budget and timeout.
+These boundaries contain owned local processes; they do not isolate remote
+effects performed by the workflow or its tools.
 
 Best-effort `on_event` callbacks are separate from durable checkpoints. Callback
 failure does not alter the operation and callback delivery is not proof that a

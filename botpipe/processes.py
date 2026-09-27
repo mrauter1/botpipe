@@ -291,9 +291,13 @@ class ProcessContainment:
         if process.pid != self._owned_pid:
             raise RuntimeError("refusing to inspect an unregistered process")
         if os.name == "nt":
-            # Closing or terminating the owned Job is the reliable descendant check.
+            # Terminating the owned Job is the reliable descendant-tree check;
+            # waiting for the parent handle also confirms that Windows has
+            # finished delivering and reaping that termination.
             assert self._windows_job is not None
             self._windows_job.terminate(0)
+            if process.poll() is None:
+                process.wait(timeout=grace_seconds)
             return
         self._signal_descendant_groups(signal.SIGTERM)
         process_group = self._owned_pgid

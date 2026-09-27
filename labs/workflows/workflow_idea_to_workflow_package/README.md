@@ -1,6 +1,9 @@
-# Workflow Idea To Workflow Package
+# Workflow Idea To Workflow Package (compatibility alias)
 
-Turn the workflow the user selected into a reviewed, executable workspace workflow package. The SOP preserves the request instead of inventing a candidate competition, treats prompts as part of the design, and distinguishes deterministic executable proof from semantic assessment.
+This experimental entry preserves the historical discovery name and delegates
+to the packaged [`workflow_author`](../../../botpipe/workflows/workflow_author/README.md)
+implementation. Its contracts, prompts, guides, materialization, and validation
+live in the packaged workflow.
 
 Canonical name: `workflow_idea_to_workflow_package`
 

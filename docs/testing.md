@@ -50,6 +50,10 @@ fixed inputs/criteria, judge isolation where promised, comparable limits,
 unavailable evidence, and replay without repeated completed trials or judgments.
 Distinguish a workflow failure under a valid case from a broken evaluation.
 Controlled fixtures test this contract; they do not prove a live judge's accuracy.
+Keep reported conclusions scoped to the frozen development cases. Exercise an
+unavailable explicit fixture, an essential-evidence omission, and a workflow
+with authorized external effects disabled or replaced by a controlled fixture;
+local subprocess isolation does not prove remote side-effect isolation.
 
 Keep bundled authoring guides synchronized with their canonical docs using the
 existing parity check. Test executable examples and installed-package dependency

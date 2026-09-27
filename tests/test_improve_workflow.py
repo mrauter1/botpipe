@@ -80,6 +80,8 @@ def test_investigation_links_observed_failure_and_assesses_workflow_and_step(tmp
     } == {("whole_workflow", "opportunity"), ("step", "failure")}
     observed = assessment.scope_assessments[1].evidence[0]
     assert observed.basis == "observation"
+    assert observed.evidence_path is None
+    assert observed.quote is None
     assert observed.observation_ids[0] in {
         item.observation_id
         for item in run.value.recommendation.evidence_snapshot.observations
@@ -115,6 +117,59 @@ def test_model_investigation_receives_neutral_metrics_without_ranked_target(tmp_
         not {"shortlist", "selection_basis", "next_action"} & evidence.keys()
         for evidence in seen
     )
+
+
+def test_historical_artifact_content_is_citable_as_trace_without_observation_id(
+    tmp_path,
+):
+    source = tmp_path / "artifact_subject.py"
+    source.write_text(
+        "from botpipe import Artifact, Provider, workflow\n"
+        "@workflow(name='artifact_subject')\n"
+        "def artifact_subject():\n"
+        "    return Provider().run(\n"
+        "        'Draft the report',\n"
+        "        writes=(Artifact.text('report.txt', required=True),),\n"
+        "    ).value\n",
+        encoding="utf-8",
+    )
+    reference = f"{source}:artifact_subject"
+
+    def write_report(request):
+        request.artifacts["report"].write_text(
+            "Rejected draft: the required boundary case is missing."
+        )
+        return "drafted"
+
+    def cite_artifact(request):
+        value = assess(request)
+        evidence_root = Path(prompt_input(request)["analysis_evidence_root"])
+        artifact = next(evidence_root.glob("artifacts/*-report"))
+        link = {
+            "basis": "trace",
+            "statement": "The historical draft omitted a required boundary case.",
+            "observation_ids": [],
+            "source_paths": [],
+            "evidence_path": artifact.relative_to(evidence_root).as_posix(),
+            "quote": "the required boundary case is missing",
+        }
+        value["scope_assessments"][1].update(
+            classification="opportunity",
+            summary="The recorded artifact identifies a missing boundary case.",
+            evidence=[link],
+        )
+        return value
+
+    provider = FakeProvider([write_report, cite_artifact, no_candidate, ACCEPT])
+    with Botpipe(tmp_path, provider=provider) as client:
+        history = client.run(reference, task_id="history", run_id="artifact-run")
+        assert history.ok, history.error
+        run = client.run(improve_workflow, params(reference))
+    assert run.ok, run.error
+    link = run.value.recommendation.assessment.scope_assessments[1].evidence[0]
+    assert link.basis == "trace"
+    assert link.observation_ids == []
+    assert link.evidence_path.startswith("artifacts/")
 
 
 def test_source_only_candidate_needs_no_fabricated_observation_id(tmp_path):
@@ -167,7 +222,7 @@ def test_source_only_candidate_needs_no_fabricated_observation_id(tmp_path):
     assert source.read_bytes() == original
 
 
-def test_assessment_cannot_fabricate_observation_links(tmp_path):
+def test_assessment_miscitation_gets_bounded_grounding_repair(tmp_path):
     reference, _ = observed_workflow(tmp_path)
 
     def fabricated(request):
@@ -177,12 +232,55 @@ def test_assessment_cannot_fabricate_observation_links(tmp_path):
         ]
         return value
 
-    provider = FakeProvider([fabricated])
+    feedback = []
+
+    def repaired(request):
+        feedback.append(prompt_input(request)["grounding_feedback"])
+        return assess(request)
+
+    provider = FakeProvider([fabricated, repaired, no_candidate, ACCEPT])
     with Botpipe(tmp_path, provider=provider) as client:
         run = client.run(improve_workflow, params(reference))
+    assert run.ok, run.error
+    assert "assessment cites unknown observations" in feedback[0]
+    assert len(provider.calls) == 4
+
+
+def test_malformed_assessment_uses_explicit_grounding_repair(tmp_path):
+    reference, _ = observed_workflow(tmp_path)
+    feedback = []
+
+    def repaired(request):
+        feedback.append(prompt_input(request)["grounding_feedback"])
+        return assess(request)
+
+    provider = FakeProvider([{}, repaired, no_candidate, ACCEPT])
+    with Botpipe(tmp_path, provider=provider) as client:
+        run = client.run(improve_workflow, params(reference))
+    assert run.ok, run.error
+    assert "assessment schema error" in feedback[0]
+    assert len(provider.calls) == 4
+
+
+def test_assessment_misquotation_exhausts_grounding_repairs(tmp_path):
+    reference, _ = observed_workflow(tmp_path)
+
+    def misquoted(request):
+        value = assess(request)
+        evidence_root = Path(prompt_input(request)["analysis_evidence_root"])
+        record = next(evidence_root.glob("runs/*/operations/*/record.json"))
+        link = value["scope_assessments"][1]["evidence"][0]
+        link["evidence_path"] = record.relative_to(evidence_root).as_posix()
+        link["quote"] = "a sentence that does not occur in the frozen record"
+        return value
+
+    provider = FakeProvider([misquoted, misquoted])
+    with Botpipe(tmp_path, provider=provider) as client:
+        run = client.run(improve_workflow, params(reference, max_grounding_repairs=1))
     assert not run.ok
-    assert "assessment cites unknown observations" in run.error
-    assert len(provider.calls) == 1
+    assert "grounding remained invalid after 1 repair" in run.error
+    assert "quote was not found verbatim" in run.error
+    assert len(provider.calls) == 2
 
 
 def test_frozen_analysis_source_tamper_blocks_recommendation(tmp_path):
@@ -203,6 +301,25 @@ def test_frozen_analysis_source_tamper_blocks_recommendation(tmp_path):
     assert not run.ok
     assert "frozen workflow analysis source changed" in run.error
     assert source.read_bytes() == original
+
+
+def test_frozen_journal_evidence_tamper_is_terminal(tmp_path):
+    reference, _ = observed_workflow(tmp_path)
+
+    def tamper(request):
+        value = assess(request)
+        evidence_root = Path(prompt_input(request)["analysis_evidence_root"])
+        record = next(evidence_root.glob("runs/*/operations/*/record.json"))
+        os.chmod(record, 0o644)
+        record.write_text("{}\n", encoding="utf-8")
+        return value
+
+    provider = FakeProvider([tamper, assess])
+    with Botpipe(tmp_path, provider=provider) as client:
+        run = client.run(improve_workflow, params(reference))
+    assert not run.ok
+    assert "frozen analysis evidence changed" in run.error
+    assert len(provider.calls) == 1
 
 
 def test_resume_rechecks_frozen_analysis_source_before_replaying_model_turns(

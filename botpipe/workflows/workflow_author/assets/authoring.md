@@ -180,7 +180,9 @@ bias a comparison, give a fresh judge only the task, fixed criteria, reference
 material, and anonymous outputs with sufficient supporting evidence. A
 tool-disabled `generate(..., allowed_tools=(), session=None)` over that packet
 avoids workspace browsing; also keep identities out of its instructions and
-inputs. Source reviewers still need source access. Choose extra judgments or
+inputs. This does not conceal identity that an output reveals through its own
+names, text, or behavior, so describe blindness only to the boundary actually
+enforced. Source reviewers still need source access. Choose extra judgments or
 repetitions for the task's uncertainty and consequence before seeing trial
 results, not a fixed panel quota or a search for a favorable verdict.
 
@@ -248,6 +250,14 @@ escape, modified frozen evidence, or unresolved effect is not a citation typo.
 Do not blanket-catch validation exceptions or imply that domain grounding checks
 automatically receive provider schema retries. Keep prior findings and evidence
 available, count repairs against the enclosing limits, and define exhaustion.
+
+When diagnosis uses both current source and recorded execution evidence, expose
+them as distinct roots. Cite source relative to the captured source root and
+traces or artifact versions relative to the frozen evidence root. For textual
+claims, require an exact quote that deterministic code can locate in the named
+UTF-8 file. A matching quote proves correspondence with captured bytes; it does
+not prove the model's interpretation. Recheck both frozen inventories between
+turns. Keep integrity failures outside the model-correction loop.
 
 Bound rework in Python and provider work with
 `provider_budget(max_turns=..., max_seconds=..., turn_timeout_seconds=...)`.
