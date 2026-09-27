@@ -231,10 +231,11 @@ def _verify_analysis_source(frozen: _FrozenAnalysisSource) -> None:
     actual_paths = {
         path.relative_to(root).as_posix()
         for path in entries
-        if path.is_file() and not path.is_symlink()
-        and not path.relative_to(root).as_posix().startswith(
-            ".analysis-evidence-bundle/"
-        )
+        if path.is_file()
+        and not path.is_symlink()
+        and not path.relative_to(root)
+        .as_posix()
+        .startswith(".analysis-evidence-bundle/")
     }
     if actual_paths != set(frozen.hashes):
         raise ValueError("frozen workflow analysis source file set changed")
@@ -482,22 +483,26 @@ def _validate_assessment(
             )
         if link.basis == "trace":
             assert link.evidence_path is not None and link.quote is not None
-            validate_exact_quote(Path(frozen_evidence.root), link.evidence_path, link.quote)
+            validate_exact_quote(
+                Path(frozen_evidence.root), link.evidence_path, link.quote
+            )
         elif link.basis == "observation" and link.evidence_path is not None:
             assert link.quote is not None
             validate_exact_quote(
                 Path(frozen_evidence.root), link.evidence_path, link.quote
             )
             cited = [
-                item for item in snapshot.observations
+                item
+                for item in snapshot.observations
                 if item.observation_id in link.observation_ids
             ]
             operation_path_identities = {
                 identity
                 for item in cited
                 for identity in (
-                    re.sub(r"[^A-Za-z0-9_.-]+", "-", item.operation_id)
-                    .strip("-.")[:96],
+                    re.sub(r"[^A-Za-z0-9_.-]+", "-", item.operation_id).strip("-.")[
+                        :96
+                    ],
                     sha256(item.operation_id.encode()).hexdigest(),
                 )
             }
@@ -514,7 +519,9 @@ def _validate_assessment(
                     "source citation path must be one of the link's source_paths"
                 )
             assert link.quote is not None
-            validate_exact_quote(Path(frozen_source.root), link.evidence_path, link.quote)
+            validate_exact_quote(
+                Path(frozen_source.root), link.evidence_path, link.quote
+            )
         elif link.basis == "inference" and link.evidence_path is not None:
             raise GroundingError("inference must not carry a direct evidence citation")
     return assessment
@@ -609,6 +616,7 @@ def propose_improvement(params: ImproveWorkflowParams, request: str) -> Recommen
     model_source_manifest = _model_source_manifest(
         source.manifest, source.baseline_manifest
     )
+
     def verify_frozen_analysis() -> None:
         _verify_analysis_source(frozen_source)
         verify_analysis_evidence(frozen_evidence)
@@ -640,8 +648,7 @@ def propose_improvement(params: ImproveWorkflowParams, request: str) -> Recommen
                     },
                     "caller_trial_inputs": {
                         "trial_cases": [
-                            item.model_dump(mode="json")
-                            for item in params.trial_cases
+                            item.model_dump(mode="json") for item in params.trial_cases
                         ],
                         "fixture_supplied": params.trial_fixture_path is not None,
                         "settings": params.trial_settings.model_dump(mode="json"),

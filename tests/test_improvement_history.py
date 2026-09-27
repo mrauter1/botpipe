@@ -56,9 +56,7 @@ def test_stopped_runs_remain_eligible_history(tmp_path, status):
         assert [item["run"]["run_id"] for item in result.value] == ["observed"]
 
 
-def test_self_improvement_selects_historical_failure_not_itself(
-    tmp_path, monkeypatch
-):
+def test_self_improvement_selects_historical_failure_not_itself(tmp_path, monkeypatch):
     def ranked_legacy_view(*_args, **_kwargs):
         raise AssertionError("neutral investigation must not compute a legacy ranking")
 

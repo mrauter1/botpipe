@@ -5,6 +5,7 @@ import shutil
 import stat
 from pathlib import Path
 
+import pytest
 from pydantic import BaseModel
 
 from botpipe import Artifact, Provider, workflow
@@ -43,7 +44,11 @@ class TimedTrialProvider:
             destination.write_text(f"report from call {count}")
         return ProviderResponse(
             f"answer-{count}",
-            usage={"input_tokens": count, "output_tokens": 2, "total_tokens": count + 2},
+            usage={
+                "input_tokens": count,
+                "output_tokens": 2,
+                "total_tokens": count + 2,
+            },
         )
 
     def recover(self, request: ProviderRequest):
@@ -142,11 +147,14 @@ def test_real_trial_copies_fixture_captures_evidence_and_reuses_completion(tmp_p
     }
     assert first.usage == {"input_tokens": 1, "output_tokens": 2, "total_tokens": 3}
     assert first.provider_budget["used_turns"] == 1
-    assert next(
-        item["content"]
-        for item in first.artifacts
-        if item.get("kind") == "text" and item.get("name") == "report"
-    ) == "report from call 1"
+    assert (
+        next(
+            item["content"]
+            for item in first.artifacts
+            if item.get("kind") == "text" and item.get("name") == "report"
+        )
+        == "report from call 1"
+    )
     workspace_output = next(
         item for item in first.artifacts if item.get("workspace_path") == "input.txt"
     )
@@ -333,24 +341,54 @@ def test_candidate_signature_change_is_complete_failure_without_provider_dispatc
     assert not (tmp_path / "signature-output/workspace/provider-calls.txt").exists()
 
 
-def test_recognized_preledger_partial_initialization_is_rebuilt_atomically(tmp_path):
+def test_interrupted_initialization_never_publishes_a_partial_trial(
+    tmp_path, monkeypatch
+):
+    from botpipe_optimizer import trials
+
     output = tmp_path / "output"
-    (output / "workspace").mkdir(parents=True)
-    (output / "workspace/partial.txt").write_text("crash debris")
-    (output / "state").mkdir()
     case = TrialCase(
         case_id="typed",
         description="recover initialization",
         kwargs={"payload": {"value": 4}},
     )
 
+    original_write = trials._atomic_write
+
+    def interrupt(path, content):
+        original_write(path, content)
+        if path.name == "trial.json":
+            raise KeyboardInterrupt("crash before publishing the complete trial root")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(trials, "_atomic_write", interrupt)
+        with pytest.raises(KeyboardInterrupt):
+            _run(tmp_path, case)
+    assert not output.exists()
     result = _run(tmp_path, case)
 
     assert result.execution == "complete"
     assert result.outcome == "completed"
     assert result.value == {"value": 4, "type": "TypedInput"}
-    assert not (output / "workspace/partial.txt").exists()
     assert (output / "trial.json").is_file()
+
+
+def test_missing_manifest_does_not_authorize_deleting_an_existing_workspace(tmp_path):
+    output = tmp_path / "output"
+    (output / "workspace").mkdir(parents=True)
+    valuable = output / "workspace/valuable.txt"
+    valuable.write_text("user data")
+    (output / "state").mkdir()
+    with pytest.raises(RuntimeError, match="unowned uncommitted data"):
+        _run(
+            tmp_path,
+            TrialCase(
+                case_id="typed",
+                description="unowned output",
+                kwargs={"payload": {"value": 4}},
+            ),
+        )
+    assert valuable.read_text() == "user data"
 
 
 def test_worker_result_must_match_durable_case_and_run_identity(tmp_path):

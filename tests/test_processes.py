@@ -168,6 +168,36 @@ def test_windows_child_is_suspended_until_owned_job_assignment(monkeypatch):
     assert calls == [("assign-and-resume", 123), ("terminate", 0), ("close",)]
 
 
+def test_windows_tree_verification_waits_for_parent_reaping(monkeypatch):
+    from botpipe import processes
+
+    calls = []
+    job = SimpleNamespace(terminate=lambda code: calls.append(("terminate", code)))
+
+    class Process:
+        pid = 123
+
+        def __init__(self) -> None:
+            self.alive = True
+
+        def poll(self):
+            return None if self.alive else 0
+
+        def wait(self, *, timeout):
+            calls.append(("wait", timeout))
+            self.alive = False
+            return 0
+
+    monkeypatch.setattr(processes, "os", SimpleNamespace(name="nt"))
+    containment = ProcessContainment({}, _windows_job=job, _owned_pid=123)
+
+    containment.ensure_tree_exited(
+        Process(), grace_seconds=2.5  # type: ignore[arg-type]
+    )
+
+    assert calls == [("terminate", 0), ("wait", 2.5)]
+
+
 @pytest.mark.skipif(os.name != "posix", reason="POSIX parent signal behavior")
 def test_release_signals_only_owned_parent(monkeypatch):
     from botpipe import processes

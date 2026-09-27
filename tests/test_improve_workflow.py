@@ -276,9 +276,7 @@ def test_assessment_misquotation_exhausts_grounding_repairs(tmp_path):
 
     provider = FakeProvider([misquoted, misquoted])
     with Botpipe(tmp_path, provider=provider) as client:
-        run = client.run(
-            improve_workflow, params(reference, max_grounding_repairs=1)
-        )
+        run = client.run(improve_workflow, params(reference, max_grounding_repairs=1))
     assert not run.ok
     assert "grounding remained invalid after 1 repair" in run.error
     assert "quote was not found verbatim" in run.error

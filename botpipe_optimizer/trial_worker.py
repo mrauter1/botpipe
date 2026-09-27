@@ -287,7 +287,9 @@ def capture_workspace_outputs(
         elif not before_exists:
             record["status"] = "created"
         else:
-            record["status"] = "unchanged" if before.get("data") == after.get("data") else "modified"
+            record["status"] = (
+                "unchanged" if before.get("data") == after.get("data") else "modified"
+            )
         if after_exists:
             record["size_bytes"] = after.get("size")
             record["sha256"] = after.get("sha256")
@@ -305,10 +307,18 @@ def capture_workspace_outputs(
             }:
                 record["diff"] = "".join(
                     difflib.unified_diff(
-                        [] if before["state"] == "absent" else before["text"].splitlines(keepends=True),
-                        [] if after["state"] == "absent" else after["text"].splitlines(keepends=True),
-                        fromfile="/dev/null" if before["state"] == "absent" else f"a/{relative}",
-                        tofile="/dev/null" if after["state"] == "absent" else f"b/{relative}",
+                        []
+                        if before["state"] == "absent"
+                        else before["text"].splitlines(keepends=True),
+                        []
+                        if after["state"] == "absent"
+                        else after["text"].splitlines(keepends=True),
+                        fromfile="/dev/null"
+                        if before["state"] == "absent"
+                        else f"a/{relative}",
+                        tofile="/dev/null"
+                        if after["state"] == "absent"
+                        else f"b/{relative}",
                     )
                 )
             else:
@@ -390,7 +400,9 @@ def _artifacts(handles: Any, limit: int) -> tuple[list[dict[str, Any]], list[str
             omissions.append(f"artifact {name!r} content exceeded evidence limit")
         except (OSError, ValueError) as exc:
             record["content_missing"] = True
-            omissions.append(f"artifact {name!r} could not be read: {type(exc).__name__}")
+            omissions.append(
+                f"artifact {name!r} could not be read: {type(exc).__name__}"
+            )
         else:
             if handle.kind == "raw":
                 record["content_omitted"] = "binary"
@@ -398,10 +410,14 @@ def _artifacts(handles: Any, limit: int) -> tuple[list[dict[str, Any]], list[str
             else:
                 try:
                     text = data.decode("utf-8")
-                    record["content"] = json.loads(text) if handle.kind == "json" else text
+                    record["content"] = (
+                        json.loads(text) if handle.kind == "json" else text
+                    )
                 except (UnicodeDecodeError, json.JSONDecodeError) as exc:
                     record["content_omitted"] = "invalid_text_or_json"
-                    omissions.append(f"artifact {name!r} content omitted: {type(exc).__name__}")
+                    omissions.append(
+                        f"artifact {name!r} content omitted: {type(exc).__name__}"
+                    )
         result.append(record)
     return result, omissions
 
@@ -425,13 +441,22 @@ def _execution_class(status: str, operations: list[dict[str, Any]]) -> str:
         if operation.get("kind") != "provider" or operation.get("status") != "failed":
             continue
         error = operation.get("error")
-        if isinstance(error, Mapping) and (error.get("module"), error.get("type")) in infrastructure_types:
+        if (
+            isinstance(error, Mapping)
+            and (error.get("module"), error.get("type")) in infrastructure_types
+        ):
             return "infrastructure_error"
     return "complete"
 
 
-def _budget(details: Mapping[str, Any], operations: list[dict[str, Any]]) -> dict[str, Any]:
-    ids = [str(item.get("id")) for item in operations if item.get("kind") == "provider_budget"]
+def _budget(
+    details: Mapping[str, Any], operations: list[dict[str, Any]]
+) -> dict[str, Any]:
+    ids = [
+        str(item.get("id"))
+        for item in operations
+        if item.get("kind") == "provider_budget"
+    ]
     if not ids:
         return {}
     selected = ids[0]
@@ -505,7 +530,9 @@ def _fit(result: TrialResult, limit: int) -> TrialResult:
             }
         )
     omissions.append("operation details omitted to fit max_output_bytes")
-    result = result.model_copy(update={"operations": operations, "omissions": omissions})
+    result = result.model_copy(
+        update={"operations": operations, "omissions": omissions}
+    )
     if len(_encoded(result)) <= limit:
         return result
     omissions.append("return value omitted to fit max_output_bytes")

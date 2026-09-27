@@ -82,7 +82,11 @@ def run_trial(
             raise RuntimeError("existing trial is missing its workspace or state")
     else:
         if destination.exists():
-            _remove_recognized_incomplete_initialization(destination)
+            # New roots publish atomically, so a nonempty root without its
+            # manifest has no ownership proof and must never be deleted.
+            if not destination.is_dir() or any(destination.iterdir()):
+                raise RuntimeError("output_root contains unowned uncommitted data")
+            destination.rmdir()
         _initialize_trial_root(destination, fixture, settings, encoded_identity)
 
     config = {
@@ -201,16 +205,19 @@ def run_trial(
         artifacts, output_omissions, _remaining = capture_workspace_outputs(
             case, workspace, fixture, settings.max_output_bytes
         )
-        result = _fit(TrialResult(
-            case_id=case.case_id,
-            execution=execution,
-            outcome=outcome,
-            run_id=run_id,
-            error=_process_diagnostic(process, settings.max_output_bytes // 2),
-            artifacts=artifacts,
-            elapsed_seconds=max(0.0, time.time() - execution_state["started_at"]),
-            omissions=[*log_omissions, *output_omissions],
-        ), settings.max_output_bytes)
+        result = _fit(
+            TrialResult(
+                case_id=case.case_id,
+                execution=execution,
+                outcome=outcome,
+                run_id=run_id,
+                error=_process_diagnostic(process, settings.max_output_bytes // 2),
+                artifacts=artifacts,
+                elapsed_seconds=max(0.0, time.time() - execution_state["started_at"]),
+                omissions=[*log_omissions, *output_omissions],
+            ),
+            settings.max_output_bytes,
+        )
         if execution == "complete":
             _atomic_write(
                 terminal_result_path,
@@ -267,15 +274,11 @@ def run_trial(
         )
     result = result.model_copy(
         update={
-            "elapsed_seconds": max(
-                0.0, time.time() - execution_state["started_at"]
-            )
+            "elapsed_seconds": max(0.0, time.time() - execution_state["started_at"])
         }
     )
     if result.execution == "complete":
-        _atomic_write(
-            terminal_result_path, _json_bytes(result.model_dump(mode="json"))
-        )
+        _atomic_write(terminal_result_path, _json_bytes(result.model_dump(mode="json")))
     return result
 
 
@@ -316,26 +319,9 @@ def _initialize_trial_root(
             shutil.rmtree(temporary)
 
 
-def _remove_recognized_incomplete_initialization(destination: Path) -> None:
-    if not destination.is_dir():
-        raise RuntimeError("output_root exists and is not a trial directory")
-    entries = {path.name for path in destination.iterdir()}
-    if not entries <= {"workspace", "state"}:
-        raise RuntimeError("output_root contains ambiguous uncommitted trial data")
-    state = destination / "state"
-    if state.exists() and (
-        state.is_symlink()
-        or not state.is_dir()
-        or any(state.iterdir())
-    ):
-        raise RuntimeError("uncommitted trial state contains ambiguous data")
-    workspace = destination / "workspace"
-    if workspace.exists() and (workspace.is_symlink() or not workspace.is_dir()):
-        raise RuntimeError("uncommitted trial workspace is not a directory")
-    shutil.rmtree(destination)
-
-
-def _copy_tree_contents(source: Path, destination: Path, settings: TrialSettings) -> None:
+def _copy_tree_contents(
+    source: Path, destination: Path, settings: TrialSettings
+) -> None:
     _check_tree(source, settings)
     for child in source.iterdir():
         if child.is_symlink():
@@ -393,13 +379,19 @@ def _validate_result_identity(
 
 def _json_bytes(value: Any) -> bytes:
     return json.dumps(
-        value, sort_keys=True, ensure_ascii=False, separators=(",", ":"), allow_nan=False
+        value,
+        sort_keys=True,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        allow_nan=False,
     ).encode("utf-8")
 
 
 def _tree_digest(root: Path) -> str:
     digest = hashlib.sha256()
-    for path in sorted(root.rglob("*"), key=lambda item: item.relative_to(root).as_posix()):
+    for path in sorted(
+        root.rglob("*"), key=lambda item: item.relative_to(root).as_posix()
+    ):
         relative_path = path.relative_to(root)
         if _transient_path(relative_path):
             continue

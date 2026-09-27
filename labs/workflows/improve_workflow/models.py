@@ -32,10 +32,14 @@ class EvidenceLink(BaseModel):
         if self.basis == "source" and not self.source_paths:
             raise ValueError("source evidence must name a captured source path")
         if self.basis == "trace" and (
-            self.evidence_path is None or self.quote is None
-            or self.observation_ids or self.source_paths
+            self.evidence_path is None
+            or self.quote is None
+            or self.observation_ids
+            or self.source_paths
         ):
-            raise ValueError("trace evidence uses a frozen relative path and exact quote")
+            raise ValueError(
+                "trace evidence uses a frozen relative path and exact quote"
+            )
         if self.basis == "observation" and self.source_paths:
             raise ValueError("observation evidence cannot also claim source inspection")
         if self.basis == "source" and self.observation_ids:
@@ -47,7 +51,9 @@ class EvidenceLink(BaseModel):
         if len(self.source_paths) != len(set(self.source_paths)):
             raise ValueError("source evidence paths must be unique")
         if (self.evidence_path is None) != (self.quote is None):
-            raise ValueError("an evidence path and exact quote must be supplied together")
+            raise ValueError(
+                "an evidence path and exact quote must be supplied together"
+            )
         if self.evidence_path is not None and (
             not self.evidence_path.strip() or not self.quote or not self.quote.strip()
         ):

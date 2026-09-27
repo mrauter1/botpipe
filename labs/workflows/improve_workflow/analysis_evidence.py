@@ -88,7 +88,9 @@ def freeze_analysis_evidence(
     managed = Path(destination)
     root = managed / "evidence"
     if managed.is_symlink() or root.is_symlink():
-        raise AnalysisIntegrityError("analysis evidence destination must not be a symlink")
+        raise AnalysisIntegrityError(
+            "analysis evidence destination must not be a symlink"
+        )
     root.mkdir(parents=True, exist_ok=True)
     files: dict[str, bytes] = {}
     total_bytes = 0
@@ -239,7 +241,9 @@ def freeze_analysis_evidence(
                     and re.fullmatch(r"[0-9a-f]{64}", digest)
                     and isinstance(artifact_path, str)
                 ):
-                    raise AnalysisIntegrityError("recorded artifact identity is malformed")
+                    raise AnalysisIntegrityError(
+                        "recorded artifact identity is malformed"
+                    )
                 identity = (digest, str(artifact.get("name")))
                 if identity in seen_artifacts:
                     continue
@@ -259,7 +263,9 @@ def freeze_analysis_evidence(
                     artifact_source, label=f"recorded artifact {artifact.get('name')}"
                 )
                 if sha256(data).hexdigest() != digest:
-                    raise AnalysisIntegrityError("recorded artifact version digest changed")
+                    raise AnalysisIntegrityError(
+                        "recorded artifact version digest changed"
+                    )
                 name = _slug(artifact.get("name"), "artifact")
                 add(f"artifacts/{digest}-{name}", data)
         catalog.append(
@@ -298,11 +304,15 @@ def verify_analysis_evidence(frozen: FrozenAnalysisEvidence) -> None:
     raw_root = Path(frozen.root)
     raw_managed = Path(frozen.managed_root)
     if raw_root.is_symlink() or raw_managed.is_symlink():
-        raise AnalysisIntegrityError("frozen analysis evidence paths must not be symlinks")
+        raise AnalysisIntegrityError(
+            "frozen analysis evidence paths must not be symlinks"
+        )
     managed = raw_managed.resolve(strict=True)
     root = raw_root.resolve(strict=True)
     if root != managed / "evidence":
-        raise AnalysisIntegrityError("frozen analysis evidence escaped its managed root")
+        raise AnalysisIntegrityError(
+            "frozen analysis evidence escaped its managed root"
+        )
     marker = managed / ".botpipe-analysis-evidence.json"
     if marker.is_symlink() or not marker.is_file():
         raise AnalysisIntegrityError("frozen analysis evidence marker is invalid")
@@ -336,7 +346,9 @@ def validate_exact_quote(root: Path, relative: str, quote: str) -> None:
 def _bounded_file(root: Path, relative: str) -> Path:
     raw = Path(relative)
     if raw.is_absolute() or ".." in raw.parts or relative != raw.as_posix():
-        raise AnalysisIntegrityError(f"analysis evidence path escapes its root: {relative}")
+        raise AnalysisIntegrityError(
+            f"analysis evidence path escapes its root: {relative}"
+        )
     path = root / raw
     if path.is_symlink():
         raise AnalysisIntegrityError("analysis evidence citation targets a symlink")
@@ -345,7 +357,9 @@ def _bounded_file(root: Path, relative: str) -> Path:
     except OSError as exc:
         raise GroundingError(f"citation path does not exist: {relative}") from exc
     if not resolved.is_relative_to(root) or not resolved.is_file():
-        raise AnalysisIntegrityError(f"analysis evidence path escapes its root: {relative}")
+        raise AnalysisIntegrityError(
+            f"analysis evidence path escapes its root: {relative}"
+        )
     return resolved
 
 

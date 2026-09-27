@@ -108,7 +108,11 @@ def _pair(candidate_label, preference="A", **judgment_changes):
     }
 
 
-def test_packet_is_anonymous_and_keeps_behavioral_prose_unchanged():
+@pytest.mark.parametrize(
+    "artifact_path",
+    ["/tmp/secret/report.txt", r"C:\secret\report.txt", r"\\host\share\report.txt"],
+)
+def test_packet_is_anonymous_and_keeps_behavioral_prose_unchanged(artifact_path):
     trial = _trial(
         value={
             "text": "candidate said /tmp/output in its answer",
@@ -118,7 +122,7 @@ def test_packet_is_anonymous_and_keeps_behavioral_prose_unchanged():
         artifacts=[
             {
                 "key": "report",
-                "path": "/tmp/secret/report.txt",
+                "path": artifact_path,
                 "source_code": "raise RuntimeError('arm-a')",
                 "schema": {
                     "python_type": "candidate.models:SecretImplementation",

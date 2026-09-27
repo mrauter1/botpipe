@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import math
 from collections.abc import Mapping, Sequence
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 from pydantic import ValidationError
@@ -471,7 +471,9 @@ def _artifact_view(value: Any, label: str, redactions: list[str]) -> Any:
         if (
             lowered in _PATH_KEYS
             and isinstance(item, (str, Path))
-            and Path(item).is_absolute()
+            and (
+                PurePosixPath(item).is_absolute() or PureWindowsPath(item).is_absolute()
+            )
         ):
             result[key] = _ABSOLUTE_PATH
             removed.append(key)

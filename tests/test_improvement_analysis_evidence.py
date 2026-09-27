@@ -111,7 +111,7 @@ def test_analysis_bundle_marks_bounded_and_unavailable_content(tmp_path):
     index = json.loads((Path(frozen.root) / "index.json").read_text())
     reasons = {item["reason"] for item in index["omissions"]}
     assert reasons == {"max_evidence_bytes", "recorded_artifact_unavailable"}
-    assert sum(
-        (Path(frozen.root) / relative).stat().st_size
-        for relative in frozen.hashes
-    ) <= 3000
+    assert (
+        sum((Path(frozen.root) / relative).stat().st_size for relative in frozen.hashes)
+        <= 3000
+    )
