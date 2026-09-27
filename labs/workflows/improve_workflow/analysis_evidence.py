@@ -79,15 +79,20 @@ def _plain_file(path: Path, *, label: str, max_bytes: int) -> tuple[bytes | None
     identity = lambda info: (
         info.st_dev,
         info.st_ino,
-        info.st_mode,
+        stat.S_IFMT(info.st_mode),
         info.st_size,
         info.st_mtime_ns,
-        info.st_ctime_ns,
     )
+    # Windows can report different ctime semantics and permission bits through
+    # path and descriptor queries. Compare those fields only within each API.
     if (
         identity(before) != identity(opened)
         or identity(opened) != identity(closed)
         or identity(closed) != identity(after)
+        or before.st_mode != after.st_mode
+        or opened.st_mode != closed.st_mode
+        or before.st_ctime_ns != after.st_ctime_ns
+        or opened.st_ctime_ns != closed.st_ctime_ns
         or not stat.S_ISREG(after.st_mode)
     ):
         raise AnalysisIntegrityError(f"{label} changed while being captured")

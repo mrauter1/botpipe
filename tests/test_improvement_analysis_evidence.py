@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 import os
+import stat
 from dataclasses import dataclass
 from enum import Enum
 from hashlib import sha256
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -14,6 +16,7 @@ from pydantic import BaseModel, ConfigDict
 from botpipe import ArtifactHandle, codec
 from labs.workflows.improve_workflow.analysis_evidence import (
     AnalysisIntegrityError,
+    _plain_file,
     freeze_analysis_evidence,
     validate_exact_quote,
     verify_analysis_evidence,
@@ -290,6 +293,32 @@ def test_malformed_canonical_artifact_tag_is_an_integrity_error(tmp_path):
         freeze_analysis_evidence(inspection, tmp_path / "bundle")
 
 
+def test_evidence_read_accepts_different_path_and_descriptor_metadata(
+    tmp_path, monkeypatch
+):
+    source = tmp_path / "stable.txt"
+    source.write_bytes(b"unchanged evidence")
+    original_fstat = os.fstat
+
+    def descriptor_stat(descriptor):
+        info = original_fstat(descriptor)
+        fields = {
+            name: getattr(info, name) for name in dir(info) if name.startswith("st_")
+        }
+        # Windows path queries may expose creation time and filename-derived
+        # execute bits, while descriptor queries expose change time and no name.
+        fields["st_ctime_ns"] += 1_000_000_000
+        fields["st_mode"] ^= 0o111
+        return SimpleNamespace(**fields)
+
+    monkeypatch.setattr(os, "fstat", descriptor_stat)
+
+    assert _plain_file(source, label="evidence", max_bytes=100) == (
+        b"unchanged evidence",
+        len(b"unchanged evidence"),
+    )
+
+
 def test_artifact_same_length_rewrite_with_restored_mtime_is_detected(
     tmp_path, monkeypatch
 ):
@@ -327,9 +356,8 @@ def test_artifact_same_length_rewrite_with_restored_mtime_is_detected(
             source.write_bytes(b"version-two")
             os.utime(source, ns=(before.st_atime_ns, before.st_mtime_ns))
             original_mode = before.st_mode & 0o777
-            os.chmod(source, original_mode ^ 0o100)
+            os.chmod(source, original_mode ^ stat.S_IWUSR)
             os.chmod(source, original_mode)
-            assert source.stat().st_ctime_ns != before.st_ctime_ns
             return data
 
     monkeypatch.setattr(os, "fdopen", MutatingReader)

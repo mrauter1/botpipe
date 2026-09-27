@@ -505,9 +505,14 @@ def test_latest_native_isolated_context_excludes_ambient_instruction_sources(
     codex_home = Path(client.env["CODEX_HOME"])
     ambient_base = codex_home / "ambient-base.md"
     ambient_base.write_text("AMBIENT_BASE_SENTINEL", encoding="utf-8")
-    (codex_home / "config.toml").write_text(
+    config_path = codex_home / "config.toml"
+    setup_config = (
+        config_path.read_text(encoding="utf-8") if config_path.exists() else ""
+    )
+    config_path.write_text(
         "developer_instructions = \"AMBIENT_DEVELOPER_SENTINEL\"\n"
         f"model_instructions_file = {json.dumps(str(ambient_base))}\n"
+        f"{setup_config.rstrip()}\n"
         "[features]\nmemories = true\n"
         "[skills]\ninclude_instructions = true\n",
         encoding="utf-8",
