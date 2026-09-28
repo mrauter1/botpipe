@@ -1,84 +1,40 @@
-"""Typed semantic handoffs for the workflow-builder SOP."""
+"""Small semantic handoffs for the workflow author."""
 
-from __future__ import annotations
+from pydantic import BaseModel, Field, model_validator
 
-from typing import Literal
-
-from pydantic import BaseModel, Field
-
-from botpipe.workflows._authoring import PhaseOutcome, WorkflowResult
-from botpipe_optimizer.candidate_validation import ValidationResult
+from .validation import Validation
 
 
-class GeneratedWorkflowFile(BaseModel):
-    """One generated file, identified from runtime-validated bytes."""
+class Brief(BaseModel):
+    purpose: str
+    definitions: list[str]
+    gates: list[str]
+    scenarios: list[str]
+    questions: list[str] = Field(default_factory=list)
 
-    path: str
-    sha256: str
-    size_bytes: int
+
+class Build(BaseModel):
+    reference: str
+    notes: str = ""
+    brief: Brief | None = None  # Revise a mistaken assumption, preserving the request.
 
 
-class WorkflowAuthorResult(WorkflowResult):
-    """A reviewed candidate package and the checks that actually ran."""
+class Review(BaseModel):
+    ship: bool = Field(strict=True)
+    findings: list[str] = Field(default_factory=list)
 
-    package_name: str
+    @model_validator(mode="after")
+    def consistent_verdict(self):
+        if self.ship == bool(self.findings) or any(not f.strip() for f in self.findings):
+            raise ValueError("Ship requires no findings; rejection requires concrete findings")
+        return self
+
+
+class WorkflowAuthorResult(BaseModel):
+    reference: str | None
+    shipped: bool
+    rounds: int
+    findings: list[str]
+    brief: Brief
     candidate_root: str
-    package_path: str
-    workflow_reference: str
-    files: list[GeneratedWorkflowFile]
-    surface_boundary: dict[str, list[str]]
-    validation: ValidationResult
-
-
-class RequestFramingPayload(PhaseOutcome):
-    """Accepted interpretation of the workflow the user asked to build."""
-
-    summary: str = Field(min_length=1)
-    authoritative_artifacts: list[str] = Field(min_length=1)
-    requested_workflow: str = Field(min_length=1)
-    intended_outcome: str = Field(min_length=1)
-    material_assumptions: list[str] = Field(default_factory=list)
-    replan_reason: str | None = None
-
-
-class WorkflowDesignPayload(PhaseOutcome):
-    """Reviewed executable design and prompt handoff."""
-
-    summary: str = Field(min_length=1)
-    authoritative_artifacts: list[str] = Field(min_length=1)
-    step_names: list[str] = Field(min_length=1)
-    prompt_files: list[str] = Field(default_factory=list)
-    semantic_decisions: list[str] = Field(default_factory=list)
-    unresolved_assumptions: list[str] = Field(default_factory=list)
-    replan_reason: str | None = None
-
-
-class WorkflowBuildPayload(PhaseOutcome):
-    """Complete source manifest ready for isolated materialization."""
-
-    summary: str = Field(min_length=1)
-    changed_paths: list[str] = Field(min_length=1)
-    evidence_artifacts: list[str] = Field(min_length=1)
-    replan_reason: str | None = None
-
-
-class WorkflowEvaluationPayload(PhaseOutcome):
-    """Accepted assessment of source, executable checks, and handoffs."""
-
-    summary: str = Field(min_length=1)
-    evidence_artifacts: list[str] = Field(min_length=1)
-    validation_commands: list[str] = Field(default_factory=list)
-    package_decision: Literal["accept"]
-    proven_outcomes: list[str] = Field(default_factory=list)
-    unproven_outcomes: list[str] = Field(default_factory=list)
-    replan_reason: str | None = None
-
-
-__all__ = [
-    "GeneratedWorkflowFile",
-    "RequestFramingPayload",
-    "WorkflowAuthorResult",
-    "WorkflowBuildPayload",
-    "WorkflowDesignPayload",
-    "WorkflowEvaluationPayload",
-]
+    validation: Validation | None = None

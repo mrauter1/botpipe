@@ -1,101 +1,66 @@
 # Workflow Author
 
-`workflow_author` turns a workflow request into a reviewed package candidate.
-It frames the request, designs the fewest coherent steps and their prompts,
-builds a complete manifest, materializes it in a run-owned root, validates it,
-and performs an independent read-only evaluation review. The packaged API is:
-
-- `workflow_author(params, request="")`
-- `Params`
-- `WorkflowAuthorResult`
-
-## Python
+`workflow_author` turns a request into a tested, independently reviewed workflow
+candidate. One author session understands, builds and repairs; a separate reviewer
+session checks the original request, clarification answers, source and test transcript.
 
 ```python
 from botpipe import Botpipe
 from botpipe.workflows.workflow_author import Params, workflow_author
 
-params = Params(
-    package_name="customer_escalation",
-    package_title="Customer escalation",
-    aliases=["escalation"],
-)
-
 with Botpipe(workspace=".") as runtime:
     run = runtime.run(
         workflow_author,
-        params,
+        Params(package_name="customer_escalation", max_rounds=4),
         request="Turn an escalation into a reviewed customer response.",
     )
 
-candidate = run.value
-print(candidate.package_path)
-print(candidate.workflow_reference)
-print(candidate.validation.success)
-for file in candidate.files:
-    print(file.path, file.sha256, file.size_bytes)
+if run.ok:
+    candidate = run.value
+    print(candidate.shipped, candidate.reference, candidate.candidate_root)
+    print(candidate.findings)
 ```
 
-`package_name` is required. `package_title`, `aliases`, and `workflow_kind` are
-optional catalog inputs. `max_provider_turns` defaults to `32` for the complete
-run. Prefer `target_test_argv` when the repository needs a test command other
-than the automatically selected focused pytest. The legacy
-`target_test_command` string remains available for explicit compatibility use;
-supply only one test-command form.
-The default validation requires pytest in the Python environment; install
-`botpipe[test]` to include it.
-
-## CLI
-
-Pass a JSON list containing the parameter object and request:
+CLI input is a parameter object followed by the request:
 
 ```bash
 botpipe run workflow_author --workspace . \
-  --input '[{"package_name":"customer_escalation"},"Turn an escalation into a reviewed customer response."]'
+  --input '[{"package_name":"customer_escalation"},"Review customer escalations."]'
 ```
 
-The CLI prints the serialized run result. Use `candidate_root`, `package_path`,
-and `workflow_reference` to inspect or execute the candidate. `files` records
-the path, SHA-256 digest, and byte size of each validated file. `validation`
-contains the checks that actually ran and any errors.
-`surface_boundary` records the runtime's validation boundary. Before handing
-off a candidate, including after an interrupted handoff resumes, the workflow
-checks its complete inventory against the recorded surface identity. Resuming
-an already completed run returns historical evidence without rerunning checks,
-as with other Botpipe workflows.
+The author writes directly into one run-owned copy of the project, including
+`.botpipe/workflows/<package_name>/flow.py`, `workflow.toml`, and
+`tests/runtime/test_<package_name>.py`. It never promotes the candidate into the
+source workspace. Existing target packages are rejected; choose a new name.
+The candidate retains project dependencies and excludes repository/runtime caches.
 
-## Process and proof
+The brief defines intended outcomes, assumptions, human gates and concrete scenarios.
+Material questions pause through `ask_human`; answers are recorded and passed to both
+author and reviewer. Findings return to the same author session. An updated brief can
+correct an assumption, but must preserve the original request and explicit answers.
+Unresolved questions prevent shipping. `max_rounds` bounds build/review and further
+clarification cycles; exhaustion returns `shipped=False` with the remaining findings.
+`max_provider_turns` bounds provider work, including schema repair, separately.
 
-Every provider receives the bundled Botpipe authoring and prompting guides.
-The packaged workflow owns its contracts, prompts, guides, materialization, and
-validation implementation and does not import the experimental labs package.
-It runs request framing, guide-based design with an independent query
-review, manifest build, runtime compile/import/discovery and tests, then semantic
-evaluation with another independent query review. Invalid manifests and failed
-executable validation get at most three complete build attempts. Source, prompt, implementation-proof,
-or behavior defects replan through design and build a fresh candidate;
-evaluation-report defects can rework locally. It asks the user only for a
-material missing fact.
+The runtime validates the exact entry point, catalog metadata, compilation/import,
+and generated behavioral tests. Install `botpipe[test]` for pytest. Optional
+`target_test_argv` runs an additional check after the mandatory focused tests; it cannot
+replace them. Commands use argument lists, not shell interpolation. Timeouts and failed
+checks feed the next repair. `validation` records output, errors, the transcript path
+and the tested content identity. The reference is returned only after runtime validation.
 
-The package must include `tests/runtime/test_<package_name>.py`. With no explicit
-test argv, validation runs that file through focused pytest automatically. An
-explicit `target_test_argv` replaces the automatic test command, while the
-generated behavioral test remains part of the package. The review rejects
-vacuous proof and records what remains unproven; passing a fake or narrow mock
-does not establish live-system quality.
+Tests use `FakeProvider`. The opt-in
+`botpipe.workflows.workflow_author.transcript_plugin` records human questions and
+answers, agent turns, workflow results and pytest outcomes. The author and reviewer
+read this transcript. Warnings about answers absent verbatim from subsequent prompts
+are investigation hints: transformed values, deterministic routing and session context
+can be legitimate. Tests must assert behavioral consequences, not literal forwarding.
+Scripted responses demonstrate only the behavior exercised; they do not prove live
+model quality. The reviewer uses `query` for read-only inspection.
 
-The design and evaluation prompts require evidence-complete handoffs and an
-actual checking operation for each material acceptance criterion. Reviewers
-inspect the generated implementation for those connections, including feedback,
-exhaustion, and unavailable-evidence paths. These are model review obligations,
-not new deterministic guarantees: generated tests must exercise the relevant
-behavior. Authoring a rubric or accepting a package does not itself execute
-comparative trials or prove improvement; add that mechanism only when the
-requested workflow makes such a claim.
-
-The result remains under the run-owned `candidate_root`. Nothing is copied into
-the authoritative workspace automatically. Review the returned source, hashes,
-validation checks, and residual limitations before deliberately promoting the
-package. Validation combines the candidate with a frozen copy of the source
-workspace; the returned candidate contains authored files and selected anchors,
-so execution may still require the target project's code and dependencies.
+Before shipping, including after an interrupted handoff resumes, the runtime checks
+that the candidate and transcript still match the successful validation. Completed
+runs retain historical results on resume, as elsewhere in Botpipe. Run a new authoring
+operation when you want fresh work. Inspect the result before deliberate promotion;
+`shipped=True` means the candidate passed this acceptance process, not that it was
+published or deployed.

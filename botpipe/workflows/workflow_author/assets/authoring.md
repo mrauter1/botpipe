@@ -293,8 +293,8 @@ The packaged [workflow author](../botpipe/workflows/workflow_author/README.md)
 applies this guide and the prompting guide to build a workflow package in a
 run-owned candidate root. It requires behavioral evidence for the generated
 entry point, validates compilation, import, discovery, and a focused generated
-test or caller-supplied test argv, and returns typed paths, file hashes, checks,
-and errors. The result is a candidate for inspection and deliberate promotion;
+behavioral test, followed by optional caller-supplied test argv. It returns the
+brief, review findings, transcript, tested content identity and validation errors. The result is a candidate for inspection and deliberate promotion;
 the workflow does not copy it into the authoritative workspace. A passing fake
 or narrowly mocked check proves only the behavior it exercised, not live-system
 quality.

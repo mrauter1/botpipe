@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+from pathlib import Path
 from typing import get_type_hints
 
 import pytest
@@ -567,6 +568,10 @@ def test_lab_workflow_completes_with_captured_outputs(tmp_path, workflow_name):
         )
 
         provider = FixtureProvider([assess, no_candidate, ACCEPT])
+    elif workflow_name == "workflow_idea_to_workflow_package":
+        from tests.test_workflow_author import _answer
+
+        provider = FakeProvider([_answer] * 4)
     else:
         provider = FakeProvider([_successful_provider] * 64)
     result = Botpipe(workspace, provider=provider).run(
@@ -586,6 +591,13 @@ def test_lab_workflow_completes_with_captured_outputs(tmp_path, workflow_name):
         assert result.value.candidate is None
         assert result.value.provider_budget["used_turns"] == len(provider.calls)
         assert provider.calls, "No history must not bypass model-led investigation."
+    elif workflow_name == "workflow_idea_to_workflow_package":
+        assert result.value.shipped
+        assert result.value.validation.success
+        assert result.value.reference == (
+            ".botpipe/workflows/customer_escalation/flow.py:GeneratedWorkflow"
+        )
+        assert (Path(result.value.candidate_root) / result.value.reference.split(":")[0]).is_file()
     else:
         assert result.value.workflow_name == workflow_name
         assert result.value.phases

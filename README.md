@@ -132,8 +132,8 @@ attribution or an atomic snapshot of the repository.
 The packaged [`workflow_author`](botpipe/workflows/workflow_author/README.md)
 workflow turns a request into a reviewed, executable workflow candidate. It
 uses the authoring and prompting guides as provider instructions, builds in a
-run-owned candidate root, and returns typed file identities and validation
-evidence. It does not install or copy the candidate into the authoritative
+run-owned candidate root, and returns the brief, review findings, test transcript
+and validation evidence. It does not install or copy the candidate into the authoritative
 workspace; inspect the returned package before promoting it deliberately.
 
 ## Readable history

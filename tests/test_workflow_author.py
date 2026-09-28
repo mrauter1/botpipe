@@ -1,8 +1,7 @@
-"""Exercise the packaged author through real materialization, tests and replay."""
+"""Behavioral coverage for the packaged, bounded workflow author."""
 
 from __future__ import annotations
 
-import hashlib
 import importlib
 import importlib.abc
 import json
@@ -16,50 +15,67 @@ from botpipe import Botpipe
 from botpipe.discovery import discover_workflows, resolve_workflow
 from botpipe.policy import SandboxMode
 from botpipe.providers import FakeProvider
-from botpipe.workflows.workflow_author import (
-    Params,
-    WorkflowAuthorResult,
-    workflow_author,
-)
-from botpipe.workflows.workflow_author.guidance import (
-    load_authoring_guidance,
-)
-from tests.test_labs import _successful_provider
+from botpipe.workflows.workflow_author import Params, WorkflowAuthorResult, workflow_author
+from botpipe.workflows.workflow_author.guidance import load_authoring_guidance
 
 
 def _input(request):
     return json.JSONDecoder().raw_decode(request.prompt.split("\n\nInput:\n", 1)[1])[0]
 
 
-def _answer(request, *, broken_test=False):
-    result = _successful_provider(request)
-    if "workflow_package_manifest" in request.artifacts:
-        manifest_path = request.artifacts["workflow_package_manifest"]
-        manifest = json.loads(manifest_path.read_text())
-        name = manifest["package_name"]
-        expected = "wrong" if broken_test else "authored outcome"
-        manifest["files"].append(
-            {
-                "path": f"tests/runtime/test_{name}.py",
-                "content": (
-                    "from pathlib import Path\n"
-                    "from botpipe import Botpipe\n"
-                    "from botpipe.discovery import resolve_workflow\n"
-                    "from botpipe.providers import FakeProvider\n\n"
-                    "def test_outcome_and_replay(tmp_path):\n"
-                    f"    fn = resolve_workflow({manifest['workflow_reference']!r}, Path.cwd())\n"
-                    "    with Botpipe(tmp_path, provider=FakeProvider([])) as client:\n"
-                    "        first = client.run(fn, request='authored outcome')\n"
-                    "        assert first.ok, first.error\n"
-                    f"        assert first.value == {expected!r}\n"
-                    "        resumed = client.resume(first.run_id, workflow=fn)\n"
-                    "        assert resumed.ok, resumed.error\n"
-                    "        assert resumed.value == first.value\n"
-                ),
-            }
-        )
-        manifest_path.write_text(json.dumps(manifest))
-    return result
+def _brief(*, questions=()):
+    return {
+        "purpose": "Echo a text request to the caller.",
+        "definitions": ["Text is the caller's supplied request."],
+        "gates": ["Ask only if the input type is unclear."],
+        "scenarios": ["Given text, when run, then return that text; replay preserves it."],
+        "questions": list(questions),
+    }
+
+
+def _write_package(request, *, failing=False):
+    name = _input(request)["parameters"]["package_name"]
+    root = Path(request.workspace)
+    package = root / ".botpipe" / "workflows" / name
+    package.mkdir(parents=True, exist_ok=True)
+    (package / "flow.py").write_text(
+        "from botpipe import workflow\n"
+        f'@workflow(name="{name}")\n'
+        "def GeneratedWorkflow(request: str = '') -> str:\n"
+        "    return request\n",
+        encoding="utf-8",
+    )
+    (package / "workflow.toml").write_text(
+        f'name = "{name}"\nfunction = "GeneratedWorkflow"\n', encoding="utf-8"
+    )
+    test = root / "tests" / "runtime" / f"test_{name}.py"
+    test.parent.mkdir(parents=True, exist_ok=True)
+    expected = "incorrect outcome" if failing else "authored outcome"
+    test.write_text(
+        "from pathlib import Path\n"
+        "from botpipe import Botpipe\n"
+        "from botpipe.discovery import resolve_workflow\n"
+        "from botpipe.providers import FakeProvider\n\n"
+        "def test_outcome_and_replay(tmp_path):\n"
+        f"    fn = resolve_workflow('.botpipe/workflows/{name}/flow.py:GeneratedWorkflow', Path.cwd())\n"
+        "    with Botpipe(tmp_path, provider=FakeProvider([])) as client:\n"
+        "        first = client.run(fn, request='authored outcome')\n"
+        "        assert first.ok, first.error\n"
+        f"        assert first.value == {expected!r}\n"
+        "        resumed = client.resume(first.run_id, workflow=fn)\n"
+        "        assert resumed.ok, resumed.error\n"
+        "        assert resumed.value == first.value\n",
+        encoding="utf-8",
+    )
+    return f".botpipe/workflows/{name}/flow.py:GeneratedWorkflow"
+
+
+def _answer(request):
+    if request.preset == "query":
+        return {"ship": True, "findings": []}
+    if "Write the brief" in request.prompt:
+        return _brief()
+    return {"reference": _write_package(request), "notes": "Echo and replay tested."}
 
 
 def test_author_is_discoverable_without_labs_and_guides_match_sources(tmp_path):
@@ -68,278 +84,129 @@ def test_author_is_discoverable_without_labs_and_guides_match_sources(tmp_path):
     assert resolve_workflow("workflow-author", tmp_path) is workflow_author
     guidance = load_authoring_guidance.__wrapped__()
     for name in ("authoring.md", "prompting.md"):
-        source = Path("docs", name).read_text(encoding="utf-8")
-        assert source in guidance
+        assert Path("docs", name).read_text(encoding="utf-8") in guidance
 
 
 def test_author_runs_when_labs_cannot_be_imported(tmp_path):
     class BlockLabs(importlib.abc.MetaPathFinder):
         def find_spec(self, fullname, path=None, target=None):
             if fullname == "labs" or fullname.startswith("labs."):
-                raise ModuleNotFoundError("labs disabled for packaged-entry test")
+                raise ModuleNotFoundError("labs disabled")
 
-    loaded_labs = {
-        name: module for name, module in sys.modules.items() if name.startswith("labs")
-    }
+    loaded_labs = {name: module for name, module in sys.modules.items() if name.startswith("labs")}
     for name in loaded_labs:
         sys.modules.pop(name)
     blocker = BlockLabs()
     sys.meta_path.insert(0, blocker)
     try:
-        result = Botpipe(tmp_path, provider=FakeProvider([_answer] * 6)).run(
-            workflow_author,
-            Params(package_name="without_labs"),
-            request="Echo the request.",
+        run = Botpipe(tmp_path, provider=FakeProvider([_answer] * 4)).run(
+            workflow_author, Params(package_name="without_labs"), request="Echo the request."
         )
     finally:
         sys.meta_path.remove(blocker)
         sys.modules.update(loaded_labs)
+    assert run.ok, run.error
+    assert run.value.shipped and run.value.validation.success
 
-    assert result.ok, result.error
-    assert result.value.validation.success
 
-
-def test_author_builds_tests_and_returns_runtime_evidence_from_empty_workspace(
-    tmp_path,
-):
-    provider = FakeProvider([_answer] * 6)
-    expected_guidance = load_authoring_guidance.__wrapped__()
+def test_author_builds_in_project_copy_and_replays_without_model_calls(tmp_path):
+    original = tmp_path / "README.md"
+    original.write_text("Keep this project context.\n", encoding="utf-8")
+    unrelated = tmp_path / "tests" / "runtime" / "test_previous.py"
+    unrelated.parent.mkdir(parents=True)
+    unrelated.write_text("def test_unrelated(): assert False, 'unrelated failure'\n")
+    provider = FakeProvider([_answer] * 4)
     with Botpipe(tmp_path, provider=provider) as client:
-        run = client.run(
-            workflow_author, Params(package_name="echo"), request="Echo the request."
-        )
+        run = client.run(workflow_author, Params(package_name="echo"), request="Echo the request.")
         assert run.ok, run.error
         result = run.value
         assert isinstance(result, WorkflowAuthorResult)
-        assert result.workflow_name == "workflow_author"
-        assert result.package_name == "echo"
-        assert result.surface_boundary["editable_paths"] == []
-        assert Path(result.package_path, "flow.py").is_file()
-        assert result.validation.success
-        assert [check.phase for check in result.validation.checks] == [
-            "compile",
-            "test",
-        ]
-        test = result.validation.checks[-1]
-        assert test.exit_code == 0
-        assert "1 passed" in test.stdout
-        assert test.result["python_exit_code"] == 0
-        assert (
-            result.workflow_reference
-            == ".botpipe/workflows/echo/flow.py:GeneratedWorkflow"
-        )
-        assert result.validation.validated_root == result.candidate_root
-        for file in result.files:
-            data = (Path(result.candidate_root) / file.path).read_bytes()
-            assert hashlib.sha256(data).hexdigest() == file.sha256
-            assert len(data) == file.size_bytes
-        assert (
-            WorkflowAuthorResult.model_validate_json(result.model_dump_json()) == result
-        )
-        assert not list(tmp_path.iterdir()), (
-            "Authoring must not modify the source workspace"
-        )
+        assert result.shipped and result.rounds == 1 and result.findings == []
+        assert result.reference == ".botpipe/workflows/echo/flow.py:GeneratedWorkflow"
+        assert result.validation.success and result.validation.reference == result.reference
+        assert "1 passed" in result.validation.output
+        assert "unrelated failure" not in result.validation.output
+        assert Path(result.validation.transcript).is_file()
+        assert (Path(result.candidate_root) / "README.md").read_text() == original.read_text()
+        assert (Path(result.candidate_root) / result.reference.split(":")[0]).is_file()
+        assert original.read_text() == "Keep this project context.\n"
+        assert unrelated.is_file() and not (tmp_path / result.reference.split(":")[0]).exists()
+        assert WorkflowAuthorResult.model_validate_json(result.model_dump_json()) == result
+        run_calls = [call for call in provider.calls if call.preset == "run"]
+        review_calls = [call for call in provider.calls if call.preset == "query"]
+        assert len(run_calls) == 2 and len(review_calls) == 1
+        assert run_calls[0].session_key == run_calls[1].session_key
+        assert review_calls[0].session_key != run_calls[0].session_key
         for call in provider.calls:
-            assert call.instructions == expected_guidance
+            assert call.instructions == load_authoring_guidance.__wrapped__()
+            assert call.workspace == Path(result.candidate_root)
             if call.preset == "run":
                 assert call.policy.sandbox_mode is SandboxMode.WORKSPACE_WRITE
-                assert call.workspace != tmp_path
-            else:
-                assert call.preset == "query"
-                assert call.session_key is None
-                assert not call.artifacts
         count = len(provider.calls)
         replayed = client.resume(run.run_id, workflow=workflow_author)
         assert replayed.ok, replayed.error
-        assert replayed.value == result
-        assert len(provider.calls) == count
+        assert replayed.value == result and len(provider.calls) == count
 
 
-def test_failed_generated_test_returns_exact_feedback_and_repairs(tmp_path):
+def test_failed_generated_test_feeds_exact_failure_to_same_author_then_repairs(tmp_path):
     builds = []
 
     def answer(request):
-        payload = _input(request)
-        if "workflow_package_manifest" in request.artifacts:
-            builds.append(payload)
-        return _answer(request, broken_test=len(builds) == 1)
+        if request.preset == "query" or "Write the brief" in request.prompt:
+            return _answer(request)
+        builds.append(request)
+        return {"reference": _write_package(request, failing=len(builds) == 1)}
 
-    result = Botpipe(tmp_path, provider=FakeProvider([answer] * 7)).run(
-        workflow_author, Params(package_name="repair"), request="Echo the request."
+    run = Botpipe(tmp_path, provider=FakeProvider([answer] * 6)).run(
+        workflow_author, Params(package_name="repair", max_rounds=2), request="Echo the request."
     )
-    assert result.ok, result.error
-    assert len(builds) == 2
-    rejected = builds[1]["runtime_validation_feedback"]
-    assert rejected["candidate_evaluation"]["success"] is False
-    assert rejected["candidate_evaluation"]["checks"][-1]["exit_code"] != 0
-    assert "AssertionError" in rejected["candidate_evaluation"]["checks"][-1]["stdout"]
-    assert rejected["generated_candidate"]["root"] != result.value.candidate_root
-    assert result.value.validation.success
+    assert run.ok, run.error
+    assert run.value.shipped and run.value.rounds == 2
+    assert len(builds) == 2 and builds[0].session_key == builds[1].session_key
+    assert "generated test" in " ".join(_input(builds[1])["feedback"])
+    assert "AssertionError" in " ".join(_input(builds[1])["feedback"])
+    assert builds[0].workspace == builds[1].workspace == Path(run.value.candidate_root)
 
 
-def test_author_preserves_existing_runtime_tests_and_runs_only_generated_test(tmp_path):
-    existing = tmp_path / "tests/runtime/test_previous_workflow.py"
-    existing.parent.mkdir(parents=True)
-    original = "def test_existing_failure():\n    assert False, 'unrelated failure'\n"
-    existing.write_text(original)
-    result = Botpipe(tmp_path, provider=FakeProvider([_answer] * 6)).run(
-        workflow_author, Params(package_name="focused")
-    )
-    assert result.ok, result.error
-    check = result.value.validation.checks[-1]
-    assert check.phase == "test"
-    assert "1 passed" in check.stdout
-    assert "unrelated failure" not in check.stdout
-    assert existing.read_text() == original
-    assert not (existing.parent / "test_focused.py").exists()
-
-
-@pytest.mark.parametrize("change", [None, "edit", "delete", "add", "anchor"])
-def test_interrupted_handoff_rechecks_cached_candidate(tmp_path, monkeypatch, change):
+def test_interrupted_handoff_rejects_modified_cached_candidate(tmp_path, monkeypatch):
     module = importlib.import_module("botpipe.workflows.workflow_author.workflow")
-    derive = module.derive_surface_manifest
-    roots = []
+    original_verify = module.verify_candidate
+    count = 0
 
-    def interrupt_once(root, **kwargs):
-        roots.append(root)
-        if len(roots) == 1:
-            raise RuntimeError("Handoff interrupted after the child completed")
-        return derive(root, **kwargs)
+    def interrupt_once(root, validation):
+        nonlocal count
+        count += 1
+        if count == 1:
+            raise RuntimeError("handoff interrupted")
+        return original_verify(root, validation)
 
-    monkeypatch.setattr(module, "derive_surface_manifest", interrupt_once)
-    (tmp_path / "README.md").write_text("Original project.\n")
-    provider = FakeProvider([_answer] * 6)
+    monkeypatch.setattr(module, "verify_candidate", interrupt_once)
+    provider = FakeProvider([_answer] * 4)
     with Botpipe(tmp_path, provider=provider) as client:
         run = client.run(workflow_author, Params(package_name="immutable"))
-        assert run.status == "failed"
-        assert "Handoff interrupted" in str(run.error)
-        [root] = roots
-        entry = root / ".botpipe/workflows/immutable/flow.py"
-        if change == "edit":
-            entry.write_text(entry.read_text() + "\n# changed after review\n")
-        elif change == "delete":
-            entry.unlink()
-        elif change == "add":
-            (entry.parent / "unreviewed.py").write_text("UNREVIEWED = True\n")
-        elif change == "anchor":
-            (root / "README.md").write_text("Changed candidate anchor.\n")
-        calls = len(provider.calls)
+        assert run.status == "failed" and "handoff interrupted" in str(run.error)
+        # Obtain the run-owned candidate from the provider handoff, without relying on run-folder names.
+        candidate = Path(provider.calls[1].workspace)
+        (candidate / ".botpipe/workflows/immutable/flow.py").write_text("# changed after validation\n")
+        prior_calls = len(provider.calls)
         replayed = client.resume(run.run_id, workflow=workflow_author)
-        if change is None:
-            assert replayed.ok, replayed.error
-            assert replayed.value.validation.success
-        else:
-            assert replayed.status == "failed"
-            assert "changed after validation" in str(replayed.error)
-        assert len(roots) == 2
-        assert len(provider.calls) == calls
-        assert (tmp_path / "README.md").read_text() == "Original project.\n"
+        assert replayed.status == "failed"
+        assert "changed since validation" in str(replayed.error)
+        assert len(provider.calls) == prior_calls and count == 2
 
 
-def test_independent_reviews_rework_design_and_rebuild_source(tmp_path):
-    designs = []
-    evaluations = []
-
-    def answer(request):
-        payload = _input(request)
-        phase = payload["phase"]
-        if request.artifacts and phase == "design_workflow":
-            designs.append(payload)
-        if request.artifacts and phase == "evaluate_package":
-            evaluations.append(payload)
-        result = _answer(request)
-        if (
-            request.preset == "query"
-            and phase == "design_workflow"
-            and len(designs) == 1
-        ):
-            result.update(
-                outcome="needs_rework",
-                summary="Make the human-input boundary explicit.",
-            )
-        if (
-            request.preset == "query"
-            and phase == "evaluate_package"
-            and len(evaluations) == 1
-        ):
-            result.update(
-                outcome="needs_replan", summary="The prompt omits required evidence."
-            )
-        return result
-
-    provider = FakeProvider([answer] * 13)
-    with Botpipe(tmp_path, provider=provider) as client:
-        run = client.run(
-            workflow_author, Params(package_name="reviewed"), request="Echo."
-        )
-        assert run.ok, run.error
-        assert len(designs) == 3
-        assert "human-input boundary" in designs[1]["rework_feedback"]["summary"]
-        assert len(evaluations) == 2
-        rejected = designs[2]["rejected_candidate_evidence"]
-        assert rejected["generated_candidate"] == evaluations[0]["generated_candidate"]
-        assert run.value.candidate_root != rejected["generated_candidate"]["root"]
-        count = len(provider.calls)
-        replayed = client.resume(run.run_id, workflow=workflow_author)
-        assert replayed.ok, replayed.error
-        assert replayed.value == run.value
-        assert len(provider.calls) == count
-
-
-def test_author_can_pause_before_artifacts_and_resume(tmp_path):
-    def question(request):
-        assert not list(tmp_path.iterdir())
-        return {
-            "outcome": "question",
-            "summary": "What input should the workflow accept?",
-        }
-
-    framing = []
-
-    def answer(request):
-        payload = _input(request)
-        if payload["phase"] == "frame_request":
-            framing.append(payload)
-        return _answer(request)
-
-    provider = FakeProvider([question] + [answer] * 6)
-    with Botpipe(tmp_path, provider=provider) as client:
-        paused = client.run(workflow_author, Params(package_name="clarified"))
-        assert paused.status == "awaiting_input"
-        resumed = client.resume(paused.run_id, answer="Accept and echo a text request.")
-        assert resumed.ok, resumed.error
-        assert (
-            framing[0]["rework_feedback"]["input_answer"]
-            == "Accept and echo a text request."
-        )
-        assert resumed.value.validation.success
-
-
-def test_author_budget_covers_the_child_and_stays_exhausted_on_resume(tmp_path):
-    provider = FakeProvider([_answer] * 2)
-    with Botpipe(tmp_path, provider=provider) as client:
-        run = client.run(
-            workflow_author, Params(package_name="bounded", max_provider_turns=2)
-        )
-        assert run.status == "budget_exceeded"
-        count = len(provider.calls)
-        resumed = client.resume(run.run_id, workflow=workflow_author)
-        assert resumed.status == "budget_exceeded"
-        assert len(provider.calls) == count
-
-
-def test_author_test_arguments_are_unambiguous():
-    params = Params(package_name="example", target_test_argv=["python", "-m", "pytest"])
+def test_parameter_boundaries_and_budget_persist_across_resume(tmp_path):
+    params = Params(package_name="example", target_test_argv=[sys.executable, "-c", "pass"])
     assert Params.model_validate_json(params.model_dump_json()) == params
-    default = Params(package_name="example")
-    assert Params.model_validate_json(default.model_dump_json()) == default
-    assert default.target_test_command is None
     for argv in ([], [""], ["python", " "]):
         with pytest.raises(ValidationError):
             Params(package_name="example", target_test_argv=argv)
-    with pytest.raises(ValidationError, match="not both"):
-        Params(
-            package_name="example",
-            target_test_command="pytest",
-            target_test_argv=["pytest"],
-        )
+    with pytest.raises(ValidationError):
+        Params(package_name="../outside")
+    provider = FakeProvider([_answer] * 3)
+    with Botpipe(tmp_path, provider=provider) as client:
+        run = client.run(workflow_author, Params(package_name="bounded", max_provider_turns=2))
+        assert run.status == "budget_exceeded"
+        count = len(provider.calls)
+        replayed = client.resume(run.run_id, workflow=workflow_author)
+        assert replayed.status == "budget_exceeded" and len(provider.calls) == count

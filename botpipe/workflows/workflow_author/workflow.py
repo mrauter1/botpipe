@@ -1,352 +1,97 @@
-"""Build an executable workflow package from the user's selected request."""
+"""Understand, build, test and independently review in a bounded repair loop."""
 
-from __future__ import annotations
-
+import sys
 from pathlib import Path
 
-from botpipe import Artifact, Provider, current_run, provider_budget, workflow
-from botpipe.surface_identity import derive_surface_manifest
-from botpipe.workflows._authoring import (
-    ReplanRequired,
-    artifact,
-    finish,
-    observe_catalog,
-    run_phase,
-)
+from botpipe import Provider, Session, ask_human, current_run, provider_budget, workflow
 
-from .contracts import (
-    RequestFramingPayload,
-    WorkflowAuthorResult,
-    WorkflowBuildPayload,
-    WorkflowDesignPayload,
-    WorkflowEvaluationPayload,
-)
+from .contracts import Brief, Build, Review, WorkflowAuthorResult
 from .guidance import load_authoring_guidance
-from .materialization import (
-    WorkflowManifestValidationError,
-    _revalidate_generated_workflow_validation,
-    freeze_generated_workflow_candidate,
-    materialize_generated_workflow_manifest,
-    prepare_generated_workflow_candidate,
-    validate_generated_workflow_candidate,
-)
 from .params import Params
+from .validation import prepare_candidate, validate_candidate, verify_candidate
+
+UNDERSTAND = """Write the brief for the requested Botpipe workflow. Read the request
+and relevant files. Explain who runs it, its purpose, and what done looks like.
+Define material vague terms and distinguish requirements from chosen assumptions.
+For every human gate, say what the person sees and what their answer changes.
+Give concrete given/when/then scenarios, including realistic failures and exhaustion.
+Ask only when a wrong assumption would materially change the design. Preserve the
+original request and all clarification answers. Keep the brief concise."""
+
+BUILD = """Build the workflow in the brief using the supplied Botpipe guides.
+Write flow.py, workflow.toml and any needed assets under `package`, and behavioral
+FakeProvider tests at `tests`. Test each brief scenario's consequences, including
+human-answer use, feedback, failure and replay; merely copying answer text is not
+proof it changes behavior. Use project context in this candidate workspace.
+Run `check.argv` with `check.cwd` (an argument list, not a shell command). Read the
+resulting transcript as the person running the workflow. Fix unusable questions,
+lost decisions and incomplete handoffs. Transcript warnings are hints: transformed
+values and earlier session context can be valid. Scripted tests do not prove live
+model quality. Address feedback and its causes; preserve unaffected behavior and
+avoid unrelated changes. If evidence corrects an assumption, return an updated
+brief; preserve explicit requirements and surface material unresolved questions.
+Return the actual flow.py:callable reference and concise implementation notes."""
+
+REVIEW = """Independently decide whether this workflow serves the original request
+and the person's clarification answers. Check the brief against those authorities.
+Start with the test transcript: questions, answers, agent inputs and responses,
+and observed test outcomes. Does the person have enough context to answer? Do their
+choices reach the appropriate operation and change its behavior? Use source and
+tests to investigate causes, missing scenarios, invalid assumptions and vacuous
+assertions. Warnings about missing verbatim text are hints, not proof of lost data.
+Inspect the validation evidence and distinguish scripted behavior from untested
+live quality. You can inspect files, but cannot run tests or edit them in this
+read-only review. Ship only if nothing material is wrong; otherwise give concrete
+findings, including brief corrections when needed. Do not require unrelated work."""
 
 
-def _execute_workflow_package(
-    params: Params,
-    request: str = "",
-    *,
-    enforce_generated_test: bool,
-    workflow_name: str,
-) -> WorkflowAuthorResult:
-    """Execute the workflow idea to workflow package evidence workflow."""
-    _producer = Provider(instructions=load_authoring_guidance())
-    _reviewer = _producer.with_config(session=None)
-    context = {
-        "request": request,
-        "parameters": params.model_dump(mode="json"),
-        "enforce_generated_test": enforce_generated_test,
-    }
-    context["workflow_catalog"] = observe_catalog(include_labs=False)
-    run = current_run()
-    completed = []
-    prior_handles = ()
-    build_cycle = 0
-    frame_request_checkpoint = len(completed)
-    frame_request_reads = prior_handles
-    frame_request_context = dict(context)
-    while True:
-        try:
-            phase_1 = run_phase(
-                phase="frame_request",
-                returns=RequestFramingPayload,
-                replan_target="frame_request",
-                producer=_producer,
-                producer_prompt=str(
-                    Path(__file__).parent / "prompts" / "frame_producer.md"
-                ),
-                input=context,
-                reads=prior_handles,
-                writes=(artifact("workflow_brief.md"),),
-            )
-            completed.append(phase_1)
-            prior_handles = prior_handles + phase_1.handles
-            design_workflow_checkpoint = len(completed)
-            design_workflow_reads = prior_handles
-            design_workflow_context = dict(context)
-            while True:
-                try:
-                    phase_2 = run_phase(
-                        phase="design_workflow",
-                        returns=WorkflowDesignPayload,
-                        replan_target="frame_request",
-                        producer=_producer,
-                        reviewer=_reviewer,
-                        producer_prompt=str(
-                            Path(__file__).parent / "prompts" / "design_producer.md"
-                        ),
-                        reviewer_prompt=str(
-                            Path(__file__).parent / "prompts" / "design_reviewer.md"
-                        ),
-                        input=context,
-                        reads=prior_handles,
-                        writes=(
-                            artifact("workflow_design.md"),
-                            artifact("prompt_design.md"),
-                        ),
-                    )
-                    completed.append(phase_2)
-                    prior_handles = prior_handles + phase_2.handles
-                    build_reads = prior_handles
-                    build_validation_feedback = None
-                    build_errors: list[str] = []
-                    build_cycle += 1
-                    for build_attempt in range(1, 4):
-                        candidate = prepare_generated_workflow_candidate(
-                            str(run.workspace),
-                            str(
-                                run.folder
-                                / "generated-workflow-candidates"
-                                / f"cycle-{build_cycle}-attempt-{build_attempt}"
-                            ),
-                            params.package_name,
-                        )
-                        frozen_candidate = freeze_generated_workflow_candidate(
-                            candidate,
-                            str(
-                                run.folder
-                                / "generated-workflow-execution"
-                                / f"cycle-{build_cycle}-attempt-{build_attempt}"
-                                / "frozen"
-                            ),
-                        )
-                        build_input = {
-                            **context,
-                            "build_attempt": build_attempt,
-                            "max_build_attempts": 3,
-                        }
-                        if build_validation_feedback is not None:
-                            build_input["runtime_validation_feedback"] = (
-                                build_validation_feedback
-                            )
-                        phase_3 = run_phase(
-                            phase="build_package",
-                            returns=WorkflowBuildPayload,
-                            replan_target="design_workflow",
-                            producer=_producer,
-                            producer_prompt=str(
-                                Path(__file__).parent / "prompts" / "build_producer.md"
-                            ),
-                            input=build_input,
-                            reads=build_reads,
-                            writes=(
-                                # Capture bytes first so malformed provider JSON can
-                                # participate in the bounded manifest repair loop.
-                                Artifact.text("workflow_package_manifest.json"),
-                                artifact("implementation_notes.md"),
-                            ),
-                        )
-                        manifest_handle = next(
-                            handle
-                            for handle in phase_3.handles
-                            if str(handle.name) == "workflow_package_manifest"
-                        )
-                        try:
-                            generated_candidate = (
-                                materialize_generated_workflow_manifest(
-                                    candidate,
-                                    manifest_handle,
-                                    params.package_name,
-                                )
-                            )
-                        except WorkflowManifestValidationError as error:
-                            build_errors = [str(error)]
-                            build_validation_feedback = {
-                                "summary": (
-                                    "The generated workflow manifest could not be "
-                                    "materialized."
-                                ),
-                                "manifest_validation": {
-                                    "success": False,
-                                    "error_type": type(error).__name__,
-                                    "errors": build_errors,
-                                },
-                            }
-                            build_reads = prior_handles + phase_3.handles
-                            continue
-                        generated_validation = validate_generated_workflow_candidate(
-                            candidate,
-                            frozen_candidate,
-                            generated_candidate["workflow_reference"],
-                            str(
-                                run.folder
-                                / "generated-workflow-execution"
-                                / f"cycle-{build_cycle}-attempt-{build_attempt}"
-                                / "validation"
-                            ),
-                            params.target_test_command,
-                            manifest_diagnostics=generated_candidate[
-                                "reference_errors"
-                            ],
-                            target_test_argv=params.target_test_argv,
-                            enforce_generated_test=enforce_generated_test,
-                        )
-                        if generated_validation["validation"]["success"]:
-                            break
-                        build_errors = list(
-                            generated_validation["validation"].get("errors", [])
-                        )
-                        build_validation_feedback = {
-                            "summary": (
-                                "The isolated generated candidate did not validate."
-                            ),
-                            "generated_candidate": generated_candidate,
-                            "candidate_manifest": generated_validation[
-                                "candidate_manifest"
-                            ],
-                            "candidate_evaluation": generated_validation["validation"],
-                        }
-                        build_reads = prior_handles + phase_3.handles
-                    else:
-                        raise ValueError(
-                            "generated workflow did not validate after 3 build "
-                            "attempts: " + "; ".join(build_errors)
-                        )
-                    completed.append(phase_3)
-                    prior_handles = prior_handles + phase_3.handles
-                    context["generated_candidate"] = generated_candidate
-                    context["candidate_manifest"] = generated_validation[
-                        "candidate_manifest"
-                    ]
-                    context["candidate_evaluation"] = generated_validation["validation"]
-                    phase_4 = run_phase(
-                        phase="evaluate_package",
-                        returns=WorkflowEvaluationPayload,
-                        replan_target="design_workflow",
-                        producer=_producer,
-                        reviewer=_reviewer,
-                        producer_prompt=str(
-                            Path(__file__).parent / "prompts" / "evaluate_producer.md"
-                        ),
-                        reviewer_prompt=str(
-                            Path(__file__).parent / "prompts" / "evaluate_reviewer.md"
-                        ),
-                        input=context,
-                        reads=prior_handles,
-                        writes=(
-                            artifact("workflow_evaluation.md"),
-                            artifact("workflow_package_summary.json"),
-                            artifact("workflow_next_action.md"),
-                        ),
-                    )
-                    completed.append(phase_4)
-                    prior_handles = prior_handles + phase_4.handles
-                    break
-                except ReplanRequired as change:
-                    if change.target != "design_workflow":
-                        raise
-                    del completed[design_workflow_checkpoint:]
-                    # Build and evaluation replans must not reduce a concrete
-                    # candidate defect to a prose summary. Feed captured defect
-                    # reports and exact runtime evidence through redesign, then
-                    # rebuild a fresh isolated candidate.
-                    prior_handles = design_workflow_reads + change.handles
-                    rejected_candidate_evidence = {
-                        key: context[key]
-                        for key in (
-                            "generated_candidate",
-                            "candidate_manifest",
-                            "candidate_evaluation",
-                        )
-                        if key in context
-                    }
-                    context = {
-                        **design_workflow_context,
-                        "replan_feedback": change.evidence.model_dump(mode="json"),
-                        "replan_artifacts": [
-                            str(handle.path) for handle in change.handles
-                        ],
-                    }
-                    if rejected_candidate_evidence:
-                        context["rejected_candidate_evidence"] = (
-                            rejected_candidate_evidence
-                        )
-            break
-        except ReplanRequired as change:
-            if change.target != "frame_request":
-                raise
-            del completed[frame_request_checkpoint:]
-            prior_handles = frame_request_reads + change.handles
-            context = {
-                **frame_request_context,
-                "replan_feedback": change.evidence.model_dump(mode="json"),
-                "replan_artifacts": [str(handle.path) for handle in change.handles],
-            }
-    # Final semantic review can pause. Check the actual package bytes again
-    # before handing out the runtime's validation evidence.
-    _revalidate_generated_workflow_validation(
-        generated_validation,
-        candidate_workspace=candidate,
-        frozen_candidate=frozen_candidate,
-    )
-    result = finish(workflow_name, completed)
-    return WorkflowAuthorResult(
-        **result.model_dump(mode="python"),
-        package_name=params.package_name,
-        candidate_root=generated_candidate["root"],
-        package_path=str(
-            Path(generated_candidate["root"])
-            / ".botpipe"
-            / "workflows"
-            / params.package_name
-        ),
-        workflow_reference=generated_candidate["workflow_reference"],
-        surface_boundary=frozen_candidate.boundary,
-        files=generated_validation["candidate_manifest"]["files"],
-        validation=generated_validation["validation"],
-    )
-
-
-@workflow(name="workflow_author_build", version="1")
-def _build_workflow_package(
-    params: Params,
-    request: str = "",
-    *,
-    enforce_generated_test: bool,
-    workflow_name: str,
-) -> WorkflowAuthorResult:
-    """Execute the canonical authoring phases within one durable budget."""
-    with provider_budget(max_turns=params.max_provider_turns):
-        return _execute_workflow_package(
-            params,
-            request,
-            enforce_generated_test=enforce_generated_test,
-            workflow_name=workflow_name,
-        )
-
-
-@workflow(name="workflow_author", version="2")
+@workflow(name="workflow_author", version="3")
 def workflow_author(params: Params, request: str = "") -> WorkflowAuthorResult:
-    """Design, build, test, and independently review a new workflow package."""
-    result = _build_workflow_package(
-        params,
-        request,
-        enforce_generated_test=True,
-        workflow_name="workflow_author",
-    )
-    # A completed authoring operation replays from its cached result. Recheck the
-    # complete candidate when an interrupted run re-enters its final handoff.
-    root = Path(result.candidate_root)
-    surface = derive_surface_manifest(
-        root,
-        expected_root=Path(result.validation.validated_root),
-        boundary=result.surface_boundary,
-        surface_kind="candidate",
-    )
-    if surface["surface_id"] != result.validation.candidate_surface_id:
-        raise ValueError("generated workflow candidate changed after validation")
-    return result
-
-
-__all__ = ["_build_workflow_package", "workflow_author"]
+    with provider_budget(max_turns=params.max_provider_turns):
+        run = current_run()
+        root = prepare_candidate(str(run.workspace), str(run.folder / "candidate"), params.package_name)
+        agent = Provider(workspace=root, instructions=load_authoring_guidance())
+        author, reviewer = Session(), Session()
+        context = {"request": request, "parameters": params.model_dump(mode="json"), "answers": []}
+        brief = agent.run(UNDERSTAND, input=context, returns=Brief, session=author).value
+        feedback, validation, reference = [], None, None
+        package = f".botpipe/workflows/{params.package_name}"
+        for round_ in range(1, params.max_rounds + 1):
+            if brief.questions:
+                answer = ask_human("Before building:\n- " + "\n- ".join(brief.questions))
+                context["answers"].append({"questions": brief.questions, "answer": answer})
+                brief = agent.run(UNDERSTAND, input={**context, "brief": brief.model_dump()},
+                                  returns=Brief, session=author).value
+                if brief.questions:
+                    feedback = brief.questions
+                    continue
+            transcript = str(Path(root) / ".botpipe" / "transcripts" / f"round-{round_}.md")
+            check = {"cwd": root, "argv": [sys.executable, "-m",
+                     "botpipe.workflows.workflow_author.validation", params.package_name,
+                     "--transcript", transcript]}
+            reference, validation = None, None
+            built = agent.run(BUILD, input={**context, "brief": brief.model_dump(),
+                              "package": package, "tests": f"tests/runtime/test_{params.package_name}.py",
+                              "check": check, "transcript": transcript, "feedback": feedback},
+                              returns=Build, session=author).value
+            brief = built.brief or brief
+            if brief.questions:
+                feedback = brief.questions
+                continue
+            validation = validate_candidate(root, params.package_name, built.reference, transcript,
+                                            extra_argv=params.target_test_argv)
+            if not validation.success:
+                feedback = validation.errors
+                continue
+            reference = validation.reference
+            review = agent.query(REVIEW, input={**context, "brief": brief.model_dump(),
+                                 "package": package, "transcript": transcript,
+                                 "validation": validation.model_dump(), "builder_notes": built.notes},
+                                 returns=Review, session=reviewer).value
+            feedback = review.findings
+            if review.ship:
+                verify_candidate(root, validation)
+                return WorkflowAuthorResult(reference=reference, shipped=True, rounds=round_,
+                                            findings=[], brief=brief, candidate_root=root, validation=validation)
+        return WorkflowAuthorResult(reference=reference, shipped=False, rounds=params.max_rounds,
+                                    findings=feedback, brief=brief, candidate_root=root, validation=validation)
