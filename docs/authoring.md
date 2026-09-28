@@ -102,7 +102,7 @@ explicit human gate where needed.
 | One result enables the next | sequential calls | Pass the validated value or captured artifact. |
 | Exactly one path should run | `if` / `match` | Branch on a typed decision. |
 | Several tasks are independent | `parallel` / `aparallel` | Use separate sessions; join after all required branches finish. |
-| Work may need correction | bounded `for` loop | Feed exact findings back and define exhaustion. |
+| Work may need correction | bounded `for` loop | Feed exact findings back into the producer's session and define exhaustion. |
 | A subprocess needs a replay scope | nested `@workflow` call | Treat the child as a durable unit. |
 | Authority or information is human | `ask_human` | Ask a typed, answerable question. |
 
@@ -223,6 +223,26 @@ Use `Worklist.from_artifact` when a generated list must keep the same selection
 across resume. Give items stable unique IDs, use `Session.work_item(item)` for
 item continuity, and call `complete` only after acceptance.
 
+### Share sessions when context is dependent
+
+A session is the agent's working memory. When a step depends on what an earlier
+step read, reasoned, decided, or was told, continue that step's session instead
+of rebuilding its context from a summary. Rework after review or a human note,
+successive rounds of one producer, and a step that builds on earlier work
+(brief, then build, then fix) belong in one session. The agent keeps its
+reasoning, and the workflow stops paying to re-send the same material.
+
+Start a new session only for a reason you can name:
+
+- independence: a reviewer or judge must not inherit the producer's rationale;
+- concurrency: parallel branches cannot share one serialized session;
+- scale: `Session.work_item(item)` keeps unrelated items out of each other's context;
+- a clean slate: the conversation has derailed, or blindness is the point.
+
+A shared session carries context, not evidence. Still pass each turn the inputs
+it acts on (human answers, review findings, the artifact to change) so they are
+recorded, replayable, and visible to tests.
+
 Reusing a provider continues one conversation. `with_config` shares it unless
 `session=` replaces it. Use `Session.task(key)` for task continuity, `Session()`
 for a distinct durable conversation, and `session=None` for independent turns.
@@ -273,8 +293,8 @@ The packaged [workflow author](../botpipe/workflows/workflow_author/README.md)
 applies this guide and the prompting guide to build a workflow package in a
 run-owned candidate root. It requires behavioral evidence for the generated
 entry point, validates compilation, import, discovery, and a focused generated
-test or caller-supplied test argv, and returns typed paths, file hashes, checks,
-and errors. The result is a candidate for inspection and deliberate promotion;
+behavioral test, followed by optional caller-supplied test argv. It returns the
+brief, review findings, transcript, tested content identity and validation errors. The result is a candidate for inspection and deliberate promotion;
 the workflow does not copy it into the authoritative workspace. A passing fake
 or narrowly mocked check proves only the behavior it exercised, not live-system
 quality.
@@ -288,5 +308,6 @@ quality.
 - A split, branch, parallel join, loop, or review has a concrete reason.
 - Permissions are code, not prompt promises; external effects have honest retry policy.
 - Review is independent where needed and its validation claim matches the operation.
+- Dependent steps continue one session; each new session has a named reason.
 - Repairable output mistakes, integrity failures, and uncertain effects have distinct handling.
 - Tests assert outcomes, artifacts, routing, and replay—not exact prose or one path.

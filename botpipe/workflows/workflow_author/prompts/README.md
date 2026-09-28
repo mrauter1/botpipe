@@ -1,9 +1,0 @@
-# Prompt contract
-
-The SOP has four producer prompts: frame the selected request, design the executable workflow and its prompts, build complete source bytes, and evaluate the materialized result. Design and final evaluation have independent read-only reviewers because rejection at those boundaries changes costly downstream work.
-
-Prompts define stable obligations—purpose, available evidence, trust, handoff, semantic decisions, acceptance, and recovery—while leaving sound investigation and implementation methods flexible. Prompt design is a first-class reviewed artifact. Every provider receives the loaded authoring and prompting guides in its instructions; no prompt relies on provider memory or a route-table engine.
-
-`accepted` requires every declared phase artifact and advances. Control outcomes may capture partial real evidence, or no artifact when none exists: they must never create placeholder files merely to satisfy the acceptance contract. `needs_rework` repeats the current phase with available captured feedback. `needs_replan` returns to an explicit Python-owned upstream boundary. `question` and `blocked` collect a genuine missing prerequisite; `failed` stops the workflow.
-
-For evaluation specifically, `needs_rework` is limited to correcting evaluation/report artifacts against the same candidate. A generated source, prompt, package behavior, implementation-proof, or design defect uses `needs_replan`; the workflow carries its immutable findings and exact candidate records through `design_workflow`, then builds a fresh isolated candidate. With `enforce_generated_test`, the manifest must always include the focused generated-entry pytest. Explicit test argv replaces its automatic selection as the executed command, not its required presence in the package. Tests should cover meaningful behavior, routes, and replay where relevant; there is no fixed quota, and fake or vacuous checks do not establish live quality.
