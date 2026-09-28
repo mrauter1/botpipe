@@ -458,7 +458,8 @@ def test_labs_discovery_matches_behavioral_scenarios():
     ]
     names = [entry.name for entry in entries]
     assert len(names) == len(set(names))
-    assert set(names) == set(LAB_SCENARIOS)
+    # Storefronts exercises its interactive scenario in test_idea_to_storefronts.py.
+    assert set(names) == set(LAB_SCENARIOS) | {"idea_to_storefronts"}
 
 
 @pytest.mark.parametrize(
