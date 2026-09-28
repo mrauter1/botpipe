@@ -1,0 +1,6 @@
+name = "idea_to_storefronts"
+function = "idea_to_storefronts"
+version = "2"
+title = "One Idea, Many Storefronts"
+description = "Research a niche into one validated idea, then produce scripts, a paid digital product, per-platform publish packages, and a learnings note, gated by the creator at every human decision point."
+aliases = ["storefronts"]
