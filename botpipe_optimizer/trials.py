@@ -57,11 +57,13 @@ def run_trial(
     identity = {
         "schema": "botpipe.workflow-trial.v1",
         "code_root": str(root),
-        "code_tree_sha256": _tree_digest(root),
+        "code_tree_sha256": _code_tree_digest(root),
         "workflow_reference": workflow_reference,
         "case": case.model_dump(mode="json"),
         "fixture_root": None if fixture is None else str(fixture),
-        "fixture_tree_sha256": None if fixture is None else _tree_digest(fixture),
+        "fixture_tree_sha256": (
+            None if fixture is None else _fixture_tree_digest(fixture)
+        ),
         "settings": settings.model_dump(mode="json"),
         "provider_config": provider_config,
         "policy": policy,
@@ -169,10 +171,18 @@ def run_trial(
         log_omissions.append("worker stdout was truncated")
     if process.stderr_truncated:
         log_omissions.append("worker stderr was truncated")
-    changed = _changed_input(root, identity["code_tree_sha256"], "code_root")
+    changed = _changed_input(
+        root,
+        identity["code_tree_sha256"],
+        "code_root",
+        digest=_code_tree_digest,
+    )
     if fixture is not None:
         changed = changed or _changed_input(
-            fixture, identity["fixture_tree_sha256"], "fixture_root"
+            fixture,
+            identity["fixture_tree_sha256"],
+            "fixture_root",
+            digest=_fixture_tree_digest,
         )
     if changed is not None:
         return TrialResult(
@@ -387,27 +397,61 @@ def _json_bytes(value: Any) -> bytes:
     ).encode("utf-8")
 
 
-def _tree_digest(root: Path) -> str:
+def _tree_digest(
+    root: Path,
+    *,
+    ignore_transient_paths: bool,
+    include_copied_metadata: bool,
+) -> str:
     digest = hashlib.sha256()
     for path in sorted(
         root.rglob("*"), key=lambda item: item.relative_to(root).as_posix()
     ):
         relative_path = path.relative_to(root)
-        if _transient_path(relative_path):
+        if ignore_transient_paths and _transient_path(relative_path):
             continue
         relative = relative_path.as_posix().encode("utf-8")
         if path.is_symlink():
             digest.update(b"L\0" + relative + b"\0" + os.readlink(path).encode("utf-8"))
         elif path.is_dir():
             digest.update(b"D\0" + relative + b"\0")
+            if include_copied_metadata:
+                metadata = path.stat()
+                if os.name == "posix":
+                    mode = stat.S_IMODE(metadata.st_mode)
+                    digest.update(b"M\0" + mode.to_bytes(2, "big") + b"\0")
+                digest.update(b"T\0" + str(metadata.st_mtime_ns).encode() + b"\0")
         elif path.is_file():
             digest.update(b"F\0" + relative + b"\0")
+            if include_copied_metadata:
+                metadata = path.stat()
+                if os.name == "posix":
+                    mode = stat.S_IMODE(metadata.st_mode)
+                    digest.update(b"M\0" + mode.to_bytes(2, "big") + b"\0")
+                digest.update(b"T\0" + str(metadata.st_mtime_ns).encode() + b"\0")
             with path.open("rb") as stream:
                 for chunk in iter(lambda: stream.read(1024 * 1024), b""):
                     digest.update(chunk)
         else:
             raise ValueError(f"tree contains a non-regular entry: {path}")
     return digest.hexdigest()
+
+
+def _code_tree_digest(root: Path) -> str:
+    # Importing from a frozen source tree creates Python caches. They are not
+    # source inputs and must not invalidate the durable trial on resume.
+    return _tree_digest(
+        root, ignore_transient_paths=True, include_copied_metadata=False
+    )
+
+
+def _fixture_tree_digest(root: Path) -> str:
+    # Every fixture path is an execution input, even when its name resembles a
+    # source-tree cache. Copied timestamps and POSIX permissions can also change
+    # workflow behavior.
+    return _tree_digest(
+        root, ignore_transient_paths=False, include_copied_metadata=True
+    )
 
 
 def _transient_path(path: Path) -> bool:
@@ -419,9 +463,15 @@ def _transient_path(path: Path) -> bool:
     )
 
 
-def _changed_input(root: Path, expected: Any, label: str) -> str | None:
+def _changed_input(
+    root: Path,
+    expected: Any,
+    label: str,
+    *,
+    digest,
+) -> str | None:
     try:
-        current = _tree_digest(root)
+        current = digest(root)
     except (OSError, ValueError) as exc:
         return f"could not verify frozen {label}: {type(exc).__name__}: {exc}"
     return None if current == expected else f"frozen {label} changed during trial"

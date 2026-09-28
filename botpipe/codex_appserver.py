@@ -8,6 +8,7 @@ import os
 import platform
 import queue
 import shutil
+import stat
 import subprocess
 import sys
 import threading
@@ -37,6 +38,7 @@ class _RpcCancelled(RuntimeError):
 
 _CLOSED = object()
 _PROCESS_REAP_GRACE_SECONDS = 5.0
+_ISOLATED_CONTEXT_SETTING = "botpipe.isolated_context"
 _TOOL_ITEMS = {
     "commandExecution": "shell",
     "fileChange": "apply_patch",
@@ -111,6 +113,7 @@ _DISABLED_ONLY_TOOL_FEATURES = frozenset(
         "in_app_local_automation",
         "js_repl",
         "js_repl_tools_only",
+        "memory_tool",
         "plugin_hooks",
         "plugins",
         "recommended_plugins",
@@ -398,6 +401,11 @@ def _tool_config(
     request: Any, capabilities: CodexCapabilities, ambient_mcp: frozenset[str]
 ) -> dict[str, Any]:
     config = dict(_plain(request.settings or {}, label="settings"))
+    isolated = config.pop(_ISOLATED_CONTEXT_SETTING, None)
+    if isolated is not None and isolated is not True:
+        raise CapabilityError(
+            f"{_ISOLATED_CONTEXT_SETTING} must be true when provided"
+        )
     forbidden = {"approval_policy", "sandbox_mode", "sandbox_workspace_write"}
     if request.preset in {"query", "generate"}:
         forbidden.add("mcp_servers")
@@ -432,6 +440,16 @@ def _tool_config(
         for feature in _DISABLED_ONLY_TOOL_FEATURES:
             if feature in known_features:
                 config[f"features.{feature}"] = False
+    if isolated:
+        config.update(
+            {
+                "project_doc_max_bytes": 0,
+                "memories.use_memories": False,
+                "memories.generate_memories": False,
+                "skills.bundled.enabled": False,
+                "skills.include_instructions": False,
+            }
+        )
     if tools is None:
         return config
     known_features = {item["name"] for item in capabilities.features}
@@ -473,6 +491,92 @@ def _tool_config(
             }
         )
     return config
+
+
+def _isolated_context(request: Any) -> bool:
+    settings = request.settings or {}
+    if not isinstance(settings, Mapping):
+        return False
+    value = settings.get(_ISOLATED_CONTEXT_SETTING)
+    if value is not None and value is not True:
+        raise CapabilityError(
+            f"{_ISOLATED_CONTEXT_SETTING} must be true when provided"
+        )
+    return value is True
+
+
+def _effective_codex_home(environment: Mapping[str, str]) -> Path:
+    merged = {**os.environ, **environment}
+    configured = merged.get("CODEX_HOME")
+    if configured:
+        path = Path(configured)
+        if not path.is_absolute():
+            raise CapabilityError(
+                "isolated context requires CODEX_HOME to be an absolute path"
+            )
+        return path
+    if os.name == "nt":
+        home = merged.get("USERPROFILE") or merged.get("HOME")
+    else:
+        home = merged.get("HOME")
+    if home:
+        path = Path(home)
+        if not path.is_absolute():
+            raise CapabilityError(
+                "isolated context cannot determine an absolute Codex home"
+            )
+        return path / ".codex"
+    return Path.home() / ".codex"
+
+
+def _require_no_global_instructions(environment: Mapping[str, str]) -> None:
+    home = _effective_codex_home(environment)
+    for filename in ("AGENTS.override.md", "AGENTS.md"):
+        path = home / filename
+        try:
+            metadata = path.stat()
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            raise CapabilityError(
+                "isolated context cannot verify global Codex instructions"
+            ) from exc
+        if not stat.S_ISREG(metadata.st_mode):
+            continue
+        # Reject any bytes, including whitespace, rather than reading an
+        # unbounded host-owned instruction file into the Botpipe process.
+        if metadata.st_size:
+            raise CapabilityError(
+                "isolated context is unavailable while global Codex "
+                f"instructions are configured in {filename}"
+            )
+
+
+def _require_isolated_context(
+    request: Any, capabilities: CodexCapabilities, environment: Mapping[str, str]
+) -> bool:
+    if not _isolated_context(request):
+        return False
+    if request.preset != "generate":
+        raise CapabilityError("isolated context requires a generate operation")
+    if request.tools != ():
+        raise CapabilityError("isolated context requires an empty tool allowlist")
+    if not isinstance(request.instructions, str) or not request.instructions.strip():
+        raise CapabilityError("isolated context requires explicit instructions")
+    if not capabilities.supports_instructions:
+        raise CapabilityError(
+            "installed Codex cannot apply isolated developer instructions"
+        )
+    if not capabilities.supports_base_instructions:
+        raise CapabilityError(
+            "installed Codex cannot replace base instructions for isolated context"
+        )
+    if "skills/list" not in capabilities.methods:
+        raise CapabilityError(
+            "installed Codex cannot enumerate skills for isolated context"
+        )
+    _require_no_global_instructions(environment)
+    return True
 
 
 class CodexAppServerAdapter:
@@ -1191,6 +1295,11 @@ class CodexAppServerAdapter:
         except TimeoutError as exc:
             raise timed_out() from exc
         capabilities.require(request.preset)
+        isolated = _require_isolated_context(request, capabilities, self.env)
+        if isolated and request.session_id is not None:
+            raise CapabilityError(
+                "isolated context requires a fresh generate operation"
+            )
         if request.on_checkpoint is not None:
             request.on_checkpoint({"disposal": {"status": "pending"}})
         try:
@@ -1198,6 +1307,66 @@ class CodexAppServerAdapter:
         except TimeoutError as exc:
             raise timed_out() from exc
         config = _tool_config(request, capabilities, self._mcp_servers)
+        if isolated:
+            workspace = str(Path(request.workspace).resolve())
+            try:
+                inventory = self._rpc(
+                    "skills/list",
+                    {"cwds": [workspace], "forceReload": True},
+                    remaining(10),
+                    deadline=deadline,
+                )
+            except TimeoutError as exc:
+                raise timed_out() from exc
+            except CodexProtocolError as exc:
+                raise CapabilityError(
+                    "Codex could not enumerate skills for isolated context"
+                ) from exc
+            data = inventory.get("data")
+            if not isinstance(data, list) or len(data) != 1:
+                raise CapabilityError(
+                    "Codex returned an invalid skill inventory for isolated context"
+                )
+            entry = data[0]
+            if not isinstance(entry, Mapping):
+                raise CapabilityError(
+                    "Codex returned an invalid skill inventory for isolated context"
+                )
+            inventory_cwd = entry.get("cwd")
+            if (
+                not isinstance(inventory_cwd, str)
+                or not Path(inventory_cwd).is_absolute()
+                or os.path.normcase(os.path.realpath(inventory_cwd))
+                != os.path.normcase(os.path.realpath(workspace))
+            ):
+                raise CapabilityError(
+                    "Codex returned an invalid skill inventory for isolated context"
+                )
+            skills, errors = entry.get("skills"), entry.get("errors")
+            if not isinstance(skills, list) or not isinstance(errors, list) or errors:
+                raise CapabilityError(
+                    "Codex could not enumerate every skill for isolated context"
+                )
+            paths: set[str] = set()
+            for skill in skills:
+                path = skill.get("path") if isinstance(skill, Mapping) else None
+                if (
+                    not isinstance(path, str)
+                    or not path
+                    or not Path(path).is_absolute()
+                ):
+                    raise CapabilityError(
+                        "Codex returned an invalid skill path for isolated context"
+                    )
+                paths.add(path)
+            config.update(
+                {
+                    "skills.config": [
+                        {"path": path, "enabled": False}
+                        for path in sorted(paths)
+                    ],
+                }
+            )
         sandbox_name, sandbox_policy = _sandbox(request)
         profile_hash = _profile_hash(request, config)
         model = getattr(request.policy, "model", None)
@@ -1256,6 +1425,8 @@ class CodexAppServerAdapter:
         }
         if request.instructions:
             common["developerInstructions"] = request.instructions
+        if isolated:
+            common["baseInstructions"] = request.instructions
         if request.on_checkpoint is not None:
             request.on_checkpoint(
                 {
@@ -1703,6 +1874,7 @@ class CodexAppServerAdapter:
         capabilities = self.probe(deadline=deadline)
         if "thread/read" not in capabilities.methods:
             return "unknown", None
+        isolated = _isolated_context(request)
         if request.on_checkpoint is not None:
             # Native history inspection can start a replacement server. An old
             # exit receipt must not authorize releasing this server's binding.
@@ -1729,6 +1901,8 @@ class CodexAppServerAdapter:
             common["model"] = model
         if request.instructions:
             common["developerInstructions"] = request.instructions
+        if isolated:
+            common["baseInstructions"] = request.instructions
 
         def read_turn(
             *, read_deadline: float = deadline

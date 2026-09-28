@@ -75,6 +75,25 @@ while True:
     if method == "mcpServerStatus/list":
         send({"id": request["id"], "result": {"data": []}})
         continue
+    if method == "skills/list":
+        skill_path = os.environ.get("BOTPIPE_FAKE_SKILL_PATH")
+        skills = [{"path": skill_path}] if skill_path else []
+        errors = json.loads(os.environ.get("BOTPIPE_FAKE_SKILL_ERRORS", "[]"))
+        send(
+            {
+                "id": request["id"],
+                "result": {
+                    "data": [
+                        {
+                            "cwd": request["params"]["cwds"][0],
+                            "skills": skills,
+                            "errors": errors,
+                        }
+                    ]
+                },
+            }
+        )
+        continue
     if method == "thread/unsubscribe":
         send({"id": request["id"], "result": {"status": "unsubscribed"}})
         continue

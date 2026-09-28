@@ -40,17 +40,30 @@ inferences carry no direct citation. Python checks each basis, path boundary,
 and quote verbatim. The source and evidence inventories are hashed and rechecked
 between analysis, proposal, and review turns.
 
+Only canonical runtime artifact handles authorize reading a referenced file;
+ordinary result dictionaries are not file capabilities. Capture checks file size
+before reading and bounds each read by the remaining evidence allowance.
+Oversized files are listed as omissions rather than read in full just to hash
+content that will not be available to the investigator.
+
 The investigation may repair a correctable citation, quote, or model-proposed
 trial-plan error with precise feedback. `max_grounding_repairs` defaults to 2
 additional attempts. Path escapes, changed frozen bytes, unsafe ownership, and
 other integrity failures fail rather than entering this repair loop. Caller
 supplied invalid trial cases also fail instead of being rewritten by the model.
+The same repair boundary covers model-owned proposal and review validation.
+Exact duplicate entries in set-like output fields are normalized without an
+extra provider call; blank or otherwise invalid entries receive repair feedback.
 
 The investigation explains intent, assesses the whole workflow and relevant
 steps, and freezes a qualitative rubric before a candidate is proposed. Each
 criterion names the evidence needed, how it can be falsified, and whether it is
 an obligation that must be preserved. Proposal and implementation receive that
 same rubric and cannot redefine success around the candidate.
+Proposal source citations must already support the assessment and are passed
+explicitly to the reviewer. Edit targets need not be those same files: the
+reviewer judges whether a cross-file change follows from the diagnosis, while
+the runtime enforces the captured baseline boundary.
 
 `objective` is a free-text priority. `metric_view` may select `reliability`,
 `token_usage`, or `latency`; otherwise the evidence record retains its
@@ -123,6 +136,11 @@ execution order and anonymous A/B label are derived deterministically from the
 run ID, case ID, and repetition, then recorded per pair. This reduces incidental
 order bias without claiming randomness. The trial identity binds code-tree and
 fixture-tree hashes; it does not add or rely on a Git HEAD record.
+Fixture hashes cover all supplied paths, including `build/` and cache-like names,
+copied file/directory modification times, and permission modes on POSIX.
+Code-tree cache exclusions do not apply to fixtures.
+Reusing a trial directory with changed fixture inputs fails before returning a
+cached result or dispatching another run.
 
 `TrialSettings` controls the native path:
 
@@ -150,12 +168,29 @@ the separately configured judge turns or time.
 A tool-free, fresh-session judge receives the fixed task, rubric, comparison
 rule, and sanitized behavioral outputs under anonymous labels. Source paths,
 provider inputs, run identities, and other arm-identifying runtime metadata are
-removed. This provides blindness only to the extent that the outputs themselves
+removed. Its explicit instructions replace inherited provider/native base and
+developer instructions, its workspace is empty and stable on replay, and native
+project instructions, skill instructions, and memory injection are disabled.
+Native skills are explicitly disabled, including skills named in evidence;
+hiding the skill catalog alone would not prevent their instructions from loading.
+Model and endpoint routing are retained, including custom provider definitions
+and ChatGPT transport origins, for both workflow and standalone calls. Other
+inherited settings, including profiles and custom instruction/catalog files,
+are excluded from judge requests.
+Native capability failures produce `inconclusive`, with no contextual fallback.
+Codex currently loads global `AGENTS.md`/`AGENTS.override.md` separately; when
+global instructions cannot be excluded, judging is unavailable. Botpipe does not
+modify those files or relocate credentials to bypass that boundary.
+
+This provides blindness only to the extent that the outputs themselves
 do not reveal their origin. Do not describe a comparison as blind when names or
 behavior intrinsically identify an arm.
 
 The judge applies every criterion to both outputs and must quote exact excerpts
 from its packet. Optional operation detail may be omitted to fit the byte limit.
+Depth-limit omissions are also propagated into the packet: loss of essential
+return/artifact content prevents judging; loss of optional trace detail is
+reported without making the packet incomplete.
 Missing essential return values, errors, artifact evidence, or other required
 content makes the packet and result `inconclusive`; it is never silently
 truncated into proof. Raw/binary artifact content is not supplied to the judge.

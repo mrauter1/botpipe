@@ -18,6 +18,7 @@ import threading
 import time
 import uuid
 from contextlib import suppress
+from dataclasses import replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -25,6 +26,7 @@ import pytest
 from pydantic import BaseModel
 
 from botpipe import Artifact, Botpipe, Provider, Session
+from botpipe.capabilities import CapabilityError
 from botpipe.codex_appserver import CodexAppServerAdapter, CodexProtocolError
 from botpipe.errors import UncertainOperation
 from botpipe.policy import NetworkMode, Policy, SandboxMode
@@ -372,6 +374,7 @@ def test_latest_native_default_session_presets_and_read_only_enforcement(native)
     assert discovered.version.startswith("codex-cli ")
     assert discovered.supports_turn_sandbox
     assert discovered.supports_interrupt
+    assert discovered.supports_base_instructions
     assert discovered.presets["run"].available
     assert discovered.presets["query"].available
     assert discovered.presets["generate"].available
@@ -487,9 +490,96 @@ def test_latest_native_default_session_presets_and_read_only_enforcement(native)
     ]
     assert len(function_outputs) == 1
     output = function_outputs[0]["output"].lower()
-    assert any(word in output for word in ("denied", "read-only", "permission", "not permitted")), output
+    assert any(
+        word in output
+        for word in ("denied", "read-only", "permission", "not permitted")
+    ), output
     report.write_text("later workspace edit", encoding="utf-8")
     assert default.artifacts.report.read_text() == "native artifact"
+
+
+def test_latest_native_isolated_context_excludes_ambient_instruction_sources(
+    native,
+) -> None:
+    client, server, workspace = native
+    codex_home = Path(client.env["CODEX_HOME"])
+    ambient_base = codex_home / "ambient-base.md"
+    ambient_base.write_text("AMBIENT_BASE_SENTINEL", encoding="utf-8")
+    config_path = codex_home / "config.toml"
+    setup_config = (
+        config_path.read_text(encoding="utf-8") if config_path.exists() else ""
+    )
+    config_path.write_text(
+        "developer_instructions = \"AMBIENT_DEVELOPER_SENTINEL\"\n"
+        f"model_instructions_file = {json.dumps(str(ambient_base))}\n"
+        f"{setup_config.rstrip()}\n"
+        "[features]\nmemories = true\n"
+        "[skills]\ninclude_instructions = true\n",
+        encoding="utf-8",
+    )
+    skill = codex_home / "skills" / "ambient-skill"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text(
+        "---\nname: ambient-skill\ndescription: AMBIENT_SKILL_SENTINEL\n---\n"
+        "AMBIENT_SKILL_BODY_SENTINEL",
+        encoding="utf-8",
+    )
+    (workspace / "AGENTS.md").write_text(
+        "PROJECT_AGENTS_SENTINEL", encoding="utf-8"
+    )
+    instruction = "NATIVE_ISOLATED_JUDGE_INSTRUCTION"
+    call = replace(
+        native_request(
+            workspace,
+            operation_id="native-isolated-context",
+            preset="generate",
+            prompt="NATIVE_ISOLATED_PACKET_SENTINEL\n$ambient-skill",
+            tools=(),
+        ),
+        instructions=instruction,
+        settings={"botpipe.isolated_context": True},
+    )
+
+    response = _start_or_skip_local_sandbox(client, call)
+
+    assert response.text == '{"ok":true}'
+    wire = json.dumps(server.requests, sort_keys=True)
+    assert instruction in wire
+    assert "NATIVE_ISOLATED_PACKET_SENTINEL" in wire
+    for excluded in (
+        "AMBIENT_BASE_SENTINEL",
+        "AMBIENT_DEVELOPER_SENTINEL",
+        "AMBIENT_SKILL_SENTINEL",
+        "AMBIENT_SKILL_BODY_SENTINEL",
+        "PROJECT_AGENTS_SENTINEL",
+    ):
+        assert excluded not in wire
+
+
+def test_latest_native_isolated_context_rejects_global_agents_without_dispatch(
+    native,
+) -> None:
+    client, server, workspace = native
+    codex_home = Path(client.env["CODEX_HOME"])
+    (codex_home / "AGENTS.md").write_text(
+        "GLOBAL_AGENTS_SENTINEL", encoding="utf-8"
+    )
+    call = replace(
+        native_request(
+            workspace,
+            operation_id="native-isolated-global-agents",
+            preset="generate",
+            prompt="This must not be dispatched.",
+            tools=(),
+        ),
+        instructions="Judge only the supplied anonymous packet.",
+        settings={"botpipe.isolated_context": True},
+    )
+
+    with pytest.raises(CapabilityError, match="global Codex instructions"):
+        client.start_turn(call)
+
+    assert server.requests == []
 
 
 def test_latest_native_background_continuity_within_logical_operation(native) -> None:

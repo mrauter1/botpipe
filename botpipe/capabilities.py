@@ -49,6 +49,7 @@ class CodexCapabilities:
     supports_mcp_config: bool = False
     supports_effort: bool = False
     supports_instructions: bool = False
+    supports_base_instructions: bool = False
     supports_strict_workspace_roots: bool = False
     presets: Mapping[str, CapabilityStatus] = field(default_factory=dict)
     item_types: frozenset[str] = frozenset()
@@ -79,6 +80,7 @@ class CodexCapabilities:
             "supports_mcp_config": self.supports_mcp_config,
             "supports_effort": self.supports_effort,
             "supports_instructions": self.supports_instructions,
+            "supports_base_instructions": self.supports_base_instructions,
             "supports_strict_workspace_roots": self.supports_strict_workspace_roots,
             "presets": {
                 name: value.to_dict() for name, value in sorted(self.presets.items())
@@ -102,6 +104,9 @@ class CodexCapabilities:
             supports_mcp_config=bool(value.get("supports_mcp_config")),
             supports_effort=bool(value.get("supports_effort")),
             supports_instructions=bool(value.get("supports_instructions")),
+            supports_base_instructions=bool(
+                value.get("supports_base_instructions")
+            ),
             supports_strict_workspace_roots=bool(
                 value.get("supports_strict_workspace_roots")
             ),
@@ -118,7 +123,7 @@ class CodexCapabilities:
 _CORE_METHODS = frozenset(
     {"initialize", "thread/start", "thread/resume", "turn/start", "turn/interrupt"}
 )
-_PROBE_FORMAT = 7
+_PROBE_FORMAT = 8
 
 
 def _method_names(document: Mapping[str, Any]) -> frozenset[str]:
@@ -469,6 +474,10 @@ def probe_codex(
         supports_instructions=(
             "developerInstructions" in thread_start
             and "developerInstructions" in thread_resume
+        ),
+        supports_base_instructions=(
+            _accepts(thread_start.get("baseInstructions"), primitive="string")
+            and _accepts(thread_resume.get("baseInstructions"), primitive="string")
         ),
         supports_strict_workspace_roots=supports_strict_roots,
         presets=statuses,

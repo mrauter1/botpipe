@@ -179,8 +179,12 @@ Independent source review is not blind output judging. When identities would
 bias a comparison, give a fresh judge only the task, fixed criteria, reference
 material, and anonymous outputs with sufficient supporting evidence. A
 tool-disabled `generate(..., allowed_tools=(), session=None)` over that packet
-avoids workspace browsing; also keep identities out of its instructions and
-inputs. This does not conceal identity that an output reveals through its own
+avoids workspace browsing, but does not clear inherited instructions or native
+context loading. Use judge-owned instructions, a stable neutral workspace, and
+provider controls that exclude ambient project instructions, skills, and memories.
+Verify the actual native request with sentinel context; if isolation cannot be
+enforced, report the evaluation as inconclusive rather than silently weakening
+the boundary. This does not conceal identity that an output reveals through its own
 names, text, or behavior, so describe blindness only to the boundary actually
 enforced. Source reviewers still need source access. Choose extra judgments or
 repetitions for the task's uncertainty and consequence before seeing trial
@@ -270,6 +274,9 @@ escape, modified frozen evidence, or unresolved effect is not a citation typo.
 Do not blanket-catch validation exceptions or imply that domain grounding checks
 automatically receive provider schema retries. Keep prior findings and evidence
 available, count repairs against the enclosing limits, and define exhaustion.
+Keep all model-owned validation, including conversion to the final domain
+record, inside that repair boundary. Normalize exact duplicates only in fields
+whose meaning is set-like; do not normalize paths or ordered workflow steps.
 
 When diagnosis uses both current source and recorded execution evidence, expose
 them as distinct roots. Cite source relative to the captured source root and
@@ -278,6 +285,22 @@ claims, require an exact quote that deterministic code can locate in the named
 UTF-8 file. A matching quote proves correspondence with captured bytes; it does
 not prove the model's interpretation. Recheck both frozen inventories between
 turns. Keep integrity failures outside the model-correction loop.
+
+Bind a proposal's diagnostic citations to evidence established by the assessment,
+but distinguish evidence locations from edit targets. A diagnosis in a prompt
+can justify changing orchestration code; the reviewer judges that relationship
+while code enforces the captured edit boundary. Treat only genuine runtime
+artifact handles as authority to read files, never ordinary data with similar
+field names. Enforce evidence byte limits before reading file contents and report
+omissions explicitly. Lost essential evidence makes evaluation inconclusive;
+optional diagnostic detail may be omitted with notice.
+
+Trial identity must cover the entire supplied fixture, including files under
+names such as `build/`. Source-cache exclusions are not fixture exclusions.
+Preserve timestamps that the workflow uses, such as for incremental builds,
+and include those timestamps in fixture identity alongside contents and modes.
+Changed inputs require a new trial identity, not reuse of a cached result or a
+silent rerun of a potentially side-effecting workflow.
 
 Bound rework in Python and provider work with
 `provider_budget(max_turns=..., max_seconds=..., turn_timeout_seconds=...)`.

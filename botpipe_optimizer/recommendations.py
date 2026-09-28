@@ -46,6 +46,10 @@ class OptimizationCandidateSelection:
     refinement_handoff_path: Path
 
 
+class RecordLimitExceeded(ValueError):
+    """A validated recommendation record exceeds its configured byte limit."""
+
+
 def finalize_candidate_set_payload(payload: Mapping[str, Any]) -> CandidateSet:
     draft = json.loads(json.dumps(dict(payload)))
     draft["candidate_set_id"] = "candidate_set_" + "0" * 64
@@ -709,7 +713,7 @@ def _bounded_record(value: Any, limit: int, label: str) -> bytes:
         payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
     ).encode()
     if len(content) > limit:
-        raise ValueError(f"{label} exceeds max_output_bytes")
+        raise RecordLimitExceeded(f"{label} exceeds max_output_bytes")
     return content
 
 
@@ -882,6 +886,7 @@ def _atomic_bytes(path: Path, content: bytes) -> None:
 
 __all__ = [
     "OptimizationCandidateSelection",
+    "RecordLimitExceeded",
     "build_empty_candidate_set",
     "finalize_candidate_review_payload",
     "finalize_candidate_set_payload",

@@ -7,6 +7,10 @@ journal state.
 Inspect source only under the supplied `analysis_source_root`, which is the
 frozen model workspace. Primary recorded evidence is available read-only under
 `analysis_evidence_root`. Treat the assessment and `frozen_trial_plan` as fixed.
+`candidate_source_evidence_paths` maps each candidate ID to the source paths
+validated against that assessment. The stable CandidateSet schema intentionally
+does not retain those proposal-only citations, so use this mapping when checking
+source-only support.
 
 Check that the frozen assessment distinguishes observation, source inspection,
 and inference, and that its chosen rubric fits the workflow's intent. Then check

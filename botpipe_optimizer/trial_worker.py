@@ -127,28 +127,40 @@ def _execute(config: Mapping[str, Any], started: float) -> TrialResult:
         else:
             run = client.run(_trial_wrapper, task_id=task_id, run_id=run_id)
         details = inspect_run(client, run_id)
-        operations = _operations(details)
+        projection_omissions: list[str] = []
+        operations = _operations(details, projection_omissions)
         artifacts, omissions, remaining = capture_workspace_outputs(
             _CASE,
             workspace,
             Path(config["fixture_root"]) if config.get("fixture_root") else None,
             _SETTINGS.max_output_bytes,
         )
+        omissions = [*projection_omissions, *omissions]
         managed_artifacts, managed_omissions = _artifacts(run.artifacts, remaining)
         artifacts.extend(managed_artifacts)
         omissions.extend(managed_omissions)
-        budget = _budget(details, operations)
+        budget = _budget(details, operations, omissions)
         execution = _execution_class(run.status, operations)
         payload = TrialResult(
             case_id=_CASE.case_id,
             execution=execution,
             outcome=run.status,
             run_id=run.run_id,
-            value=_plain(run.value),
+            value=_plain(
+                run.value,
+                omissions=omissions,
+                omission="return value omitted: maximum projection depth",
+            ),
             error=run.error,
             artifacts=artifacts,
             operations=operations,
-            usage=_plain(run.usage),
+            usage=_plain(
+                run.usage,
+                omissions=omissions,
+                omission=(
+                    "trial evidence omitted: usage exceeded maximum projection depth"
+                ),
+            ),
             elapsed_seconds=max(0.0, time.monotonic() - started),
             provider_budget=budget,
             omissions=omissions,
@@ -214,7 +226,9 @@ def _provider(reference: Any, config: dict[str, Any], code_root: Path) -> Any:
     return provider
 
 
-def _operations(details: Mapping[str, Any]) -> list[dict[str, Any]]:
+def _operations(
+    details: Mapping[str, Any], omissions: list[str]
+) -> list[dict[str, Any]]:
     graph = details.get("observed_graph") or {}
     nodes = graph.get("nodes") if isinstance(graph, Mapping) else []
     raw_by_id = {
@@ -224,7 +238,11 @@ def _operations(details: Mapping[str, Any]) -> list[dict[str, Any]]:
     }
     result = []
     for node in nodes or []:
-        record = _plain(node)
+        record = _plain(
+            node,
+            omissions=omissions,
+            omission="operation details omitted: maximum projection depth",
+        )
         raw = raw_by_id.get(str(node.get("id")), {})
         dispatches = []
         for dispatch in raw.get("dispatches", []) if isinstance(raw, Mapping) else []:
@@ -239,7 +257,9 @@ def _operations(details: Mapping[str, Any]) -> list[dict[str, Any]]:
                         "usage_availability": dispatch.get("usage_availability"),
                         "response": response,
                         "error": dispatch.get("error"),
-                    }
+                    },
+                    omissions=omissions,
+                    omission="operation details omitted: maximum projection depth",
                 )
             )
         if dispatches:
@@ -386,7 +406,13 @@ def _artifacts(handles: Any, limit: int) -> tuple[list[dict[str, Any]], list[str
     omissions: list[str] = []
     content_budget = limit
     for name, handle in sorted(handles.items()):
-        record = _plain(handle.to_record())
+        record = _plain(
+            handle.to_record(),
+            omissions=omissions,
+            omission=(
+                f"artifact {name!r} metadata omitted: maximum projection depth"
+            ),
+        )
         record["key"] = name
         try:
             size = handle.path.stat().st_size
@@ -411,7 +437,16 @@ def _artifacts(handles: Any, limit: int) -> tuple[list[dict[str, Any]], list[str
                 try:
                     text = data.decode("utf-8")
                     record["content"] = (
-                        json.loads(text) if handle.kind == "json" else text
+                        _plain(
+                            json.loads(text),
+                            omissions=omissions,
+                            omission=(
+                                f"artifact {name!r} content omitted: "
+                                "maximum projection depth"
+                            ),
+                        )
+                        if handle.kind == "json"
+                        else text
                     )
                 except (UnicodeDecodeError, json.JSONDecodeError) as exc:
                     record["content_omitted"] = "invalid_text_or_json"
@@ -450,7 +485,9 @@ def _execution_class(status: str, operations: list[dict[str, Any]]) -> str:
 
 
 def _budget(
-    details: Mapping[str, Any], operations: list[dict[str, Any]]
+    details: Mapping[str, Any],
+    operations: list[dict[str, Any]],
+    omissions: list[str],
 ) -> dict[str, Any]:
     ids = [
         str(item.get("id"))
@@ -476,27 +513,65 @@ def _budget(
         if isinstance(states, Mapping) and isinstance(states.get(selected), Mapping):
             state = dict(states[selected])
     state.pop("last_observed", None)
-    return _plain(state)
+    return _plain(
+        state,
+        omissions=omissions,
+        omission="operation details omitted: maximum projection depth",
+    )
 
 
-def _plain(value: Any, *, depth: int = 0) -> Any:
+def _plain(
+    value: Any,
+    *,
+    depth: int = 0,
+    omissions: list[str] | None = None,
+    omission: str | None = None,
+) -> Any:
     if depth > 30:
+        if omissions is not None and omission is not None and omission not in omissions:
+            omissions.append(omission)
         return "<omitted: maximum depth>"
     if value is None or type(value) in {str, int, float, bool}:
         return value
     if isinstance(value, Path):
         return str(value)
     if isinstance(value, Mapping):
-        return {str(key): _plain(item, depth=depth + 1) for key, item in value.items()}
+        return {
+            str(key): _plain(
+                item,
+                depth=depth + 1,
+                omissions=omissions,
+                omission=omission,
+            )
+            for key, item in value.items()
+        }
     if isinstance(value, (list, tuple, set, frozenset)):
-        return [_plain(item, depth=depth + 1) for item in value]
+        return [
+            _plain(
+                item,
+                depth=depth + 1,
+                omissions=omissions,
+                omission=omission,
+            )
+            for item in value
+        ]
     for method in ("model_dump", "to_record", "to_dict"):
         callback = getattr(value, method, None)
         if callable(callback):
-            return _plain(callback(), depth=depth + 1)
+            return _plain(
+                callback(),
+                depth=depth + 1,
+                omissions=omissions,
+                omission=omission,
+            )
     if is_dataclass(value) and not isinstance(value, type):
         return {
-            field.name: _plain(getattr(value, field.name), depth=depth + 1)
+            field.name: _plain(
+                getattr(value, field.name),
+                depth=depth + 1,
+                omissions=omissions,
+                omission=omission,
+            )
             for field in fields(value)
         }
     return repr(value)
@@ -507,19 +582,25 @@ def _fit(result: TrialResult, limit: int) -> TrialResult:
         return result
     omissions = list(result.omissions)
     artifacts = []
+    artifact_loss = False
     for artifact in result.artifacts:
         item = dict(artifact)
         if "content" in item:
             item.pop("content")
             item["content_omitted"] = "trial_result_limit"
+            artifact_loss = True
         if "diff" in item:
             item.pop("diff")
             item["diff_omitted"] = "trial_result_limit"
+            artifact_loss = True
         artifacts.append(item)
-    omissions.append("artifact contents omitted to fit max_output_bytes")
-    result = result.model_copy(update={"artifacts": artifacts, "omissions": omissions})
-    if len(_encoded(result)) <= limit:
-        return result
+    if artifact_loss:
+        omissions.append("artifact contents omitted to fit max_output_bytes")
+        result = result.model_copy(
+            update={"artifacts": artifacts, "omissions": omissions}
+        )
+        if len(_encoded(result)) <= limit:
+            return result
     operations = []
     for operation in result.operations:
         operations.append(
@@ -529,14 +610,16 @@ def _fit(result: TrialResult, limit: int) -> TrialResult:
                 if key in operation
             }
         )
-    omissions.append("operation details omitted to fit max_output_bytes")
-    result = result.model_copy(
-        update={"operations": operations, "omissions": omissions}
-    )
-    if len(_encoded(result)) <= limit:
-        return result
-    omissions.append("return value omitted to fit max_output_bytes")
-    result = result.model_copy(update={"value": None, "omissions": omissions})
+    if operations != result.operations:
+        omissions.append("operation details omitted to fit max_output_bytes")
+        result = result.model_copy(
+            update={"operations": operations, "omissions": omissions}
+        )
+        if len(_encoded(result)) <= limit:
+            return result
+    if result.value is not None:
+        omissions.append("return value omitted to fit max_output_bytes")
+        result = result.model_copy(update={"value": None, "omissions": omissions})
     if len(_encoded(result)) > limit:
         result = result.model_copy(
             update={

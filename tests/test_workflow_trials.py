@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import stat
 from pathlib import Path
@@ -11,8 +12,10 @@ from pydantic import BaseModel
 from botpipe import Artifact, Provider, workflow
 from botpipe.providers import ProviderPolicyError, ProviderRequest, ProviderResponse
 from botpipe.recovery import Stopped, Unknown
+from botpipe_optimizer.judging import build_judge_packet
 from botpipe_optimizer.processes import ProcessResult
-from botpipe_optimizer.trial_models import TrialCase, TrialSettings
+from botpipe_optimizer.trial_models import TrialCase, TrialResult, TrialSettings
+from botpipe_optimizer.trial_worker import _fit
 from botpipe_optimizer.trials import run_trial
 
 
@@ -41,7 +44,13 @@ class TimedTrialProvider:
             source = request.workspace / "input.txt"
             source.write_text(source.read_text() + " edited")
         for destination in request.artifacts.values():
-            destination.write_text(f"report from call {count}")
+            destination.write_text(
+                json.dumps(_deep_value())
+                if self.config.get("deep_json_artifact")
+                else f"report from call {count}"
+            )
+        if self.config.get("deep_response"):
+            return ProviderResponse("deep answer", metadata=_deep_value())
         return ProviderResponse(
             f"answer-{count}",
             usage={
@@ -59,6 +68,13 @@ class TimedTrialProvider:
 
 def make_trial_provider(config):
     return TimedTrialProvider(config)
+
+
+def _deep_value():
+    value = "leaf"
+    for _ in range(32):
+        value = {"next": value}
+    return value
 
 
 @workflow
@@ -89,6 +105,31 @@ def typed_trial(payload: TypedInput):
     return {"value": payload.value, "type": type(payload).__name__}
 
 
+@workflow
+def deep_value_trial():
+    return _deep_value()
+
+
+@workflow
+def deep_operation_trial():
+    Provider().run("return a deeply nested response")
+    return "done"
+
+
+@workflow
+def deep_artifact_trial():
+    Provider().run(
+        "produce deeply nested JSON",
+        writes=[Artifact.json(Path.cwd() / "deep.json", name="deep")],
+    )
+    return "done"
+
+
+@workflow
+def fixture_mtime_trial(relative: str):
+    return Path(relative).stat().st_mtime_ns
+
+
 def _run(
     tmp_path: Path,
     case: TrialCase,
@@ -103,13 +144,14 @@ def _run(
     source = root / "test_workflow_trials.py"
     if not source.exists():
         shutil.copy2(__file__, source)
-    target = (
-        "two_turn_trial"
-        if case.case_id == "budget"
-        else "typed_trial"
-        if case.case_id == "typed"
-        else "fixture_trial"
-    )
+    target = {
+        "budget": "two_turn_trial",
+        "typed": "typed_trial",
+        "deep-value": "deep_value_trial",
+        "deep-operation": "deep_operation_trial",
+        "deep-artifact": "deep_artifact_trial",
+        "fixture-mtime": "fixture_mtime_trial",
+    }.get(case.case_id, "fixture_trial")
     return run_trial(
         code_root=root,
         workflow_reference=f"test_workflow_trials.py:{target}",
@@ -136,6 +178,9 @@ def test_real_trial_copies_fixture_captures_evidence_and_reuses_completion(tmp_p
     )
 
     first = _run(tmp_path, case, provider_config={"edit_fixture": True})
+    cache = tmp_path / "frozen-code/__pycache__"
+    cache.mkdir(exist_ok=True)
+    (cache / "resume-only.pyc").write_bytes(b"runtime cache")
     second = _run(tmp_path, case, provider_config={"edit_fixture": True})
 
     assert first.execution == "complete"
@@ -179,6 +224,154 @@ def test_real_trial_copies_fixture_captures_evidence_and_reuses_completion(tmp_p
     assert second.run_id == first.run_id
     assert second.value == first.value
     assert second.elapsed_seconds == first.elapsed_seconds
+
+
+def test_fixture_cache_like_paths_are_part_of_the_durable_identity(tmp_path):
+    fixture = tmp_path / "fixture"
+    (fixture / "build").mkdir(parents=True)
+    (fixture / "input.txt").write_text("input")
+    cached_input = fixture / "build/input.txt"
+    cached_input.write_text("first")
+    case = TrialCase(
+        case_id="fixture-cache-path",
+        description="freeze every fixture path",
+        workspace="fixture",
+    )
+
+    first = _run(tmp_path, case)
+    cached_input.write_text("second")
+
+    assert first.execution == "complete"
+    with pytest.raises(ValueError, match="different trial"):
+        _run(tmp_path, case)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permission identity")
+def test_fixture_nonexecutable_mode_is_part_of_the_durable_identity(tmp_path):
+    fixture = tmp_path / "fixture"
+    fixture.mkdir()
+    source = fixture / "input.txt"
+    source.write_text("input")
+    source.chmod(0o400)
+    case = TrialCase(
+        case_id="fixture-mode",
+        description="freeze input permissions",
+        workspace="fixture",
+    )
+
+    first = _run(tmp_path, case)
+    source.chmod(0o444)
+
+    assert first.execution == "complete"
+    with pytest.raises(ValueError, match="different trial"):
+        _run(tmp_path, case)
+
+
+@pytest.mark.parametrize("kind", ["file", "directory"])
+def test_fixture_mtime_is_part_of_durable_identity_and_copied_input(tmp_path, kind):
+    fixture = tmp_path / "fixture"
+    fixture.mkdir()
+    observed = fixture / "observed"
+    if kind == "file":
+        observed.write_text("unchanged")
+    else:
+        observed.mkdir()
+    requested_first_mtime = 1_700_000_000_000_000_000
+    requested_second_mtime = 1_800_000_000_000_000_000
+    os.utime(observed, ns=(requested_first_mtime, requested_first_mtime))
+    first_mtime = observed.stat().st_mtime_ns
+    case = TrialCase(
+        case_id="fixture-mtime",
+        description="preserve and freeze fixture timestamps",
+        kwargs={"relative": "observed"},
+        workspace="fixture",
+    )
+
+    first = _run(tmp_path, case)
+    os.utime(observed, ns=(requested_second_mtime, requested_second_mtime))
+    second_mtime = observed.stat().st_mtime_ns
+
+    assert first.execution == "complete"
+    assert first.value == first_mtime
+    with pytest.raises(ValueError, match="different trial"):
+        _run(tmp_path, case)
+    fresh = _run(tmp_path, case, output_name="fresh-output")
+    assert fresh.execution == "complete"
+    assert fresh.value == second_mtime
+
+
+def test_deep_return_value_is_reported_as_essential_omission(tmp_path):
+    result = _run(
+        tmp_path,
+        TrialCase(case_id="deep-value", description="return deeply nested evidence"),
+    )
+
+    assert result.execution == "complete"
+    assert "return value omitted: maximum projection depth" in result.omissions
+    assert "<omitted: maximum depth>" in json.dumps(result.value)
+
+
+def test_deep_operation_is_reported_as_optional_omission(tmp_path):
+    result = _run(
+        tmp_path,
+        TrialCase(case_id="deep-operation", description="record a deep trace"),
+        provider_config={"deep_response": True},
+    )
+
+    assert result.execution == "complete"
+    assert result.value == "done"
+    assert "operation details omitted: maximum projection depth" in result.omissions
+    assert not any("return value omitted" in item for item in result.omissions)
+
+
+def test_deep_json_artifact_is_reported_as_essential_omission(tmp_path):
+    result = _run(
+        tmp_path,
+        TrialCase(case_id="deep-artifact", description="capture deep JSON evidence"),
+        provider_config={"deep_json_artifact": True},
+    )
+
+    assert result.execution == "complete"
+    assert any(
+        item.startswith("artifact ")
+        and item.endswith("content omitted: maximum projection depth")
+        for item in result.omissions
+    )
+    artifact = next(item for item in result.artifacts if item.get("name") == "deep")
+    assert "<omitted: maximum depth>" in json.dumps(artifact["content"])
+
+
+def test_fit_reports_only_actual_optional_operation_loss():
+    fitted = _fit(
+        TrialResult(
+            case_id="operation-only",
+            execution="complete",
+            outcome="completed",
+            value="ok",
+            operations=[
+                {
+                    "kind": "provider",
+                    "status": "completed",
+                    "response": "x" * 10_000,
+                }
+            ],
+        ),
+        1_500,
+    )
+
+    assert fitted.omissions == [
+        "operation details omitted to fit max_output_bytes"
+    ]
+    packet = build_judge_packet(
+        case={"description": "exercise one operation", "args": [], "kwargs": {}},
+        rubric=[{"name": "Behavior"}],
+        comparison_rule="Prefer the better behavior.",
+        a=fitted,
+        b=fitted,
+        max_bytes=48_000,
+    )
+    assert packet["complete"] is True
+    assert any("operation details omitted" in item for item in packet["omissions"])
 
 
 def test_interrupted_trial_resumes_same_workspace_and_provider_operation(tmp_path):

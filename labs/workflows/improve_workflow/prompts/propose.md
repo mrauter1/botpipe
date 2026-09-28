@@ -18,7 +18,10 @@ as a target ranking. A trace-backed candidate may cite only focused observation
 IDs from the selected evidence group. A source-backed opportunity may honestly
 use an empty observation citation list and names its exact captured paths in
 `source_evidence_paths`. Those paths must already support the frozen assessment;
-the candidate must not claim an observed failure.
+the candidate must not claim an observed failure. Source evidence paths must be
+drawn from `intent_evidence` or a scope assessment's evidence. Edit `targets`
+may name other files in the captured baseline when the assessed change genuinely
+requires a cross-file edit; targets are not restricted to evidence citation paths.
 
 The `frozen_trial_plan`, when present, is immutable. The expected effect is a
 hypothesis. Do not claim measured improvement. Make
