@@ -18,7 +18,9 @@ def test_initial_question_answer_reaches_author_and_independent_reviewer(tmp_pat
             context = _input(request)
             seen["understand"].append((request, context))
             if len(seen["understand"]) == 1:
-                return _brief(questions=["What input should this workflow accept?"])
+                draft = _brief(questions=["What input should this workflow accept?"])
+                draft["definitions"] = ["Input might be a numeric identifier."]
+                return draft
             return _brief()
         if request.preset == "query":
             seen["review"].append((request, _input(request)))
@@ -41,6 +43,7 @@ def test_initial_question_answer_reaches_author_and_independent_reviewer(tmp_pat
         review, context = seen["review"][0]
         assert context["request"] == "Make a reusable echo workflow."
         assert context["answers"][0]["answer"] == "Accept and echo text."
+        assert context["initial_brief"] == _brief()
         assert review.session_key != seen["understand"][0][0].session_key
         assert Path(resumed.value.candidate_root).is_dir()
 
@@ -162,3 +165,94 @@ def test_inconsistent_review_is_corrected_before_shipping(tmp_path):
     assert len(reviews) == 2
     assert not run.value.shipped
     assert run.value.findings == ["The test omits the human gate."]
+
+
+def test_review_findings_survive_questions_and_failed_tests_until_re_review(tmp_path):
+    finding = "Use the person's note when building the final answer."
+    question = "Should the note change the echoed output?"
+    builds, reviews, clarifications = [], [], []
+
+    def answer(request):
+        context = _input(request)
+        if "Write the brief" in request.prompt:
+            if context["answers"]:
+                clarifications.append(context)
+            return _brief()
+        if request.preset == "query":
+            reviews.append(context)
+            return {"ship": len(reviews) == 2,
+                    "findings": [] if len(reviews) == 2 else [finding]}
+        builds.append(context)
+        result = {"reference": _write_package(request, failing=len(builds) == 3)}
+        if len(builds) == 2:
+            result["brief"] = _brief(questions=[question])
+        return result
+
+    with Botpipe(tmp_path, provider=FakeProvider([answer] * 10)) as client:
+        paused = client.run(workflow_author, Params(package_name="handoffs", max_rounds=4))
+        assert paused.status == "awaiting_input"
+        completed = client.resume(paused.run_id, answer="Yes, apply the note.")
+        assert completed.ok, completed.error
+        assert completed.value.shipped and completed.value.rounds == 4
+        assert clarifications[0]["feedback"] == [finding]
+        assert builds[2]["feedback"] == [finding]
+        assert finding in builds[3]["feedback"]
+        assert any("AssertionError" in item for item in builds[3]["feedback"])
+        assert question not in builds[3]["feedback"]
+        assert reviews[-1]["previous_findings"] == [finding]
+        assert reviews[-1]["validation"]["errors"] == []
+        assert completed.value.findings == []
+
+
+def test_exhaustion_reports_review_findings_test_errors_and_open_questions(tmp_path):
+    finding = "Keep the human note in the producer input."
+    question = "Which producer should apply the note?"
+    builds = []
+
+    def answer(request):
+        if "Write the brief" in request.prompt:
+            return _brief()
+        if request.preset == "query":
+            return {"ship": False, "findings": [finding]}
+        builds.append(request)
+        result = {"reference": _write_package(request, failing=len(builds) == 2)}
+        if len(builds) == 3:
+            result["brief"] = _brief(questions=[question])
+        return result
+
+    result = Botpipe(tmp_path, provider=FakeProvider([answer] * 6)).run(
+        workflow_author, Params(package_name="outstanding", max_rounds=3)
+    )
+    assert result.ok, result.error
+    assert not result.value.shipped
+    assert finding in result.value.findings and question in result.value.findings
+    assert any("AssertionError" in item for item in result.value.findings)
+    assert result.value.brief.questions == [question]
+
+
+def test_reviewer_can_compare_removed_scenarios_with_first_build_ready_brief(tmp_path):
+    original = _brief()
+    original["scenarios"].append("Given empty input, when run, then return empty text.")
+    revised = {**original, "scenarios": original["scenarios"][:1]}
+    reviews, builds = [], []
+
+    def answer(request):
+        context = _input(request)
+        if "Write the brief" in request.prompt:
+            return original
+        if request.preset == "query":
+            reviews.append(context)
+            missing = set(context["initial_brief"]["scenarios"]) - set(context["brief"]["scenarios"])
+            return {"ship": not missing, "findings": [f"Restore scenario: {item}" for item in missing]}
+        builds.append(context)
+        return {"reference": _write_package(request),
+                "brief": revised if len(builds) == 1 else original}
+
+    result = Botpipe(tmp_path, provider=FakeProvider([answer] * 5)).run(
+        workflow_author, Params(package_name="scenarios", max_rounds=2)
+    )
+    assert result.ok, result.error
+    assert result.value.shipped and result.value.rounds == 2
+    assert reviews[0]["brief"] == revised and reviews[1]["brief"] == original
+    assert all(context["initial_brief"] == original for context in [*reviews, *builds])
+    assert builds[1]["feedback"] == [f"Restore scenario: {original['scenarios'][-1]}"]

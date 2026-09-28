@@ -30,10 +30,14 @@ values and earlier session context can be valid. Scripted tests do not prove liv
 model quality. Address feedback and its causes; preserve unaffected behavior and
 avoid unrelated changes. If evidence corrects an assumption, return an updated
 brief; preserve explicit requirements and surface material unresolved questions.
+Explain removed or revised brief scenarios in the implementation notes.
 Return the actual flow.py:callable reference and concise implementation notes."""
 
 REVIEW = """Independently decide whether this workflow serves the original request
 and the person's clarification answers. Check the brief against those authorities.
+Compare it with `initial_brief`, the first build-ready brief, for removed or weakened
+scenarios. That baseline is provisional: explicit human answers can supersede its
+assumptions. Require a justified correction rather than silently reduced coverage.
 Start with the test transcript: questions, answers, agent inputs and responses,
 and observed test outcomes. Does the person have enough context to answer? Do their
 choices reach the appropriate operation and change its behavior? Use source and
@@ -54,17 +58,18 @@ def workflow_author(params: Params, request: str = "") -> WorkflowAuthorResult:
         author, reviewer = Session(), Session()
         context = {"request": request, "parameters": params.model_dump(mode="json"), "answers": []}
         brief = agent.run(UNDERSTAND, input=context, returns=Brief, session=author).value
-        feedback, validation, reference = [], None, None
+        findings, test_errors, validation, reference = [], [], None, None
         package = f".botpipe/workflows/{params.package_name}"
         for round_ in range(1, params.max_rounds + 1):
             if brief.questions:
                 answer = ask_human("Before building:\n- " + "\n- ".join(brief.questions))
                 context["answers"].append({"questions": brief.questions, "answer": answer})
-                brief = agent.run(UNDERSTAND, input={**context, "brief": brief.model_dump()},
+                brief = agent.run(UNDERSTAND, input={**context, "brief": brief.model_dump(),
+                                  "feedback": [*findings, *test_errors]},
                                   returns=Brief, session=author).value
                 if brief.questions:
-                    feedback = brief.questions
                     continue
+            context.setdefault("initial_brief", brief.model_dump())
             transcript = str(Path(root) / ".botpipe" / "transcripts" / f"round-{round_}.md")
             check = {"cwd": root, "argv": [sys.executable, "-m",
                      "botpipe.workflows.workflow_author.validation", params.package_name,
@@ -72,26 +77,27 @@ def workflow_author(params: Params, request: str = "") -> WorkflowAuthorResult:
             reference, validation = None, None
             built = agent.run(BUILD, input={**context, "brief": brief.model_dump(),
                               "package": package, "tests": f"tests/runtime/test_{params.package_name}.py",
-                              "check": check, "transcript": transcript, "feedback": feedback},
+                              "check": check, "transcript": transcript, "feedback": [*findings, *test_errors]},
                               returns=Build, session=author).value
             brief = built.brief or brief
             if brief.questions:
-                feedback = brief.questions
                 continue
             validation = validate_candidate(root, params.package_name, built.reference, transcript,
                                             extra_argv=params.target_test_argv)
+            test_errors = validation.errors
             if not validation.success:
-                feedback = validation.errors
                 continue
             reference = validation.reference
             review = agent.query(REVIEW, input={**context, "brief": brief.model_dump(),
                                  "package": package, "transcript": transcript,
-                                 "validation": validation.model_dump(), "builder_notes": built.notes},
+                                 "validation": validation.model_dump(), "builder_notes": built.notes,
+                                 "previous_findings": findings},
                                  returns=Review, session=reviewer).value
-            feedback = review.findings
+            findings = review.findings
             if review.ship:
                 verify_candidate(root, validation)
                 return WorkflowAuthorResult(reference=reference, shipped=True, rounds=round_,
                                             findings=[], brief=brief, candidate_root=root, validation=validation)
         return WorkflowAuthorResult(reference=reference, shipped=False, rounds=params.max_rounds,
-                                    findings=feedback, brief=brief, candidate_root=root, validation=validation)
+                                    findings=list(dict.fromkeys([*findings, *test_errors, *brief.questions])),
+                                    brief=brief, candidate_root=root, validation=validation)

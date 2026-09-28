@@ -38,6 +38,9 @@ The brief defines intended outcomes, assumptions, human gates and concrete scena
 Material questions pause through `ask_human`; answers are recorded and passed to both
 author and reviewer. Findings return to the same author session. An updated brief can
 correct an assumption, but must preserve the original request and explicit answers.
+Review findings remain explicit through clarification and failed test attempts. The
+reviewer also receives the first build-ready brief to detect removed or weakened
+scenarios; later explicit human answers can supersede that baseline's assumptions.
 Unresolved questions prevent shipping. `max_rounds` bounds build/review and further
 clarification cycles; exhaustion returns `shipped=False` with the remaining findings.
 `max_provider_turns` bounds provider work, including schema repair, separately.
@@ -54,7 +57,10 @@ Tests use `FakeProvider`. The opt-in
 answers, agent turns, workflow results and pytest outcomes. The author and reviewer
 read this transcript. Warnings about answers absent verbatim from subsequent prompts
 are investigation hints: transformed values, deterministic routing and session context
-can be legitimate. Tests must assert behavioral consequences, not literal forwarding.
+can be legitimate. The heuristic checks strings of at least three words and names the
+missing text; shorter answers remain fully recorded. Identical instruction blocks are
+printed once and referenced on each turn; changed instructions remain visible.
+Tests must assert behavioral consequences, not literal forwarding.
 Scripted responses demonstrate only the behavior exercised; they do not prove live
 model quality. The reviewer uses `query` for read-only inspection.
 

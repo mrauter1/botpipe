@@ -44,7 +44,7 @@ def _display(value):
 
 def _free_text(value):
     if isinstance(value, str):
-        if value:
+        if len(value.split()) >= 3:
             yield value
     elif isinstance(value, BaseModel):
         yield from _free_text(value.model_dump(mode="python"))
@@ -132,6 +132,7 @@ class _Transcript:
 
     def write(self):
         lines = ["# Workflow test transcript", ""]
+        instruction_blocks = {}
         for nodeid, entry in self.tests.items():
             reports = entry["reports"]
             outcome = "failed" if "failed" in reports else "skipped" if "skipped" in reports else "passed"
@@ -148,7 +149,17 @@ class _Transcript:
                         "", "Prompt:", "", _fence(event["prompt"]), "",
                     ])
                     if event["instructions"] is not None:
-                        lines.extend(["Instructions:", "", _fence(event["instructions"]), ""])
+                        instructions = event["instructions"]
+                        if instructions in instruction_blocks:
+                            lines.extend([
+                                f"Instructions: same as block {instruction_blocks[instructions]}.", "",
+                            ])
+                        else:
+                            block = len(instruction_blocks) + 1
+                            instruction_blocks[instructions] = block
+                            lines.extend([
+                                f"Instructions (block {block}):", "", _fence(instructions), "",
+                            ])
                 elif kind in ("response", "answer"):
                     lines.extend([_display(event["value"]), ""])
                 elif kind == "result":
@@ -162,7 +173,7 @@ class _Transcript:
                 elif kind == "exception":
                     lines.extend([f"At: `{event['where']}`", "", _fence(event["error"]), ""])
                 if kind == "answer" and run_id:
-                    answer_text = list(_free_text(event["value"]))
+                    answer_text = list(dict.fromkeys(_free_text(event["value"])))
                     if not answer_text:
                         continue
                     subsequent = [
@@ -172,19 +183,23 @@ class _Transcript:
                     if not subsequent:
                         lines.extend([
                             "Warning: no later provider prompt was recorded for this run after "
-                            "the free-text answer; inspect transformed values/session context.", "",
+                            f"free-text answers {json.dumps(answer_text, ensure_ascii=False)}; "
+                            "inspect transformed values/session context.", "",
                         ])
-                    elif any(
-                        not any(
+                    else:
+                        missing = [text for text in answer_text if not any(
                             variant in prompt for prompt in subsequent
-                            for variant in (text, json.dumps(text, ensure_ascii=False)[1:-1])
-                        )
-                        for text in answer_text
-                    ):
-                        lines.extend([
-                            "Warning: free-text answer not found verbatim in later prompts "
-                            "for this run; inspect transformed values/session context.", "",
-                        ])
+                            for variant in (
+                                text, json.dumps(text, ensure_ascii=False)[1:-1],
+                                json.dumps(text, ensure_ascii=True)[1:-1],
+                            )
+                        )]
+                        if missing:
+                            lines.extend([
+                                "Warning: free-text answer not found verbatim in later prompts "
+                                f"for this run: {json.dumps(missing, ensure_ascii=False)}; "
+                                "inspect transformed values/session context.", "",
+                            ])
         self.target.parent.mkdir(parents=True, exist_ok=True)
         self.target.write_text("\n".join(lines), encoding="utf-8")
 
